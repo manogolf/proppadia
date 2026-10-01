@@ -101,6 +101,29 @@ class EightRainAdapterTests(unittest.TestCase):
         self.assertEqual(len(rows), 4)
         self.assertEqual(len(meta["unmapped_players"]), 1)
 
+    def test_unique_global_name_fallback_handles_stale_team_and_rejects_ambiguous_name(self):
+        props = pd.DataFrame([{
+            "game_id": 101, "game_date": "2026-09-30", "player_name": "Alex Example",
+            "team": "UTA", "market": "points", "line": 0.5,
+            "model_pick": "over", "model_side_prob": .7,
+        }])
+        rows, meta = build_rows(
+            package_dir=self.package, spec=self.spec, team_map=self.team_map,
+            player_map={}, allowed_bets=self.allowed, prop_candidates=props,
+            unique_player_code_by_name={"alex example": "alex-example"},
+        )
+        prop_rows = rows[rows.SECTION.eq("player_prop")]
+        self.assertEqual(set(prop_rows.SELECTOR), {"alex-example"})
+        self.assertEqual(meta["players_mapped_by_unique_name_fallback"], 1)
+
+        rows, meta = build_rows(
+            package_dir=self.package, spec=self.spec, team_map=self.team_map,
+            player_map={}, allowed_bets=self.allowed, prop_candidates=props,
+            unique_player_code_by_name={}, ambiguous_player_names={"alex example"},
+        )
+        self.assertTrue(rows[rows.SECTION.eq("player_prop")].empty)
+        self.assertEqual(len(meta["ambiguous_players"]), 1)
+
     def test_duplicate_prop_candidate_fails_closed(self):
         props = pd.DataFrame([{
             "game_id": 101, "game_date": "2026-09-30", "player_name": "Alex Example",

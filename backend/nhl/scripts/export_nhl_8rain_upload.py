@@ -13,8 +13,9 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from backend.nhl.eightrain_adapter import (
-    UPLOAD_COLUMNS, ambiguous_player_bindings, build_rows, load_catalogs,
+    UPLOAD_COLUMNS, ambiguous_player_bindings, ambiguous_player_names, build_rows, load_catalogs,
     resolve_catalog_dir, validate_upload, classify_export_date,
+    unique_player_codes_by_name,
 )
 
 
@@ -97,7 +98,9 @@ def main() -> None:
     out, diagnostics = build_rows(
         package_dir=args.package_dir, spec=spec, team_map=team_map,
         player_map=player_map, allowed_bets=allowed_bets, prop_candidates=props,
-        ambiguous_player_keys=ambiguous_player_bindings(catalog_dir))
+        ambiguous_player_keys=ambiguous_player_bindings(catalog_dir),
+        unique_player_code_by_name=unique_player_codes_by_name(catalog_dir),
+        ambiguous_player_names=ambiguous_player_names(catalog_dir))
     canonical_dates = set(pd.read_csv(args.package_dir / "schedule_event_identity.csv").game_date.astype(str))
     if canonical_dates != {args.date}:
         raise SystemExit(f"package slate mismatch: expected {args.date}, got {sorted(canonical_dates)}")

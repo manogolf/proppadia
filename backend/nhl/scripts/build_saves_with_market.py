@@ -154,7 +154,9 @@ def parse_odds_candidates(raw) -> pd.DataFrame:
     if raw is None:
         return pd.DataFrame(columns=[
             "normalized_alias", "provider_player_identity", "provider_player_name",
-            "market_identity", "line_str", "price_over", "source_quote_count",
+            "market_identity", "line_str", "price_over", "price_under",
+            "source_quote_count_over", "source_quote_count_under",
+            "source_books_over", "source_books_under",
         ])
     quotes: list[dict[str, object]] = []
 
@@ -168,7 +170,8 @@ def parse_odds_candidates(raw) -> pd.DataFrame:
                 next_bookmaker_key = str(x.get("key"))
             if x.get("key") == "player_total_saves":
                 for o in x.get("outcomes",[]) or []:
-                    if o.get("name") != "Over":
+                    side = str(o.get("name") or "").strip().lower()
+                    if side not in {"over", "under"}:
                         continue
                     base_name = (o.get("description") or o.get("player") or "").strip()
                     pt = o.get("point")
@@ -181,6 +184,7 @@ def parse_odds_candidates(raw) -> pd.DataFrame:
                             "provider_player_identity": provider_identity,
                             "provider_player_name": base_name,
                             "line_str": line_key(pt),
+                            "side": side,
                             "price": float(pr),
                         })
             for v in x.values():
@@ -192,23 +196,36 @@ def parse_odds_candidates(raw) -> pd.DataFrame:
     if not quotes:
         return pd.DataFrame(columns=[
             "normalized_alias", "provider_player_identity", "provider_player_name",
-            "market_identity", "line_str", "price_over", "source_quote_count",
+            "market_identity", "line_str", "price_over", "price_under",
+            "source_quote_count_over", "source_quote_count_under",
+            "source_books_over", "source_books_under",
         ])
     quote_frame = pd.DataFrame(quotes)
-    markets = (
-        quote_frame.groupby(
-            ["event_id", "provider_player_identity", "line_str"], as_index=False,
-            dropna=False,
-        ).agg(
-            price_over=("price", "median"),
-            provider_player_name=("provider_player_name", "first"),
-            source_quote_count=("price", "size"),
-        )
+    grouped = quote_frame.groupby(
+        ["event_id", "provider_player_identity", "line_str", "side"],
+        as_index=False, dropna=False,
+    ).agg(
+        price=("price", "median"),
+        provider_player_name=("provider_player_name", "first"),
+        source_quote_count=("price", "size"),
+        source_books=("bookmaker_key", lambda values: "|".join(sorted(set(values)))),
     )
+    indices = ["event_id", "provider_player_identity", "line_str"]
+    prices = grouped.pivot(index=indices, columns="side", values="price")
+    counts = grouped.pivot(index=indices, columns="side", values="source_quote_count")
+    books = grouped.pivot(index=indices, columns="side", values="source_books")
+    names = quote_frame.groupby(indices, as_index=True).provider_player_name.first()
+    markets = prices.rename(columns={"over": "price_over", "under": "price_under"})
+    markets["source_quote_count_over"] = counts.get("over")
+    markets["source_quote_count_under"] = counts.get("under")
+    markets["source_books_over"] = books.get("over")
+    markets["source_books_under"] = books.get("under")
+    markets["provider_player_name"] = names
+    markets = markets.reset_index()
     candidates: list[dict[str, object]] = []
     for row in markets.to_dict("records"):
         market_identity = stable_candidate_identity([
-            row["event_id"], row["provider_player_identity"], row["line_str"], "OVER",
+            row["event_id"], row["provider_player_identity"], row["line_str"],
         ])
         for alias in aliases_for_name(str(row["provider_player_name"])):
             candidates.append({
@@ -218,7 +235,11 @@ def parse_odds_candidates(raw) -> pd.DataFrame:
                 "market_identity": market_identity,
                 "line_str": row["line_str"],
                 "price_over": row["price_over"],
-                "source_quote_count": int(row["source_quote_count"]),
+                "price_under": row.get("price_under"),
+                "source_quote_count_over": row.get("source_quote_count_over"),
+                "source_quote_count_under": row.get("source_quote_count_under"),
+                "source_books_over": row.get("source_books_over"),
+                "source_books_under": row.get("source_books_under"),
             })
     return pd.DataFrame(candidates)
 
@@ -234,7 +255,9 @@ def build_match_candidates(predictions: pd.DataFrame, odds: pd.DataFrame) -> pd.
         return pd.DataFrame(columns=[
             "prediction_index", "alias_value", "alias_type", "alias_rank",
             "normalized_alias", "provider_player_identity", "provider_player_name",
-            "market_identity", "line_str", "price_over", "source_quote_count",
+            "market_identity", "line_str", "price_over", "price_under",
+            "source_quote_count_over", "source_quote_count_under",
+            "source_books_over", "source_books_under",
         ])
     return aliases.merge(odds, on=["normalized_alias", "line_str"], how="inner",
                          suffixes=("_prediction", "_odds"))
@@ -247,6 +270,11 @@ def reduce_match_candidates(
     result = predictions.copy()
     result["attachment_status"] = "UNMATCHED"
     result["price_over"] = pd.NA
+    result["price_under"] = pd.NA
+    result["source_quote_count_over"] = pd.NA
+    result["source_quote_count_under"] = pd.NA
+    result["source_books_over"] = ""
+    result["source_books_under"] = ""
     result["matched_alias_type"] = ""
     result["matched_alias_value"] = ""
     result["matched_provider_player_identity"] = ""
@@ -259,17 +287,21 @@ def reduce_match_candidates(
         return result, pd.DataFrame(columns=list(candidates.columns))
 
     for prediction_index, group in candidates.groupby("prediction_index", sort=False):
-        exact = group.drop_duplicates(subset=["market_identity", "price_over"]).copy()
+        exact = group.drop_duplicates(subset=["market_identity", "price_over", "price_under"]).copy()
         result.loc[prediction_index, "alias_candidate_count"] = len(group)
         result.loc[prediction_index, "distinct_market_candidate_count"] = len(exact)
         if len(exact) == 1:
             equivalent = group[
                 (group["market_identity"] == exact.iloc[0]["market_identity"])
-                & (group["price_over"] == exact.iloc[0]["price_over"])
+                & (group["price_over"].eq(exact.iloc[0]["price_over"]) | (group["price_over"].isna() & pd.isna(exact.iloc[0]["price_over"])))
+                & (group["price_under"].eq(exact.iloc[0]["price_under"]) | (group["price_under"].isna() & pd.isna(exact.iloc[0]["price_under"])))
             ].sort_values(["alias_rank_prediction", "alias_type_prediction", "alias_value_prediction"])
             selected = equivalent.iloc[0]
             result.loc[prediction_index, "attachment_status"] = "MATCHED"
             result.loc[prediction_index, "price_over"] = selected["price_over"]
+            result.loc[prediction_index, "price_under"] = selected["price_under"]
+            for column in ("source_quote_count_over", "source_quote_count_under", "source_books_over", "source_books_under"):
+                result.loc[prediction_index, column] = selected.get(column, pd.NA)
             result.loc[prediction_index, "matched_alias_type"] = selected["alias_type_prediction"]
             result.loc[prediction_index, "matched_alias_value"] = selected["alias_value_prediction"]
             result.loc[prediction_index, "matched_provider_player_identity"] = selected["provider_player_identity"]
@@ -419,6 +451,8 @@ def main():
     # compute market prob, edge, fair odds
     df["p_over"] = pd.to_numeric(df["p_over"], errors="coerce")
     df["p_over_mkt"] = df["price_over"].map(american_to_prob)
+    df["p_under"] = 1.0 - df["p_over"]
+    df["p_under_mkt"] = df["price_under"].map(american_to_prob)
 
     def edge(a, b):
         if isinstance(a, float) and isinstance(b, float) and math.isfinite(a) and math.isfinite(b):
@@ -426,14 +460,18 @@ def main():
         return float("nan")
 
     df["edge_over"] = [edge(a,b) for a,b in zip(df["p_over"], df["p_over_mkt"])]
+    df["edge_under"] = [edge(a,b) for a,b in zip(df["p_under"], df["p_under_mkt"])]
     df["fair_over"] = df["p_over"].map(prob_to_american)
+    df["fair_under"] = df["p_under"].map(prob_to_american)
 
     unmatched = df[df["attachment_status"] != "MATCHED"].copy()
     unmatched_cols = [c for c in ["full_name","player_id","game_id","team_id","line","p_over","game_date"] if c in df.columns]
 
     out_cols = [c for c in [
         "full_name","player_id","game_id","team_id",
-        "line","p_over","price_over","p_over_mkt","edge_over","fair_over","game_date",
+        "line","p_over","p_under","price_over","price_under","p_over_mkt","p_under_mkt",
+        "edge_over","edge_under","fair_over","fair_under","source_quote_count_over",
+        "source_quote_count_under","source_books_over","source_books_under","game_date",
         "attachment_status", "matched_alias_type", "matched_alias_value",
         "matched_provider_player_identity", "matched_market_identity", "alias_candidate_count",
         "distinct_market_candidate_count", "matched_alias_types",

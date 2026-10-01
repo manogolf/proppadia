@@ -132,6 +132,36 @@ def ambiguous_player_bindings(catalog_dir: Path) -> set[tuple[str, str]]:
     return {key for key, codes in options.items() if len(codes) > 1}
 
 
+def unique_player_codes_by_name(catalog_dir: Path) -> dict[str, str]:
+    """Return exact normalized names that resolve to one provider code globally.
+
+    This supports stale team metadata in the provider catalog without guessing:
+    a cross-team fallback is accepted only when the normalized name has exactly
+    one non-empty code in the catalog.
+    """
+    catalog_dir = resolve_catalog_dir(catalog_dir)
+    players_json = json.loads((catalog_dir / "players.json").read_text())
+    options: dict[str, set[str]] = {}
+    for row in players_json.get("data", []):
+        name = normalize_player_name(row.get("name"))
+        code = str(row.get("code") or "").strip()
+        if name and code:
+            options.setdefault(name, set()).add(code)
+    return {name: next(iter(codes)) for name, codes in options.items() if len(codes) == 1}
+
+
+def ambiguous_player_names(catalog_dir: Path) -> set[str]:
+    catalog_dir = resolve_catalog_dir(catalog_dir)
+    players_json = json.loads((catalog_dir / "players.json").read_text())
+    options: dict[str, set[str]] = {}
+    for row in players_json.get("data", []):
+        name = normalize_player_name(row.get("name"))
+        code = str(row.get("code") or "").strip()
+        if name and code:
+            options.setdefault(name, set()).add(code)
+    return {name for name, codes in options.items() if len(codes) > 1}
+
+
 def _date(value: Any) -> str:
     return pd.to_datetime(value, errors="raise").strftime("%Y-%m-%d")
 
@@ -164,6 +194,8 @@ def build_rows(
     player_map: dict[tuple[str, str], str], allowed_bets: dict[str, set[str]],
     prop_candidates: pd.DataFrame | None = None,
     ambiguous_player_keys: set[tuple[str, str]] | None = None,
+    unique_player_code_by_name: dict[str, str] | None = None,
+    ambiguous_player_names: set[str] | None = None,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     """Build only reference rows plus explicitly selected prop candidates.
 
@@ -237,6 +269,9 @@ def build_rows(
     mapped_player_keys: set[tuple[str, str]] = set()
     needed_player_keys: set[tuple[str, str]] = set()
     ambiguous_player_keys = ambiguous_player_keys or set()
+    unique_player_code_by_name = unique_player_code_by_name or {}
+    ambiguous_player_names = ambiguous_player_names or set()
+    unique_name_mapped_keys: set[tuple[str, str]] = set()
     if prop_candidates is not None and not prop_candidates.empty:
         required_prop = {"game_id", "game_date", "player_name", "team", "market", "line", "model_pick", "model_side_prob"}
         if required_prop - set(prop_candidates.columns):
@@ -257,9 +292,13 @@ def build_rows(
             player_key = (normalize_player_name(r["player_name"]), team_code)
             needed_player_keys.add(player_key)
             selector = player_map.get(player_key)
+            mapping_via_unique_name = False
+            if not selector:
+                selector = unique_player_code_by_name.get(player_key[0])
+                mapping_via_unique_name = bool(selector)
             if not selector:
                 item = {"player_name": str(r["player_name"]), "team": team_abbr, "game_id": str(r["game_id"]), "market": market}
-                if player_key in ambiguous_player_keys:
+                if player_key in ambiguous_player_keys or player_key[0] in ambiguous_player_names:
                     ambiguous_players.append(item)
                 else:
                     unmapped_players.append(item)
@@ -283,6 +322,10 @@ def build_rows(
                 {"game_id": str(r["game_id"]), "market": market, "model_identity": str(r.get("model_identity", "POLICY_SELECTED_CANDIDATE")), "run_id": str(r.get("run_id", "")), "side": s, "probability": pair[s]}
                 for s in ("over", "under")
             ])
+            if mapping_via_unique_name:
+                unique_name_mapped_keys.add(player_key)
+                provenance[-2]["player_mapping_method"] = "UNIQUE_NORMALIZED_NAME_CATALOG_TEAM_LAG"
+                provenance[-1]["player_mapping_method"] = "UNIQUE_NORMALIZED_NAME_CATALOG_TEAM_LAG"
 
     out = pd.DataFrame(rows, columns=UPLOAD_COLUMNS)
     if out.duplicated(UPLOAD_COLUMNS[:4] + ["SECTION", "MARKET", "SELECTOR", "POINT", "SIDE"]).any():
@@ -291,6 +334,7 @@ def build_rows(
         "mapped_teams": sorted(team_map), "unmapped_teams": sorted(team_unmapped),
         "mapped_prop_rows": max(0, len(provenance) - 2 * len(games) * 2),
         "players_needed": len(needed_player_keys), "players_mapped": len(mapped_player_keys),
+        "players_mapped_by_unique_name_fallback": len(unique_name_mapped_keys),
         "unmapped_players": unmapped_players, "ambiguous_players": ambiguous_players,
         "provenance": provenance,
         "reference_games": len(games), "challengers_included": False,

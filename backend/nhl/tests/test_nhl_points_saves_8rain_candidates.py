@@ -10,7 +10,10 @@ import pandas as pd
 from backend.nhl.eightrain_adapter import build_rows, UPLOAD_COLUMNS, validate_upload
 from backend.nhl.scripts.select_nhl_points_saves_8rain_candidates import (
     DEFAULT_POLICIES, load_active_policy, require_current_slate, select_lane,
+    select_raw_lane,
 )
+from backend.nhl.scripts.build_points_with_market import parse_points_odds
+from backend.nhl.scripts.build_saves_with_market import parse_odds_candidates
 
 
 class PointsSavesEightRainPolicyTests(unittest.TestCase):
@@ -146,6 +149,93 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
                 build_rows(package_dir=package, spec={"league": {"code": "nhl"}, "markets": {"h2h": {}, "spread": {}}, "stats": [{"code": "points", "bet": ["over", "under"]}]},
                            team_map={"BOS": "team-bos", "NYR": "team-nyr"}, player_map={},
                            allowed_bets={"points": {"over", "under"}}, prop_candidates=candidate)
+
+    def test_raw_points_and_saves_ignore_ev_gap_price_and_line_count_policies(self):
+        raw_source = self.source(lines=(0.5, 1.5)).copy()
+        raw_source["p_over"] = [0.2, 0.8]
+        raw_source["price_over"] = [-300, -200]
+        raw_source["price_under"] = [None, None]
+        raw_source["p_over_mkt"] = [0.7, 0.2]
+        raw_source["p_under_mkt"] = [None, None]
+        raw_source["attachment_status"] = ["UNMATCHED", "MATCHED"]
+        raw_common = dict(
+            lane="points", slate_date="2026-10-01", source_sha256="sha",
+            observation_id="obs", observation_manifest_sha256="manifest",
+            capture_timestamp_utc="2026-10-01T15:00:00Z",
+            team_map=self.common["team_map"], player_map=self.common["player_map"],
+            unique_name_map={}, ambiguous_team_keys=set(), ambiguous_names=set(),
+            allowed_bets={"points": {"over", "under"}, "saves": {"over", "under"}},
+            parent_run_id="daily-1",
+        )
+        for lane in ("points", "saves"):
+            raw_common["lane"] = lane
+            decisions, upload, summary = select_raw_lane(
+                raw_source, self.names, self.schedule, **raw_common,
+            )
+            self.assertEqual(len(upload), 2)
+            self.assertEqual(summary["mapped_upload_predictions"], 2)
+            self.assertEqual(set(upload.line), {0.5, 1.5})
+            self.assertEqual(set(upload.model_identity.str.endswith("REFERENCE")), {True})
+            self.assertTrue(upload.ev_over.dropna().lt(0).any())
+            self.assertTrue(upload.edge_over.dropna().lt(0).any())
+            self.assertTrue(upload.price_under.isna().all())
+            self.assertEqual(set(decisions.candidate_policy_name), {"RAW_PREDICTION_COLLECTION"})
+
+    def test_raw_sog_accepts_valid_probability_without_policy_or_market_quote(self):
+        source = self.source(lines=(1.5, 2.5)).drop(columns=["price_over", "price_under", "p_over_mkt", "p_under_mkt", "attachment_status"])
+        common = dict(
+            lane="shots_on_goal", slate_date="2026-10-01", source_sha256="sha",
+            observation_id="obs", observation_manifest_sha256="manifest",
+            capture_timestamp_utc="2026-10-01T15:00:00Z",
+            team_map=self.common["team_map"], player_map=self.common["player_map"],
+            unique_name_map={}, ambiguous_team_keys=set(), ambiguous_names=set(),
+            allowed_bets={"shots_on_goal": {"over", "under"}}, parent_run_id="daily-1",
+        )
+        _, upload, summary = select_raw_lane(source, self.names, self.schedule, **common)
+        self.assertEqual(len(upload), 2)
+        self.assertEqual(summary["mapped_upload_predictions"], 2)
+
+    def test_raw_zero_probability_is_preserved_but_classified_as_format_limit(self):
+        source = self.source(lines=(1.5,)).copy()
+        source["p_over"] = 0.0
+        common = dict(
+            lane="shots_on_goal", slate_date="2026-10-01", source_sha256="sha",
+            observation_id="obs", observation_manifest_sha256="manifest",
+            capture_timestamp_utc="2026-10-01T15:00:00Z",
+            team_map=self.common["team_map"], player_map=self.common["player_map"],
+            unique_name_map={}, ambiguous_team_keys=set(), ambiguous_names=set(),
+            allowed_bets={"shots_on_goal": {"over", "under"}}, parent_run_id="daily-1",
+        )
+        decisions, upload, summary = select_raw_lane(source, self.names, self.schedule, **common)
+        self.assertTrue(upload.empty)
+        self.assertEqual(summary["valid_model_predictions"], 1)
+        self.assertEqual(summary["win_percent_unrepresentable"], 1)
+        self.assertEqual(decisions.raw_export_status.iloc[0], "WIN_PERCENT_UNREPRESENTABLE")
+        self.assertEqual(decisions.exclusion_class.iloc[0], "SCHEMA_REQUIRED")
+
+    def test_points_and_saves_normalizers_preserve_both_provider_sides(self):
+        raw = [{
+            "id": "game-1", "commence_time": "2026-10-01T23:00:00Z",
+            "bookmakers": [{"key": "book-a", "markets": [
+                {"key": "player_points", "outcomes": [
+                    {"name": "Over", "description": "Alex Example", "point": 0.5, "price": -120},
+                    {"name": "Under", "description": "Alex Example", "point": 0.5, "price": 100},
+                ]},
+                {"key": "player_total_saves", "outcomes": [
+                    {"name": "Over", "description": "Alex Example", "point": 24.5, "price": -110},
+                    {"name": "Under", "description": "Alex Example", "point": 24.5, "price": -105},
+                ]},
+            ]}],
+        }]
+        points = parse_points_odds(raw).iloc[0]
+        saves = parse_odds_candidates(raw)
+        saves = saves[saves.alias_type.eq("AUTHORITATIVE_FULL_NAME")].iloc[0]
+        self.assertEqual(points.price_over, -120)
+        self.assertEqual(points.price_under, 100)
+        self.assertEqual(points.source_quote_count_under, 1)
+        self.assertEqual(saves.price_over, -110)
+        self.assertEqual(saves.price_under, -105)
+        self.assertEqual(saves.source_quote_count_under, 1)
 
 
 if __name__ == "__main__":

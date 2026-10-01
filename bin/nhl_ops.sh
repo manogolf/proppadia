@@ -41,26 +41,18 @@ CMD
 SLATE=$(date +%F) && .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" --segment-min-model-prob under:1.5=0.65 --segment-max-price under:1.5=100 --segment-min-ev-override over:2.5=0.15 --segment-min-gap-override over:2.5=0.07 --segment-min-ev-override under:2.5=0.19 --segment-min-gap-override under:2.5=0.10 --segment-max-price over:3.5=130 --emit-book-upload --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv --book-upload-max-fair-favorite -300
 CMD
       ;;
-    eight-rain-export)
+eight-rain-export)
       cat <<'CMD'
 set -euo pipefail
 SLATE=$(date +%F)
 : "${NHL_CROSS_MARKET_PACKAGE:?Set to today's immutable cross-market REFRESH/FINAL_PREGAME package directory}"
 .venv/bin/python backend/nhl/scripts/refresh_nhl_8rain_catalog.py
 CATALOG=$(ls -dt artifacts/operational/nhl/8rain_catalog/retrieval=* | head -n 1)
-CARD="tmp/cards/nhl_sog_card_${SLATE}.csv"
-SOG_ARGS=()
-if [ -f backend/nhl/config/nhl_sog_active_candidate_policy_v1.json ] && [ -f nhl/site/data/sog_with_market.csv ]; then
-  .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "$CARD" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" --segment-min-model-prob under:1.5=0.65 --segment-max-price under:1.5=100 --segment-min-ev-override over:2.5=0.15 --segment-min-gap-override over:2.5=0.07 --segment-min-ev-override under:2.5=0.19 --segment-min-gap-override under:2.5=0.10 --segment-max-price over:3.5=130
-  if [ -s "$CARD" ]; then SOG_ARGS=(--sog-candidates-csv "$CARD"); fi
-else
-  echo "SOG candidate export skipped: current policy or date-bound SOG market view absent; no thresholds inferred."
-fi
 OBSERVATION=$(find artifacts/operational/nhl/odds_observations -type d -path "*/slate_date=${SLATE}/observation=*" | sort | tail -n 1)
-COMBINED="tmp/cards/nhl_8rain_props_${SLATE}.csv"
-.venv/bin/python backend/nhl/scripts/select_nhl_points_saves_8rain_candidates.py --slate-date "$SLATE" --names-csv "backend/nhl/exports/daily/names/names_${SLATE}.csv" --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir "$CATALOG" --odds-observation-dir "$OBSERVATION" "${SOG_ARGS[@]}" --out-dir "tmp/cards/nhl_8rain_${SLATE}" --combined-props-csv "$COMBINED"
-UPLOAD="artifacts/operational/nhl/8rain_uploads/${SLATE}/nhl_8rain_manual_upload_${SLATE}.csv"
-.venv/bin/python backend/nhl/scripts/export_nhl_8rain_upload.py --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir "$CATALOG" --date "$SLATE" --props-csv "$COMBINED" --out-csv "$UPLOAD" --report-json "artifacts/operational/nhl/8rain_uploads/${SLATE}/nhl_8rain_manual_upload_${SLATE}_lineage.json"
+COMBINED="tmp/cards/nhl_8rain_raw_props_${SLATE}.csv"
+.venv/bin/python backend/nhl/scripts/select_nhl_points_saves_8rain_candidates.py --mode raw --slate-date "$SLATE" --names-csv "backend/nhl/exports/daily/names/names_${SLATE}.csv" --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir "$CATALOG" --odds-observation-dir "$OBSERVATION" --out-dir "tmp/cards/nhl_8rain_raw_${SLATE}" --combined-props-csv "$COMBINED"
+UPLOAD="artifacts/operational/nhl/8rain_uploads/${SLATE}/nhl_8rain_raw_manual_upload_${SLATE}.csv"
+.venv/bin/python backend/nhl/scripts/export_nhl_8rain_upload.py --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir "$CATALOG" --date "$SLATE" --props-csv "$COMBINED" --out-csv "$UPLOAD" --report-json "artifacts/operational/nhl/8rain_uploads/${SLATE}/nhl_8rain_raw_manual_upload_${SLATE}_lineage.json"
 mkdir -p "backend/nhl/data/processed"
 cp "$UPLOAD" "backend/nhl/data/processed/nhl_8rain_upload_${SLATE}.csv"
 CMD
@@ -102,7 +94,7 @@ description_for() {
     daily) echo "Run NHL daily pipeline" ;;
     denali-upload) echo "Build full SOG book-upload CSV" ;;
     candidates) echo "Build policy-selected candidate upload CSV + dated card files" ;;
-    eight-rain-export) echo "Refresh live catalog, select SOG/Points/Saves under explicit active policies, build and validate a current-slate five-lane CSV for manual upload" ;;
+    eight-rain-export) echo "Refresh live catalog, export all valid mappable reference predictions without candidate policy filters, and validate a current-slate five-lane CSV for manual upload" ;;
     bakeoff-trigger) echo "Run bakeoff only when slate game count >= 8" ;;
     reconcile) echo "Reconcile base model vs BetOnline and emit row/month reports" ;;
     walkforward) echo "Generate research threshold proposal without activating it" ;;

@@ -135,18 +135,20 @@ def load_odds_json(path: Path | None):
 
 def parse_points_odds(raw) -> pd.DataFrame | None:
     """
-    Return median Over price per (name_short, line_str) and a representative full_name for display.
-    Columns: name_short, line_str, price_over, full_name_odds
+    Return median Over and Under prices per (name_short, line_str), with book provenance.
     """
     if raw is None:
         return None
     recs = []
 
-    def walk(x):
+    def walk(x, bookmaker_key: str = ""):
         if isinstance(x, dict):
+            if "markets" in x and x.get("key") is not None:
+                bookmaker_key = str(x.get("key"))
             if x.get("key") == "player_points":
                 for o in (x.get("outcomes") or []):
-                    if o.get("name") != "Over":
+                    side = str(o.get("name") or "").strip().lower()
+                    if side not in {"over", "under"}:
                         continue
                     disp = (o.get("description") or o.get("player") or "").strip()
                     nm_norm = norm_name(disp)
@@ -159,24 +161,38 @@ def parse_points_odds(raw) -> pd.DataFrame | None:
                                 "name_short": nm_short,
                                 "full_name_odds": disp,
                                 "line_str": str(pt),
+                                "side": side,
+                                "bookmaker_key": bookmaker_key,
                                 "price": float(pr),
                             }
                         )
             for v in x.values():
-                walk(v)
+                walk(v, bookmaker_key)
         elif isinstance(x, list):
             for it in x:
-                walk(it)
+                walk(it, bookmaker_key)
 
     walk(raw)
     if not recs:
         return None
     od = pd.DataFrame(recs)
-    med = od.groupby(["name_short", "line_str"], as_index=False).agg(
-        price_over=("price", "median"),
+    med = od.groupby(["name_short", "line_str", "side"], as_index=False).agg(
+        price=("price", "median"),
         full_name_odds=("full_name_odds", "first"),
+        source_quote_count=("price", "size"),
+        source_books=("bookmaker_key", lambda values: "|".join(sorted(set(values)))),
     )
-    return med
+    prices = med.pivot(index=["name_short", "line_str"], columns="side", values="price")
+    counts = med.pivot(index=["name_short", "line_str"], columns="side", values="source_quote_count")
+    books = med.pivot(index=["name_short", "line_str"], columns="side", values="source_books")
+    full_names = od.groupby(["name_short", "line_str"], as_index=False).full_name_odds.first().set_index(["name_short", "line_str"])
+    result = prices.rename(columns={"over": "price_over", "under": "price_under"})
+    result["source_quote_count_over"] = counts.get("over")
+    result["source_quote_count_under"] = counts.get("under")
+    result["source_books_over"] = books.get("over")
+    result["source_books_under"] = books.get("under")
+    result["full_name_odds"] = full_names["full_name_odds"]
+    return result.reset_index()
 
 
 # ------------------ main ------------------
@@ -208,7 +224,7 @@ def main():
 
     # ---- Odds (used in both modes)
     odds_raw = load_odds_json(Path(args.odds_json) if args.odds_json else None)
-    med = parse_points_odds(odds_raw)  # name_short, line_str, price_over, full_name_odds
+    med = parse_points_odds(odds_raw)
 
     # ---- Mode
     have_preds = bool(args.pred and args.names and Path(args.pred).exists() and Path(args.names).exists())
@@ -232,25 +248,32 @@ def main():
             pd.DataFrame(
                 columns=[
                     "full_name", "player_id", "game_id", "team_id", "line",
-                    "price_over", "p_over_mkt", "fair_over", "game_date",
+                    "price_over", "price_under", "p_over_mkt", "p_under_mkt",
+                    "fair_over", "fair_under", "source_quote_count_over",
+                    "source_quote_count_under", "source_books_over", "source_books_under",
+                    "game_date",
                 ]
             ).to_csv(out, index=False)
             um.write_text("")
             print(f"[points_with_market] odds-only: no player_points found; wrote empty {out}")
             return
 
-        df = med.copy()  # name_short, line_str, price_over, full_name_odds
+        df = med.copy()
         df["full_name"] = df["full_name_odds"]
         df["line"] = pd.to_numeric(df["line_str"], errors="coerce")
         df["p_over_mkt"] = df["price_over"].map(american_to_prob)
+        df["p_under_mkt"] = df["price_under"].map(american_to_prob)
         df["fair_over"] = df["p_over_mkt"].map(prob_to_american)
+        df["fair_under"] = df["p_under_mkt"].map(prob_to_american)
         df["player_id"] = pd.NA
         df["game_id"]   = pd.NA
         df["team_id"]   = pd.NA
         df["game_date"] = slate or pd.NA
 
         keep = ["full_name", "player_id", "game_id", "team_id", "line",
-                "price_over", "p_over_mkt", "fair_over", "game_date"]
+                "price_over", "price_under", "p_over_mkt", "p_under_mkt",
+                "fair_over", "fair_under", "source_quote_count_over",
+                "source_quote_count_under", "source_books_over", "source_books_under", "game_date"]
         out_df = df[keep]
         out_df.to_csv(out, index=False)
         um.write_text("")
@@ -343,6 +366,7 @@ def main():
     # Metrics
     df["p_over"] = pd.to_numeric(df["p_over"], errors="coerce")
     df["p_over_mkt"] = df["price_over"].map(american_to_prob)
+    df["p_under_mkt"] = df["price_under"].map(american_to_prob)
     df["edge_over"] = df.apply(
         lambda r: (r["p_over"] - r["p_over_mkt"])
         if (isinstance(r["p_over"], float) and isinstance(r["p_over_mkt"], float)
@@ -351,6 +375,9 @@ def main():
         axis=1,
     )
     df["fair_over"] = df["p_over"].map(prob_to_american)
+    df["p_under"] = 1.0 - df["p_over"]
+    df["edge_under"] = df["p_under"] - df["p_under_mkt"]
+    df["fair_under"] = df["p_under"].map(prob_to_american)
 
     # ---- Final cleanup before writing ----
 
@@ -374,7 +401,9 @@ def main():
     # 3) Outputs
     keep_cols = [c for c in [
         "full_name","player_id","game_id","team_id","line",
-        "p_over","price_over","p_over_mkt","edge_over","fair_over","game_date",
+        "p_over","p_under","price_over","price_under","p_over_mkt","p_under_mkt",
+        "edge_over","edge_under","fair_over","fair_under","source_quote_count_over",
+        "source_quote_count_under","source_books_over","source_books_under","game_date",
     ] if c in df.columns]
     out_df = df[keep_cols].copy()
     if args.strict_current_run:

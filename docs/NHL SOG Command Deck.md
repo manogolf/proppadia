@@ -61,14 +61,17 @@ grading/book-upload workflow below. The upload remains manual.
 3. Inspect the emitted status JSON. Continue only when today's canonical slate,
    current predictions, market observation, and immutable REFRESH package are
    present and healthy. Set `NHL_CROSS_MARKET_PACKAGE` to that package directory.
-4. Confirm the candidate policy is the frozen default or a separately
-   authorized, versioned alternative.
+4. Opening-season collection mode is `RAW_PREDICTION_COLLECTION`: send all
+   valid, mappable reference-model predictions to 8rain while collecting
+   several slates of evidence. EV, edge/gap, price, probability bands, line
+   preferences, candidate counts, and one-per-player settings remain optional
+   research policies and do not gate this default export.
 5. Run `bin/nhl_ops.sh show eight-rain-export`. It refreshes the live catalog,
-   runs SOG selection when its active policy and current market view exist,
-   then selects Points and Saves with their active policy files. It writes rich
-   ledgers and validates the combined thin CSV for today's slate.
+   builds rich raw decision ledgers and mapping exceptions, then validates the
+   combined thin CSV for today's slate. The legacy SOG/Points/Saves selectors
+   and policy files remain available for explicit filtered research.
 6. Review the lineage report and manually upload
-   `artifacts/operational/nhl/8rain_uploads/YYYY-MM-DD/nhl_8rain_manual_upload_YYYY-MM-DD.csv`
+   `artifacts/operational/nhl/8rain_uploads/YYYY-MM-DD/nhl_8rain_raw_manual_upload_YYYY-MM-DD.csv`
    only if desired. The command never uploads externally.
 
 8rain importer acceptance note:
@@ -821,8 +824,9 @@ Examples:
 
 ## 8rain Station Export (Two Layers)
 
-The candidate card remains the rich internal layer. Keep its selection policy,
-model context, market fields, and run artifacts there. The 8rain adapter is the
+Raw prediction decision ledgers remain the rich internal layer. Keep optional
+selection policy, model context, market fields, mapping status, and run
+artifacts there. The 8rain adapter is the
 thin upload layer and writes exactly:
 
 `LEAGUE,DATE,HOME,AWAY,DOUBLEHEADER,SECTION,MARKET,SELECTOR,POINT,SIDE,WIN %`
@@ -832,16 +836,15 @@ operational CSV. Catalog responses and hashes are retained under
 `artifacts/operational/nhl/8rain_catalog/`. The adapter uses catalog market and
 player codes and maps NHL team abbreviations to the current 8rain team codes.
 Current operational lanes are Moneyline V2 reference, Puck Line V1 reference,
-and policy-selected SOG, Points, and Saves. Points and Saves use the explicit
-replaceable policies in `backend/nhl/config/nhl_points_active_candidate_policy_v1.json`
-and `backend/nhl/config/nhl_saves_active_candidate_policy_v1.json`. Each
-requires a matched side price, positive EV, and positive model-market gap;
-neither policy caps candidates or limits lines. Policies are selection inputs,
-not scoring changes. Candidate rows map through exact live catalog player codes;
-unmapped and ambiguous identities stay in the internal ledgers and are omitted
-from the upload. Challenger rows stay excluded by default and remain in
-separately identified shadow artifacts. A lineage JSON sits beside the thin
-CSV because the 11-column upload has no model-version field.
+and raw reference-model SOG, Points, and Saves. Points/Saves policy files and
+the SOG active policy remain optional filtered research workflows. Raw upload
+does not require a matched quote, positive EV, positive model-market gap, or
+candidate limits. Exact team/name catalog matching is preferred; a unique
+normalized global name match may resolve stale team catalogs. Unmapped and
+ambiguous identities remain in internal ledgers and are omitted from upload
+with a mapping exception report. Challengers remain excluded. A lineage JSON
+sits beside the thin CSV because the 11-column upload has no model-version
+field.
 
 The 8rain importer has manually accepted a four-row test CSV: 4/4 predictions
 resolved (100%), per operator report. The report did not identify whether the
@@ -872,10 +875,9 @@ package, then copy and run:
 bin/nhl_ops.sh show eight-rain-export
 ```
 
-The printed command refreshes the live catalog, runs SOG selection when its
-active policy and current market view exist, selects Points and Saves under
-their explicit active policies, and writes rich internal decision ledgers.
-It then builds and validates one current-slate Moneyline/Puck Line/SOG/
+The printed command refreshes the live catalog, writes raw decision ledgers for
+SOG, Points, and Saves without candidate filters, then builds and validates one
+current-slate Moneyline/Puck Line/SOG/
 Points/Saves reference CSV and copies it to the manual-upload path reported by
 the command. Current slate is required. Challenger rows remain excluded, and
 the workflow never uploads externally. The operator performs manual upload
