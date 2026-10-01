@@ -11,6 +11,7 @@ Usage:
   bin/nhl_ops.sh copy <id>
   bin/nhl_ops.sh export [path]
   bin/nhl_ops.sh ids
+  bin/nhl_ops.sh eight-rain-export --latest-refresh
   bin/nhl_ops.sh eight-rain-export --package <immutable-package-dir>
   bin/nhl_ops.sh show eight-rain-export
 
@@ -44,7 +45,7 @@ CMD
       ;;
 eight-rain-export)
       cat <<'CMD'
-bin/nhl_ops.sh eight-rain-export --package "${NHL_CROSS_MARKET_PACKAGE:?Pass the immutable current-slate package with --package}"
+bin/nhl_ops.sh eight-rain-export --latest-refresh
 CMD
       ;;
     bakeoff-trigger)
@@ -84,7 +85,7 @@ description_for() {
     daily) echo "Run NHL daily pipeline" ;;
     denali-upload) echo "Build full SOG book-upload CSV" ;;
     candidates) echo "Build policy-selected candidate upload CSV + dated card files" ;;
-    eight-rain-export) echo "Directly build, validate, and report one immutable current-slate raw reference export for the supplied cross-market package" ;;
+    eight-rain-export) echo "Build, validate, and report one immutable current-slate raw reference export from the latest valid REFRESH package" ;;
     bakeoff-trigger) echo "Run bakeoff only when slate game count >= 8" ;;
     reconcile) echo "Reconcile base model vs BetOnline and emit row/month reports" ;;
     walkforward) echo "Generate research threshold proposal without activating it" ;;
