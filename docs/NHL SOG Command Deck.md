@@ -67,6 +67,13 @@ grading/book-upload workflow below. The upload remains manual.
    `backend/nhl/data/processed/nhl_8rain_upload_YYYY-MM-DD.csv` path for manual
    upload. Do not automate upload.
 
+8rain importer acceptance note:
+
+- `IMPORTER_ACCEPTANCE_DECIMAL = CONFIRMED` for decimal `WIN %` input.
+- `IMPORTER_ACCEPTANCE_D_SUFFIX = CONFIRMED` for d-suffixed American `WIN %` input.
+- Semantic equivalence on a current slate remains unverified. Keep the
+  operational default unchanged until that check is completed.
+
 For an explicit inspectable run, invoke `select_sog_candidates_live.py` once
 with `--game-date "$SLATE"`, then pass that card to
 `export_nhl_8rain_upload.py --props-csv CARD.csv --prop-market shots_on_goal`.

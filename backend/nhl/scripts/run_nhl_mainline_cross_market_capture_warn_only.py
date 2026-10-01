@@ -7,9 +7,11 @@ import contextlib
 import fcntl
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -125,6 +127,119 @@ def validate_history_score_source(
     target_start = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True, errors="coerce").min()
     if scheduled.isna().any() or not scheduled.lt(target_start).all():
         raise ValueError("CROSS_MARKET_FINAL_SCORE_NOT_STRICT_PRIOR")
+
+
+def _prior_day_regular_season_game_ids(dsn: str, prior_slate: str) -> list[int]:
+    """Return canonical regular-season game IDs for one operational prior day."""
+    with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT game_id
+            FROM nhl.games
+            WHERE season = 2026 AND game_type = 2 AND game_date = %s::date
+            ORDER BY game_id
+            """,
+            (prior_slate,),
+        )
+        return [int(row[0]) for row in cursor.fetchall()]
+
+
+def _parse_json_output(output: str, *, expected_status: str) -> dict:
+    """Parse a governed preflight's JSON-only output and require its status."""
+    try:
+        payload = json.loads(output)
+    except json.JSONDecodeError as error:
+        raise RuntimeError("CROSS_MARKET_RECONCILIATION_PREFLIGHT_INVALID_JSON") from error
+    if not isinstance(payload, dict):
+        raise RuntimeError("CROSS_MARKET_RECONCILIATION_PREFLIGHT_INVALID_SHAPE")
+    if payload.get("status") != expected_status:
+        raise RuntimeError(
+            "CROSS_MARKET_PRIOR_DAY_RECONCILIATION_BLOCKED:"
+            f"{payload.get('failure', payload.get('status', 'INVALID_STATUS'))}"
+        )
+    return payload
+
+
+def ensure_prior_day_official_outcomes(
+    dsn: str, slate: str, *, outcome_root: Path = DEFAULT_OUTCOME_ROOT,
+) -> dict[str, object]:
+    """Ensure yesterday's regular-season finals have the canonical governed package.
+
+    This runs only for today's operational slate and only for the immediately
+    prior date. Existing evidence is validated by the same immutable reader
+    used by cross-market history. It never substitutes database player stats
+    for official scores.
+    """
+    today = datetime.now(ZoneInfo("America/Los_Angeles")).date().isoformat()
+    if slate != today:
+        return {"status": "NOT_CURRENT_OPERATIONAL_SLATE"}
+    prior_slate = (date.fromisoformat(slate) - timedelta(days=1)).isoformat()
+    game_ids = _prior_day_regular_season_game_ids(dsn, prior_slate)
+    if not game_ids:
+        return {"status": "NO_PRIOR_DAY_REGULAR_SEASON_GAMES", "slate_date": prior_slate}
+
+    day_root = outcome_root / prior_slate
+    packages = sorted(day_root.glob("reconciliation=*") if day_root.is_dir() else [])
+    if packages:
+        outcomes = load_official_outcomes(outcome_root)
+        observed = set(pd.to_numeric(outcomes.game_id, errors="coerce").dropna().astype(int))
+        missing = sorted(set(game_ids) - observed)
+        if missing:
+            raise ValueError(
+                "CROSS_MARKET_PRIOR_DAY_RECONCILIATION_INCOMPLETE:"
+                + ",".join(map(str, missing))
+            )
+        return {"status": "EXISTING_GOVERNED_PACKAGE_VALID", "slate_date": prior_slate,
+                "game_ids": game_ids}
+
+    base = [sys.executable, "-m", "backend.nhl.scripts.run_nhl_postgame_reconciliation"]
+    acquisition = subprocess.run(
+        [*base, "--authority-roster-acquisition", prior_slate], cwd=str(ROOT),
+        check=True, text=True, capture_output=True, env=os.environ.copy(),
+    )
+    acquisition_payload = _parse_json_output(
+        acquisition.stdout, expected_status="COMPLETE")
+    source_id = str(acquisition_payload.get("run_id") or "")
+    if not source_id or set(map(int, acquisition_payload.get("game_ids") or [])) != set(game_ids):
+        raise RuntimeError("CROSS_MARKET_PRIOR_DAY_ACQUISITION_GAME_SET_MISMATCH")
+    sources = [
+        "--response-source", f"AUTHORITY_RESPONSE_SOURCE={source_id}",
+        "--response-source", f"ROSTER_RESPONSE_SOURCE={source_id}",
+    ]
+    local = subprocess.run(
+        [*base, "--local-input-preflight", prior_slate, *sources], cwd=str(ROOT),
+        check=True, text=True, capture_output=True, env=os.environ.copy(),
+    )
+    _parse_json_output(local.stdout, expected_status="LOCAL_INPUTS_VALID")
+    identity = subprocess.run(
+        [*base, "--database-identity-preflight", prior_slate, *sources], cwd=str(ROOT),
+        check=True, text=True, capture_output=True, env=os.environ.copy(),
+    )
+    identity_payload = _parse_json_output(
+        identity.stdout, expected_status="DATABASE_IDENTITY_PREFLIGHT_VALID")
+    partition = identity_payload.get("database_preflight") or {}
+    classification = partition.get("classification") or {}
+    if (partition.get("authorized_new_official_lookup_ids")
+            or classification.get("new_official_lookup")
+            or classification.get("conflict")):
+        raise RuntimeError(
+            "CROSS_MARKET_PRIOR_DAY_PLAYER_IDENTITY_AUTHORIZATION_REQUIRED"
+        )
+
+    subprocess.run(
+        [*base, "--execute", prior_slate, *sources], cwd=str(ROOT),
+        check=True, text=True, capture_output=True, env=os.environ.copy(),
+    )
+    outcomes = load_official_outcomes(outcome_root)
+    observed = set(pd.to_numeric(outcomes.game_id, errors="coerce").dropna().astype(int))
+    missing = sorted(set(game_ids) - observed)
+    if missing:
+        raise RuntimeError(
+            "CROSS_MARKET_PRIOR_DAY_RECONCILIATION_OUTPUT_INCOMPLETE:"
+            + ",".join(map(str, missing))
+        )
+    return {"status": "GOVERNED_RECONCILIATION_COMPLETE", "slate_date": prior_slate,
+            "game_ids": game_ids, "acquisition_run_id": source_id}
 
 
 def export_inputs(dsn: str, slate_date: str, directory: Path, *,
@@ -350,6 +465,9 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
         try:
             if not dsn:
                 raise RuntimeError("SUPABASE_DB_URL_MISSING")
+            result["prior_day_outcome_handoff"] = ensure_prior_day_official_outcomes(
+                dsn, slate,
+            )
             input_dir = root / "runtime_inputs" / slate / stamp
             if (canonical_raw_path is None) != (canonical_health_path is None):
                 raise ValueError("BOTH_CANONICAL_SLATE_PATHS_REQUIRED")

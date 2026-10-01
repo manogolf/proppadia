@@ -684,6 +684,17 @@ def verify_manifest(path: Path) -> None:
             raise RuntimeError("MANIFEST_MISMATCH")
 
 
+def _run_nonblocking_challenger(callback):
+    """Keep optional challenger failures out of the frozen control capture."""
+    try:
+        return callback(), {"status": "COMPLETE", "failure": None}
+    except Exception as error:
+        return None, {
+            "status": "FAILED_NONBLOCKING",
+            "failure": f"{type(error).__name__}:{error}",
+        }
+
+
 def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path | None, root: Path,
                           slate_date: str, run_timestamp_utc: str, run_type: str,
                           sog_csv: Path | None = None, points_csv: Path | None = None,
@@ -706,25 +717,34 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     puck_predictions = build_puck_line_predictions(predictions)
     puck_v2_predictions = pd.DataFrame()
     puck_v2_provenance = pd.DataFrame()
+    puck_v2_lane = {"status": "NOT_APPLICABLE", "failure": None}
+    moneyline_challenger_lane = {"status": "SKIPPED_DEPENDENCY_OR_NOT_APPLICABLE", "failure": None}
     if schedule.game_type_code.eq(2).any():
-        prior_source, prior_source_hash, prior_outcome_hash = load_verified_2025_shot_prior()
-        challenger_input, puck_v2_provenance = build_shot_prior_challenger(
-            schedule, history, predictions, prior_source,
-            prior_source_sha256=prior_source_hash,
-            prior_outcome_sha256=prior_outcome_hash,
-        )
-        puck_v2_predictions = build_puck_line_predictions(challenger_input)
-        puck_v2_predictions["control_name"] = CHALLENGER_NAME
-        puck_v2_predictions["feature_policy_version"] = POLICY_VERSION
-        puck_v2_predictions["control_model_sha256"] = load_puck_parameters()["model_sha256"]
-        puck_v2_predictions["substantive_prediction_sha256"] = puck_v2_predictions.apply(
-            lambda row: digest_value({
-                "game_id": int(row.game_id), "canonical_season": int(row.canonical_season),
-                "feature_policy_version": POLICY_VERSION,
-                "features": {feature: row[feature] for feature in FEATURES},
-                "control_model_sha256": row.control_model_sha256,
-            }), axis=1,
-        )
+        def build_puck_line_challenger():
+            prior = load_verified_2025_shot_prior()
+            candidate_input, provenance = build_shot_prior_challenger(
+                schedule, history, predictions, prior[0],
+                prior_source_sha256=prior[1], prior_outcome_sha256=prior[2],
+            )
+            candidate_predictions = build_puck_line_predictions(candidate_input)
+            candidate_predictions["control_name"] = CHALLENGER_NAME
+            candidate_predictions["feature_policy_version"] = POLICY_VERSION
+            candidate_predictions["control_model_sha256"] = load_puck_parameters()["model_sha256"]
+            candidate_predictions["substantive_prediction_sha256"] = candidate_predictions.apply(
+                lambda row: digest_value({
+                    "game_id": int(row.game_id), "canonical_season": int(row.canonical_season),
+                    "feature_policy_version": POLICY_VERSION,
+                    "features": {feature: row[feature] for feature in FEATURES},
+                    "control_model_sha256": row.control_model_sha256,
+                }), axis=1,
+            )
+            return prior, candidate_input, provenance, candidate_predictions
+
+        puck_result, puck_v2_lane = _run_nonblocking_challenger(build_puck_line_challenger)
+        if puck_result is not None:
+            (prior_result, challenger_input, puck_v2_provenance,
+             puck_v2_predictions) = puck_result
+            prior_source, prior_source_hash, prior_outcome_hash = prior_result
     if odds_json:
         envelope = json.loads(odds_json.read_text())
     else:
@@ -738,32 +758,38 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     moneyline_challenger_provenance = pd.DataFrame()
     moneyline_challenger_ledger = pd.DataFrame(columns=["game_id", "outcome_status"])
     if len(puck_v2_predictions):
-        moneyline_challenger_predictions, moneyline_challenger_provenance, _ = build_moneyline_challenger(
-            predictions, challenger_input, puck_v2_provenance, prior_source,
-            prior_team_source_sha256=prior_source_hash,
-            prior_outcome_source_sha256=prior_outcome_hash,
-            schedule_source_sha256=sha256(schedule_csv),
-            history_source_sha256=sha256(history_csv),
-            odds_source_sha256=sha256(odds_json) if odds_json else "NO_MARKET",
-        )
-        moneyline_challenger_ledger = make_moneyline_challenger_ledger(
-            moneyline_challenger_predictions, quotes,
-        )
-        moneyline_challenger_ledger["slate_date"] = slate_date
-        moneyline_challenger_ledger["market_observation_timestamp_utc"] = envelope.get("capture_timestamp_utc")
-        v2_by_game = predictions.set_index("game_id")
-        moneyline_challenger_ledger["v2_side"] = moneyline_challenger_ledger.game_id.map(v2_by_game.model_favored_team)
-        moneyline_challenger_ledger["v2_home_win_probability"] = moneyline_challenger_ledger.game_id.map(v2_by_game.v2_home_win_probability)
-        moneyline_challenger_ledger["v2_probability"] = moneyline_challenger_ledger.v2_home_win_probability
-        moneyline_challenger_ledger["challenger_side"] = moneyline_challenger_ledger.challenger_favored_team
-        moneyline_challenger_ledger["probability_delta"] = moneyline_challenger_ledger.probability_delta_challenger_minus_v2
-        moneyline_challenger_ledger["current_history_depth_home"] = moneyline_challenger_ledger.game_id.map(
-            puck_v2_provenance.set_index("game_id").current_home_games
-        )
-        moneyline_challenger_ledger["current_history_depth_away"] = moneyline_challenger_ledger.game_id.map(
-            puck_v2_provenance.set_index("game_id").current_away_games
-        )
-        moneyline_challenger_ledger["outcome_status"] = "PENDING_OFFICIAL_RECONCILIATION"
+        def build_moneyline_candidate():
+            candidate, provenance, _ = build_moneyline_challenger(
+                predictions, challenger_input, puck_v2_provenance, prior_source,
+                prior_team_source_sha256=prior_source_hash,
+                prior_outcome_source_sha256=prior_outcome_hash,
+                schedule_source_sha256=sha256(schedule_csv),
+                history_source_sha256=sha256(history_csv),
+                odds_source_sha256=sha256(odds_json) if odds_json else "NO_MARKET",
+            )
+            candidate_ledger = make_moneyline_challenger_ledger(candidate, quotes)
+            candidate_ledger["slate_date"] = slate_date
+            candidate_ledger["market_observation_timestamp_utc"] = envelope.get("capture_timestamp_utc")
+            v2_by_game = predictions.set_index("game_id")
+            candidate_ledger["v2_side"] = candidate_ledger.game_id.map(v2_by_game.model_favored_team)
+            candidate_ledger["v2_home_win_probability"] = candidate_ledger.game_id.map(v2_by_game.v2_home_win_probability)
+            candidate_ledger["v2_probability"] = candidate_ledger.v2_home_win_probability
+            candidate_ledger["challenger_side"] = candidate_ledger.challenger_favored_team
+            candidate_ledger["probability_delta"] = candidate_ledger.probability_delta_challenger_minus_v2
+            candidate_ledger["current_history_depth_home"] = candidate_ledger.game_id.map(
+                puck_v2_provenance.set_index("game_id").current_home_games
+            )
+            candidate_ledger["current_history_depth_away"] = candidate_ledger.game_id.map(
+                puck_v2_provenance.set_index("game_id").current_away_games
+            )
+            candidate_ledger["outcome_status"] = "PENDING_OFFICIAL_RECONCILIATION"
+            return candidate, provenance, candidate_ledger
+
+        moneyline_result, moneyline_challenger_lane = _run_nonblocking_challenger(
+            build_moneyline_candidate)
+        if moneyline_result is not None:
+            (moneyline_challenger_predictions, moneyline_challenger_provenance,
+             moneyline_challenger_ledger) = moneyline_result
     if len(puck_v2_predictions):
         standard = quotes[
             quotes.qualification_status.eq("PREGAME_QUALIFIED")
@@ -884,6 +910,8 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "moneyline_shot_finishing_challenger_v3_predictions_created": len(moneyline_challenger_predictions),
         "moneyline_shot_finishing_challenger_v3_model": MONEYLINE_CHALLENGER_NAME if len(moneyline_challenger_predictions) else None,
         "moneyline_shot_finishing_challenger_v3_feature_policy": MONEYLINE_FEATURE_POLICY_VERSION if len(moneyline_challenger_predictions) else None,
+        "puck_line_v2_challenger_lane": puck_v2_lane,
+        "moneyline_challenger_lane": moneyline_challenger_lane,
         "puck_line_v1_v2_class_changes": int(ledger.drop_duplicates("game_id").class_changed.sum()) if len(ledger) else 0,
         "puck_line_v1_v2_mean_absolute_probability_delta": float(pd.concat([
             ledger.drop_duplicates("game_id")[f"{label}_probability_delta_v2_minus_v1"].abs()
