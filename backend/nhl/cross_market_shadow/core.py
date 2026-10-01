@@ -10,6 +10,7 @@ import unicodedata
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -49,6 +50,8 @@ GAME_TYPES = {1: "PRESEASON", 2: "REGULAR_SEASON", 3: "POSTSEASON"}
 MAX_REQUESTS_PER_RUN = 1
 MAX_ESTIMATED_CREDITS_PER_RUN = 4
 MARKETS = ("h2h", "spreads")
+NHL_OPERATIONAL_TZ = ZoneInfo("America/New_York")
+TIME_WARNING_MINUTES = 15
 REGIONS = ("us", "us2")
 PRIOR_SOURCE_DIR = Path(__file__).resolve().parents[3] / "artifacts" / "analysis" / "model_development"
 PRIOR_TEAM_SOURCE = PRIOR_SOURCE_DIR / "nhl_season_2025_frozen_moneyline_replay_and_sog_novelty_v1" / "2026-09-15" / "season_2025_team_game_source.csv"
@@ -421,8 +424,26 @@ def normalize_markets(envelope: dict[str, Any], schedule: pd.DataFrame) -> tuple
     capture = parse_utc(envelope["capture_timestamp_utc"])
     schedule = normalize_game_types(schedule)
     schedule["scheduled_start_time_utc"] = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True, format="mixed")
+    schedule["_official_et_date"] = schedule.scheduled_start_time_utc.map(
+        lambda value: (
+            value.to_pydatetime().astimezone(NHL_OPERATIONAL_TZ).date().isoformat()
+            if pd.notna(value) else None
+        )
+    )
     quote_rows, binding_rows, raw_rows = [], [], []
-    for event in envelope.get("provider_response") or []:
+    events = envelope.get("provider_response") or []
+    # Provider event identity is the ordered team pair on its NHL business
+    # date (ET). Start time is diagnostic for a unique identity and only helps
+    # disambiguate when the canonical schedule itself has duplicate pairs.
+    event_pairs: dict[tuple[str, str, str], list[tuple[int, pd.Timestamp]]] = {}
+    for index, item in enumerate(events):
+        commence_value = pd.to_datetime(item.get("commence_time"), utc=True, errors="coerce")
+        home_value, away_value = team_code(item.get("home_team")), team_code(item.get("away_team"))
+        if pd.notna(commence_value) and home_value and away_value:
+            et_date = commence_value.to_pydatetime().astimezone(NHL_OPERATIONAL_TZ).date().isoformat()
+            key = (et_date, away_value, home_value)
+            event_pairs.setdefault(key, []).append((index, commence_value))
+    for event_index, event in enumerate(events):
         event_id = str(event.get("id") or "")
         commence = pd.to_datetime(event.get("commence_time"), utc=True, errors="coerce")
         home_code, away_code = team_code(event.get("home_team")), team_code(event.get("away_team"))
@@ -432,23 +453,96 @@ def normalize_markets(envelope: dict[str, Any], schedule: pd.DataFrame) -> tuple
                 team_name_normalization_flag(event.get("away_team", "")),
             ) if flag != "NONE"
         })
-        candidates = schedule[
+        provider_et_date = (
+            commence.to_pydatetime().astimezone(NHL_OPERATIONAL_TZ).date().isoformat()
+            if pd.notna(commence) else None
+        )
+        pair_candidates = schedule[
             schedule.home_team.eq(home_code) & schedule.away_team.eq(away_code)
-            & schedule.scheduled_start_time_utc.sub(commence).abs().le(pd.Timedelta(minutes=15))
-        ] if pd.notna(commence) else schedule.iloc[0:0]
-        status = "BOUND" if len(candidates) == 1 else "UNMATCHED_OR_AMBIGUOUS"
-        game = candidates.iloc[0] if len(candidates) == 1 else None
+        ] if home_code and away_code else schedule.iloc[0:0]
+        same_day_candidates = pair_candidates[
+            pair_candidates._official_et_date.eq(provider_et_date)
+            & pair_candidates.slate_date.astype(str).eq(provider_et_date)
+        ] if provider_et_date else schedule.iloc[0:0]
+        reversed_candidates = schedule[
+            schedule.home_team.eq(away_code) & schedule.away_team.eq(home_code)
+        ] if home_code and away_code else schedule.iloc[0:0]
+        game = None
+        binding_classification = "NO_PROVIDER_EVENT"
+        binding_reason = "NO_PROVIDER_EVENT"
+        if not pd.notna(commence):
+            binding_classification = "MALFORMED_PROVIDER_EVENT_DATE"
+            binding_reason = "MALFORMED_PROVIDER_EVENT_DATE"
+        elif len(same_day_candidates) == 1:
+            pair_key = (provider_et_date, away_code, home_code)
+            pair_events = event_pairs.get(pair_key, [])
+            if len(pair_events) > 1:
+                distances = [
+                    abs((candidate_time - same_day_candidates.iloc[0].scheduled_start_time_utc).total_seconds())
+                    for _, candidate_time in pair_events
+                ]
+                minimum_distance = min(distances)
+                nearest_indices = [
+                    pair_events[position][0] for position, distance in enumerate(distances)
+                    if distance == minimum_distance
+                ]
+                if len(nearest_indices) == 1 and event_index == nearest_indices[0]:
+                    game = same_day_candidates.iloc[0]
+                    binding_classification = "EXACT_IDENTITY_MATCH"
+                    binding_reason = "ET_TEAM_PAIR_DISAMBIGUATED_BY_NEAREST_PROVIDER_START"
+                else:
+                    binding_classification = "AMBIGUOUS_TEAM_PAIR"
+                    binding_reason = "MULTIPLE_PROVIDER_EVENTS_NOT_UNIQUELY_DISAMBIGUATED"
+            else:
+                game = same_day_candidates.iloc[0]
+                binding_classification = "EXACT_IDENTITY_MATCH"
+                binding_reason = "ET_SLATE_DATE_AND_ORDERED_TEAM_PAIR_MATCH"
+        elif len(same_day_candidates) > 1:
+            deltas = (same_day_candidates.scheduled_start_time_utc - commence).abs()
+            nearest = deltas.min()
+            nearest_candidates = same_day_candidates.loc[deltas.eq(nearest)]
+            if len(nearest_candidates) == 1 and len(event_pairs.get((provider_et_date, away_code, home_code), [])) == 1:
+                game = nearest_candidates.iloc[0]
+                binding_classification = "EXACT_IDENTITY_MATCH"
+                binding_reason = "ET_TEAM_PAIR_DISAMBIGUATED_BY_NEAREST_START"
+            else:
+                binding_classification = "AMBIGUOUS_TEAM_PAIR"
+                binding_reason = "CANONICAL_TEAM_PAIR_NOT_UNIQUELY_DISAMBIGUATED"
+        elif len(pair_candidates):
+            binding_classification = "DATE_MISMATCH"
+            binding_reason = "PROVIDER_ET_DATE_DOES_NOT_MATCH_CANONICAL_SLATE_DATE"
+        elif len(reversed_candidates):
+            binding_classification = "ORIENTATION_MISMATCH"
+            binding_reason = "REVERSED_ORDERED_TEAM_PAIR"
+        signed_delta_minutes = (
+            float((commence - game.scheduled_start_time_utc).total_seconds() / 60)
+            if game is not None else pd.NA
+        )
+        delta_minutes = abs(signed_delta_minutes) if game is not None else pd.NA
+        time_warning = bool(game is not None and delta_minutes > TIME_WARNING_MINUTES)
+        if game is not None and time_warning:
+            binding_classification = "EXACT_IDENTITY_MATCH_WITH_TIME_WARNING"
+            binding_reason += ";START_TIME_DELTA_EXCEEDS_WARNING_LEVEL"
+        status = "BOUND" if game is not None else "UNMATCHED_OR_AMBIGUOUS"
+        game_start_utc = game.scheduled_start_time_utc if game is not None else pd.NaT
+        provider_start_et = commence.tz_convert("America/New_York") if pd.notna(commence) else pd.NaT
+        official_start_et = game_start_utc.tz_convert("America/New_York") if pd.notna(game_start_utc) else pd.NaT
         binding_rows.append({
             "provider_event_id": event_id, "participant_home_raw": event.get("home_team"),
             "participant_away_raw": event.get("away_team"), "normalized_home_team": home_code,
             "normalized_away_team": away_code,
             "team_name_normalization": ",".join(normalization_flags) or "NONE",
             "provider_commence_time_utc": event.get("commence_time"),
-            "candidate_games": len(candidates), "binding_status": status,
-            "binding_reason": (
-                "ORDERED_TEAM_PAIR_AND_START_TIME_MATCH" if len(candidates) == 1
-                else "NO_UNIQUE_CANONICAL_CANDIDATE"
-            ),
+            "provider_start_et": provider_start_et.isoformat() if pd.notna(provider_start_et) else None,
+            "provider_et_slate_date": provider_et_date,
+            "official_start_utc": game_start_utc.isoformat() if pd.notna(game_start_utc) else None,
+            "official_start_et": official_start_et.isoformat() if pd.notna(official_start_et) else None,
+            "start_delta_minutes": delta_minutes,
+            "provider_minus_official_start_minutes": signed_delta_minutes,
+            "time_warning": time_warning,
+            "binding_classification": binding_classification,
+            "candidate_games": len(same_day_candidates), "binding_status": status,
+            "binding_reason": binding_reason,
             "canonical_game_id": int(game.game_id) if game is not None else pd.NA,
         })
         for book in event.get("bookmakers") or []:
@@ -511,8 +605,11 @@ def normalize_markets(envelope: dict[str, Any], schedule: pd.DataFrame) -> tuple
     binding_columns = [
         "provider_event_id", "participant_home_raw", "participant_away_raw",
         "normalized_home_team", "normalized_away_team", "team_name_normalization",
-        "provider_commence_time_utc", "candidate_games", "binding_status",
-        "binding_reason", "canonical_game_id",
+        "provider_commence_time_utc", "provider_start_et", "provider_et_slate_date",
+        "official_start_utc", "official_start_et", "start_delta_minutes",
+        "provider_minus_official_start_minutes", "time_warning",
+        "binding_classification", "candidate_games", "binding_status", "binding_reason",
+        "canonical_game_id",
     ]
     raw_columns = [
         "provider_event_id", "sportsbook_key", "sportsbook_name", "provider_market_key",
