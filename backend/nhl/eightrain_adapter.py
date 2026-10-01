@@ -8,7 +8,7 @@ import re
 import unicodedata
 from pathlib import Path
 from typing import Any
-from datetime import datetime, timezone
+from datetime import date
 
 import pandas as pd
 
@@ -134,6 +134,17 @@ def ambiguous_player_bindings(catalog_dir: Path) -> set[tuple[str, str]]:
 
 def _date(value: Any) -> str:
     return pd.to_datetime(value, errors="raise").strftime("%Y-%m-%d")
+
+
+def classify_export_date(value: str, *, current_date: date, test_only: bool = False) -> str:
+    """Require current-slate dates for operational exports; label prior dates as tests."""
+    try:
+        export_date = date.fromisoformat(str(value))
+    except ValueError as exc:
+        raise ValueError("UPLOAD_DATE_INVALID") from exc
+    if export_date != current_date and not test_only:
+        raise ValueError("OPERATIONAL_EXPORT_MUST_USE_CURRENT_SLATE; use --test-only for prior-date testing")
+    return "TEST_ONLY_NON_OPERATIONAL" if test_only else "OPERATIONAL_CURRENT_SLATE"
 
 
 def _base_row(date: str, home: str, away: str, section: str, market: str,

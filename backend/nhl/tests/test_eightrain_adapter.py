@@ -5,12 +5,13 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import json
+from datetime import date
 
 import pandas as pd
 
 from backend.nhl.eightrain_adapter import (
     UPLOAD_COLUMNS, build_rows, fair_american, fair_american_d,
-    format_win_probability, load_catalogs, validate_upload,
+    classify_export_date, format_win_probability, load_catalogs, validate_upload,
 )
 from backend.nhl.scripts.select_sog_candidates_live import DEFAULT_POLICY_JSON, _load_policy, main
 
@@ -137,6 +138,16 @@ class EightRainAdapterTests(unittest.TestCase):
         self.assertEqual(policy["under:2.5"].min_gap, .08)
         self.assertNotEqual(path.as_posix(), "tmp/nhl_sog_walkforward_research_summary.json")
 
+    def test_explicit_alternate_policy_can_be_selected_without_changing_default(self):
+        alternate = self.root / "sog_policy_experiment_v2.json"
+        alternate.write_text(json.dumps({"policy_name": "TEST_POLICY_V2", "thresholds_for_next_slate": {
+            "over:1.5": {"min_ev": .07, "min_gap": .05},
+        }}))
+        policy = _load_policy(alternate)
+        active = _load_policy(Path(DEFAULT_POLICY_JSON))
+        self.assertEqual((policy["over:1.5"].min_ev, policy["over:1.5"].min_gap), (.07, .05))
+        self.assertEqual((active["over:1.5"].min_ev, active["over:1.5"].min_gap), (.03, .04))
+
     def test_frozen_policy_contains_all_documented_thresholds(self):
         policy = _load_policy(Path(DEFAULT_POLICY_JSON))
         expected = {
@@ -157,6 +168,25 @@ class EightRainAdapterTests(unittest.TestCase):
         command_deck = Path("bin/nhl_ops.sh").read_text()
         self.assertIn("--out-summary-json tmp/nhl_sog_walkforward_research_summary.json", command_deck)
         self.assertNotIn("--out-summary-json backend/nhl/config/nhl_sog_active_candidate_policy_v1.json", command_deck)
+
+    def test_current_slate_required_and_prior_day_explicitly_test_only(self):
+        today = date(2026, 10, 1)
+        with self.assertRaisesRegex(ValueError, "OPERATIONAL_EXPORT_MUST_USE_CURRENT_SLATE"):
+            classify_export_date("2026-09-30", current_date=today)
+        self.assertEqual(classify_export_date("2026-09-30", current_date=today, test_only=True),
+                         "TEST_ONLY_NON_OPERATIONAL")
+        self.assertEqual(classify_export_date("2026-10-01", current_date=today),
+                         "OPERATIONAL_CURRENT_SLATE")
+
+    def test_test_only_export_requires_classification_report(self):
+        with patch("sys.argv", [
+            "export_nhl_8rain_upload.py", "--package-dir", str(self.package),
+            "--catalog-dir", str(self.root / "catalog"), "--date", "2026-09-30",
+            "--out-csv", str(self.root / "prior.csv"), "--test-only",
+        ]):
+            from backend.nhl.scripts.export_nhl_8rain_upload import main as export_main
+            with self.assertRaisesRegex(SystemExit, "--report-json is required with --test-only"):
+                export_main()
 
     def test_player_selector_is_taken_verbatim_from_catalog(self):
         catalog = self.root / "catalog"

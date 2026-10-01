@@ -7,12 +7,14 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 from backend.nhl.eightrain_adapter import (
     UPLOAD_COLUMNS, ambiguous_player_bindings, build_rows, load_catalogs,
-    resolve_catalog_dir, validate_upload,
+    resolve_catalog_dir, validate_upload, classify_export_date,
 )
 
 
@@ -48,7 +50,17 @@ def main() -> None:
     ap.add_argument("--prop-market", choices=["shots_on_goal", "points", "saves"])
     ap.add_argument("--out-csv", required=True, type=Path)
     ap.add_argument("--report-json", type=Path)
+    ap.add_argument("--test-only", action="store_true",
+                    help="Allow a non-current slate for schema/importer testing; lineage is marked non-operational")
     args = ap.parse_args()
+
+    export_classification = classify_export_date(
+        args.date,
+        current_date=datetime.now(ZoneInfo("America/Los_Angeles")).date(),
+        test_only=args.test_only,
+    )
+    if args.test_only and args.report_json is None:
+        raise SystemExit("--report-json is required with --test-only so the artifact is marked non-operational")
 
     catalog_dir = resolve_catalog_dir(args.catalog_dir)
     package_manifest_sha256 = verify_package_manifest(args.package_dir)
@@ -107,6 +119,7 @@ def main() -> None:
     capture_receipt = json.loads(args.capture_receipt.read_text()) if args.capture_receipt else {}
     report = {
         "slate_date": args.date, "csv_path": str(args.out_csv),
+        "export_classification": export_classification,
         "csv_sha256": hashlib.sha256(args.out_csv.read_bytes()).hexdigest(),
         "columns": UPLOAD_COLUMNS, "validation": validation,
         "rows_by_market": out.groupby("MARKET").size().to_dict(),

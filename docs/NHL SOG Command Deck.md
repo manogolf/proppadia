@@ -13,13 +13,15 @@ bin/nhl_ops.sh copy candidates
 bin/nhl_ops.sh export tmp/nhl_ops_commands.txt
 ```
 
-## Daily Runbook (Quick 1-9)
+## Legacy SOG Grading / Book-Upload Runbook (Quick 1-9)
 
-Use this when you want the full daily sequence in one contiguous block.
+This is the established SOG grading/book workflow, separate from the current
+8rain operational sequence above. Its candidate settings are policies, not
+global prediction or 8rain schema limits.
 
 - `Step 1`: Load env vars.
 - `Step 2`: Run NHL daily pipeline.
-- `Step 3`: Build full-slate upload CSV.
+- `Step 3`: Build the legacy full-slate SOG book-upload CSV.
 - `Step 3b` (optional): Trigger full bakeoff only on large slates (`>=8` games).
 - `Step 4`: Build candidate upload CSV (choose one):
   - `4a` Default daily upload (recommended).
@@ -33,6 +35,71 @@ Use this when you want the full daily sequence in one contiguous block.
 - `Step 9`: Run live truth gate.
 
 Detailed commands for each step remain below.
+
+## Current 8rain Operator Sequence
+
+This is the current operational path; it is separate from the historical SOG
+grading/book-upload workflow below. The upload remains manual.
+
+1. Run today's normal pipeline and acquire fresh odds:
+
+   ```bash
+   .venv/bin/python -m backend.nhl.cli daily --with-odds
+   ```
+
+2. Run the intended current-slate mainline cross-market refresh:
+
+   ```bash
+   SLATE=$(date +%F)
+   .venv/bin/python backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py \
+     --slate-date "$SLATE" --phase REFRESH
+   ```
+
+3. Inspect the emitted status JSON. Continue only when today's canonical slate,
+   current predictions, market observation, and immutable REFRESH package are
+   present and healthy. Set `NHL_CROSS_MARKET_PACKAGE` to that package directory.
+4. Confirm the candidate policy is the frozen default or a separately
+   authorized, versioned alternative.
+5. Run `bin/nhl_ops.sh show eight-rain-export`. It refreshes the catalog,
+   selects current-slate candidates, builds the thin CSV, and runs the local
+   validator. The exporter requires today's slate for operational output.
+6. Verify the export lineage report and present the resulting
+   `backend/nhl/data/processed/nhl_8rain_upload_YYYY-MM-DD.csv` path for manual
+   upload. Do not automate upload.
+
+For an explicit inspectable run, invoke `select_sog_candidates_live.py` once
+with `--game-date "$SLATE"`, then pass that card to
+`export_nhl_8rain_upload.py --props-csv CARD.csv --prop-market shots_on_goal`.
+That selector-plus-export route replaces step 5; do not rerun selection before
+exporting. The exporter runs the local validator before reporting success.
+
+### Validation rules and candidate policy
+
+Validation rules are data-integrity requirements: current canonical slate and
+date, strict-prior prediction inputs, exact live catalog codes, unambiguous
+team/player identity, valid market/side/line orientation, complete two-sided
+markets, complementary probabilities, and duplicate prevention. They cannot
+be relaxed to increase row count.
+
+Candidate policy is configurable and versioned. EV/gap thresholds, selected
+lines/sides, probability and price gates, per-player/per-game/per-slate limits,
+market inclusion, and reference/challenger selection are policy choices; they
+are not 8rain schema limits or daily prediction caps. The current default is
+`backend/nhl/config/nhl_sog_active_candidate_policy_v1.json`. It remains active
+until deliberately superseded. Walk-forward optimizer output is research-only
+and never replaces it automatically.
+
+To experiment without changing the active default, create an explicit versioned
+policy JSON and pass it with `--policy-json path/to/nhl_sog_candidate_policy_v2.json`.
+The JSON may use `thresholds_for_next_slate` with `min_ev` and `min_gap` for
+each `side:line`; existing selector flags such as `--segment-disable`,
+`--segment-max-price`, `--segment-min-model-prob`, `--max-per-player`,
+`--max-per-game`, and `--max-per-slate` configure bounded variants. Write
+alternate cards to separate paths and do not overwrite the active policy.
+
+Manual additions or edits remain separately identifiable from automated
+candidate rows. Reference and challenger identities must not be merged
+ambiguously.
 
 ## Daily Sequence (From Upload Prep)
 
@@ -75,7 +142,7 @@ Daily archive note:
 - `daily` also refreshes the SOG residual dataset and reconcile artifacts (default on) so replay/reconcile rows keep moving forward each day.
 - Daily CLI also refreshes SOG reconcile artifacts (`tmp/nhl_sog_base_vs_betonline_*.csv/json`) and archives them per-slate for replay/testing continuity.
 
-Step 3. Build full-slate upload CSV (all rows).
+Step 3. Legacy SOG full-slate book-upload file (all rows; not the 8rain adapter).
 
 ```bash
 .venv/bin/python backend/nhl/scripts/export_sog_denali_book_upload.py
@@ -93,6 +160,11 @@ Behavior:
 - Prints `skip` and exits cleanly when game count is below threshold.
 
 Step 4. Build candidate upload CSV (choose one profile).
+
+The one-per-player cap in the default selector and the max-per-game/max-per-slate
+settings in the conservative profile are policy defaults. They are not global
+prediction-generation restrictions. Step 4c/4d and alternate arms are
+testing/research profiles, not automatic active-policy replacements.
 
 Matchup confirmation note (auto-enabled):
 - Candidate cards now include opponent-history confirmation fields per pick:
@@ -748,10 +820,36 @@ Refresh the public NHL model-spec, team, and player catalogs before preparing an
 operational CSV. Catalog responses and hashes are retained under
 `artifacts/operational/nhl/8rain_catalog/`. The adapter uses catalog market and
 player codes and maps NHL team abbreviations to the current 8rain team codes.
-It emits only Moneyline V2 and Puck Line V1 reference predictions plus
-policy-selected prop candidates; challenger rows stay in their separately
-identified shadow artifacts. A lineage JSON sits beside the thin CSV because
-the 11-column upload has no model-version field.
+Current operational lanes are Moneyline V2 reference, Puck Line V1 reference,
+and policy-selected SOG. Challenger rows stay excluded by default and remain in
+separately identified shadow artifacts. A future research export may
+intentionally select a challenger, but it must retain a distinct model identity
+and must not mix it ambiguously with reference rows. Points and Saves are
+supported adapter market choices; add them only after defining an explicit
+candidate policy, confirming live stat codes and player-code mappings, and
+passing paired-row validation. Missing candidate policy is a current readiness
+gap, not a permanent lane prohibition. A lineage JSON sits beside the thin CSV
+because the 11-column upload has no model-version field.
+
+The 8rain importer has manually accepted a four-row test CSV: 4/4 predictions
+resolved (100%), per operator report. The report did not identify whether the
+decimal or d-suffixed American test file was uploaded. Therefore the operational
+format has not changed; the adapter retains its last-known plain American
+default until the operator identifies the accepted file. Both test files are
+under `artifacts/operational/nhl/8rain_test/` and are NON-OPERATIONAL / TEST
+ONLY. They use Sep 30 rows and must not be treated as current-slate exports.
+
+Operational exports must use the current slate. A prior-day CSV is allowed only
+for schema testing, importer testing, or diagnostics, and must be explicitly
+classified `TEST_ONLY_NON_OPERATIONAL` in its lineage report. The exporter
+rejects a non-current slate unless `--test-only` is supplied, and that mode
+requires `--report-json` so the classification is retained.
+
+Before a current-slate export, require today's normal daily pipeline, a
+canonical current slate, the intended fresh market observation, predictions
+bound to that slate, and successful live-catalog/local validation. Unmapped or
+ambiguous player identities remain excluded and reported; that mapping gap does
+not cap or restrict predictions globally.
 
 For each slate, set `NHL_CROSS_MARKET_PACKAGE` to that slate's immutable
 REFRESH or FINAL_PREGAME cross-market package, then copy and run:
