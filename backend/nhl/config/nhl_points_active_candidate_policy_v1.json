@@ -1,0 +1,35 @@
+{
+  "schema_version": "NHL_8RAIN_PROP_CANDIDATE_POLICY_V1",
+  "policy_name": "NHL_POINTS_8RAIN_ACTIVE_REFERENCE_CANDIDATE_POLICY",
+  "policy_version": "v1",
+  "lane": "POINTS",
+  "market_code": "points",
+  "effective_date": "2026-10-01",
+  "status": "ACTIVE_REFERENCE",
+  "provenance": {
+    "authorization": "NHL 2026 — ADD POINTS + SAVES TO 8RAIN OPERATIONAL EXPORT, 2026-10-01",
+    "prior_policy_search": "No authorized operational Points candidate policy found; prior preseason readiness artifacts classified Points candidate execution as blocked pending an explicit policy.",
+    "rationale": "Use current-slate market-attached predictions only. Require a usable side-specific sportsbook price, positive expected value at that price, and positive model-versus-market probability gap. No threshold was tuned on current-slate outcomes.",
+    "threshold_basis": "Strictly greater than zero for EV and model-market gap; no line, price, or candidate-count cutoff."
+  },
+  "selection": {
+    "allowed_sides": ["OVER", "UNDER"],
+    "minimum_ev_exclusive": 0.0,
+    "minimum_model_market_gap_exclusive": 0.0,
+    "allowed_lines": null,
+    "minimum_price_american": null,
+    "maximum_price_american": null,
+    "minimum_model_probability_exclusive": 0.0,
+    "maximum_model_probability_exclusive": 1.0,
+    "require_side_specific_market_price": true
+  },
+  "identity": {
+    "source_prediction_grain": ["player_id", "game_id", "prop", "line", "feature_hash_if_present"],
+    "candidate_key": ["game_id", "player_id", "prop", "line", "side"],
+    "duplicate_handling": "Fail closed on duplicate source prediction keys or conflicting candidate keys; preserve distinct props, lines, and sides.",
+    "per_player_cap": null,
+    "per_game_cap": null,
+    "per_slate_cap": null
+  },
+  "paired_export": "The thin 8rain adapter emits the complementary model probability for the opposite side of each selected player/prop/line."
+}

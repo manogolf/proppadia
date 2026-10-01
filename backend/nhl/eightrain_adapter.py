@@ -241,6 +241,10 @@ def build_rows(
         required_prop = {"game_id", "game_date", "player_name", "team", "market", "line", "model_pick", "model_side_prob"}
         if required_prop - set(prop_candidates.columns):
             raise ValueError("PROP_CANDIDATE_SCHEMA_MISSING")
+        if "model_identity" in prop_candidates:
+            identities = prop_candidates.model_identity.fillna("").astype(str).str.upper()
+            if identities.str.contains(r"CHALLENGER|EXPERIMENT|SHADOW", regex=True).any():
+                raise ValueError("8RAIN_CHALLENGER_PROP_ROWS_FORBIDDEN")
         for r in prop_candidates.to_dict("records"):
             market = str(r["market"])
             if market not in allowed_bets or not {"over", "under"}.issubset(allowed_bets[market]):
@@ -269,6 +273,8 @@ def build_rows(
             if game_id not in game_identity:
                 raise ValueError(f"PROP_GAME_NOT_IN_CANONICAL_SLATE:{game_id}")
             date, home_code, away_code = game_identity[game_id]
+            if _date(r["game_date"]) != date:
+                raise ValueError(f"PROP_CANDIDATE_DATE_NOT_CANONICAL:{game_id}")
             pair = {selected_side: p, ("under" if selected_side == "over" else "over"): 1.0 - p}
             for side in ("over", "under"):
                 rows.append(_base_row(date, home_code, away_code,

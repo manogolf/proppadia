@@ -47,25 +47,29 @@ grading/book-upload workflow below. The upload remains manual.
    .venv/bin/python -m backend.nhl.cli daily --with-odds
    ```
 
-2. Run the intended current-slate mainline cross-market refresh:
+2. Run the current-slate mainline cross-market capture. Use `AUTO` for the
+   first run; use `REFRESH` when refreshing an already captured slate:
 
    ```bash
    SLATE=$(date +%F)
    .venv/bin/python backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py \
-     --slate-date "$SLATE" --phase REFRESH
+     --slate-date "$SLATE" --phase AUTO
    ```
+
+   For a later same-slate refresh, change `--phase AUTO` to `--phase REFRESH`.
 
 3. Inspect the emitted status JSON. Continue only when today's canonical slate,
    current predictions, market observation, and immutable REFRESH package are
    present and healthy. Set `NHL_CROSS_MARKET_PACKAGE` to that package directory.
 4. Confirm the candidate policy is the frozen default or a separately
    authorized, versioned alternative.
-5. Run `bin/nhl_ops.sh show eight-rain-export`. It refreshes the catalog,
-   selects current-slate candidates, builds the thin CSV, and runs the local
-   validator. The exporter requires today's slate for operational output.
-6. Verify the export lineage report and present the resulting
-   `backend/nhl/data/processed/nhl_8rain_upload_YYYY-MM-DD.csv` path for manual
-   upload. Do not automate upload.
+5. Run `bin/nhl_ops.sh show eight-rain-export`. It refreshes the live catalog,
+   runs SOG selection when its active policy and current market view exist,
+   then selects Points and Saves with their active policy files. It writes rich
+   ledgers and validates the combined thin CSV for today's slate.
+6. Review the lineage report and manually upload
+   `artifacts/operational/nhl/8rain_uploads/YYYY-MM-DD/nhl_8rain_manual_upload_YYYY-MM-DD.csv`
+   only if desired. The command never uploads externally.
 
 8rain importer acceptance note:
 
@@ -828,15 +832,16 @@ operational CSV. Catalog responses and hashes are retained under
 `artifacts/operational/nhl/8rain_catalog/`. The adapter uses catalog market and
 player codes and maps NHL team abbreviations to the current 8rain team codes.
 Current operational lanes are Moneyline V2 reference, Puck Line V1 reference,
-and policy-selected SOG. Challenger rows stay excluded by default and remain in
-separately identified shadow artifacts. A future research export may
-intentionally select a challenger, but it must retain a distinct model identity
-and must not mix it ambiguously with reference rows. Points and Saves are
-supported adapter market choices; add them only after defining an explicit
-candidate policy, confirming live stat codes and player-code mappings, and
-passing paired-row validation. Missing candidate policy is a current readiness
-gap, not a permanent lane prohibition. A lineage JSON sits beside the thin CSV
-because the 11-column upload has no model-version field.
+and policy-selected SOG, Points, and Saves. Points and Saves use the explicit
+replaceable policies in `backend/nhl/config/nhl_points_active_candidate_policy_v1.json`
+and `backend/nhl/config/nhl_saves_active_candidate_policy_v1.json`. Each
+requires a matched side price, positive EV, and positive model-market gap;
+neither policy caps candidates or limits lines. Policies are selection inputs,
+not scoring changes. Candidate rows map through exact live catalog player codes;
+unmapped and ambiguous identities stay in the internal ledgers and are omitted
+from the upload. Challenger rows stay excluded by default and remain in
+separately identified shadow artifacts. A lineage JSON sits beside the thin
+CSV because the 11-column upload has no model-version field.
 
 The 8rain importer has manually accepted a four-row test CSV: 4/4 predictions
 resolved (100%), per operator report. The report did not identify whether the
@@ -858,21 +863,23 @@ bound to that slate, and successful live-catalog/local validation. Unmapped or
 ambiguous player identities remain excluded and reported; that mapping gap does
 not cap or restrict predictions globally.
 
-For each slate, set `NHL_CROSS_MARKET_PACKAGE` to that slate's immutable
-REFRESH or FINAL_PREGAME cross-market package, then copy and run:
+For each slate, run the normal `daily --with-odds` pipeline and complete the
+cross-market AUTO first run or REFRESH on later runs. Set
+`NHL_CROSS_MARKET_PACKAGE` to that slate's immutable REFRESH or FINAL_PREGAME
+package, then copy and run:
 
 ```bash
 bin/nhl_ops.sh show eight-rain-export
 ```
 
-The printed command refreshes catalogs, runs the existing SOG candidate
-selector only when its policy and date-bound market view exist, exports the
-reference lanes and any selected SOG candidates, validates the CSV, and writes
-a lineage report. It does not run daily scoring or upload externally. If
-`backend/nhl/config/nhl_sog_active_candidate_policy_v1.json` is missing, it reports and skips SOG
-candidate rows rather than deriving new thresholds. Points and Saves only feed
-the adapter when their internal candidate populations are nonempty and the
-catalog mapping is unambiguous.
+The printed command refreshes the live catalog, runs SOG selection when its
+active policy and current market view exist, selects Points and Saves under
+their explicit active policies, and writes rich internal decision ledgers.
+It then builds and validates one current-slate Moneyline/Puck Line/SOG/
+Points/Saves reference CSV and copies it to the manual-upload path reported by
+the command. Current slate is required. Challenger rows remain excluded, and
+the workflow never uploads externally. The operator performs manual upload
+only after reviewing the CSV and lineage report.
 
 ## Source Control Noise Control (Local Only)
 
