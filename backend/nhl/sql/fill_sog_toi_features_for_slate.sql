@@ -21,14 +21,16 @@ ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
   ADD COLUMN IF NOT EXISTS d10_toi_cv      numeric,
   ADD COLUMN IF NOT EXISTS toi_trend_3v10  numeric;
 
--- 2) Compute TOI features from realized history (exclude slate day itself)
+-- 2) Compute rolling TOI exposure from all realized history before the slate.
+-- Unlike season-to-date situation features, rolling game exposure spans the
+-- season boundary so opening-season rows can use the prior season's latest
+-- appearances. The date predicate remains strictly prior to the slate.
 WITH params AS (
   SELECT (:'slate_date')::date AS slate_date
 ),
 slate AS (
   SELECT
-    t.player_id::bigint AS player_id,
-    t.season::int       AS season
+    t.player_id::bigint AS player_id
   FROM nhl.training_features_nhl_sog_enriched_pregame_v2 t
   JOIN params p ON TRUE
   WHERE t.game_date = p.slate_date
@@ -36,7 +38,6 @@ slate AS (
 hist AS (
   SELECT
     l.player_id::bigint AS player_id,
-    g.season::int       AS season,
     g.game_date::date   AS game_date,
     g.game_id::bigint   AS game_id,
     NULLIF(l.toi_minutes, 0)::numeric AS toi_min
@@ -49,19 +50,17 @@ hist_ranked AS (
   SELECT
     h.*,
     ROW_NUMBER() OVER (
-      PARTITION BY h.player_id, h.season
+      PARTITION BY h.player_id
       ORDER BY h.game_date DESC, h.game_id DESC
     ) AS rn_desc
   FROM hist h
   JOIN slate s
     ON s.player_id = h.player_id
-   AND s.season    = h.season
   WHERE h.toi_min IS NOT NULL
 ),
 aggs AS (
   SELECT
     player_id,
-    season,
     AVG(CASE WHEN rn_desc <= 3  THEN toi_min END) AS d3_toi_min_avg,
     AVG(CASE WHEN rn_desc <= 5  THEN toi_min END) AS d5_toi_min_avg,
     AVG(CASE WHEN rn_desc <= 10 THEN toi_min END) AS d10_toi_min_avg,
@@ -70,7 +69,7 @@ aggs AS (
     (AVG(CASE WHEN rn_desc <= 3  THEN toi_min END)
      - AVG(CASE WHEN rn_desc <= 10 THEN toi_min END)) AS toi_trend_3v10
   FROM hist_ranked
-  GROUP BY 1,2
+  GROUP BY 1
 ),
 final AS (
   SELECT
@@ -93,8 +92,7 @@ SET
   toi_trend_3v10  = f.toi_trend_3v10
 FROM params p, final f
 WHERE t.game_date = p.slate_date
-  AND f.player_id = t.player_id::bigint
-  AND f.season    = t.season::int;
+  AND f.player_id = t.player_id::bigint;
 
 COMMIT;
 
