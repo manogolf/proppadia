@@ -1354,6 +1354,7 @@ def _run_independent_daily_lanes(
                 parent_daily_run_id=daily_run_id,
                 feature_input_cutoff_utc=saves_cutoff,
                 expected_game_set_hash=recorder.canonical_game_set_hash,
+                constant_feature_values={"start_prob": 1.0},
             )
             saves_input_identity.update(artifact_identity(saves_input_csv))
             recorder.lane("saves").inputs.append(saves_input_identity)

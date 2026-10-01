@@ -102,6 +102,7 @@ def prepare_scoring_input(
     slate: str, parent_daily_run_id: str, feature_input_cutoff_utc: str,
     expected_game_set_hash: str, identity_column: str = "player_id",
     allow_partial_slate: bool = False,
+    constant_feature_values: Mapping[str, float] | None = None,
 ) -> dict[str, Any]:
     """Validate a feature export and write a run-local, canonically joined input."""
     source_path, output_path = Path(source_path), Path(output_path)
@@ -150,6 +151,15 @@ def prepare_scoring_input(
     frame["parent_daily_run_id"] = parent_daily_run_id
     frame["feature_input_cutoff_utc"] = feature_input_cutoff_utc
     frame["canonical_game_set_hash"] = expected_game_set_hash
+
+    # Some lanes have an explicit operational feature contract. Apply those
+    # values after row eligibility and identity validation, before writing the
+    # scorer input, so generic missing-value handling cannot
+    # manufacture their semantic value.
+    for feature, value in (constant_feature_values or {}).items():
+        if feature not in frame.columns:
+            raise RuntimeError(f"SCORING_INPUT_CONTRACT_FEATURE_MISSING:{feature}")
+        frame[feature] = float(value)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     temporary = output_path.with_name(f".{output_path.name}.tmp")
