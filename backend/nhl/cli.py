@@ -2099,6 +2099,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     prediction_run_dir = PROC_DIR / "daily_runs" / daily_run_id
     prediction_run_dir.mkdir(parents=True, exist_ok=True)
     calibrated_pred_path = prediction_run_dir / "sog_predictions_wide_calibrated.csv"
+    unscored_pred_path = prediction_run_dir / "sog_predictions_unscored.csv"
     recorder.independent_context = {
         "db": db,
         "slate": slate,
@@ -2114,16 +2115,16 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     _ACTIVE_DAILY_LANE = "legacy_sog"
     sog_scorer = (os.environ.get("NHL_SOG_SCORER") or "poisson_baseline").strip().lower()
     if sog_scorer == "poisson_baseline":
-        run(
-            [
-                PY,
-                SCRIPTS_DIR / "score_sog_poisson_baseline.py",
-                "--in",
-                str(sog_feat_path),
-                "--out",
-                str(calibrated_pred_path),
-            ]
-        )
+        sog_score_command = [
+            PY,
+            SCRIPTS_DIR / "score_sog_poisson_baseline.py",
+            "--in", str(sog_feat_path),
+            "--out", str(calibrated_pred_path),
+            "--unscored-out", str(unscored_pred_path),
+        ]
+        if names_path is not None and names_path.is_file():
+            sog_score_command.extend(["--names", str(names_path)])
+        run(sog_score_command)
         sog_model_family = "poisson_baseline"
         sog_model_version = "baseline_v1"
         sog_feature_hash = "poisson_baseline_v1"
@@ -2301,6 +2302,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
 
     legacy_sog_identity = _require_current_prediction_artifact(
         calibrated_pred_path, slate=slate, expected_sha256=None)
+    sog_outputs = [legacy_sog_identity]
+    if unscored_pred_path.is_file():
+        sog_outputs.append(artifact_identity(unscored_pred_path))
 
     # 5b) Load SOG into nhl.predictions
     run(
@@ -2317,7 +2321,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         ]
     )
     recorder.finish_lane(
-        "legacy_sog", outputs=[legacy_sog_identity], database_rows_written=True)
+        "legacy_sog", outputs=sog_outputs, database_rows_written=True)
     _run_independent_daily_lanes(
         recorder=recorder, db=db, slate=slate, with_odds=with_odds,
         odds_phase=odds_phase, daily_run_id=daily_run_id,
