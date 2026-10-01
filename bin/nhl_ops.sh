@@ -44,17 +44,15 @@ CMD
 eight-rain-export)
       cat <<'CMD'
 set -euo pipefail
-SLATE=$(date +%F)
+SLATE=$(TZ=America/New_York date +%F)
 : "${NHL_CROSS_MARKET_PACKAGE:?Set to today's immutable cross-market REFRESH/FINAL_PREGAME package directory}"
 .venv/bin/python backend/nhl/scripts/refresh_nhl_8rain_catalog.py
 CATALOG=$(ls -dt artifacts/operational/nhl/8rain_catalog/retrieval=* | head -n 1)
 OBSERVATION=$(find artifacts/operational/nhl/odds_observations -type d -path "*/slate_date=${SLATE}/observation=*" | sort | tail -n 1)
 COMBINED="tmp/cards/nhl_8rain_raw_props_${SLATE}.csv"
 .venv/bin/python backend/nhl/scripts/select_nhl_points_saves_8rain_candidates.py --mode raw --slate-date "$SLATE" --names-csv "backend/nhl/exports/daily/names/names_${SLATE}.csv" --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir "$CATALOG" --odds-observation-dir "$OBSERVATION" --out-dir "tmp/cards/nhl_8rain_raw_${SLATE}" --combined-props-csv "$COMBINED"
-UPLOAD="artifacts/operational/nhl/8rain_uploads/${SLATE}/nhl_8rain_raw_manual_upload_${SLATE}.csv"
-.venv/bin/python backend/nhl/scripts/export_nhl_8rain_upload.py --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir "$CATALOG" --date "$SLATE" --props-csv "$COMBINED" --out-csv "$UPLOAD" --report-json "artifacts/operational/nhl/8rain_uploads/${SLATE}/nhl_8rain_raw_manual_upload_${SLATE}_lineage.json"
-mkdir -p "backend/nhl/data/processed"
-cp "$UPLOAD" "backend/nhl/data/processed/nhl_8rain_upload_${SLATE}.csv"
+EXPORT_DIR="artifacts/operational/nhl/8rain_uploads/${SLATE}"
+.venv/bin/python backend/nhl/scripts/export_nhl_8rain_upload.py --package-dir "$NHL_CROSS_MARKET_PACKAGE" --catalog-dir "$CATALOG" --date "$SLATE" --props-csv "$COMBINED" --immutable-output-dir "$EXPORT_DIR"
 CMD
       ;;
     bakeoff-trigger)

@@ -70,9 +70,10 @@ grading/book-upload workflow below. The upload remains manual.
    builds rich raw decision ledgers and mapping exceptions, then validates the
    combined thin CSV for today's slate. The legacy SOG/Points/Saves selectors
    and policy files remain available for explicit filtered research.
-6. Review the lineage report and manually upload
-   `artifacts/operational/nhl/8rain_uploads/YYYY-MM-DD/nhl_8rain_raw_manual_upload_YYYY-MM-DD.csv`
-   only if desired. The command never uploads externally.
+6. Review the lineage report and manually upload the immutable CSV under
+   `artifacts/operational/nhl/8rain_uploads/YYYY-MM-DD/`. Its filename includes
+   the ET export timestamp and cross-market state prefix. The command never
+   uploads externally.
 
 8rain importer acceptance note:
 

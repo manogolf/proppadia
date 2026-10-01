@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 import json
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -13,6 +14,7 @@ from backend.nhl.eightrain_adapter import (
     UPLOAD_COLUMNS, build_rows, fair_american, fair_american_d,
     classify_export_date, format_win_probability, load_catalogs, validate_upload,
 )
+from backend.nhl.scripts.export_nhl_8rain_upload import immutable_export_paths
 from backend.nhl.scripts.select_sog_candidates_live import DEFAULT_POLICY_JSON, _load_policy, main
 
 
@@ -210,6 +212,27 @@ class EightRainAdapterTests(unittest.TestCase):
             from backend.nhl.scripts.export_nhl_8rain_upload import main as export_main
             with self.assertRaisesRegex(SystemExit, "--report-json is required with --test-only"):
                 export_main()
+
+    def test_intraday_export_paths_are_unique_immutable_et_and_state_qualified(self):
+        output_dir = self.root / "exports"
+        first_csv, first_lineage = immutable_export_paths(
+            output_dir, slate_date="2026-10-01",
+            package_state_sha256="7f4fb2359f892e5f2e4c4faa0fd1f63bfdb86fc12a8add1d0caaf657a2069147",
+            exported_at_et=datetime(2026, 10, 1, 16, 1, 24, 100, tzinfo=ZoneInfo("America/New_York")),
+        )
+        first_csv.parent.mkdir(parents=True)
+        first_csv.write_text("first export\n")
+        first_bytes = first_csv.read_bytes()
+        second_csv, second_lineage = immutable_export_paths(
+            output_dir, slate_date="2026-10-01",
+            package_state_sha256="7f4fb2359f892e5f2e4c4faa0fd1f63bfdb86fc12a8add1d0caaf657a2069147",
+            exported_at_et=datetime(2026, 10, 1, 16, 1, 24, 200, tzinfo=ZoneInfo("America/New_York")),
+        )
+        self.assertNotEqual(first_csv, second_csv)
+        self.assertNotEqual(first_lineage, second_lineage)
+        self.assertIn("20261001T160124000100EDT_7f4fb2359f89", first_csv.name)
+        self.assertEqual(first_csv.read_bytes(), first_bytes)
+        self.assertFalse(second_csv.exists())
 
     def test_player_selector_is_taken_verbatim_from_catalog(self):
         catalog = self.root / "catalog"

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import re
 from pathlib import Path
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -17,6 +18,23 @@ from backend.nhl.eightrain_adapter import (
     resolve_catalog_dir, validate_upload, classify_export_date,
     unique_player_codes_by_name,
 )
+
+
+def immutable_export_paths(
+    output_dir: Path, *, slate_date: str, package_state_sha256: str,
+    exported_at_et: datetime,
+) -> tuple[Path, Path]:
+    """Build an ET-timestamped CSV and adjacent lineage path for one package."""
+    if exported_at_et.tzinfo is None:
+        raise ValueError("EXPORT_TIMESTAMP_MUST_BE_TIMEZONE_AWARE")
+    et_timestamp = exported_at_et.astimezone(ZoneInfo("America/New_York"))
+    stamp = et_timestamp.strftime("%Y%m%dT%H%M%S%f%Z")
+    state_prefix = re.sub(r"[^A-Za-z0-9]", "", str(package_state_sha256))[:12]
+    if len(state_prefix) != 12:
+        raise ValueError("PACKAGE_STATE_IDENTITY_INVALID")
+    stem = f"nhl_8rain_raw_manual_upload_{slate_date}_{stamp}_{state_prefix}"
+    output_dir = Path(output_dir)
+    return output_dir / f"{stem}.csv", output_dir / f"{stem}_lineage.json"
 
 
 def verify_package_manifest(package_dir: Path) -> str:
@@ -49,11 +67,17 @@ def main() -> None:
     ap.add_argument("--names-csv", type=Path, help="Canonical player/team mapping for candidates")
     ap.add_argument("--capture-receipt", type=Path, help="Optional cross-market capture receipt for lineage")
     ap.add_argument("--prop-market", choices=["shots_on_goal", "points", "saves"])
-    ap.add_argument("--out-csv", required=True, type=Path)
+    ap.add_argument("--out-csv", type=Path,
+                    help="Explicit output path; use --immutable-output-dir for the operational raw flow")
+    ap.add_argument("--immutable-output-dir", type=Path,
+                    help="Create a unique ET-timestamped CSV and adjacent lineage file in this directory")
     ap.add_argument("--report-json", type=Path)
     ap.add_argument("--test-only", action="store_true",
                     help="Allow a non-current slate for schema/importer testing; lineage is marked non-operational")
     args = ap.parse_args()
+
+    if (args.out_csv is None) == (args.immutable_output_dir is None):
+        raise SystemExit("provide exactly one of --out-csv or --immutable-output-dir")
 
     export_classification = classify_export_date(
         args.date,
@@ -65,6 +89,18 @@ def main() -> None:
 
     catalog_dir = resolve_catalog_dir(args.catalog_dir)
     package_manifest_sha256 = verify_package_manifest(args.package_dir)
+    package_status = json.loads((args.package_dir / "daily_execution_status.json").read_text())
+    exported_at_et = datetime.now(ZoneInfo("America/New_York"))
+    if args.immutable_output_dir is not None:
+        args.out_csv, generated_report_path = immutable_export_paths(
+            args.immutable_output_dir, slate_date=args.date,
+            package_state_sha256=str(package_status.get("substantive_state_sha256") or ""),
+            exported_at_et=exported_at_et,
+        )
+        if args.report_json is None:
+            args.report_json = generated_report_path
+    if args.out_csv.exists():
+        raise SystemExit(f"EXPORT_OUTPUT_ALREADY_EXISTS:{args.out_csv}")
     spec, team_map, player_map, allowed_bets = load_catalogs(catalog_dir)
     props = None
     if args.props_csv:
@@ -114,14 +150,23 @@ def main() -> None:
     out.to_csv(args.out_csv, index=False, columns=UPLOAD_COLUMNS)
     catalog_hashes = {name: hashlib.sha256((catalog_dir / name).read_bytes()).hexdigest()
                       for name in ("model_spec.json", "teams.json", "players.json")}
-    package_status = json.loads((args.package_dir / "daily_execution_status.json").read_text())
     source_hashes = {
         name: hashlib.sha256((args.package_dir / name).read_bytes()).hexdigest()
         for name in ("v2_immutable_predictions.csv", "puck_line_v1_immutable_predictions.csv", "raw_market_response.json")
     }
     capture_receipt = json.loads(args.capture_receipt.read_text()) if args.capture_receipt else {}
+    source_run_ids = sorted({str(value) for column in ("parent_daily_run_id", "run_id")
+                             if column in (props.columns if props is not None else [])
+                             for value in props[column].dropna().astype(str) if value}) if props is not None else []
+    source_observation_ids = sorted({str(value) for column in ("odds_observation_id",)
+                                    if column in (props.columns if props is not None else [])
+                                    for value in props[column].dropna().astype(str) if value}) if props is not None else []
+    source_observation_timestamps = sorted({str(value) for column in ("capture_timestamp_utc",)
+                                            if column in (props.columns if props is not None else [])
+                                            for value in props[column].dropna().astype(str) if value}) if props is not None else []
     report = {
         "slate_date": args.date, "csv_path": str(args.out_csv),
+        "export_timestamp_et": exported_at_et.isoformat(timespec="microseconds"),
         "export_classification": export_classification,
         "csv_sha256": hashlib.sha256(args.out_csv.read_bytes()).hexdigest(),
         "columns": UPLOAD_COLUMNS, "validation": validation,
@@ -130,6 +175,9 @@ def main() -> None:
         "package_manifest_sha256": package_manifest_sha256,
         "package_dir": str(args.package_dir), "package_state_sha256": package_status.get("substantive_state_sha256"),
         "package_run_timestamp_utc": package_status.get("run_timestamp_utc"),
+        "source_daily_run_ids": source_run_ids,
+        "source_odds_observation_ids": source_observation_ids,
+        "source_odds_observation_timestamps_utc": source_observation_timestamps,
         "market_capture_id": capture_receipt.get("capture_id") or (args.capture_receipt.stem if args.capture_receipt else None),
         "market_capture_timestamp_utc": capture_receipt.get("invocation_timestamp_utc"),
         "market_snapshot_sha256": source_hashes["raw_market_response.json"],
