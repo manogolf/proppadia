@@ -62,15 +62,15 @@ grading/book-upload workflow below. The upload remains manual.
    20–75 minute band; the first-start time and minutes remaining are diagnostics.
 
 3. Inspect the emitted status JSON. Continue only when today's canonical slate,
-   current predictions, market observation, and immutable REFRESH package are
+   current predictions, market observation, and immutable capture package are
    present and healthy.
 4. Opening-season collection mode is `RAW_PREDICTION_COLLECTION`: send all
    valid, mappable reference-model predictions to 8rain while collecting
    several slates of evidence. EV, edge/gap, price, probability bands, line
    preferences, candidate counts, and one-per-player settings remain optional
    research policies and do not gate this default export.
-5. Run the normal operator command. It resolves the newest valid REFRESH
-   package for today's New York date, refreshes the live catalog, builds rich
+5. Run the normal operator command. It resolves the newest valid successful
+   MIDDAY, FINAL_PREGAME, or REFRESH package for today's New York date, refreshes the live catalog, builds rich
    raw decision ledgers and mapping exceptions, then validates the combined
    thin CSV for today's slate:
 
@@ -902,16 +902,19 @@ bound to that slate, and successful live-catalog/local validation. Unmapped or
 ambiguous player identities remain excluded and reported; that mapping gap does
 not cap or restrict predictions globally.
 
-For each slate, run the normal `daily --with-odds` pipeline and complete the
-cross-market AUTO first run or REFRESH on later runs. The preferred export
-command resolves the newest valid current-day REFRESH package automatically:
+For each slate, run the normal `daily --with-odds` pipeline and complete a
+successful cross-market AUTO, MIDDAY, FINAL_PREGAME, or REFRESH capture. The
+preferred export command resolves the newest valid current-day capture by its
+retained capture timestamp, regardless of phase:
 
 ```bash
 bin/nhl_ops.sh eight-rain-export --latest-refresh
 ```
 
-For explicit, reproducible selection, supply the complete immutable package
-path (example only; replace it with the retained path for the intended run):
+`--latest-refresh` remains as a backward-compatible command name. The clearer
+`--latest-capture` alias selects the same package. For explicit, reproducible
+historical/replay/debug selection, supply the complete immutable package path
+(example only; replace it with the retained path for the intended run):
 
 ```bash
 bin/nhl_ops.sh eight-rain-export --package "/absolute/path/to/immutable/REFRESH/package"

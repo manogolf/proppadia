@@ -20,6 +20,7 @@ from backend.nhl.scripts.run_nhl_8rain_export import (
     resolve_package_selection,
     resolve_package_argument,
     select_latest_refresh_package,
+    select_latest_capture_package,
     validate_export_report,
     validate_package,
 )
@@ -52,6 +53,7 @@ class NHL8RainDirectExportTests(unittest.TestCase):
     def _refresh_package(
         self, root: Path, *, slate: str = "2026-10-01", stamp: str = "2026-10-01T15:00:00Z",
         run_type: str = "REFRESH", mode: str = "SHADOW_RESEARCH_ONLY", state: str = "a",
+        capture_status: str | None = None,
     ) -> Path:
         state_hash = state * 64
         package = (root / "season=2026" / f"slate_date={slate}" / f"run_type={run_type}"
@@ -70,12 +72,15 @@ class NHL8RainDirectExportTests(unittest.TestCase):
             "one_goal_game_probability": .40, "home_by_2_plus_probability": .35,
         }]).to_csv(package / "puck_line_v1_immutable_predictions.csv", index=False)
         (package / "raw_market_response.json").write_text("{}\n")
-        (package / "daily_execution_status.json").write_text(json.dumps({
+        status = {
             "mode": mode, "slate_date": slate, "run_type": run_type,
             "run_timestamp_utc": stamp, "substantive_state_sha256": state_hash,
             "scheduled_games": 1, "v2_predictions_created": 1,
             "puck_line_v1_predictions_created": 1,
-        }))
+        }
+        if capture_status is not None:
+            status["status"] = capture_status
+        (package / "daily_execution_status.json").write_text(json.dumps(status))
         entries = []
         for path in sorted(package.iterdir()):
             entries.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}")
@@ -109,22 +114,87 @@ class NHL8RainDirectExportTests(unittest.TestCase):
             selected, skipped = select_latest_refresh_package(
                 current_slate="2026-10-01", cross_market_root=root)
             self.assertEqual(selected, valid.resolve())
-            self.assertTrue(any(str(failed) in item and "REFRESH_STATUS_NOT_COMPLETE" in item
+            self.assertTrue(any(str(failed) in item and "CAPTURE_STATUS_NOT_COMPLETE" in item
                                 for item in skipped))
+
+    def test_noop_capture_status_is_not_selected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._refresh_package(root, capture_status="NOOP", state="e")
+            with self.assertRaisesRegex(ValueError, "NO_VALID_CURRENT_DAY_CAPTURE_PACKAGE"):
+                select_latest_capture_package(current_slate="2026-10-01", cross_market_root=root)
 
     def test_prior_day_refresh_is_not_selected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._refresh_package(root, slate="2026-09-30", state="f")
-            with self.assertRaisesRegex(ValueError, "CURRENT_DAY_REFRESH_PACKAGE_MISSING:2026-10-01"):
+            with self.assertRaisesRegex(ValueError, "CURRENT_DAY_CAPTURE_PACKAGE_MISSING:2026-10-01"):
                 select_latest_refresh_package(current_slate="2026-10-01", cross_market_root=root)
 
     def test_auto_package_is_not_selected(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._refresh_package(root, run_type="AUTO", state="1")
-            with self.assertRaisesRegex(ValueError, "CURRENT_DAY_REFRESH_PACKAGE_MISSING"):
+            with self.assertRaisesRegex(ValueError, "CURRENT_DAY_CAPTURE_PACKAGE_MISSING"):
                 select_latest_refresh_package(current_slate="2026-10-01", cross_market_root=root)
+
+    def test_only_midday_capture_is_selected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            midday = self._refresh_package(root, run_type="MIDDAY", state="6")
+            selected, _ = select_latest_capture_package(
+                current_slate="2026-10-01", cross_market_root=root)
+            self.assertEqual(selected, midday.resolve())
+
+    def test_only_final_pregame_capture_is_selected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            final = self._refresh_package(root := Path(tmp), run_type="FINAL_PREGAME", state="7")
+            selected, _ = select_latest_capture_package(
+                current_slate="2026-10-01", cross_market_root=root)
+            self.assertEqual(selected, final.resolve())
+
+    def test_newer_phase_wins_by_capture_timestamp(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            midday = self._refresh_package(
+                root, run_type="MIDDAY", state="8", stamp="2026-10-01T15:00:00Z")
+            refresh = self._refresh_package(
+                root, run_type="REFRESH", state="9", stamp="2026-10-01T16:00:00Z")
+            self.assertEqual(select_latest_capture_package(
+                current_slate="2026-10-01", cross_market_root=root)[0], refresh.resolve())
+            # Reverse timestamps and ensure phase labels do not affect selection.
+            midday2 = self._refresh_package(
+                root, run_type="MIDDAY", state="b", stamp="2026-10-01T17:00:00Z")
+            self.assertEqual(select_latest_capture_package(
+                current_slate="2026-10-01", cross_market_root=root)[0], midday2.resolve())
+
+    def test_corrupt_newer_package_is_skipped_with_diagnostic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            valid = self._refresh_package(
+                root, run_type="MIDDAY", state="c", stamp="2026-10-01T15:00:00Z")
+            corrupt = self._refresh_package(
+                root, run_type="REFRESH", state="d", stamp="2026-10-01T16:00:00Z")
+            (corrupt / "raw_market_response.json").write_text("tampered\n")
+            selected, skipped = select_latest_capture_package(
+                current_slate="2026-10-01", cross_market_root=root)
+            self.assertEqual(selected, valid.resolve())
+            self.assertTrue(any(str(corrupt) in item and "PACKAGE_MANIFEST_INVALID" in item
+                                for item in skipped))
+
+    def test_latest_capture_alias_and_legacy_flag_share_selector(self):
+        from backend.nhl.scripts import run_nhl_8rain_export as runner
+        selected = Path("/immutable/midday").resolve()
+        for flag in ("--latest-refresh", "--latest-capture"):
+            with patch.object(runner, "current_et_slate", return_value="2026-10-01"), \
+                 patch.object(runner, "select_latest_capture_package", return_value=(selected, [])), \
+                 patch.object(runner, "run_export", return_value={
+                     "slate": "2026-10-01", "state_prefix": "a", "phase": "MIDDAY",
+                     "rows": 1, "pairs": 1, "markets": {}, "mapping_exclusions": 0,
+                     "validation": "PASS", "csv_path": "/tmp/a.csv", "lineage_path": "/tmp/a.json",
+                 }) as export, redirect_stdout(io.StringIO()):
+                self.assertEqual(runner.main([flag]), 0)
+                export.assert_called_once_with(selected, current_slate="2026-10-01", retained_catalog_dir=None)
 
     def test_cli_precedence_is_explicit_package_then_latest_then_environment(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -149,26 +219,28 @@ class NHL8RainDirectExportTests(unittest.TestCase):
         from backend.nhl.scripts import run_nhl_8rain_export as runner
 
         summary = {
-            "slate": "2026-10-01", "state_prefix": "a" * 12, "rows": 4, "pairs": 2,
+            "slate": "2026-10-01", "state_prefix": "a" * 12, "phase": "REFRESH", "rows": 4, "pairs": 2,
             "markets": {"Moneyline": 2, "Puck Line": 2, "SOG": 0, "Points": 0, "Saves": 0},
             "mapping_exclusions": 0, "validation": "PASS", "csv_path": "/tmp/out.csv",
             "lineage_path": "/tmp/out_lineage.json",
         }
         with patch.object(runner, "current_et_slate", return_value="2026-10-01"), \
-             patch.object(runner, "select_latest_refresh_package",
+             patch.object(runner, "select_latest_capture_package",
                           return_value=(Path("/immutable/refresh").resolve(), [])), \
              patch.object(runner, "run_export", return_value=summary) as export, \
              patch.dict(os.environ, {"NHL_CROSS_MARKET_PACKAGE": "/stale/env/package"}), \
              redirect_stdout(io.StringIO()):
             result = runner.main(["--latest-refresh"])
         self.assertEqual(result, 0)
-        export.assert_called_once_with(Path("/immutable/refresh").resolve(), current_slate="2026-10-01")
+        export.assert_called_once_with(
+            Path("/immutable/refresh").resolve(), current_slate="2026-10-01",
+            retained_catalog_dir=None)
 
     def test_no_valid_current_day_refresh_fails_clearly(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             self._refresh_package(root, mode="FAILED", state="3")
-            with self.assertRaisesRegex(ValueError, "NO_VALID_CURRENT_DAY_REFRESH_PACKAGE:2026-10-01"):
+            with self.assertRaisesRegex(ValueError, "NO_VALID_CURRENT_DAY_CAPTURE_PACKAGE:2026-10-01"):
                 select_latest_refresh_package(current_slate="2026-10-01", cross_market_root=root)
 
     def test_latest_resolution_is_absolute_for_export_lineage_binding(self):
@@ -221,6 +293,8 @@ class NHL8RainDirectExportTests(unittest.TestCase):
             lineage = json.loads(lineage_path.read_text())
             self.assertEqual(lineage["package_dir"], str(selected))
             self.assertEqual(lineage["package_state_sha256"], "5" * 64)
+            self.assertEqual(lineage["package_run_type"], "REFRESH")
+            self.assertFalse(lineage["challengers_included"])
             exported = pd.read_csv(csv_path)
             self.assertEqual(list(exported.columns), UPLOAD_COLUMNS)
             self.assertEqual(len(exported), 4)

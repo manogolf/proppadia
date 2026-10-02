@@ -51,113 +51,129 @@ def _manifest_names(package: Path) -> set[str]:
     return names
 
 
-def _refresh_timestamp(status: dict) -> datetime:
+def _capture_timestamp(status: dict) -> datetime:
     value = pd.to_datetime(status.get("run_timestamp_utc"), utc=True, errors="coerce")
     if pd.isna(value):
-        raise ValueError("REFRESH_TIMESTAMP_MISSING_OR_INVALID")
+        raise ValueError("CAPTURE_TIMESTAMP_MISSING_OR_INVALID")
     return value.to_pydatetime()
 
 
-def validate_latest_refresh_package(package: Path, *, current_slate: str) -> datetime:
-    """Validate the REFRESH identity and required reference outputs for auto-selection."""
+def validate_latest_capture_package(package: Path, *, current_slate: str) -> datetime:
+    """Validate a successful operational capture and its required reference outputs."""
     package = Path(package).expanduser().resolve()
     manifest_hash, state_hash = validate_package(package, current_slate=current_slate)
     del manifest_hash
     status = json.loads((package / "daily_execution_status.json").read_text(encoding="utf-8"))
-    if package.parent.name != "run_type=REFRESH":
-        raise ValueError("REFRESH_PACKAGE_PATH_RUN_TYPE_MISMATCH")
+    run_type = package.parent.name.removeprefix("run_type=")
+    if run_type not in {"MIDDAY", "FINAL_PREGAME", "REFRESH"}:
+        raise ValueError(f"CAPTURE_PACKAGE_PATH_RUN_TYPE_NOT_OPERATIONAL:{run_type}")
     if package.name != f"state={state_hash}":
-        raise ValueError("REFRESH_PACKAGE_PATH_STATE_MISMATCH")
-    if status.get("run_type") != "REFRESH":
-        raise ValueError(f"REFRESH_STATUS_RUN_TYPE_MISMATCH:{status.get('run_type')}")
-    if str(status.get("status") or status.get("classification") or "").upper() in {
-        "FAILED", "FAILED_CLOSED", "ABORTED", "INCOMPLETE",
+        raise ValueError("CAPTURE_PACKAGE_PATH_STATE_MISMATCH")
+    if status.get("run_type") != run_type:
+        raise ValueError(f"CAPTURE_STATUS_RUN_TYPE_MISMATCH:{status.get('run_type')}")
+    capture_states = {
+        str(status.get(key) or "").upper()
+        for key in ("status", "classification", "completion_status")
+    }
+    if capture_states & {
+        "FAILED", "FAILED_CLOSED", "ABORTED", "INCOMPLETE", "NOOP",
+        "PARTIAL", "PARTIAL_CAPTURE", "NOT_COMPLETE",
     }:
-        raise ValueError("REFRESH_STATUS_FAILED")
+        raise ValueError("CAPTURE_STATUS_FAILED")
     if status.get("mode") != "SHADOW_RESEARCH_ONLY":
-        raise ValueError(f"REFRESH_STATUS_NOT_COMPLETE:{status.get('mode')}")
+        raise ValueError(f"CAPTURE_STATUS_NOT_COMPLETE:{status.get('mode')}")
     if any(int(status.get(key) or 0) <= 0 for key in (
         "scheduled_games", "v2_predictions_created", "puck_line_v1_predictions_created",
     )):
-        raise ValueError("REFRESH_REFERENCE_OUTPUT_COUNTS_EMPTY")
+        raise ValueError("CAPTURE_REFERENCE_OUTPUT_COUNTS_EMPTY")
     required_manifest_entries = set(PACKAGE_REQUIRED_FILES) - {"SHA256SUMS"}
     missing_manifest_entries = sorted(required_manifest_entries - _manifest_names(package))
     if missing_manifest_entries:
         raise ValueError(
-            "REFRESH_REQUIRED_FILES_NOT_MANIFESTED:" + ",".join(missing_manifest_entries))
+            "CAPTURE_REQUIRED_FILES_NOT_MANIFESTED:" + ",".join(missing_manifest_entries))
     schedule = pd.read_csv(package / "schedule_event_identity.csv")
     if not {"game_id", "game_date"}.issubset(schedule.columns):
-        raise ValueError("REFRESH_CANONICAL_SLATE_SCHEMA_INVALID")
+        raise ValueError("CAPTURE_CANONICAL_SLATE_SCHEMA_INVALID")
     if "slate_date" in schedule and sorted(
         schedule.slate_date.dropna().astype(str).unique()) != [current_slate]:
-        raise ValueError("REFRESH_CANONICAL_SLATE_DATE_MISMATCH")
+        raise ValueError("CAPTURE_CANONICAL_SLATE_DATE_MISMATCH")
     if "canonical_season" in schedule and set(
         pd.to_numeric(schedule.canonical_season, errors="coerce").dropna().astype(int)
     ) != {2026}:
-        raise ValueError("REFRESH_CANONICAL_SEASON_MISMATCH")
+        raise ValueError("CAPTURE_CANONICAL_SEASON_MISMATCH")
     schedule_ids = set(pd.to_numeric(schedule.game_id, errors="coerce").dropna().astype(int))
     if not schedule_ids or schedule.game_id.duplicated().any():
-        raise ValueError("REFRESH_CANONICAL_SLATE_EMPTY_OR_DUPLICATED")
+        raise ValueError("CAPTURE_CANONICAL_SLATE_EMPTY_OR_DUPLICATED")
     if len(schedule_ids) != int(status["scheduled_games"]):
-        raise ValueError("REFRESH_CANONICAL_SLATE_COUNT_MISMATCH")
+        raise ValueError("CAPTURE_CANONICAL_SLATE_COUNT_MISMATCH")
     for filename, count_key in (
         ("v2_immutable_predictions.csv", "v2_predictions_created"),
         ("puck_line_v1_immutable_predictions.csv", "puck_line_v1_predictions_created"),
     ):
         frame = pd.read_csv(package / filename)
         if frame.empty or "game_id" not in frame or frame.game_id.isna().any():
-            raise ValueError(f"REFRESH_REFERENCE_OUTPUT_EMPTY_OR_MALFORMED:{filename}")
+            raise ValueError(f"CAPTURE_REFERENCE_OUTPUT_EMPTY_OR_MALFORMED:{filename}")
         prediction_ids = set(pd.to_numeric(frame.game_id, errors="coerce").dropna().astype(int))
         if frame.game_id.duplicated().any() or not prediction_ids.issubset(schedule_ids):
-            raise ValueError(f"REFRESH_REFERENCE_OUTPUT_IDENTITY_INVALID:{filename}")
+            raise ValueError(f"CAPTURE_REFERENCE_OUTPUT_IDENTITY_INVALID:{filename}")
         if len(frame) != int(status[count_key]):
-            raise ValueError(f"REFRESH_REFERENCE_OUTPUT_COUNT_MISMATCH:{filename}")
+            raise ValueError(f"CAPTURE_REFERENCE_OUTPUT_COUNT_MISMATCH:{filename}")
         if "slate_date" in frame and sorted(frame.slate_date.dropna().astype(str).unique()) != [current_slate]:
-            raise ValueError(f"REFRESH_REFERENCE_OUTPUT_SLATE_MISMATCH:{filename}")
-    return _refresh_timestamp(status)
+            raise ValueError(f"CAPTURE_REFERENCE_OUTPUT_SLATE_MISMATCH:{filename}")
+    return _capture_timestamp(status)
 
 
-def select_latest_refresh_package(
+# Backward-compatible name retained for callers/tests from the earlier selector.
+validate_latest_refresh_package = validate_latest_capture_package
+
+
+def select_latest_capture_package(
     *, current_slate: str, cross_market_root: Path = CROSS_MARKET_ROOT,
 ) -> tuple[Path, list[str]]:
-    """Select the newest valid REFRESH package for this ET slate, by capture time."""
-    refresh_root = (
-        Path(cross_market_root) / "season=2026" / f"slate_date={current_slate}"
-        / "run_type=REFRESH"
+    """Select the newest valid operational capture for this ET slate."""
+    slate_root = Path(cross_market_root) / "season=2026" / f"slate_date={current_slate}"
+    candidates = sorted(
+        path for run_type in ("MIDDAY", "FINAL_PREGAME", "REFRESH")
+        for path in (slate_root / f"run_type={run_type}").glob("state=*")
+        if path.is_dir()
     )
-    candidates = sorted(path for path in refresh_root.glob("state=*") if path.is_dir())
     if not candidates:
-        raise ValueError(f"CURRENT_DAY_REFRESH_PACKAGE_MISSING:{current_slate}")
+        raise ValueError(f"CURRENT_DAY_CAPTURE_PACKAGE_MISSING:{current_slate}")
     valid: list[tuple[datetime, Path]] = []
     skipped: list[str] = []
     for package in candidates:
         try:
-            captured_at = validate_latest_refresh_package(package, current_slate=current_slate)
+            captured_at = validate_latest_capture_package(package, current_slate=current_slate)
         except Exception as error:
             skipped.append(f"{package}: {type(error).__name__}:{error}")
             continue
         valid.append((captured_at, package.resolve()))
     if not valid:
         reasons = " | ".join(skipped)
-        raise ValueError(f"NO_VALID_CURRENT_DAY_REFRESH_PACKAGE:{current_slate}:{reasons}")
+        raise ValueError(f"NO_VALID_CURRENT_DAY_CAPTURE_PACKAGE:{current_slate}:{reasons}")
     valid.sort(key=lambda item: (item[0], item[1].name))
     return valid[-1][1], skipped
 
 
+# Backward-compatible Python API and CLI flag naming from the original workflow.
+select_latest_refresh_package = select_latest_capture_package
+
+
 def resolve_package_selection(
-    cli_package: str | None, *, latest_refresh: bool, env_package: str | None,
+    cli_package: str | None, *, latest_refresh: bool = False, latest_capture: bool = False,
+    env_package: str | None,
     current_slate: str, cross_market_root: Path = CROSS_MARKET_ROOT,
 ) -> tuple[Path, list[str]]:
     """Apply CLI precedence and return the resolved package plus operator notices."""
     notices: list[str] = []
     if cli_package:
-        if latest_refresh:
-            notices.append("Both --package and --latest-refresh were supplied; explicit --package wins.")
+        if latest_refresh or latest_capture:
+            notices.append("An automatic selector and --package were both supplied; explicit --package wins.")
         return resolve_package_argument(cli_package, env_package), notices
-    if latest_refresh:
-        package, skipped = select_latest_refresh_package(
+    if latest_refresh or latest_capture:
+        package, skipped = select_latest_capture_package(
             current_slate=current_slate, cross_market_root=cross_market_root)
-        notices.extend(f"Skipped invalid REFRESH package: {item}" for item in skipped)
+        notices.extend(f"Skipped invalid current-day capture: {item}" for item in skipped)
         return package, notices
     return resolve_package_argument(None, env_package), notices
 
@@ -236,7 +252,8 @@ def validate_export_report(export: dict, *, state_hash: str, manifest_hash: str)
         raise RuntimeError(f"EXPORT_VALIDATION_FAILED:{validation}")
 
 
-def run_export(package: Path, *, current_slate: str | None = None) -> dict:
+def run_export(package: Path, *, current_slate: str | None = None,
+               retained_catalog_dir: Path | None = None) -> dict:
     if not PYTHON.is_file():
         raise RuntimeError(f"QUALIFIED_PYTHON_MISSING:{PYTHON}")
     slate = current_slate or current_et_slate()
@@ -246,14 +263,22 @@ def run_export(package: Path, *, current_slate: str | None = None) -> dict:
     print(f"Resolved state:\n{state_hash[:12]}")
     print(f"Slate:\n{slate}")
 
-    catalog_result = _run(
-        [str(PYTHON), "backend/nhl/scripts/refresh_nhl_8rain_catalog.py"],
-        label="CATALOG_REFRESH",
-    )
-    catalog_lines = (catalog_result.stdout or "").splitlines()
-    if not catalog_lines:
-        raise RuntimeError("CATALOG_REFRESH_PATH_MISSING")
-    catalog_dir = Path(catalog_lines[0]).resolve()
+    if retained_catalog_dir is None:
+        catalog_result = _run(
+            [str(PYTHON), "backend/nhl/scripts/refresh_nhl_8rain_catalog.py"],
+            label="CATALOG_REFRESH",
+        )
+        catalog_lines = (catalog_result.stdout or "").splitlines()
+        if not catalog_lines:
+            raise RuntimeError("CATALOG_REFRESH_PATH_MISSING")
+        catalog_dir = Path(catalog_lines[0]).resolve()
+    else:
+        catalog_dir = Path(retained_catalog_dir).expanduser().resolve()
+        if not catalog_dir.is_dir() or any(
+            not (catalog_dir / name).is_file()
+            for name in ("model_spec.json", "teams.json", "players.json")
+        ):
+            raise RuntimeError(f"RETAINED_CATALOG_INVALID:{catalog_dir}")
     if not catalog_dir.is_dir() or catalog_dir.parent != CATALOG_ROOT.resolve():
         raise RuntimeError(f"CATALOG_REFRESH_PATH_INVALID:{catalog_dir}")
 
@@ -296,6 +321,7 @@ def run_export(package: Path, *, current_slate: str | None = None) -> dict:
     return {
         "slate": slate,
         "state_prefix": state_hash[:12],
+        "phase": json.loads((package / "daily_execution_status.json").read_text()).get("run_type"),
         "rows": int(validation["rows"]),
         "pairs": int(validation["market_pairs"]),
         "markets": {
@@ -317,24 +343,34 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--package", help="Immutable current-slate cross-market package directory")
     parser.add_argument(
         "--latest-refresh", action="store_true",
-        help="Resolve the newest valid current-ET-day immutable REFRESH package",
+        help="Resolve the newest valid successful current-ET-day operational capture (legacy alias)",
+    )
+    parser.add_argument(
+        "--latest-capture", action="store_true",
+        help="Resolve the newest valid successful current-ET-day operational capture",
+    )
+    parser.add_argument(
+        "--retained-catalog-dir", type=Path,
+        help="Use an existing local catalog package instead of refreshing the public catalog",
     )
     args = parser.parse_args(argv)
     try:
         slate = current_et_slate()
         package, notices = resolve_package_selection(
-            args.package, latest_refresh=args.latest_refresh,
+            args.package, latest_refresh=args.latest_refresh, latest_capture=args.latest_capture,
             env_package=os.environ.get("NHL_CROSS_MARKET_PACKAGE"), current_slate=slate,
         )
         for notice in notices:
             print(notice, file=sys.stderr)
-        summary = run_export(package, current_slate=slate)
+        summary = run_export(
+            package, current_slate=slate, retained_catalog_dir=args.retained_catalog_dir)
     except Exception as error:
         print(f"NHL_8RAIN_EXPORT_FAILED: {error}", file=sys.stderr)
         return 1
     print("NHL 8RAIN EXPORT READY")
     print(f"Slate: {summary['slate']}")
     print(f"Package: {summary['state_prefix']}")
+    print(f"Phase: {summary['phase']}")
     print(f"Rows: {summary['rows']}")
     print(f"Pairs: {summary['pairs']}")
     for market, rows in summary["markets"].items():

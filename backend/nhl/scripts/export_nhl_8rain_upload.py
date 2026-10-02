@@ -174,6 +174,7 @@ def main() -> None:
         "catalog_sha256": catalog_hashes, "catalog_dir": str(catalog_dir),
         "package_manifest_sha256": package_manifest_sha256,
         "package_dir": str(args.package_dir), "package_state_sha256": package_status.get("substantive_state_sha256"),
+        "package_run_type": package_status.get("run_type"),
         "package_run_timestamp_utc": package_status.get("run_timestamp_utc"),
         "source_daily_run_ids": source_run_ids,
         "source_odds_observation_ids": source_observation_ids,
