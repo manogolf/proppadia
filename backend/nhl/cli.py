@@ -72,6 +72,7 @@ from backend.nhl.attachment_integrity import (
     audit_attachment_files,
     validate_odds_observation,
 )
+from backend.nhl.postgame_learning import ensure_prior_learning, prior_et_slate
 
 
 # ---------- bootstrap env ----------
@@ -1748,6 +1749,18 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
 
     # 0) DB sanity
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", "SELECT now();"])
+
+    # Complete yesterday's official learning handoff before history updates.
+    # Official NHL requests are governed; this path never invokes Odds API.
+    prior_date_et = prior_et_slate()
+    recorder.prior_learning = ensure_prior_learning(prior_date_et)
+    print("NHL_PRIOR_DAY_LEARNING=" + json.dumps(recorder.prior_learning, sort_keys=True))
+    if recorder.prior_learning.get("reconciliation_status") in {
+        "CREATED", "REUSED_VALID_PACKAGE", "NOT_FINAL", "NO_PACKAGE", "NO_PRIOR_GAMES",
+    }:
+        pass
+    else:
+        raise RuntimeError("PRIOR_DAY_LEARNING_STATUS_INVALID")
 
     # 0b) Full-league roster/player refresh (all teams, not slate-limited).
     # Explicit roster reuse prohibits a second roster-provider acquisition.

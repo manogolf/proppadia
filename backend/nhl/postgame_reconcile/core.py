@@ -27,6 +27,7 @@ from backend.nhl.sog_cold_start.core import (
     grade_predictions,
 )
 from backend.nhl.prediction_only.core import digest as prediction_only_digest
+from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluation_eligible
 
 
 CONTRACT = "NHL_POSTGAME_RECONCILIATION_V1"
@@ -694,6 +695,42 @@ def _pregame(frame: pd.DataFrame, timestamp_col: str, schedule: pd.DataFrame) ->
     return joined
 
 
+def _grade_game_lines(moneyline: pd.DataFrame, puck: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Apply the canonical official game-type evaluation contract to ML/PL."""
+    for frame in (moneyline, puck):
+        if "game_type_code" not in frame:
+            if not frame.empty:
+                raise RuntimeError("CANONICAL_GAME_TYPE_MISSING_FROM_GRADE_ROWS")
+            frame["game_type_code"] = pd.Series(dtype="Int64")
+        frame["canonical_phase"] = frame.game_type_code.map(phase_for_game_type)
+        eligible = frame.game_type_code.map(regular_season_evaluation_eligible)
+        frame["grading_status"] = "PRESEASON_NON_EVALUATION"
+        frame.loc[eligible, "grading_status"] = "REGULAR_SEASON_GRADED"
+        frame.loc[frame.canonical_phase.eq("POSTSEASON"), "grading_status"] = "POSTSEASON_NON_REGULAR_SEASON_EVALUATION"
+        frame.loc[frame.canonical_phase.eq("UNKNOWN_GAME_TYPE"), "grading_status"] = "GAME_TYPE_UNRESOLVED"
+        frame["regular_season_evaluation_target"] = pd.NA
+        winner = frame.official_full_game_winner
+        frame.loc[eligible, "regular_season_evaluation_target"] = winner.map({"HOME": 1, "AWAY": 0})[eligible]
+        if "model_favored_team" in frame and "home_team" in frame:
+            home_won = winner.eq("HOME")
+            frame["prediction_correct"] = frame.model_favored_team.eq(frame.home_team).eq(home_won).where(eligible)
+        if frame is puck:
+            margin = pd.to_numeric(frame.official_final_home_goals, errors="coerce") - pd.to_numeric(frame.official_final_away_goals, errors="coerce")
+            frame["actual_margin_class"] = pd.Series(pd.NA, index=frame.index, dtype="string")
+            frame.loc[eligible & margin.le(-2), "actual_margin_class"] = "AWAY_BY_2_PLUS"
+            frame.loc[eligible & margin.abs().lt(2), "actual_margin_class"] = "ONE_GOAL_GAME"
+            frame.loc[eligible & margin.ge(2), "actual_margin_class"] = "HOME_BY_2_PLUS"
+            class_columns = ["away_by_2_plus_probability", "one_goal_game_probability", "home_by_2_plus_probability"]
+            if set(class_columns).issubset(frame.columns):
+                frame["predicted_margin_class"] = frame[class_columns].idxmax(axis=1).map({
+                    "away_by_2_plus_probability": "AWAY_BY_2_PLUS",
+                    "one_goal_game_probability": "ONE_GOAL_GAME",
+                    "home_by_2_plus_probability": "HOME_BY_2_PLUS",
+                })
+                frame["prediction_correct"] = frame.predicted_margin_class.eq(frame.actual_margin_class).where(eligible)
+    return moneyline, puck
+
+
 def grade_catchup(prediction_root: Path, schedule: pd.DataFrame, games: pd.DataFrame,
                   skaters: pd.DataFrame, goalies: pd.DataFrame) -> dict[str, pd.DataFrame]:
     main_runs = list((prediction_root / "constructed/mainline").glob("season=2026/slate_date=*/run_type=*/state=*"))
@@ -704,10 +741,7 @@ def grade_catchup(prediction_root: Path, schedule: pd.DataFrame, games: pd.DataF
     puck = _pregame(pd.read_csv(main / "puck_line_v1_immutable_predictions.csv"), "prediction_creation_time_utc", schedule)
     moneyline = moneyline.merge(games[["game_id", "official_full_game_winner", "official_final_home_goals", "official_final_away_goals"]], on="game_id", validate="one_to_one")
     puck = puck.merge(games[["game_id", "official_full_game_winner", "official_final_home_goals", "official_final_away_goals"]], on="game_id", validate="one_to_one")
-    moneyline["grading_status"] = "PRESEASON_NON_EVALUATION"
-    moneyline["regular_season_evaluation_target"] = pd.NA
-    puck["grading_status"] = "PRESEASON_NON_EVALUATION"
-    puck["regular_season_evaluation_target"] = pd.NA
+    moneyline, puck = _grade_game_lines(moneyline, puck)
 
     props = prediction_root / "constructed/independent_props"
     summary = json.loads((props / "lane_prediction_summary.json").read_text())
@@ -849,7 +883,7 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
     if cross_binding["run"] is None:
         empty_columns = ["canonical_season", "slate_date", "game_id",
                          "grading_status", "regular_season_evaluation_target",
-                         *outcome_columns[1:]]
+                         "game_type_code", *outcome_columns[1:]]
         moneyline = pd.DataFrame(columns=empty_columns)
         puck = pd.DataFrame(columns=empty_columns)
     else:
@@ -860,9 +894,7 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
                         "prediction_creation_time_utc", schedule)
         moneyline = moneyline.merge(games[outcome_columns], on="game_id", validate="one_to_one")
         puck = puck.merge(games[outcome_columns], on="game_id", validate="one_to_one")
-    for frame in (moneyline, puck):
-        frame["grading_status"] = "PRESEASON_NON_EVALUATION"
-        frame["regular_season_evaluation_target"] = pd.NA
+    moneyline, puck = _grade_game_lines(moneyline, puck)
 
     sog_run = Path(source_binding["sog"]["run"])
     predictions = pd.read_csv(sog_run / "immutable_predictions.csv")
@@ -979,12 +1011,22 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
         goalies.to_csv(staging / "canonical_goalie_outcomes.csv", index=False)
         for lane, frame in grades.items():
             frame.to_csv(staging / f"graded_{lane}.csv", index=False)
+        all_regular = canonical.game_type_code.astype(int).eq(2).all()
+        all_preseason = canonical.game_type_code.astype(int).eq(1).all()
+        if all_preseason:
+            phase_grade_status = "PRESEASON_NON_EVALUATION"
+        elif all_regular and source_binding and source_binding["cross_market"]["run"] is not None:
+            phase_grade_status = "REGULAR_SEASON_GRADED"
+        elif all_regular:
+            phase_grade_status = "NO_IMMUTABLE_CROSS_MARKET_SOURCE"
+        else:
+            phase_grade_status = "MIXED_OR_UNRESOLVED_GAME_PHASE"
         summary = {
             "contract_version": CONTRACT, "slate_date": slate_date,
             "status": "COMPLETE", "substantive_identity": identity,
             "games": len(games), "skater_outcomes": len(skaters), "goalie_outcomes": len(goalies),
-            "moneyline_status": "PRESEASON_NON_EVALUATION",
-            "puck_line_status": "PRESEASON_NON_EVALUATION",
+            "moneyline_status": phase_grade_status,
+            "puck_line_status": phase_grade_status,
             "points_timestamp_qualification": (source_binding["points"]["status"] if source_binding else "RUN_SUMMARY_OBSERVATION_TIMESTAMP_PRESTART"),
             "saves_contract": (source_binding["saves"]["status"] if source_binding else "FROZEN_CONDITIONAL_STARTER_PARTICIPATION"),
             "sog_status": ("PROSPECTIVE_FINAL_PREGAME_GRADED_BY_CONTRACT_ARM" if source_binding else "NO_SEPTEMBER_19_PREDICTION_GRADE"),

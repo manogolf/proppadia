@@ -16,6 +16,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from backend.nhl.game_phase import GAME_TYPE_PHASE, phase_for_game_type, regular_season_evaluation_eligible
 from sklearn.metrics import roc_auc_score
 from .shot_prior import (
     CHALLENGER_NAME, POLICY_VERSION, build_shot_prior_challenger,
@@ -46,7 +47,7 @@ SCHEDULE_COLUMNS = [
     "canonical_season", "slate_date", "game_id", "game_date", "scheduled_start_time_utc",
     "home_team_id", "home_team", "away_team_id", "away_team", "game_status",
 ]
-GAME_TYPES = {1: "PRESEASON", 2: "REGULAR_SEASON", 3: "POSTSEASON"}
+GAME_TYPES = GAME_TYPE_PHASE
 MAX_REQUESTS_PER_RUN = 1
 MAX_ESTIMATED_CREDITS_PER_RUN = 4
 MARKETS = ("h2h", "spreads")
@@ -190,7 +191,7 @@ def normalize_game_types(frame: pd.DataFrame) -> pd.DataFrame:
     if source is None:
         raise ValueError("GAME_TYPE_REQUIRED")
     result["game_type_code"] = pd.to_numeric(result[source], errors="coerce").astype("Int64")
-    result["game_type_label"] = result.game_type_code.map(GAME_TYPES).fillna("UNKNOWN_GAME_TYPE")
+    result["game_type_label"] = result.game_type_code.map(phase_for_game_type)
     return result
 
 
@@ -302,6 +303,8 @@ def build_v2_predictions(schedule: pd.DataFrame, history: pd.DataFrame, predicti
             "v2_away_win_probability": 1 - probability,
             "model_favored_team": target.home_team if probability >= .5 else target.away_team,
             "prediction_creation_time_utc": created.isoformat(),
+            "game_type_code": int(target.game_type_code),
+            "game_type_label": phase_for_game_type(target.game_type_code),
             "substantive_prediction_sha256": digest_value(substantive),
             "control_name": CONTROL_NAME, "control_artifact_sha256": sha256(PARAMETER_PATH),
             "prediction_status": (
@@ -310,7 +313,7 @@ def build_v2_predictions(schedule: pd.DataFrame, history: pd.DataFrame, predicti
                 "REGULAR_SEASON_SHADOW_ELIGIBLE" if int(target.game_type_code) == 2 else
                 "POSTSEASON_NON_REGULAR_EVALUATION"
             ),
-            "regular_season_evaluation_eligible": bool(prestart and int(target.game_type_code) == 2),
+            "regular_season_evaluation_eligible": bool(prestart and regular_season_evaluation_eligible(target.game_type_code)),
             "wager_recommendation": "NONE_SHADOW_ONLY",
         })
         rows.append(row)
@@ -324,7 +327,7 @@ def build_v2_predictions(schedule: pd.DataFrame, history: pd.DataFrame, predicti
                 pd.isna(x) or x < target.scheduled_start_time_utc for x in prior_starts
             ),
             "preseason_history_rows": 0 if int(target.game_type_code) in {1, 2} else pd.NA,
-            "regular_season_evaluation_eligible": bool(prestart and int(target.game_type_code) == 2),
+            "regular_season_evaluation_eligible": bool(prestart and regular_season_evaluation_eligible(target.game_type_code)),
         })
     return pd.DataFrame(rows), pd.DataFrame(timing)
 
@@ -1306,10 +1309,51 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
                     "class_accuracy": group.correct.mean(), "top_label_ece": ece,
                 })
         challenger_segments = pd.DataFrame(segment_rows)
+    # Retain every matched outcome row while limiting evaluation metrics to
+    # regular-season official game types. Preseason remains observable but is
+    # never included in evaluation summaries.
+    schedule_path = run_dir / "schedule_event_identity.csv"
+    if not schedule_path.is_file():
+        raise RuntimeError("CANONICAL_SCHEDULE_PHASE_EVIDENCE_MISSING")
+    phase_schedule = pd.read_csv(schedule_path)
+    if phase_schedule.duplicated("game_id").any() or not {"game_id", "game_type_code"}.issubset(phase_schedule):
+        raise RuntimeError("CANONICAL_SCHEDULE_PHASE_EVIDENCE_INVALID")
+    game_type_by_id = phase_schedule.set_index("game_id").game_type_code.to_dict()
+    evaluated_frames = {
+        "moneyline": moneyline, "moneyline_challenger": moneyline_challenger,
+        "moneyline_market": comparison, "puck_market": puck,
+        "puck_model": puck_model, "puck_challenger": puck_v2_model,
+    }
+    for frame in evaluated_frames.values():
+        if frame.empty:
+            continue
+        if "game_type_code" not in frame and "game_id" in frame:
+            frame["game_type_code"] = frame.game_id.map(game_type_by_id)
+        type_column = next((name for name in ("game_type_code", "canonical_game_type_code") if name in frame), None)
+        if type_column is None:
+            continue
+        frame["canonical_phase"] = frame[type_column].map(phase_for_game_type)
+        eligible = frame[type_column].map(regular_season_evaluation_eligible)
+        frame["evaluation_status"] = "REGULAR_SEASON_GRADED"
+        frame.loc[~eligible, "evaluation_status"] = frame.loc[~eligible, "canonical_phase"].map({
+            "PRESEASON": "PRESEASON_NON_EVALUATION",
+            "POSTSEASON": "POSTSEASON_NON_REGULAR_SEASON_EVALUATION",
+            "UNKNOWN_GAME_TYPE": "GAME_TYPE_UNRESOLVED",
+        }).fillna("GAME_TYPE_UNRESOLVED")
+        for metric in ("correct", "brier_contribution", "log_loss_contribution",
+                       "accuracy_contribution", "probability_assigned_to_outcome",
+                       "model_cover_probability", "cover_actual",
+                       "v2_minus_market_probability_gap", "standard_puck_line_result"):
+            if metric in frame:
+                if pd.api.types.is_bool_dtype(frame[metric].dtype):
+                    frame[metric] = frame[metric].astype("boolean")
+                elif pd.api.types.is_numeric_dtype(frame[metric].dtype):
+                    frame[metric] = pd.to_numeric(frame[metric], errors="coerce").astype("Float64")
+                frame.loc[~eligible, metric] = pd.NA
     substantive = {
         "run_manifest": sha256(run_dir / "SHA256SUMS"),
         "outcomes": outcomes.sort_values("game_id")[sorted(required)].astype(str).to_dict("records"),
-        "grading_contract_version": "MONEYLINE_V3_BRIER_LOGLOSS_AUC_ACCURACY_ECE_V2",
+        "grading_contract_version": "MONEYLINE_V3_BRIER_LOGLOSS_AUC_ACCURACY_ECE_V5_PHASE_AWARE",
     }
     grade_hash = digest_value(substantive)
     destination = grade_root / run_dir.name / f"grade={grade_hash}"
@@ -1330,15 +1374,22 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
         puck_v2_model.to_csv(destination / "graded_puck_line_v2_shot_prior_model_results.csv", index=False)
         paired.to_csv(destination / "graded_puck_line_v1_v2_paired_results.csv", index=False)
         challenger_segments.to_csv(destination / "graded_puck_line_v2_shot_prior_segments.csv", index=False)
-    (destination / "grading_status.json").write_text(json.dumps({
+    def evaluation_count(frame: pd.DataFrame) -> int:
+        if frame.empty or "evaluation_status" not in frame:
+            return 0
+        return int(frame.evaluation_status.eq("REGULAR_SEASON_GRADED").sum())
+
+    status_payload = {
         "mode": "SHADOW_RESEARCH_ONLY", "graded_games": len(moneyline),
+        "outcomes_observed": len(moneyline),
+        "moneyline_regular_season_games_graded": evaluation_count(moneyline),
         "source_run_dir": str(run_dir),
         "slate_date": str(predictions.slate_date.iloc[0]) if len(predictions) else None,
-        "moneyline_correct": int(moneyline.correct.sum()),
+        "moneyline_correct": int(moneyline.loc[moneyline.evaluation_status.eq("REGULAR_SEASON_GRADED"), "correct"].fillna(False).sum()) if evaluation_count(moneyline) else 0,
         "moneyline_brier": moneyline.brier_contribution.mean() if len(moneyline) else None,
         "moneyline_log_loss": moneyline.log_loss_contribution.mean() if len(moneyline) else None,
         "moneyline_challenger_v3_games_graded": len(moneyline_challenger),
-        "moneyline_challenger_v3_correct": int(moneyline_challenger.correct.sum()) if len(moneyline_challenger) else 0,
+        "moneyline_challenger_v3_correct": int(moneyline_challenger.correct.fillna(False).sum()) if len(moneyline_challenger) else 0,
         "moneyline_challenger_v3_brier": moneyline_challenger.brier_contribution.mean() if len(moneyline_challenger) else None,
         "moneyline_challenger_v3_log_loss": moneyline_challenger.log_loss_contribution.mean() if len(moneyline_challenger) else None,
         "moneyline_challenger_v3_auc": float(roc_auc_score(
@@ -1350,17 +1401,27 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
         ) if len(moneyline_challenger) else None,
         "moneyline_v2_v3_side_changes": int(moneyline_paired.side_changed.sum()) if len(moneyline_paired) else 0,
         "moneyline_v2_v3_paired_games": len(moneyline_paired),
-        "puck_line_model_games_graded": len(puck_model),
-        "puck_line_model_correct": int(puck_model.correct.sum()),
+        "puck_line_model_games_graded": evaluation_count(puck_model),
+        "puck_line_model_correct": int(puck_model.loc[puck_model.evaluation_status.eq("REGULAR_SEASON_GRADED"), "correct"].fillna(False).sum()) if evaluation_count(puck_model) else 0,
         "puck_line_model_brier": puck_model.brier_contribution.mean() if len(puck_model) else None,
         "puck_line_model_log_loss": puck_model.log_loss_contribution.mean() if len(puck_model) else None,
         "puck_line_v2_shot_prior_games_graded": len(puck_v2_model),
-        "puck_line_v2_shot_prior_correct": int(puck_v2_model.correct.sum()) if len(puck_v2_model) else 0,
+        "puck_line_v2_shot_prior_correct": int(puck_v2_model.correct.fillna(False).sum()) if len(puck_v2_model) else 0,
         "puck_line_v2_shot_prior_brier": puck_v2_model.brier_contribution.mean() if len(puck_v2_model) else None,
         "puck_line_v2_shot_prior_log_loss": puck_v2_model.log_loss_contribution.mean() if len(puck_v2_model) else None,
         "puck_line_v1_v2_class_changes": int(paired.class_changed.sum()) if len(paired) else 0,
-        "puck_line_market_observations_graded": len(puck), "wagers_placed": 0,
-    }, indent=2, sort_keys=True) + "\n")
+        "puck_line_market_observations_graded": evaluation_count(puck), "wagers_placed": 0,
+    }
+    def json_default(value: Any) -> Any:
+        if value is pd.NA or value is pd.NaT:
+            return None
+        if isinstance(value, np.generic):
+            return value.item()
+        if pd.api.types.is_scalar(value) and pd.isna(value):
+            return None
+        raise TypeError(f"NOT_JSON_SERIALIZABLE:{type(value).__name__}")
+    (destination / "grading_status.json").write_text(
+        json.dumps(status_payload, indent=2, sort_keys=True, default=json_default) + "\n")
     write_manifest(destination)
     return destination
 
@@ -1396,8 +1457,8 @@ def daily_status(root: Path, slate_date: str) -> dict[str, Any]:
         item = json.loads(path.read_text())
         if item.get("slate_date") == slate_date:
             grading.append(item)
-    graded_games = max((item["graded_games"] for item in grading), default=0)
-    best = max(grading, key=lambda item: item["graded_games"], default=None)
+    graded_games = max((item.get("outcomes_observed", item["graded_games"]) for item in grading), default=0)
+    best = max(grading, key=lambda item: item.get("outcomes_observed", item["graded_games"]), default=None)
     return {
         "slate_date": slate_date, "scheduled_games": latest["scheduled_games"],
         "v2_predictions_created": latest["v2_predictions_created"],
@@ -1413,9 +1474,10 @@ def daily_status(root: Path, slate_date: str) -> dict[str, Any]:
         "saves_games_covered": int(coverage.saves_strict_prior_available.sum()),
         "missing_or_unmatched_events": latest["unmatched_events"],
         "remaining_api_credits": latest["remaining_api_credits"],
-        "final_games_awaiting_grading": max(latest["scheduled_games"] - graded_games, 0),
+        "final_games_awaiting_grading": max(latest["scheduled_games"] - max(
+            graded_games, max((item.get("outcomes_observed", item["graded_games"]) for item in grading), default=0)), 0),
         "graded_moneyline_record": (
-            f"{best['moneyline_correct']}-{best['graded_games'] - best['moneyline_correct']}" if best else "0-0"
+            f"{best['moneyline_correct']}-{best.get('moneyline_regular_season_games_graded', best['graded_games']) - best['moneyline_correct']}" if best else "0-0"
         ),
         "graded_moneyline_brier": best["moneyline_brier"] if best else None,
         "graded_moneyline_log_loss": best["moneyline_log_loss"] if best else None,

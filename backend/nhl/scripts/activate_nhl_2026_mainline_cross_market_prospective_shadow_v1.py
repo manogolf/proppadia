@@ -238,9 +238,9 @@ def run_validation(work: Path) -> tuple[list[dict], dict]:
     comparison = pd.read_csv(grade / "graded_moneyline_market_comparison.csv")
     puck = pd.read_csv(grade / "graded_puck_line_market_results.csv")
     check("idempotent append-only grading", grade == grade_again and grade_tree == tree_hashes(grade), grade.name)
-    check("Moneyline grading and proper scores", len(moneyline) == 1 and moneyline.correct.all() and moneyline.brier_contribution.notna().all() and moneyline.log_loss_contribution.notna().all(), moneyline[["correct", "brier_contribution", "log_loss_contribution"]].to_json(orient="records"))
-    check("no-vig V2 market comparison", len(comparison) == 8 and comparison.no_vig_probability.notna().all() and comparison.v2_minus_market_probability_gap.notna().all(), len(comparison))
-    check("puck line grading hypothetical only", len(puck) == 4 and set(puck.standard_puck_line_result) == {"WIN", "LOSS"} and puck.financial_result_label.eq("HYPOTHETICAL_NO_WAGER_PLACED").all(), len(puck))
+    check("preseason Moneyline retained as non-evaluation", len(moneyline) == 1 and moneyline.evaluation_status.eq("PRESEASON_NON_EVALUATION").all() and moneyline.correct.isna().all() and moneyline.brier_contribution.isna().all() and moneyline.log_loss_contribution.isna().all(), moneyline[["evaluation_status", "correct", "brier_contribution", "log_loss_contribution"]].to_json(orient="records"))
+    check("preseason market quotes retained outside evaluation", len(comparison) == 8 and comparison.no_vig_probability.notna().all() and comparison.evaluation_status.eq("PRESEASON_NON_EVALUATION").all() and comparison.v2_minus_market_probability_gap.isna().all(), len(comparison))
+    check("preseason Puck Line retained as non-evaluation", len(puck) == 4 and puck.evaluation_status.eq("PRESEASON_NON_EVALUATION").all() and puck.standard_puck_line_result.isna().all() and puck.financial_result_label.eq("HYPOTHETICAL_NO_WAGER_PLACED").all(), len(puck))
     check("pregame capture immutable after grading", first_tree == tree_hashes(first), sha256(first / "SHA256SUMS"))
 
     # A regular-season target can use prior regular-season games, but never preseason.
@@ -309,7 +309,7 @@ def run_validation(work: Path) -> tuple[list[dict], dict]:
     check("scheduler lock released after every exit", retry.returncode == 0, retry.stderr.strip() or "second invocation exit 0")
 
     status = daily_status(run_root, SLATE)
-    check("daily status command surface", status["graded_moneyline_record"] == "1-0" and status["final_games_awaiting_grading"] == 0 and status["graded_puck_line_market_observations"] == 4, status)
+    check("daily status command surface", status["graded_moneyline_record"] == "0-0" and status["final_games_awaiting_grading"] == 0 and status["graded_puck_line_market_observations"] == 0, status)
 
     failures = [row for row in checks if row["status"] != "PASS"]
     summary = {

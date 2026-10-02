@@ -167,6 +167,7 @@ class DailyRunRecorder:
         self.canonical_game_set_hash: str | None = None
         self.roster_observation: dict[str, Any] | None = None
         self.odds_observation: dict[str, Any] | None = None
+        self.prior_learning: dict[str, Any] | None = None
         self.children: list[dict[str, Any]] = []
         self.failure: dict[str, Any] | None = None
         # Runtime-only continuation state. It is intentionally excluded from
@@ -364,6 +365,7 @@ class DailyRunRecorder:
             "lanes": {name: asdict(self.lanes[name]) for name in LANE_NAMES},
             "roster_observation": self.roster_observation,
             "odds_observation": self.odds_observation,
+            "prior_day_learning": self.prior_learning,
             "child_summaries": self.children,
             "database_write_status": self.database_write_status(),
             "database_write_children": [

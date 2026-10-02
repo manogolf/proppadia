@@ -79,9 +79,33 @@ grading/book-upload workflow below. The upload remains manual.
    directory with `--package`. The legacy SOG/Points/Saves selectors and policy
    files remain available for explicit filtered research.
 6. Review the lineage report and manually upload the immutable CSV under
-   `artifacts/operational/nhl/8rain_uploads/YYYY-MM-DD/`. Its filename includes
-   the ET export timestamp and cross-market state prefix. The command never
-   uploads externally.
+  `artifacts/operational/nhl/8rain_uploads/YYYY-MM-DD/`. Its filename includes
+  the ET export timestamp and cross-market state prefix. The command never
+  uploads externally.
+
+## Morning Postgame Learning
+
+The 2026 regular season began on September 29. NHL official `gameType` is the
+phase authority (`1` preseason, `2` regular season, `3` postseason). A normal
+morning `daily --with-odds` run now checks the prior New York calendar date
+before it updates prior-day history. It reuses a complete hash-verified
+reconciliation package or invokes the governed official-outcome reconciler
+when no package exists. Non-final slates are recorded as `NOT_FINAL` and do
+not receive invented outcomes.
+
+The governed package supplies Moneyline and Puck Line reference grades. When
+an immutable FINAL_PREGAME cross-market capture exists, the same morning flow
+grades its mainline and any available challenger identities separately.
+Challenger absence is nonfatal. SOG, Points, and Saves rows without sufficient
+official identity/participation evidence remain explicitly unresolved; confirmed
+Saves relief appearances remain outside the conditional starter denominator.
+The prior-day statuses and row counts are retained in the daily parent receipt.
+
+No separate morning `bin/nhl_postgame_reconcile.sh` or `grade-capture` step is
+required. Intraday REFRESH snapshots remain append-only and retain their
+observation IDs, timestamps, books, lines, prices, and capture identity. 8rain
+is downstream export and manual upload tooling; it is not an outcome or grading
+authority.
 
 8rain importer acceptance note:
 
