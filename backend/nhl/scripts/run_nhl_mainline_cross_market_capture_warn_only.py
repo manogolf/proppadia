@@ -21,7 +21,7 @@ import psycopg
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
 from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canonical_slate
 from backend.nhl.cross_market_shadow.official_outcomes import load_official_outcomes
-from backend.nhl.daily_capture import load_canonical_slate
+from backend.nhl.daily_capture import load_canonical_slate, sha256_file, verify_package
 from backend.nhl.scripts.nhl_prediction_only_common import observe as observe_independent_prediction_only
 from backend.nhl.scripts.run_nhl_sog_prediction_only_warn_only import observe as observe_sog_prediction_only
 from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow"
 DEFAULT_OUTCOME_ROOT = ROOT / "artifacts/operational/nhl/postgame_reconciliation"
 MORNING_ROOT = ROOT / "artifacts/operational/nhl/morning"
+DAILY_RUN_ROOT = ROOT / "artifacts/operational/nhl/daily_runs"
 
 
 def observe_prediction_only_lanes(slate: str, requested: str, dsn: str,
@@ -417,20 +418,96 @@ def durable_json(path: Path, payload: dict, *, create_only: bool = False) -> Non
             temporary.unlink(missing_ok=True)
 
 
-def morning_capture_allowed(slate: str, morning_root: Path = MORNING_ROOT) -> tuple[bool, str]:
-    """Fail closed until a durable successful morning receipt enables capture."""
-    health_files = sorted((morning_root / slate / "runs").glob("*/morning_health.json"))
-    for path in reversed(health_files):
-        try:
-            health = json.loads(path.read_text())
-        except (OSError, ValueError):
-            continue
-        downstream = health.get("downstream") or {}
-        if (health.get("overall_status") == "READY"
-                and downstream.get("MIDDAY_MARKET_CAPTURE_ALLOWED") is True
-                and downstream.get("FINAL_PREGAME_CAPTURE_ALLOWED") is True):
-            return True, f"MORNING_READY_RECEIPT:{health.get('orchestration_run_id')}"
+def _daily_receipt_is_capture_ready(package: Path, slate: str) -> tuple[bool, str, str | None]:
+    """Validate a completed daily receipt as the current-slate market readiness authority."""
+    try:
+        verify_package(package)
+        receipt_path = package / "parent_receipt.json"
+        marker_path = package / "RUN_COMPLETE.json"
+        receipt = json.loads(receipt_path.read_text())
+        marker = json.loads(marker_path.read_text())
+        run_id = str(receipt.get("parent_daily_run_id") or "")
+        if (receipt.get("schema_version") != "NHL_COMPREHENSIVE_DAILY_RUN_RECEIPT_V3"
+                or marker.get("schema_version") != receipt.get("schema_version")
+                or marker.get("parent_daily_run_id") != run_id
+                or marker.get("final_classification") != "READY"
+                or receipt.get("final_classification") != "READY"
+                or receipt.get("operational_timezone") != "America/New_York"
+                or receipt.get("slate_date") != slate
+                or not run_id
+                or package.name != f"run_id={run_id}"):
+            return False, "DAILY_RECEIPT_IDENTITY_OR_CLASSIFICATION_INVALID", None
+        lanes = receipt.get("lanes") or {}
+        required_lanes = {
+            "shared_prerequisites": {"COMPLETE"},
+            "roster": {"COMPLETE", "REUSED"},
+            "legacy_sog": {"COMPLETE"},
+            "points": {"COMPLETE"},
+            "saves": {"COMPLETE"},
+        }
+        for lane, statuses in required_lanes.items():
+            if (not isinstance(lanes.get(lane), dict)
+                    or lanes[lane].get("status") not in statuses):
+                return False, f"DAILY_REQUIRED_LANE_NOT_READY:{lane}", None
+        predictions = {
+            "legacy_sog": "sog_predictions_wide_calibrated.csv",
+            "points": "points_predictions.csv",
+            "saves": "saves_predictions.csv",
+        }
+        for lane, filename in predictions.items():
+            lane_outputs = lanes[lane].get("outputs") or []
+            candidates = [row for row in lane_outputs if isinstance(row, dict)
+                          and Path(str(row.get("path", ""))).name == filename]
+            if not candidates:
+                return False, f"DAILY_REQUIRED_PREDICTION_MISSING:{lane}", None
+            artifact = candidates[0]
+            artifact_path = Path(str(artifact.get("path", "")))
+            if (not artifact_path.is_file()
+                    or artifact_path.stat().st_size != int(artifact.get("bytes", -1))
+                    or sha256_file(artifact_path) != artifact.get("sha256")):
+                return False, f"DAILY_REQUIRED_PREDICTION_INVALID:{lane}", None
+            if lane in {"points", "saves"} and (
+                    artifact.get("parent_daily_run_id") != run_id
+                    or artifact.get("canonical_game_set_hash") != receipt.get("canonical_game_set_hash")
+                    or int(artifact.get("canonical_game_count", -1)) != len(receipt.get("canonical_game_ids") or [])):
+                return False, f"DAILY_REQUIRED_PREDICTION_LINEAGE_INVALID:{lane}", None
+        odds = receipt.get("odds_observation") or {}
+        odds_dir = Path(str(odds.get("path", "")))
+        if (odds.get("classification") not in {"CAPTURED_EMPTY", "CAPTURED_NONEMPTY"}
+                or not odds_dir.is_dir()
+                or verify_package(odds_dir) != odds.get("manifest_sha256")):
+            return False, "DAILY_ODDS_OBSERVATION_INVALID", None
+        if marker.get("completed_at_utc") is None:
+            return False, "DAILY_COMPLETION_TIMESTAMP_MISSING", None
+        return True, f"DAILY_READY_RECEIPT:{run_id}", marker["completed_at_utc"]
+    except (OSError, ValueError, TypeError, KeyError, RuntimeError):
+        return False, "DAILY_RECEIPT_INTEGRITY_INVALID", None
+
+
+def morning_capture_allowed(
+    slate: str, morning_root: Path | None = None, *, daily_run_root: Path = DAILY_RUN_ROOT,
+) -> tuple[bool, str]:
+    """Use newest valid, completed same-ET-slate daily receipt for readiness."""
+    # morning_root remains an accepted argument for call compatibility. The
+    # comprehensive daily receipt supersedes the redundant legacy health file.
+    del morning_root
+    candidates: list[tuple[str, Path]] = []
+    for package in Path(daily_run_root).glob("run_id=*"):
+        ready, reason, completed = _daily_receipt_is_capture_ready(package, slate)
+        if ready and completed:
+            candidates.append((completed, package))
+    if candidates:
+        _, selected = max(candidates, key=lambda item: item[0])
+        receipt = json.loads((selected / "parent_receipt.json").read_text())
+        return True, f"DAILY_READY_RECEIPT:{receipt['parent_daily_run_id']}"
     return False, "MORNING_READINESS_RECEIPT_ABSENT_OR_BLOCKED"
+
+
+def resolve_slate_date(requested: str, now: datetime) -> str:
+    """Resolve the operator's `today` against the NHL ET calendar boundary."""
+    if requested == "today":
+        return now.astimezone(ZoneInfo("America/New_York")).date().isoformat()
+    return requested
 
 
 def record_morning_not_ready(root: Path, slate: str, reason: str) -> Path:
@@ -554,7 +631,7 @@ def main() -> int:
     args = parser.parse_args()
     load_env(args.env_file)
     now = utc_now()
-    slate = now.astimezone(ZoneInfo("America/New_York")).date().isoformat() if args.slate_date == "today" else args.slate_date
+    slate = resolve_slate_date(args.slate_date, now)
     try:
         # All odds-independent predictions run before the market-readiness gate.
         # Their immutable status records remain lane-local and never authorize a
