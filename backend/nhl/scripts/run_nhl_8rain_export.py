@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from backend.nhl.scripts.export_nhl_8rain_upload import verify_package_manifest
+from backend.nhl.scripts.refresh_nhl_8rain_catalog import validate_catalog
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -265,22 +266,34 @@ def run_export(package: Path, *, current_slate: str | None = None,
 
     if retained_catalog_dir is None:
         catalog_result = _run(
-            [str(PYTHON), "backend/nhl/scripts/refresh_nhl_8rain_catalog.py"],
+            [str(PYTHON), "backend/nhl/scripts/refresh_nhl_8rain_catalog.py",
+             "--slate-date", slate],
             label="CATALOG_REFRESH",
         )
         catalog_lines = (catalog_result.stdout or "").splitlines()
-        if not catalog_lines:
-            raise RuntimeError("CATALOG_REFRESH_PATH_MISSING")
+        if len(catalog_lines) < 2:
+            raise RuntimeError("CATALOG_CATALOG_RESOLUTION_OUTPUT_MISSING")
         catalog_dir = Path(catalog_lines[0]).resolve()
+        catalog_use_info = json.loads(catalog_lines[1])
+        catalog_use = str(catalog_use_info.get("catalog_use") or "")
     else:
         catalog_dir = Path(retained_catalog_dir).expanduser().resolve()
-        if not catalog_dir.is_dir() or any(
-            not (catalog_dir / name).is_file()
-            for name in ("model_spec.json", "teams.json", "players.json")
-        ):
-            raise RuntimeError(f"RETAINED_CATALOG_INVALID:{catalog_dir}")
+        catalog_use = "EXPLICIT_RETAINED"
     if not catalog_dir.is_dir() or catalog_dir.parent != CATALOG_ROOT.resolve():
-        raise RuntimeError(f"CATALOG_REFRESH_PATH_INVALID:{catalog_dir}")
+        raise RuntimeError(f"CATALOG_PATH_INVALID:{catalog_dir}")
+    try:
+        catalog_use_info = validate_catalog(catalog_dir)
+    except Exception as error:
+        raise RuntimeError(f"CATALOG_VALIDATION_FAILED:{type(error).__name__}:{error}") from error
+    catalog_use_info["catalog_use"] = catalog_use
+    if catalog_use == "EXPLICIT_RETAINED" and catalog_use_info["retrieved_at_et"][:10] != slate:
+        catalog_use_info["freshness"] = "STALE_EXPLICIT_RETAINED"
+    else:
+        catalog_use_info["freshness"] = (
+            "CURRENT_ET_DAY" if catalog_use_info["retrieved_at_et"][:10] == slate
+            else "STALE_REJECTED")
+    if catalog_use_info["freshness"] == "STALE_REJECTED":
+        raise RuntimeError("CURRENT_DAY_NHL_CATALOG_REQUIRED")
 
     observation = _latest_observation(slate)
     names_csv = ROOT / "backend/nhl/exports/daily/names" / f"names_{slate}.csv"
@@ -297,6 +310,8 @@ def run_export(package: Path, *, current_slate: str | None = None,
     ], label="RAW_REFERENCE_SELECTION"), label="RAW_REFERENCE_SELECTION")
     if selection.get("mode") != "RAW_PREDICTION_COLLECTION" or selection.get("challengers_included") is not False:
         raise RuntimeError("RAW_REFERENCE_SELECTION_CONTRACT_FAILED")
+    mapping_summary_path = output_dir / f"nhl_raw_8rain_mapping_summary_{slate}.json"
+    mapping_summary_path.write_text(json.dumps(selection, indent=2, sort_keys=True) + "\n")
 
     archive_dir = ROOT / "artifacts/operational/nhl/8rain_uploads" / slate
     export = _json_stdout(_run([
@@ -304,6 +319,8 @@ def run_export(package: Path, *, current_slate: str | None = None,
         "--package-dir", str(package), "--catalog-dir", str(catalog_dir),
         "--date", slate, "--props-csv", str(combined_props),
         "--immutable-output-dir", str(archive_dir),
+        "--catalog-use", catalog_use,
+        "--mapping-summary-json", str(mapping_summary_path),
     ], label="EIGHTRAIN_EXPORT"), label="EIGHTRAIN_EXPORT")
     validate_export_report(
         export, state_hash=state_hash, manifest_hash=package_manifest_sha256)
@@ -332,6 +349,21 @@ def run_export(package: Path, *, current_slate: str | None = None,
             "Saves": int(market_rows.get("saves", 0)),
         },
         "mapping_exclusions": mapping_exclusions,
+        "catalog": catalog_use_info,
+        "mapping_counts": {
+            "total_internal_player_predictions": sum(
+                int((selection.get("lanes", {}).get(lane) or {}).get("source_rows", 0))
+                for lane in ("points", "saves")
+            ) + int((selection.get("sog") or {}).get("source_rows", 0)),
+            "mapped_player_predictions": sum(
+                int((selection.get("lanes", {}).get(lane) or {}).get("mapped_upload_predictions", 0))
+                for lane in ("points", "saves")
+            ) + int((selection.get("sog") or {}).get("mapped_upload_predictions", 0)),
+            "mapping_status_counts": {
+                lane: (selection.get("lanes", {}).get(lane) or {}).get("mapping_status_counts", {})
+                for lane in ("points", "saves")
+            } | {"sog": (selection.get("sog") or {}).get("mapping_status_counts", {})},
+        },
         "csv_path": str(csv_path),
         "lineage_path": str(lineage_path),
         "validation": "PASS",
@@ -371,6 +403,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Slate: {summary['slate']}")
     print(f"Package: {summary['state_prefix']}")
     print(f"Phase: {summary['phase']}")
+    print(f"Catalog: {summary['catalog']['path']}")
+    print(f"Catalog use: {summary['catalog']['catalog_use']}")
     print(f"Rows: {summary['rows']}")
     print(f"Pairs: {summary['pairs']}")
     for market, rows in summary["markets"].items():

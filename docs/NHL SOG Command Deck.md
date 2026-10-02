@@ -70,8 +70,9 @@ grading/book-upload workflow below. The upload remains manual.
    preferences, candidate counts, and one-per-player settings remain optional
    research policies and do not gate this default export.
 5. Run the normal operator command. It resolves the newest valid successful
-   MIDDAY, FINAL_PREGAME, or REFRESH package for today's New York date, refreshes the live catalog, builds rich
-   raw decision ledgers and mapping exceptions, then validates the combined
+   MIDDAY, FINAL_PREGAME, or REFRESH package for today's New York date, reuses
+   a validated current-day NHL catalog or fetches and retains one when absent,
+   builds rich raw decision ledgers and mapping exceptions, then validates the combined
    thin CSV for today's slate:
 
    ```bash
@@ -905,7 +906,11 @@ not cap or restrict predictions globally.
 For each slate, run the normal `daily --with-odds` pipeline and complete a
 successful cross-market AUTO, MIDDAY, FINAL_PREGAME, or REFRESH capture. The
 preferred export command resolves the newest valid current-day capture by its
-retained capture timestamp, regardless of phase:
+retained capture timestamp, regardless of phase, and reuses a verified 8rain
+NHL catalog already fetched on the same New York date. If none exists, it fetches
+the three public NHL catalog resources, validates NHL identity and bundle hashes,
+and retains an immutable catalog package before mapping. An older-day catalog is
+never silently treated as current; a failed current-day fetch stops the export.
 
 ```bash
 bin/nhl_ops.sh eight-rain-export --latest-refresh
@@ -920,8 +925,8 @@ historical/replay/debug selection, supply the complete immutable package path
 bin/nhl_ops.sh eight-rain-export --package "/absolute/path/to/immutable/REFRESH/package"
 ```
 
-The command prints the resolved package, state prefix, and ET slate before
-exporting. It refreshes the live catalog, writes raw decision ledgers for SOG,
+The command prints the resolved package, state prefix, ET slate, and catalog
+package/use mode before exporting. It writes raw decision ledgers for SOG,
 Points, and Saves without candidate filters, then builds and validates one
 current-slate Moneyline/Puck Line/SOG/Points/Saves reference CSV. It prints the
 immutable CSV and lineage paths. Current slate is required. Challenger rows

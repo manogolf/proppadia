@@ -12,6 +12,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+from backend.nhl.scripts.refresh_nhl_8rain_catalog import validate_catalog
 
 from backend.nhl.eightrain_adapter import (
     UPLOAD_COLUMNS, ambiguous_player_bindings, ambiguous_player_names, build_rows, load_catalogs,
@@ -66,6 +67,10 @@ def main() -> None:
     ap.add_argument("--props-csv", type=Path, help="Already policy-selected prop candidate rows")
     ap.add_argument("--names-csv", type=Path, help="Canonical player/team mapping for candidates")
     ap.add_argument("--capture-receipt", type=Path, help="Optional cross-market capture receipt for lineage")
+    ap.add_argument("--catalog-use", choices=["REUSED", "FRESHLY_FETCHED", "EXPLICIT_RETAINED"],
+                    default="EXPLICIT_RETAINED")
+    ap.add_argument("--mapping-summary-json", type=Path,
+                    help="Raw unrestricted selector summary to bind mapping counts into lineage")
     ap.add_argument("--prop-market", choices=["shots_on_goal", "points", "saves"])
     ap.add_argument("--out-csv", type=Path,
                     help="Explicit output path; use --immutable-output-dir for the operational raw flow")
@@ -88,6 +93,10 @@ def main() -> None:
         raise SystemExit("--report-json is required with --test-only so the artifact is marked non-operational")
 
     catalog_dir = resolve_catalog_dir(args.catalog_dir)
+    catalog_info = validate_catalog(catalog_dir)
+    if (export_classification == "OPERATIONAL_CURRENT_SLATE"
+            and catalog_info["retrieved_at_et"][:10] != args.date):
+        raise SystemExit("CURRENT_DAY_NHL_CATALOG_REQUIRED")
     package_manifest_sha256 = verify_package_manifest(args.package_dir)
     package_status = json.loads((args.package_dir / "daily_execution_status.json").read_text())
     exported_at_et = datetime.now(ZoneInfo("America/New_York"))
@@ -155,6 +164,10 @@ def main() -> None:
         for name in ("v2_immutable_predictions.csv", "puck_line_v1_immutable_predictions.csv", "raw_market_response.json")
     }
     capture_receipt = json.loads(args.capture_receipt.read_text()) if args.capture_receipt else {}
+    mapping_summary = (
+        json.loads(args.mapping_summary_json.read_text())
+        if args.mapping_summary_json else {}
+    )
     source_run_ids = sorted({str(value) for column in ("parent_daily_run_id", "run_id")
                              if column in (props.columns if props is not None else [])
                              for value in props[column].dropna().astype(str) if value}) if props is not None else []
@@ -172,6 +185,18 @@ def main() -> None:
         "columns": UPLOAD_COLUMNS, "validation": validation,
         "rows_by_market": out.groupby("MARKET").size().to_dict(),
         "catalog_sha256": catalog_hashes, "catalog_dir": str(catalog_dir),
+        "catalog_artifact_path": str(catalog_dir),
+        "catalog_bundle_sha256": catalog_info["catalog_sha256"],
+        "catalog_retrieved_at_utc": catalog_info["retrieved_at_utc"],
+        "catalog_source": catalog_info["source"],
+        "catalog_freshness": (
+            "CURRENT_ET_DAY" if catalog_info["retrieved_at_et"][:10] == args.date
+            else "STALE_EXPLICIT_RETAINED"
+        ),
+        "catalog_use": args.catalog_use,
+        "catalog_player_count": catalog_info["player_count"],
+        "catalog_team_count": catalog_info["team_count"],
+        "catalog_slate_association": catalog_info["slate_date"],
         "package_manifest_sha256": package_manifest_sha256,
         "package_dir": str(args.package_dir), "package_state_sha256": package_status.get("substantive_state_sha256"),
         "package_run_type": package_status.get("run_type"),
@@ -183,6 +208,14 @@ def main() -> None:
         "market_capture_timestamp_utc": capture_receipt.get("invocation_timestamp_utc"),
         "market_snapshot_sha256": source_hashes["raw_market_response.json"],
         "source_artifact_sha256": source_hashes,
+        "mapping_summary": mapping_summary,
+        "fallback_name_mapping_count": int(diagnostics.get("players_mapped_by_unique_name_fallback", 0)),
+        "fallback_name_mapped_prediction_rows": sum(
+            int((mapping_summary.get("lanes", {}).get(lane) or {})
+                .get("mapping_status_counts", {}).get("MAPPED_UNIQUE_NAME_CATALOG_TEAM_LAG", 0))
+            for lane in ("points", "saves")
+        ),
+        "ambiguous_mapping_count": len(diagnostics.get("ambiguous_players", [])),
         "reference_model_identities": sorted({x["model_identity"] for x in diagnostics["provenance"]}),
         "capture_receipt_path": str(args.capture_receipt) if args.capture_receipt else None,
         "capture_receipt_sha256": hashlib.sha256(args.capture_receipt.read_bytes()).hexdigest() if args.capture_receipt else None,

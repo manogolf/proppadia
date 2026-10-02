@@ -5,7 +5,7 @@ import json
 import subprocess
 import tempfile
 import unittest
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 import os
 import io
@@ -189,7 +189,8 @@ class NHL8RainDirectExportTests(unittest.TestCase):
             with patch.object(runner, "current_et_slate", return_value="2026-10-01"), \
                  patch.object(runner, "select_latest_capture_package", return_value=(selected, [])), \
                  patch.object(runner, "run_export", return_value={
-                     "slate": "2026-10-01", "state_prefix": "a", "phase": "MIDDAY",
+            "slate": "2026-10-01", "state_prefix": "a", "phase": "MIDDAY",
+            "catalog": {"path": "/catalog", "catalog_use": "REUSED"},
                      "rows": 1, "pairs": 1, "markets": {}, "mapping_exclusions": 0,
                      "validation": "PASS", "csv_path": "/tmp/a.csv", "lineage_path": "/tmp/a.json",
                  }) as export, redirect_stdout(io.StringIO()):
@@ -220,6 +221,7 @@ class NHL8RainDirectExportTests(unittest.TestCase):
 
         summary = {
             "slate": "2026-10-01", "state_prefix": "a" * 12, "phase": "REFRESH", "rows": 4, "pairs": 2,
+            "catalog": {"path": "/catalog", "catalog_use": "REUSED"},
             "markets": {"Moneyline": 2, "Puck Line": 2, "SOG": 0, "Points": 0, "Saves": 0},
             "mapping_exclusions": 0, "validation": "PASS", "csv_path": "/tmp/out.csv",
             "lineage_path": "/tmp/out_lineage.json",
@@ -273,13 +275,39 @@ class NHL8RainDirectExportTests(unittest.TestCase):
                 "league": {"code": "nhl"},
                 "markets": {"h2h": {"bet": ["home", "away"]},
                             "spread": {"bet": ["home", "away"]}},
-                "stats": [],
+                "stats": [{"code": "shots_on_goal", "bet": ["over", "under"]}],
             }))
             (catalog / "teams.json").write_text(json.dumps({"data": [
-                {"abbreviation": "BOS", "code": "bos-boston-bruins"},
-                {"abbreviation": "NYR", "code": "nyr-new-york-rangers"},
+                {"abbreviation": "BOS", "code": "bos-boston-bruins", "name": "Boston Bruins"},
+                {"abbreviation": "NYR", "code": "nyr-new-york-rangers", "name": "New York Rangers"},
             ]}))
             (catalog / "players.json").write_text(json.dumps({"data": []}))
+            catalog_files = {}
+            for name in ("model_spec.json", "teams.json", "players.json"):
+                body = (catalog / name).read_bytes()
+                catalog_files[name] = {
+                    "sha256": hashlib.sha256(body).hexdigest(), "bytes": len(body),
+                }
+            (catalog / "players.json").write_text(json.dumps({"data": [
+                {"code": "player-test", "name": "Test Player", "team": "bos-boston-bruins"},
+            ]}))
+            body = (catalog / "players.json").read_bytes()
+            catalog_files["players.json"] = {
+                "sha256": hashlib.sha256(body).hexdigest(), "bytes": len(body),
+            }
+            catalog_meta = {
+                "schema_version": "NHL_8RAIN_CATALOG_BUNDLE_V1", "league_code": "nhl",
+                "slate_date": slate,
+                "retrieved_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "endpoints": {
+                    name: "https://app.8rainstation.com/public/api/catalog/" + endpoint
+                    for name, endpoint in (
+                        ("model_spec.json", "model-spec?league=nhl"),
+                        ("teams.json", "teams?league=nhl"), ("players.json", "players?league=nhl"),
+                    )
+                }, "files": catalog_files,
+            }
+            (catalog / "catalog_metadata.json").write_text(json.dumps(catalog_meta))
             output_dir = root / "immutable_exports"
             with patch("sys.argv", [
                 "export_nhl_8rain_upload.py", "--package-dir", str(selected),
@@ -294,6 +322,13 @@ class NHL8RainDirectExportTests(unittest.TestCase):
             self.assertEqual(lineage["package_dir"], str(selected))
             self.assertEqual(lineage["package_state_sha256"], "5" * 64)
             self.assertEqual(lineage["package_run_type"], "REFRESH")
+            self.assertEqual(lineage["catalog_use"], "EXPLICIT_RETAINED")
+            self.assertEqual(lineage["catalog_freshness"], "CURRENT_ET_DAY")
+            self.assertEqual(lineage["catalog_player_count"], 1)
+            self.assertEqual(len(lineage["catalog_bundle_sha256"]), 64)
+            self.assertEqual(lineage["catalog_source"]["players.json"],
+                             "https://app.8rainstation.com/public/api/catalog/players?league=nhl")
+            self.assertTrue(lineage["catalog_retrieved_at_utc"])
             self.assertFalse(lineage["challengers_included"])
             exported = pd.read_csv(csv_path)
             self.assertEqual(list(exported.columns), UPLOAD_COLUMNS)

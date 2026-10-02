@@ -85,7 +85,7 @@ description_for() {
     daily) echo "Run NHL daily pipeline" ;;
     denali-upload) echo "Build full SOG book-upload CSV" ;;
     candidates) echo "Build policy-selected candidate upload CSV + dated card files" ;;
-    eight-rain-export) echo "Build, validate, and report one immutable current-slate raw reference export from the latest valid capture" ;;
+    eight-rain-export) echo "Build, validate, and report one immutable current-slate raw reference export from the latest valid capture and current NHL catalog" ;;
     bakeoff-trigger) echo "Run bakeoff only when slate game count >= 8" ;;
     reconcile) echo "Reconcile base model vs BetOnline and emit row/month reports" ;;
     walkforward) echo "Generate research threshold proposal without activating it" ;;
