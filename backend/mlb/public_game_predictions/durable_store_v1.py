@@ -144,11 +144,15 @@ def append_state_snapshot(snapshot: dict[str, Any]) -> bool:
 
 
 def append_prediction_rows(rows: Iterable[dict[str, Any]]) -> int:
+    # Prediction admission is an exact-game authority boundary, not merely a
+    # scoring/receipt label. Validate the entire admitted batch before opening
+    # the database so stale or unknown gamePks cannot be persisted.
+    materialized = [row for row in rows if row.get('admission_status') == 'ADMITTED_SHADOW']
+    for row in materialized:
+        require_evaluation_row(row)
     inserted=0
     with pg_connect() as conn, conn.cursor() as cur:
-        for row in rows:
-            if row.get('admission_status') != 'ADMITTED_SHADOW':
-                continue
+        for row in materialized:
             payload_hash=canonical_payload_hash(row)
             cur.execute("""
               INSERT INTO mlb.public_game_moneyline_predictions

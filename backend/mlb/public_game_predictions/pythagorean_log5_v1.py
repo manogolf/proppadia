@@ -255,6 +255,11 @@ def _append_jsonl(path: Path, rows: list[dict[str, Any]]) -> int:
 
 
 def append_prediction_rows(rows: list[dict[str, Any]], path: Path) -> int:
+    from .phase_gating_v1 import require_evaluation_row
+
+    for row in rows:
+        if row.get("admission_status") == "ADMITTED_SHADOW":
+            require_evaluation_row(row)
     seen = {_identity(row) for row in _read_jsonl(path)}
     admitted = []
     for row in rows:

@@ -12,7 +12,7 @@ from unittest.mock import patch
 from backend.mlb.scripts import prepare_mlb_2026_regular_season_close_v1 as close_command
 from backend.mlb.season_transition.game_phase_authority_v1 import (
     GamePhaseAuthorityRecord,
-    HashedProposalAuthority,
+    load_v1_authority,
 )
 from backend.mlb.season_transition.regular_season_close_inventory_v1 import (
     CloseInventoryError,
@@ -177,7 +177,9 @@ def _write_live_feed_fixture(
 class AuthoritativeRegularSeasonCloseInventoryTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
-        cls.authority = HashedProposalAuthority()
+        # The close population is pinned to immutable regular-season V1 even
+        # when the active phase selector includes later postseason children.
+        cls.authority = load_v1_authority()
         cls.rows, cls.summary = build_authoritative_inventory(authority=cls.authority)
         cls.by_game = {row["game_pk"]: row for row in cls.rows}
 

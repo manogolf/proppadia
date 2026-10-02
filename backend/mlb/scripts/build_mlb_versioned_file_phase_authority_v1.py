@@ -115,6 +115,19 @@ def _schedule_games(payload: Any, source_path: str) -> list[dict[str, Any]]:
         for game in block.get("games", []):
             if not isinstance(game, dict):
                 raise SnapshotBuildError(f"STATSAPI_SCHEDULE_GAME_INVALID:{source_path}")
+            try:
+                game_pk = int(game.get("gamePk"))
+            except (TypeError, ValueError):
+                raise SnapshotBuildError(f"AUTHORITATIVE_GAME_PK_MISSING:{source_path}") from None
+            if game_pk <= 0:
+                raise SnapshotBuildError(f"AUTHORITATIVE_GAME_PK_INVALID:{game_pk}")
+            nested_pk = ((game.get("gameData") or {}).get("game") or {}).get("pk")
+            if nested_pk not in (None, ""):
+                try:
+                    if int(nested_pk) != game_pk:
+                        raise SnapshotBuildError(f"SCHEDULE_GAME_PK_CONFLICT:{game_pk}")
+                except (TypeError, ValueError):
+                    raise SnapshotBuildError(f"SCHEDULE_GAME_PK_CONFLICT:{game_pk}") from None
             games.append(game)
     return games
 
@@ -272,8 +285,23 @@ def build_candidate_snapshot(
         except json.JSONDecodeError as exc:
             raise SnapshotBuildError(f"STATSAPI_SOURCE_MALFORMED:{source_text}") from exc
         games = _schedule_games(payload, source_text)
+        schedule_game_row_count = len(games)
+        requested_pks = source_row.get("selected_game_pks")
+        if requested_pks is not None:
+            try:
+                selected_pks = [int(value) for value in requested_pks]
+            except (TypeError, ValueError):
+                raise SnapshotBuildError(f"SOURCE_SET_GAME_PK_SELECTION_INVALID:{source_text}") from None
+            if not selected_pks or len(selected_pks) != len(set(selected_pks)):
+                raise SnapshotBuildError(f"SOURCE_SET_GAME_PK_SELECTION_INVALID:{source_text}")
+            matches = [game for game in games if int(game.get("gamePk") or 0) in set(selected_pks)]
+            counts = Counter(int(game.get("gamePk") or 0) for game in matches)
+            if set(counts) != set(selected_pks) or any(count != 1 for count in counts.values()):
+                raise SnapshotBuildError(f"SOURCE_SET_SELECTED_GAME_PK_NOT_UNIQUE_OR_MISSING:{source_text}")
+            games = matches
         manifest_row = {
-            "schedule_game_rows": len(games),
+            "schedule_game_rows": schedule_game_row_count,
+            "selected_game_pks": sorted(selected_pks) if requested_pks is not None else None,
             "source_bytes": int(source_row["source_bytes"]),
             "source_path": source_text,
             "source_sha256": source_hash,
@@ -287,6 +315,8 @@ def build_candidate_snapshot(
             except PhaseContractError as exc:
                 raise SnapshotBuildError(f"AUTHORITATIVE_CLASSIFICATION_REJECTED:{exc}") from exc
             game_pk = int(record["game_pk"])
+            if int(record["source_season"]) != int(parent.data["supported_season"]):
+                raise SnapshotBuildError(f"AUTHORITATIVE_SEASON_CONFLICT:{game_pk}")
             record["scheduled_start_utc"] = _scheduled_start(game, game_pk)
             if record.get("season_phase") is None:
                 raise SnapshotBuildError(f"NEW_AUTHORITY_SPECIAL_EXCLUDED:{game_pk}")
@@ -295,6 +325,26 @@ def build_candidate_snapshot(
                 _same_existing(existing, record)
                 consistent_existing_observations += 1
                 continue
+            # Newly appended identities must carry a complete ordinary schedule
+            # status and explicit game type/season. Never infer these fields.
+            if requested_pks is not None:
+                status = game.get("status")
+                if not isinstance(status, dict) or any(
+                    not str(status.get(field) or "").strip()
+                    for field in ("abstractGameState", "codedGameState", "detailedState", "statusCode")
+                ):
+                    raise SnapshotBuildError(f"AUTHORITATIVE_SCHEDULE_STATUS_INCOMPLETE:{game_pk}")
+                if str(status.get("codedGameState")) != str(status.get("statusCode")):
+                    raise SnapshotBuildError(f"AUTHORITATIVE_SCHEDULE_STATUS_CONFLICT:{game_pk}")
+                abstract, coded = str(status.get("abstractGameState")), str(status.get("codedGameState"))
+                if (abstract == "Final") != (coded == "F"):
+                    raise SnapshotBuildError(f"AUTHORITATIVE_SCHEDULE_STATUS_CONFLICT:{game_pk}")
+            if not str(game.get("gameType") or "").strip() or game.get("season") in (None, ""):
+                raise SnapshotBuildError(f"AUTHORITATIVE_SCHEDULE_IDENTITY_INCOMPLETE:{game_pk}")
+            if record.get("season_phase") == "POSTSEASON" and not str(
+                record.get("source_round") or ""
+            ).strip():
+                raise SnapshotBuildError(f"AUTHORITATIVE_POSTSEASON_ROUND_MISSING:{game_pk}")
             current = new_records.get(game_pk)
             if current is None:
                 record["source_paths"] = [source_text]
