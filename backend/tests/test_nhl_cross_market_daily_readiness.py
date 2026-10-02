@@ -6,6 +6,8 @@ from pathlib import Path
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
+import pandas as pd
+
 from backend.nhl.daily_capture import sha256_file
 from backend.nhl.scripts import run_nhl_mainline_cross_market_capture_warn_only as capture
 
@@ -34,6 +36,11 @@ def make_daily_package(root: Path, run_id: str, *, slate: str = SLATE,
     odds.mkdir()
     write_package_file(odds, "observation.json", {"status": "CAPTURED_NONEMPTY"})
     finalize_package(odds)
+    reconciliation = root / f"reconciliation-{run_id}"
+    reconciliation.mkdir()
+    write_package_file(reconciliation, "RUN_COMPLETE.json", {"status": "COMPLETE"})
+    write_package_file(reconciliation, "outcomes.json", {"status": "FINAL"})
+    finalize_package(reconciliation)
     lanes = {
         "shared_prerequisites": {"status": "COMPLETE", "outputs": []},
         "roster": {"status": "COMPLETE", "outputs": []},
@@ -58,6 +65,13 @@ def make_daily_package(root: Path, run_id: str, *, slate: str = SLATE,
         "parent_daily_run_id": run_id, "slate_date": slate,
         "operational_timezone": "America/New_York", "final_classification": classification,
         "canonical_game_ids": [2], "canonical_game_set_hash": "gamehash", "lanes": lanes,
+        "prior_day_learning": {
+            "official_outcomes_status": "FINAL",
+            "reconciliation_status": "CREATED",
+            "reconciliation_package": str(reconciliation),
+            "moneyline_grade_status": "COMPLETE",
+            "puck_line_grade_status": "COMPLETE",
+        },
         "odds_observation": {"classification": "CAPTURED_NONEMPTY", "path": str(odds),
                              "manifest_sha256": sha256_file(odds / "SHA256SUMS")},
     }
@@ -127,6 +141,61 @@ class CrossMarketDailyReadinessTest(unittest.TestCase):
             self.assertIsNone(capture.prior_capture_suppression(
                 "AUTO", existing=False, prior_claim=False, prior_paid=False, force=False))
             self.assertFalse(list(root.glob("paid_attempt_claims/*/*.claim.json")))
+
+    def test_auto_allowed_eight_hours_early_and_timing_is_diagnostic(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            make_daily_package(root, "ready")
+            now = datetime(2026, 10, 2, 15, 0, tzinfo=timezone.utc)
+            schedule = pd.DataFrame({"scheduled_start_time_utc": ["2026-10-02T23:00:00Z"]})
+            result = capture.auto_capture_readiness_decision(
+                SLATE, schedule, now, daily_run_root=root)
+        self.assertEqual(result["decision"], "LIVE_CAPTURE_ALLOWED")
+        self.assertEqual(result["daily_readiness"], "PASS")
+        self.assertEqual(result["prior_day_learning"], "PASS")
+        self.assertEqual(result["requested_phase"], "AUTO")
+        self.assertEqual(result["capture_window"], "NONBLOCKING")
+        self.assertEqual(result["resolved_phase"], "MIDDAY")
+        self.assertEqual(result["minutes_until_first_start"], 480.0)
+        self.assertEqual(result["first_start_time"], "2026-10-02T23:00:00Z")
+
+    def test_no_canonical_games_remains_blocked(self):
+        with tempfile.TemporaryDirectory() as raw:
+            make_daily_package(Path(raw), "ready")
+            result = capture.auto_capture_readiness_decision(
+                SLATE, pd.DataFrame(columns=["scheduled_start_time_utc"]),
+                datetime(2026, 10, 2, 15, 0, tzinfo=timezone.utc),
+                daily_run_root=Path(raw))
+        self.assertEqual(result["decision"], "BLOCKED")
+        self.assertEqual(result["gate_reason"], "NO_CANONICAL_2026_GAMES")
+
+    def test_prior_day_reconciliation_manifest_integrity_remains_required(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            package = make_daily_package(root, "ready")
+            receipt = json.loads((package / "parent_receipt.json").read_text())
+            reconciliation = Path(receipt["prior_day_learning"]["reconciliation_package"])
+            (reconciliation / "outcomes.json").write_text("tampered\n")
+            schedule = pd.DataFrame({
+                "scheduled_start_time_utc": ["2026-10-02T23:00:00Z"]})
+            result = capture.auto_capture_readiness_decision(
+                SLATE, schedule, datetime(2026, 10, 2, 15, 0, tzinfo=timezone.utc),
+                daily_run_root=root)
+        self.assertEqual(result["decision"], "BLOCKED")
+        self.assertEqual(result["prior_day_learning"], "BLOCKED")
+
+    def test_auto_first_capture_then_refresh_is_the_later_observation(self):
+        schedule = pd.DataFrame({"scheduled_start_time_utc": ["2026-10-02T23:00:00Z"]})
+        now = datetime(2026, 10, 2, 15, 0, tzinfo=timezone.utc)
+        first_phase, _ = capture.phase_for(schedule, now, "AUTO", False)
+        self.assertEqual(first_phase, "MIDDAY")
+        self.assertEqual(capture.prior_capture_suppression(
+            first_phase, existing=True, prior_claim=False, prior_paid=False, force=False),
+            "NOOP_ALREADY_CAPTURED")
+        refresh_phase, _ = capture.phase_for(schedule, now, "REFRESH", False)
+        self.assertEqual(refresh_phase, "REFRESH")
+        self.assertIsNone(capture.prior_capture_suppression(
+            refresh_phase, existing=True, prior_claim=True, prior_paid=True, force=False))
 
     def test_missing_prediction_artifact_blocks(self):
         with tempfile.TemporaryDirectory() as raw:

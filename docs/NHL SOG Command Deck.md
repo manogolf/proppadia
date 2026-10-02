@@ -51,12 +51,15 @@ grading/book-upload workflow below. The upload remains manual.
    first run; use `REFRESH` when refreshing an already captured slate:
 
    ```bash
-   SLATE=$(date +%F)
+   SLATE=$(TZ=America/New_York date +%F)
    .venv/bin/python backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py \
      --slate-date "$SLATE" --phase AUTO
    ```
 
    For a later same-slate refresh, change `--phase AUTO` to `--phase REFRESH`.
+   AUTO is not blocked by time to puck drop or a noon-only window. Its resolved
+   package phase is `MIDDAY` by default, or `FINAL_PREGAME` inside the existing
+   20–75 minute band; the first-start time and minutes remaining are diagnostics.
 
 3. Inspect the emitted status JSON. Continue only when today's canonical slate,
    current predictions, market observation, and immutable REFRESH package are

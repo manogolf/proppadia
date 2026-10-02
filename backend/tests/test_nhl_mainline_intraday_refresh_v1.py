@@ -28,7 +28,9 @@ class MainlineIntradayRefreshTest(unittest.TestCase):
         now = datetime(2026, 9, 29, 15, 0, tzinfo=timezone.utc)
         self.assertEqual(phase_for(self.schedule(), now, "REFRESH", False),
                          ("REFRESH", "EXPLICIT_PHASE"))
-        self.assertTrue(phase_for(self.schedule(), now, "AUTO", False)[0] is None)
+        auto_phase, auto_reason = phase_for(self.schedule(), now, "AUTO", False)
+        self.assertEqual(auto_phase, "MIDDAY")
+        self.assertIn("AUTO_ALLOWED_NONBLOCKING", auto_reason)
 
     def test_auto_inside_final_pregame_window_remains_enabled(self):
         now = datetime(2026, 9, 29, 21, 55, tzinfo=timezone.utc)

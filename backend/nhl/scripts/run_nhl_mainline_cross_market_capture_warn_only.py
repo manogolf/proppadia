@@ -351,19 +351,84 @@ def export_inputs(dsn: str, slate_date: str, directory: Path, *,
 def phase_for(schedule: pd.DataFrame, now: datetime, requested: str, force: bool) -> tuple[str | None, str]:
     if schedule.empty:
         return None, "NO_CANONICAL_2026_GAMES"
-    starts = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True)
-    before = starts[starts > pd.Timestamp(now)]
-    if before.empty:
+    timing = first_start_diagnostics(schedule, now)
+    if timing["first_start_time"] is None:
         return None, "NO_PRESTART_GAME"
-    minutes = (before.min() - pd.Timestamp(now)).total_seconds() / 60
+    minutes = float(timing["minutes_until_first_start"])
     if requested != "AUTO":
         return (requested, "EXPLICIT_FORCE" if force else "EXPLICIT_PHASE")
-    local = now.astimezone(ZoneInfo("America/New_York"))
     if 20 <= minutes <= 75:
-        return "FINAL_PREGAME", f"FIRST_START_IN_{minutes:.1f}_MINUTES"
-    if local.hour == 12 and local.minute <= 30:
-        return "MIDDAY", "LOCAL_MIDDAY_WINDOW"
-    return None, f"OUTSIDE_CAPTURE_WINDOW_FIRST_START_IN_{minutes:.1f}_MINUTES"
+        return "FINAL_PREGAME", f"AUTO_ALLOWED_FINAL_PREGAME_FIRST_START_IN_{minutes:.1f}_MINUTES"
+    return "MIDDAY", f"AUTO_ALLOWED_NONBLOCKING_FIRST_START_IN_{minutes:.1f}_MINUTES"
+
+
+def first_start_diagnostics(schedule: pd.DataFrame, now: datetime) -> dict[str, object]:
+    """Return the next scheduled start and lead time for audit metadata only."""
+    if schedule.empty or "scheduled_start_time_utc" not in schedule:
+        return {"first_start_time": None, "minutes_until_first_start": None}
+    starts = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True, errors="coerce")
+    future = starts[starts > pd.Timestamp(now)]
+    if future.empty:
+        return {"first_start_time": None, "minutes_until_first_start": None}
+    first = future.min()
+    return {
+        "first_start_time": first.isoformat().replace("+00:00", "Z"),
+        "minutes_until_first_start": round((first - pd.Timestamp(now)).total_seconds() / 60, 1),
+    }
+
+
+def auto_capture_readiness_decision(
+    slate: str, schedule: pd.DataFrame, now: datetime,
+    *, daily_run_root: Path = DAILY_RUN_ROOT,
+) -> dict[str, object]:
+    """Read-only readiness rehearsal for an AUTO capture; never acquires markets."""
+    ready, receipt_reason = morning_capture_allowed(slate, daily_run_root=daily_run_root)
+    decision: dict[str, object] = {
+        "slate_date": slate, "requested_phase": "AUTO",
+        "daily_readiness": "PASS" if ready else "BLOCKED",
+        "prior_day_learning": "BLOCKED", "capture_window": "NONBLOCKING",
+        "canonical_games": int(len(schedule)),
+        **first_start_diagnostics(schedule, now),
+        "decision": "BLOCKED",
+    }
+    if not ready:
+        decision["gate_reason"] = receipt_reason
+        return decision
+    if schedule.empty:
+        decision["gate_reason"] = "NO_CANONICAL_2026_GAMES"
+        return decision
+    run_id = receipt_reason.removeprefix("DAILY_READY_RECEIPT:")
+    try:
+        receipt = json.loads((Path(daily_run_root) / f"run_id={run_id}" / "parent_receipt.json").read_text())
+        learning = receipt.get("prior_day_learning") or {}
+        reconciliation = Path(str(learning.get("reconciliation_package", "")))
+        learning_ok = (
+            learning.get("official_outcomes_status") == "FINAL"
+            and learning.get("reconciliation_status") in {"CREATED", "EXISTING_GOVERNED_PACKAGE_VALID"}
+            and learning.get("moneyline_grade_status") == "COMPLETE"
+            and learning.get("puck_line_grade_status") == "COMPLETE"
+            and reconciliation.is_dir()
+            and (reconciliation / "RUN_COMPLETE.json").is_file()
+            and (reconciliation / "SHA256SUMS").is_file()
+        )
+        if learning_ok:
+            from backend.nhl.postgame_reconcile.core import _verify_manifest
+            _verify_manifest(reconciliation)
+            learning_ok = json.loads(
+                (reconciliation / "RUN_COMPLETE.json").read_text()
+            ).get("status") == "COMPLETE"
+    except (OSError, ValueError, TypeError, RuntimeError):
+        learning_ok = False
+    decision["prior_day_learning"] = "PASS" if learning_ok else "BLOCKED"
+    if not learning_ok:
+        decision["gate_reason"] = "PRIOR_DAY_LEARNING_HANDOFF_INVALID"
+        return decision
+    phase, reason = phase_for(schedule, now, "AUTO", False)
+    if phase is None:
+        decision["gate_reason"] = reason
+        return decision
+    decision.update(decision="LIVE_CAPTURE_ALLOWED", resolved_phase=phase, gate_reason=reason)
+    return decision
 
 
 def prior_capture_suppression(
@@ -536,6 +601,8 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
     status_dir = root / "orchestration_status" / slate
     status_path = status_dir / f"capture_{stamp}.json"
     result = {"slate_date": slate, "warning_only": True,
+              "requested_phase": requested,
+              "capture_window": "NONBLOCKING" if requested == "AUTO" else "EXPLICIT_PHASE",
               "player_prop_execution_allowed": True, "historical_odds_calls": 0,
               "live_calls": 0, "live_credits_consumed": 0,
               **observer_provenance(Path(__file__))}
@@ -564,8 +631,9 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
             schedule_path, history_path, schedule = export_inputs(
                 dsn, slate, input_dir, canonical_schedule=canonical_schedule,
             )
+            timing = first_start_diagnostics(schedule, utc_now())
             phase, reason = phase_for(schedule, utc_now(), requested, force)
-            result.update(canonical_games=len(schedule), phase=phase, gate_reason=reason)
+            result.update(canonical_games=len(schedule), phase=phase, gate_reason=reason, **timing)
             claims_dir = root / "paid_attempt_claims" / slate
             if phase is None:
                 result["status"] = "NOOP_READY"
@@ -604,6 +672,7 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
                     fetch_markets(os.environ.get("ODDS_API_KEY", "").strip(), odds_path)
                     envelope = json.loads(odds_path.read_text())
                     result.update(status="REQUEST_RESPONSE_PRESERVED", charge_state="RESPONSE_RECORDED",
+                                  capture_timestamp_utc=envelope.get("capture_timestamp_utc"),
                                   live_credits_consumed=int(envelope["quota"]["credits_consumed"]),
                                   ending_requests_remaining=envelope["quota"].get("requests_remaining"))
                     durable_json(status_path, result)
