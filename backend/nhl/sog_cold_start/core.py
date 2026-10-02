@@ -236,8 +236,13 @@ def grade_predictions(predictions: pd.DataFrame, outcomes: pd.DataFrame, *, grad
         elif row.participation_status == "POSTPONED":
             state = "POSTPONED_UNGRADED"
         elif row.participation_status == "APPEARED" and pd.notna(row.official_sog):
-            actual_over = float(row.official_sog) > float(row.line)
-            state = "WIN" if (actual_over and row.selected_side == "OVER") or (not actual_over and row.selected_side == "UNDER") else "LOSS"
+            actual = float(row.official_sog)
+            line = float(row.line)
+            if actual == line:
+                state = "PUSH"
+            else:
+                actual_side = "OVER" if actual > line else "UNDER"
+                state = "WIN" if actual_side == row.selected_side else "LOSS"
         else:
             state = "UNRESOLVED_UNGRADED"
         states.append(state)

@@ -750,13 +750,19 @@ def _zero_evidence_surface(status: str, reason: str) -> pd.DataFrame:
 
 def _settle_ladder(frame: pd.DataFrame, *, outcome_column: str) -> pd.DataFrame:
     result = frame.copy()
-    result["settled_side"] = result.apply(
-        lambda row: "OVER" if float(row[outcome_column]) > float(row.line) else "UNDER",
-        axis=1)
+    actual = pd.to_numeric(result[outcome_column], errors="coerce")
+    line = pd.to_numeric(result.line, errors="coerce")
+    result["settled_side"] = pd.Series(pd.NA, index=result.index, dtype="string")
+    result.loc[actual > line, "settled_side"] = "OVER"
+    result.loc[actual < line, "settled_side"] = "UNDER"
+    result.loc[actual.eq(line) & actual.notna() & line.notna(), "settled_side"] = "PUSH"
     result["model_side"] = result.prob_over.astype(float).map(
         lambda value: "OVER" if value >= 0.5 else "UNDER")
-    result["prediction_correct"] = result.model_side.eq(result.settled_side)
-    result["grading_status"] = "SETTLED"
+    result["prediction_correct"] = result.model_side.eq(result.settled_side).where(
+        result.settled_side.ne("PUSH"), pd.NA)
+    result["grading_status"] = "OUTCOME_UNRESOLVED"
+    result.loc[result.settled_side.isin(["OVER", "UNDER"]), "grading_status"] = "SETTLED"
+    result.loc[result.settled_side.eq("PUSH"), "grading_status"] = "PUSH"
     return result
 
 
@@ -775,7 +781,9 @@ def _grade_points(run: Path, schedule: pd.DataFrame,
     participating = joined.loc[joined.participation_state.eq("PARTICIPATED")].copy()
     unresolved = joined.loc[~joined.participation_state.eq("PARTICIPATED")].copy()
     settled = _settle_ladder(participating, outcome_column="official_points")
-    unresolved["grading_status"] = "NONPARTICIPANT_UNGRADED"
+    unresolved["grading_status"] = unresolved.participation_state.map(
+        lambda state: "NONPARTICIPANT_UNGRADED" if pd.notna(state)
+        else "PARTICIPATION_STATUS_UNRESOLVED")
     predicted = set(predictions[["game_id", "player_id"]].itertuples(index=False, name=None))
     missing = outcomes.loc[~outcomes[["game_id", "player_id"]].apply(tuple, axis=1).isin(predicted)].copy()
     missing["grading_status"] = "MISSING_PROSPECTIVE_PREDICTION_EXCLUDED"
@@ -801,9 +809,13 @@ def _grade_saves(run: Path, schedule: pd.DataFrame,
                  "starter_identity_method"]],
         on=["game_id", "goalie_id"], how="left", validate="many_to_one")
     starters = joined.loc[joined.actual_start_flag.fillna(False).astype(bool)].copy()
-    nonstarters = joined.loc[~joined.actual_start_flag.fillna(False).astype(bool)].copy()
+    nonstarters = joined.loc[
+        joined.actual_start_flag.eq(False) & joined.goalie_participation_state.notna()
+    ].copy()
+    unresolved = joined.loc[joined.actual_start_flag.isna()].copy()
     settled = _settle_ladder(starters, outcome_column="official_saves")
-    nonstarters["grading_status"] = "NONSTARTER_EXCLUDED_FROM_CONDITIONAL_EVALUATION"
+    nonstarters["grading_status"] = "DID_NOT_START_NOT_GRADEABLE_CONDITIONAL"
+    unresolved["grading_status"] = "STARTER_STATUS_UNRESOLVED"
     predicted = set(predictions[["game_id", "goalie_id"]].itertuples(index=False, name=None))
     unpredicted = goalies.loc[
         ~goalies[["game_id", "goalie_id"]].apply(tuple, axis=1).isin(predicted)].copy()
@@ -816,9 +828,10 @@ def _grade_saves(run: Path, schedule: pd.DataFrame,
     predicted_relief = nonstarters.loc[
         nonstarters.goalie_participation_state.eq("RELIEF_APPEARANCE")].copy()
     input_exclusions = pd.read_csv(run / "input_exclusions.csv")
-    return {"saves": pd.concat([settled, nonstarters], ignore_index=True, sort=False),
+    return {"saves": pd.concat([settled, nonstarters, unresolved], ignore_index=True, sort=False),
             "saves_settled_starters": settled,
             "saves_predicted_nonstarters": nonstarters,
+            "saves_unresolved": unresolved,
             "saves_predicted_relief_appearances": predicted_relief,
             "saves_nonstarters": nonstarters,
             "saves_unpredicted_starters": unpredicted_starters,

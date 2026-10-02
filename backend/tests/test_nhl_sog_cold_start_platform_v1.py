@@ -20,6 +20,23 @@ def features(slate="2026-09-20"):
 
 
 class ColdStartTest(unittest.TestCase):
+    def test_grading_marks_exact_line_tie_as_push(self):
+        prediction = pd.DataFrame([{
+            "canonical_season": 2026, "slate_date": "2026-09-20",
+            "game_id": 2026010001, "player_id": 1, "line": 2.0,
+            "selected_side": "OVER",
+        }])
+        outcome = pd.DataFrame([{
+            "canonical_season": 2026, "slate_date": "2026-09-20",
+            "game_id": 2026010001, "player_id": 1, "official_final": True,
+            "official_sog": 2, "participation_status": "APPEARED",
+            "outcome_source": "official_fixture",
+            "outcome_source_timestamp_utc": "2026-09-21T02:00:00Z",
+        }])
+        graded = grade_predictions(
+            prediction, outcome, grading_timestamp_utc="2026-09-21T03:00:00Z")
+        self.assertEqual(graded.grading_state.iloc[0], "PUSH")
+
     def test_no_network_market_independence_preflight(self):
         with patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
              patch.dict(os.environ, {"ODDS_API_KEY": "fixture-secret"}):

@@ -21,6 +21,7 @@ from backend.nhl.postgame_reconcile.core import (
     _select_cross_market_final_run,
     _grade_points,
     _grade_saves,
+    _settle_ladder,
     publish_reconciliation,
     reconciliation_lock,
     resolve_operational_sources,
@@ -439,6 +440,100 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(len(save_grades["saves_predicted_relief_appearances"]), 429)
         self.assertEqual(len(save_grades["saves_unpredicted_starters"]), 0)
         self.assertEqual(len(save_grades["saves_unpredicted_relief_appearances"]), 0)
+
+    def test_ladder_grading_preserves_pushes(self):
+        frame = pd.DataFrame([{
+            "line": 2.0, "actual": 2, "prob_over": 0.7,
+        }])
+        graded = _settle_ladder(frame, outcome_column="actual")
+        self.assertEqual(graded.settled_side.iloc[0], "PUSH")
+        self.assertEqual(graded.grading_status.iloc[0], "PUSH")
+        self.assertTrue(pd.isna(graded.prediction_correct.iloc[0]))
+
+    def test_ladder_grading_keeps_missing_actual_unresolved(self):
+        frame = pd.DataFrame([{
+            "line": 2.0, "actual": pd.NA, "prob_over": 0.7,
+        }])
+        graded = _settle_ladder(frame, outcome_column="actual")
+        self.assertTrue(pd.isna(graded.settled_side.iloc[0]))
+        self.assertEqual(graded.grading_status.iloc[0], "OUTCOME_UNRESOLVED")
+
+    def test_points_grading_uses_goals_plus_assists_without_market_fields(self):
+        with tempfile.TemporaryDirectory(prefix="nhl_points_grade_") as raw:
+            run = Path(raw)
+            pd.DataFrame([{
+                "game_id": 1, "player_id": 5, "line": line,
+                "prob_over": 0.7,
+                "prediction_timestamp_utc": "2026-09-21T20:00:00Z",
+                "prediction_identity": f"points-{line}",
+            } for line in (0.5, 1.5, 2.0)]).to_csv(
+                run / "immutable_predictions.csv", index=False)
+            pd.DataFrame(columns=["exclusion_reason"]).to_csv(
+                run / "prediction_exclusions.csv", index=False)
+            pd.DataFrame(columns=["exclusion_reason"]).to_csv(
+                run / "input_exclusions.csv", index=False)
+            schedule = pd.DataFrame([{
+                "game_id": 1, "scheduled_start_time_utc": "2026-09-21T23:00:00Z",
+                "game_type_code": 2,
+            }])
+            outcomes = pd.DataFrame([{
+                "game_id": 1, "player_id": 5, "official_goals": 1,
+                "official_assists": 1, "official_points": 99,
+                "participation_state": "PARTICIPATED",
+            }])
+            grades = _grade_points(run, schedule, outcomes)
+            self.assertEqual(len(grades["points_settled"]), 3)
+            self.assertTrue(grades["points_settled"].official_points.eq(2).all())
+            self.assertEqual(
+                grades["points_settled"].grading_status.tolist(),
+                ["SETTLED", "SETTLED", "PUSH"],
+            )
+
+    def test_saves_missing_official_identity_is_unresolved_not_nonstarter(self):
+        with tempfile.TemporaryDirectory(prefix="nhl_saves_unresolved_") as raw:
+            run = Path(raw)
+            pd.DataFrame([{
+                "game_id": 1, "goalie_id": 10, "line": 20.5,
+                "prediction_timestamp_utc": "2026-09-21T20:00:00Z",
+                "prob_over": 0.5, "prediction_identity": "starter",
+            }, {
+                "game_id": 1, "goalie_id": 11, "line": 20.5,
+                "prediction_timestamp_utc": "2026-09-21T20:00:00Z",
+                "prob_over": 0.5, "prediction_identity": "missing",
+            }, {
+                "game_id": 1, "goalie_id": 12, "line": 20.5,
+                "prediction_timestamp_utc": "2026-09-21T20:00:00Z",
+                "prob_over": 0.5, "prediction_identity": "relief",
+            }]).to_csv(run / "immutable_conditional_predictions.csv", index=False)
+            pd.DataFrame(columns=["exclusion_reason"]).to_csv(
+                run / "input_exclusions.csv", index=False)
+            schedule = pd.DataFrame([{
+                "game_id": 1, "scheduled_start_time_utc": "2026-09-21T23:00:00Z",
+                "game_type_code": 2,
+            }])
+            goalies = pd.DataFrame([{
+                "game_id": 1, "goalie_id": 10, "team_id": 1,
+                "official_saves": 25, "actual_start_flag": True,
+                "goalie_participation_state": "STARTED",
+                "starter_identity_method": "OFFICIAL_TOI",
+            }, {
+                "game_id": 1, "goalie_id": 12, "team_id": 1,
+                "official_saves": 5, "actual_start_flag": False,
+                "goalie_participation_state": "RELIEF_APPEARANCE",
+                "starter_identity_method": "OFFICIAL_TOI",
+            }])
+            grades = _grade_saves(run, schedule, goalies)
+            self.assertEqual(len(grades["saves_settled_starters"]), 1)
+            self.assertEqual(len(grades["saves_predicted_nonstarters"]), 1)
+            self.assertEqual(
+                grades["saves_predicted_nonstarters"].grading_status.iloc[0],
+                "DID_NOT_START_NOT_GRADEABLE_CONDITIONAL",
+            )
+            self.assertEqual(len(grades["saves_unresolved"]), 1)
+            self.assertEqual(
+                grades["saves_unresolved"].grading_status.iloc[0],
+                "STARTER_STATUS_UNRESOLVED",
+            )
 
     def test_september_20_local_only_source_binding_is_exact(self):
         operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
