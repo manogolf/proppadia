@@ -7,6 +7,7 @@ import pandas as pd
 from unittest.mock import MagicMock
 
 from backend.nhl.scripts import load_sog_predictions_denali
+from backend.nhl import cli
 from backend.nhl.scripts.select_nhl_points_saves_8rain_candidates import select_raw_sog
 from backend.nhl.scripts.score_sog_poisson_baseline import (
     _poisson_tail,
@@ -43,6 +44,38 @@ def _features() -> pd.DataFrame:
 
 
 class ScoreSogPoissonBaselineTests(unittest.TestCase):
+    def test_missing_season_toi_does_not_block_scoreable_rows(self):
+        frame = pd.DataFrame([
+            {
+                "player_id": player_id, "game_id": 1, "game_date": "2026-10-01",
+                "d10_sog_per60": 6.0, "d10_toi_min_avg": 15.0,
+                "szn_toi_per_game_5on5": None,
+                "season_5on5_icetime_per_game": None,
+            }
+            for player_id in range(100, 110)
+        ])
+        scored, unscored = score_predictions(frame)
+        self.assertEqual(len(scored), 10)
+        self.assertTrue(unscored.empty)
+
+    def test_poisson_feature_export_skips_ordinal_pairings_veto(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "features.csv"
+
+            def fake_psql(*args, **kwargs):
+                kwargs["stdout"].write(
+                    "player_id,game_id,game_date,diagnostic\n"
+                    "101,1,2026-10-01," + ("x" * 220) + "\n"
+                )
+
+            with patch("backend.nhl.cli.sp.run", side_effect=fake_psql) as mocked:
+                cli.export_sog_denali_features(
+                    "postgresql://unused", "2026-10-01", output,
+                    require_pairings_coverage=False,
+                )
+            self.assertEqual(mocked.call_count, 1)
+            self.assertEqual(len(pd.read_csv(output)), 1)
+
     def test_missing_toi_is_unscored_and_never_emits_probabilities(self):
         scored, unscored = score_predictions(_features(), source_run_id="run-1")
         self.assertNotIn(101, set(scored.player_id))

@@ -56,7 +56,7 @@ from backend.nhl.daily_orchestration import (
     DailyRunRecorder,
     LEGACY_SOG_TOI_REASON,
     artifact_identity,
-    evaluate_legacy_sog_toi_gate,
+    legacy_sog_toi_population_diagnostic,
     redact_sensitive_text,
     safe_called_process_error,
     verify_roster_observation_reuse,
@@ -888,12 +888,15 @@ def refresh_sog_denali_rollups_window(db: str, *, start_date: str, end_date: str
     run(["psql", db, "--no-psqlrc", "-v", "ON_ERROR_STOP=1", "-c", sql])
     print("✅ SOG rollups refreshed.")
 
-def export_sog_denali_features(db_url: str, slate_date: str, out_path: Path) -> None:
+def export_sog_denali_features(
+    db_url: str, slate_date: str, out_path: Path, *,
+    require_pairings_coverage: bool = True,
+) -> None:
     """
     Export Denali SOG features for a given slate_date into a CSV used by the SOG scorer.
 
     Behavior:
-      - (Upstream guard) Fails early if pairings/coverage substrate is missing on the slate rows.
+      - Optionally requires pairings/coverage substrate for the ordinal scorer.
       - Runs backend/nhl/sql/export_sog_denali_pregame.sql via psql.
       - Passes slate_date as a psql variable: -v slate_date=YYYY-MM-DD
       - Script itself does COPY ... TO STDOUT WITH CSV HEADER.
@@ -902,59 +905,59 @@ def export_sog_denali_features(db_url: str, slate_date: str, out_path: Path) -> 
     sql_path = BASE / "sql" / "export_sog_denali_pregame.sql"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    # ------------------------------------------------------------------
-    # UPSTREAM GUARD: fail export if pairings/coverage substrate is missing
-    # (This is intentionally BEFORE we write any CSV.)
-    # ------------------------------------------------------------------
-    guard_sql = f"""
-    WITH s AS (
-      SELECT COUNT(*)::int AS n_rows
-      FROM nhl.training_features_nhl_sog_enriched_pregame_v2
-      WHERE game_date = DATE '{slate_date}'
-    ),
-    nn AS (
-      SELECT
-        COUNT(d10_shiftcharts_coverage_rate)::int AS nn_d10_cov,
-        COUNT(d20_shiftcharts_coverage_rate)::int AS nn_d20_cov,
-        COUNT(d10_pairings_available)::int        AS nn_d10_avail,
-        COUNT(d20_pairings_available)::int        AS nn_d20_avail
-      FROM nhl.training_features_nhl_sog_enriched_pregame_v2
-      WHERE game_date = DATE '{slate_date}'
-    )
-    SELECT
-      s.n_rows,
-      nn.nn_d10_cov, nn.nn_d20_cov,
-      nn.nn_d10_avail, nn.nn_d20_avail
-    FROM s, nn;
-    """
+    # The ordinal scorer consumes pairings/coverage features.  The default
+    # Poisson baseline does not; requiring those columns there can suppress
+    # otherwise scoreable raw SOG predictions.
+    if require_pairings_coverage:
+        guard_sql = f"""
+        WITH s AS (
+          SELECT COUNT(*)::int AS n_rows
+          FROM nhl.training_features_nhl_sog_enriched_pregame_v2
+          WHERE game_date = DATE '{slate_date}'
+        ),
+        nn AS (
+          SELECT
+            COUNT(d10_shiftcharts_coverage_rate)::int AS nn_d10_cov,
+            COUNT(d20_shiftcharts_coverage_rate)::int AS nn_d20_cov,
+            COUNT(d10_pairings_available)::int        AS nn_d10_avail,
+            COUNT(d20_pairings_available)::int        AS nn_d20_avail
+          FROM nhl.training_features_nhl_sog_enriched_pregame_v2
+          WHERE game_date = DATE '{slate_date}'
+        )
+        SELECT
+          s.n_rows,
+          nn.nn_d10_cov, nn.nn_d20_cov,
+          nn.nn_d10_avail, nn.nn_d20_avail
+        FROM s, nn;
+        """
 
-    proc = sp.run(
-        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", guard_sql],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=_psql_env(),
-    )
-
-    # output format: n_rows|nn_d10_cov|nn_d20_cov|nn_d10_avail|nn_d20_avail
-    parts = proc.stdout.strip().split("|")
-    if len(parts) != 5:
-        raise RuntimeError(f"[guard] unexpected guard output: {proc.stdout!r}")
-
-    n_rows, nn_d10_cov, nn_d20_cov, nn_d10_avail, nn_d20_avail = map(int, parts)
-
-    if n_rows == 0:
-        raise RuntimeError(
-            f"[guard] no rows in nhl.training_features_nhl_sog_enriched_pregame_v2 for slate_date={slate_date}"
+        proc = sp.run(
+            ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", guard_sql],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=_psql_env(),
         )
 
-    if nn_d10_cov == 0 or nn_d20_cov == 0 or nn_d10_avail == 0 or nn_d20_avail == 0:
-        raise RuntimeError(
-            f"[guard] missing pairings/coverage substrate for slate_date={slate_date}: "
-            f"n_rows={n_rows} nn_d10_cov={nn_d10_cov} nn_d20_cov={nn_d20_cov} "
-            f"nn_d10_avail={nn_d10_avail} nn_d20_avail={nn_d20_avail}. "
-            "This should be fixed upstream (fill_sog_pairings_rolling_for_slate.sql / fill_sog_pairings_for_slate.sql)."
-        )
+        # output format: n_rows|nn_d10_cov|nn_d20_cov|nn_d10_avail|nn_d20_avail
+        parts = proc.stdout.strip().split("|")
+        if len(parts) != 5:
+            raise RuntimeError(f"[guard] unexpected guard output: {proc.stdout!r}")
+
+        n_rows, nn_d10_cov, nn_d20_cov, nn_d10_avail, nn_d20_avail = map(int, parts)
+
+        if n_rows == 0:
+            raise RuntimeError(
+                f"[guard] no rows in nhl.training_features_nhl_sog_enriched_pregame_v2 for slate_date={slate_date}"
+            )
+
+        if nn_d10_cov == 0 or nn_d20_cov == 0 or nn_d10_avail == 0 or nn_d20_avail == 0:
+            raise RuntimeError(
+                f"[guard] missing pairings/coverage substrate for slate_date={slate_date}: "
+                f"n_rows={n_rows} nn_d10_cov={nn_d10_cov} nn_d20_cov={nn_d20_cov} "
+                f"nn_d10_avail={nn_d10_avail} nn_d20_avail={nn_d20_avail}. "
+                "This should be fixed upstream (fill_sog_pairings_rolling_for_slate.sql / fill_sog_pairings_for_slate.sql)."
+            )
 
     # ------------------------------------------------------------------
     # EXPORT
@@ -2004,15 +2007,16 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     n = int(row["n"])
     null_5v5 = int(row["null_5v5"])
     null_season_5v5 = int(row["null_season_5v5"])
-    sog_gate = evaluate_legacy_sog_toi_gate(
+    sog_gate = legacy_sog_toi_population_diagnostic(
         population_rows=n, null_5v5=null_5v5,
         null_season_5v5=null_season_5v5)
     null_ratio = sog_gate["null_ratio"]
 
-    # Allow a couple misses (callups), but not systemic failure. During the
-    # morning-only preparation boundary this is a SOG-lane prerequisite, not a
-    # reason to suppress independently viable Points/Saves exports.
-    sog_prerequisite_blocked = bool(sog_gate["blocked"])
+    # Keep the former 20% season-TOI population gate as a diagnostic only.
+    # The Poisson scorer has per-row rate/exposure fallbacks and writes an
+    # unscored ledger for rows that lack every valid source. A slate-wide
+    # threshold must not discard other scoreable players.
+    sog_scorer = (os.environ.get("NHL_SOG_SCORER") or "poisson_baseline").strip().lower()
     recorder.start_lane("legacy_sog", inputs=[{
         "slate_date": slate,
         "population_rows": n,
@@ -2020,15 +2024,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "null_season_5on5_icetime_per_game": null_season_5v5,
         "null_ratio": null_ratio,
         "maximum_null_ratio": 0.20,
+        "legacy_population_gate_would_block": bool(
+            sog_gate["legacy_population_gate_would_block"]),
     }])
-    if sog_prerequisite_blocked:
-        print(
-            "SOG_PREREQUISITE_BLOCKED_LANE_LOCAL "
-            f"slate={slate} n={n} null_5v5={null_5v5} "
-            f"null_season_5v5={null_season_5v5}"
-        )
-        recorder.finish_lane(
-            "legacy_sog", status="BLOCKED_LANE_LOCAL", reason=LEGACY_SOG_TOI_REASON)
 
     # After seed_sog_features_for_slate + pairings fills
 
@@ -2045,9 +2043,10 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
 
     # 4a) SOG Denali features → backend/nhl/exports/daily/sog_features/
     sog_feat_path = DAILY_SOG_FEATURES_DIR / f"sog_features_{slate}_denali.csv"
-    # Never create a prediction input from a blocked SOG prerequisite.
-    if not sog_prerequisite_blocked:
-        export_sog_denali_features(db, slate, sog_feat_path)
+    export_sog_denali_features(
+        db, slate, sog_feat_path,
+        require_pairings_coverage=(sog_scorer == "ordinal_lgbm"),
+    )
 
     # 4b) Saves / Points exporters are independent lane inputs.
     saves_export_ready = points_export_ready = False
@@ -2066,10 +2065,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     print("exports → sog_features_{slate}_denali.csv, train_goalie_saves_v2.csv, train_nhl_points_v2.csv")
 
     if morning_only:
-        if not sog_prerequisite_blocked:
-            recorder.finish_lane(
-                "legacy_sog", status="PREREQUISITES_READY",
-                reason="MORNING_ONLY_SCORING_NOT_RUN")
+        recorder.finish_lane(
+            "legacy_sog", status="PREREQUISITES_READY",
+            reason="MORNING_ONLY_SCORING_NOT_RUN")
         for lane_name in ("points", "saves"):
             if recorder.lane(lane_name).status != "FAILED_NONBLOCKING":
                 recorder.finish_lane(
@@ -2083,18 +2081,6 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
             recorder.finish_lane(lane_name, status="SKIPPED_MORNING_ONLY")
         recorder.finish_lane("research_integrity", status="SKIPPED_MORNING_ONLY")
         print("✅ Morning-only boundary reached: stable upstream state prepared; scoring, markets, candidates, and uploads skipped.")
-        return
-
-    if sog_prerequisite_blocked:
-        _run_independent_daily_lanes(
-            recorder=recorder, db=db, slate=slate, with_odds=with_odds,
-            odds_phase=odds_phase, daily_run_id=daily_run_id,
-            canonical_games=canonical_games,
-            saves_export_ready=saves_export_ready,
-            points_export_ready=points_export_ready,
-            legacy_sog_prediction=None,
-            reuse_odds_observation=reuse_odds_observation,
-        )
         return
 
     prediction_run_dir = PROC_DIR / "daily_runs" / daily_run_id
@@ -2114,7 +2100,6 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "reuse_odds_observation": reuse_odds_observation,
     }
     _ACTIVE_DAILY_LANE = "legacy_sog"
-    sog_scorer = (os.environ.get("NHL_SOG_SCORER") or "poisson_baseline").strip().lower()
     if sog_scorer == "poisson_baseline":
         sog_score_command = [
             PY,

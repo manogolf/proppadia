@@ -104,7 +104,7 @@ def artifact_identity(path: Path) -> dict[str, Any]:
     }
 
 
-def evaluate_legacy_sog_toi_gate(
+def legacy_sog_toi_population_diagnostic(
     *, population_rows: int, null_5v5: int, null_season_5v5: int,
     maximum_null_ratio: float = 0.20,
 ) -> dict[str, Any]:
@@ -122,8 +122,9 @@ def evaluate_legacy_sog_toi_gate(
         "null_season_5on5_icetime_per_game": null_season_5v5,
         "null_ratio": ratio,
         "maximum_null_ratio": float(maximum_null_ratio),
-        "blocked": population_rows > 0 and ratio > float(maximum_null_ratio),
-        "reason": LEGACY_SOG_TOI_REASON if population_rows > 0 and ratio > float(maximum_null_ratio) else None,
+        "legacy_population_gate_would_block": (
+            population_rows > 0 and ratio > float(maximum_null_ratio)
+        ),
     }
 
 

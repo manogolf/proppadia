@@ -16,7 +16,7 @@ from backend.nhl.daily_orchestration import (
     DailyRunRecorder,
     LANE_NAMES,
     LEGACY_SOG_TOI_REASON,
-    evaluate_legacy_sog_toi_gate,
+    legacy_sog_toi_population_diagnostic,
     verify_roster_observation_reuse,
 )
 
@@ -98,8 +98,8 @@ def fake_odds_lineage(**kwargs):
     }
 
 
-def test_212_of_713_is_only_a_legacy_sog_block():
-    gate = evaluate_legacy_sog_toi_gate(
+def test_212_of_713_records_the_retired_legacy_sog_population_gate():
+    gate = legacy_sog_toi_population_diagnostic(
         population_rows=713, null_5v5=212, null_season_5v5=212)
     assert gate == {
         "population_rows": 713,
@@ -107,21 +107,20 @@ def test_212_of_713_is_only_a_legacy_sog_block():
         "null_season_5on5_icetime_per_game": 212,
         "null_ratio": 212 / 713,
         "maximum_null_ratio": 0.20,
-        "blocked": True,
-        "reason": LEGACY_SOG_TOI_REASON,
+        "legacy_population_gate_would_block": True,
     }
     value = recorder()
-    value.finish_lane("legacy_sog", status="BLOCKED_LANE_LOCAL", reason=gate["reason"])
+    value.finish_lane("legacy_sog", status="BLOCKED_LANE_LOCAL", reason=LEGACY_SOG_TOI_REASON)
     value.finish_lane("points")
     value.finish_lane("saves")
     finish_unowned_lanes(value)
     assert value.classification() == "READY_WITH_BOUNDED_LANE_WARNING"
 
 
-def test_legacy_sog_below_threshold_operates_normally():
-    gate = evaluate_legacy_sog_toi_gate(
+def test_legacy_sog_below_threshold_has_no_retired_gate_warning():
+    gate = legacy_sog_toi_population_diagnostic(
         population_rows=713, null_5v5=142, null_season_5v5=142)
-    assert gate["blocked"] is False
+    assert gate["legacy_population_gate_would_block"] is False
     value = recorder()
     for name in LANE_NAMES:
         if value.lane(name).status == "NOT_STARTED":
