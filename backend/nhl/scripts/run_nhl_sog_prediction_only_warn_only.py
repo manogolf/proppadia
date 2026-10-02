@@ -42,7 +42,7 @@ def phase_for(schedule:pd.DataFrame,now:datetime,requested:str)->tuple[str|None,
     if future.empty:return None,"NO_PRESTART_GAME"
     minutes=(future.min()-pd.Timestamp(now)).total_seconds()/60
     if requested!="AUTO":return requested,"EXPLICIT_PHASE"
-    local=now.astimezone(ZoneInfo("America/Los_Angeles"))
+    local=now.astimezone(ZoneInfo("America/New_York"))
     if 20<=minutes<=75:return "FINAL_PREGAME",f"FIRST_START_IN_{minutes:.1f}_MINUTES"
     if local.hour==12 and local.minute<=30:return "MIDDAY","LOCAL_MIDDAY_WINDOW"
     return None,f"OUTSIDE_PREDICTION_WINDOW_FIRST_START_IN_{minutes:.1f}_MINUTES"

@@ -16,8 +16,8 @@ from backend.nhl.daily_capture import sha256_file, verify_package
 
 
 UTC = timezone.utc
-PACIFIC = ZoneInfo("America/Los_Angeles")
-RECEIPT_SCHEMA = "NHL_COMPREHENSIVE_DAILY_RUN_RECEIPT_V2"
+EASTERN = ZoneInfo("America/New_York")
+RECEIPT_SCHEMA = "NHL_COMPREHENSIVE_DAILY_RUN_RECEIPT_V3"
 DATABASE_WRITE_STATUSES = (
     "NONE", "COMMITTED", "ROLLED_BACK", "POSSIBLE_UNQUANTIFIED", "UNKNOWN",
 )
@@ -89,8 +89,8 @@ def _iso_utc(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _iso_pt(value: datetime) -> str:
-    return value.astimezone(PACIFIC).isoformat()
+def _iso_et(value: datetime) -> str:
+    return value.astimezone(EASTERN).isoformat()
 
 
 def artifact_identity(path: Path) -> dict[str, Any]:
@@ -355,9 +355,10 @@ class DailyRunRecorder:
             "command": self.command,
             "resolved_phase": self.phase,
             "started_at_utc": _iso_utc(self.started_at),
-            "started_at_pt": _iso_pt(self.started_at),
+            "started_at_et": _iso_et(self.started_at),
             "ended_at_utc": _iso_utc(ended),
-            "ended_at_pt": _iso_pt(ended),
+            "ended_at_et": _iso_et(ended),
+            "operational_timezone": "America/New_York",
             "slate_date": self.slate_date,
             "canonical_season": self.canonical_season,
             "canonical_game_ids": self.canonical_game_ids,

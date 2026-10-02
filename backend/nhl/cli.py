@@ -10,7 +10,7 @@ Commands:
   build-points Build nhl/site/data/points_with_market.csv from latest predictions + odds.
 
 Conventions:
-  - Operational slate dates use America/Los_Angeles.
+  - Operational slate dates use America/New_York.
   - Artifacts:
       exports/                             (SQL exports consumed by models)
       backend/nhl/data/processed/          (model outputs)
@@ -72,7 +72,9 @@ from backend.nhl.attachment_integrity import (
     audit_attachment_files,
     validate_odds_observation,
 )
-from backend.nhl.postgame_learning import ensure_prior_learning, prior_et_slate
+from backend.nhl.postgame_learning import (
+    current_et_slate, ensure_prior_learning, prior_et_slate,
+)
 
 
 # ---------- bootstrap env ----------
@@ -301,23 +303,22 @@ def refresh_sog_residual_dataset(*, slate: str) -> None:
         cmd.extend(["--from-date", from_date])
     run(cmd)
 
-# ---------- time helpers (Pacific operational boundary) ----------
+# ---------- time helpers (Eastern operational boundary) ----------
 
 def pt_today() -> str:
-    from zoneinfo import ZoneInfo
-    return datetime.now(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m-%d")
+    """Legacy name retained for callers; NHL operational dates use Eastern time."""
+    return current_et_slate()
 
 
 def pt_yesterday() -> str:
-    from zoneinfo import ZoneInfo
-    return (datetime.now(ZoneInfo("America/Los_Angeles")) - timedelta(days=1)).strftime("%Y-%m-%d")
+    return prior_et_slate()
 
 def et_today() -> str:
-    """Compatibility alias; NHL operational dates are now Pacific."""
+    """Current NHL operational date in Eastern time."""
     return pt_today()
 
 def et_yesterday() -> str:
-    """Compatibility alias; NHL operational dates are now Pacific."""
+    """Previous NHL operational date in Eastern time."""
     return pt_yesterday()
     
 def infer_nhl_season_from_date_yyyy_mm_dd(date_str: str) -> int:
@@ -1737,8 +1738,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     recorder.canonical_season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
     recorder.start_lane("shared_prerequisites")
 
-    print(f"SLATE_DATE (PT): {slate}" + (" (honor env)" if honor_env else ""))
-    print(f"YDAY       (PT): {yday}" + (" (honor env)" if honor_env else ""))
+    print(f"SLATE_DATE (ET): {slate}" + (" (honor env)" if honor_env else ""))
+    print(f"PRIOR_DATE (ET): {yday}" + (" (honor env)" if honor_env else ""))
 
     # --- Daily artifact dirs (your weekly cleanup automation) ---
     DAILY_EXPORTS_DIR = ROOT / "backend" / "nhl" / "exports" / "daily"
@@ -1927,7 +1928,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     )
     game_count = int((res.stdout or "").strip() or "0")
     if game_count == 0:
-        print(f"ℹ️ No NHL games for {slate} (PT) — skipping scoring/export steps (yday finalization already done).")
+        print(f"ℹ️ No NHL games for {slate} (ET) — skipping scoring/export steps (prior-date finalization already done).")
         return
     # --- end early exit ---
 
@@ -2510,7 +2511,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     fo.add_argument("--phase", choices=PHASES, default=os.environ.get("NHL_DAILY_PHASE", "EARLY"))
 
     rr = sub.add_parser("refresh-rosters-all", help="Refresh NHL players/rosters for all teams")
-    rr.add_argument("--date", default=os.environ.get("SLATE_DATE") or et_today(), help="YYYY-MM-DD Pacific context date")
+    rr.add_argument("--date", default=os.environ.get("SLATE_DATE") or et_today(), help="YYYY-MM-DD Eastern context date")
 
     bsog = sub.add_parser("build-sog", help="Build sog_with_market.csv")
     bsog.add_argument("--slate", default=os.environ.get("SLATE_DATE") or et_today())

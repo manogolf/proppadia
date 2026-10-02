@@ -629,33 +629,33 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
         ordinary = plan_first_puck_phases(
             slate_date="2026-09-24", first_puck_utc="2026-09-24T23:00:00Z",
             now_utc=datetime(2026, 9, 24, 12, tzinfo=UTC))
-        self.assertEqual([row["target_pt"][11:16] for row in ordinary], ["06:30", "13:30", "14:45"])
+        self.assertEqual([row["target_et"][11:16] for row in ordinary], ["06:30", "13:30", "17:45"])
 
         early = plan_first_puck_phases(
             slate_date="2026-11-15", first_puck_utc="2026-11-15T14:00:00Z",
             now_utc=datetime(2026, 11, 14, 20, tzinfo=UTC))
-        self.assertEqual(early[0]["target_pt"][:16], "2026-11-15T01:30")
-        self.assertEqual(early[1]["target_pt"][:16], "2026-11-15T03:30")
+        self.assertEqual(early[0]["target_et"][:16], "2026-11-15T04:30")
+        self.assertEqual(early[1]["target_et"][:16], "2026-11-15T06:30")
         self.assertFalse(early[0]["prior_calendar_date"])
 
         saturday = plan_first_puck_phases(
             slate_date="2026-10-10", first_puck_utc="2026-10-10T19:00:00Z",
             now_utc=datetime(2026, 10, 10, 11, tzinfo=UTC))
-        self.assertEqual([row["target_pt"][11:16] for row in saturday], ["06:30", "09:30", "10:45"])
+        self.assertEqual([row["target_et"][11:16] for row in saturday], ["06:30", "12:30", "13:45"])
 
         prior_day = plan_first_puck_phases(
-            slate_date="2026-11-15", first_puck_utc="2026-11-15T10:00:00Z",
+            slate_date="2026-11-15", first_puck_utc="2026-11-15T06:00:00Z",
             now_utc=datetime(2026, 11, 14, 18, tzinfo=UTC))
         self.assertTrue(prior_day[0]["prior_calendar_date"])
 
         dst = plan_first_puck_phases(
             slate_date="2026-11-01", first_puck_utc="2026-11-02T00:00:00Z",
             now_utc=datetime(2026, 11, 1, 12, tzinfo=UTC))
-        self.assertTrue(dst[0]["target_pt"].endswith("-08:00"))
+        self.assertTrue(dst[0]["target_et"].endswith("-05:00"))
         spring_dst = plan_first_puck_phases(
             slate_date="2027-03-14", first_puck_utc="2027-03-14T23:00:00Z",
             now_utc=datetime(2027, 3, 14, 11, tzinfo=UTC))
-        self.assertTrue(spring_dst[0]["target_pt"].endswith("-07:00"))
+        self.assertTrue(spring_dst[0]["target_et"].endswith("-04:00"))
         self.assertEqual(plan_first_puck_phases(
             slate_date="2026-09-25", first_puck_utc=None,
             now_utc=datetime(2026, 9, 25, 12, tzinfo=UTC)), [])
@@ -671,7 +671,7 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             now_utc=datetime(2026, 9, 24, 20, tzinfo=UTC), completed=completed)
         self.assertEqual(states[0]["state"], "COMPLETED")
         changed = plan_first_puck_phases(
-            slate_date="2026-09-24", first_puck_utc="2026-09-24T17:00:00Z",
+            slate_date="2026-09-24", first_puck_utc="2026-09-24T14:00:00Z",
             now_utc=datetime(2026, 9, 24, 20, tzinfo=UTC), completed=completed)
         self.assertEqual(changed[0]["state"], "SUPERSEDED")
         missed = plan_first_puck_phases(
@@ -679,7 +679,7 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
             now_utc=datetime(2026, 9, 25, 0, tzinfo=UTC))
         self.assertTrue(all(row["state"] == "MISSED" for row in missed))
 
-    def test_canonical_slate_uses_pacific_date_at_utc_midnight(self):
+    def test_canonical_slate_uses_eastern_date_at_utc_midnight(self):
         raw = {"games": [{
             "id": 2026010037, "startTimeUTC": "2026-09-25T01:00:00Z",
             "homeTeam": {"abbrev": "NJD"}, "awayTeam": {"abbrev": "NYR"},
@@ -868,7 +868,7 @@ class BoundedOddsTopologyTests(unittest.TestCase):
             (duplicate, "DUPLICATE_PROVIDER_EVENT_ID"),
             (competing, "AMBIGUOUS_CANONICAL_COMPETITION"),
             (incompatible, "UNMATCHED"),
-            (adjacent, "UNMATCHED_OUTSIDE_PACIFIC_SLATE"),
+            (adjacent, "UNMATCHED_OUTSIDE_ET_SLATE"),
         ]:
             plan, bindings = build_odds_request_plan(
                 events=events, canonical_games=one, slate_date=SLATE,

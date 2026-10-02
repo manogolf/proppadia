@@ -29,8 +29,8 @@ from requests.adapters import HTTPAdapter
 from backend.nhl.player_external_identity import localized_text, resolve_player_external_identity
 
 # --------------------------- flags & env ---------------------------
-PACIFIC = ZoneInfo("America/Los_Angeles")
-DATE = os.getenv("SLATE_DATE") or dt.datetime.now(PACIFIC).date().isoformat()
+EASTERN = ZoneInfo("America/New_York")
+DATE = os.getenv("SLATE_DATE") or dt.datetime.now(EASTERN).date().isoformat()
 
 def _flag(name: str, default: str = "0") -> bool:
     v = os.getenv(name, default).strip().lower()
@@ -180,7 +180,7 @@ def main():
 
         try:
             with conn.cursor() as cur:
-                # 1) Today’s games (Pacific operational date)
+                # 1) Today’s games (Eastern operational date)
                 cur.execute("""
                     SELECT
                       g.game_id,

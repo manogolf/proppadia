@@ -13,7 +13,7 @@ import pandas as pd
 from backend.nhl.daily_capture import canonical_game_set_hash
 
 
-PACIFIC = ZoneInfo("America/Los_Angeles")
+EASTERN = ZoneInfo("America/New_York")
 POINTS_LINES = (0.5, 1.5, 2.5)
 SAVES_LINES = tuple(float(value) + 0.5 for value in range(18, 31))
 LINEAGE_COLUMNS = (
@@ -72,7 +72,7 @@ def build_canonical_game_map(
             raise RuntimeError(f"CANONICAL_GAME_START_INVALID:{game_id}") from error
         if start.tzinfo is None:
             raise RuntimeError(f"CANONICAL_GAME_START_NAIVE:{game_id}")
-        game_date = start.astimezone(PACIFIC).date().isoformat()
+        game_date = start.astimezone(EASTERN).date().isoformat()
         if game_date != slate:
             raise RuntimeError(
                 f"CANONICAL_GAME_DATE_MISMATCH:{game_id}:{game_date}:{slate}")

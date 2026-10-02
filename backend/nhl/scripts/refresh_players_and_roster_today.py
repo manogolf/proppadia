@@ -13,7 +13,7 @@ Resilient daily "ensure" step:
           players already exist (or that we can name via API lookup).
 
 Env:
-  SLATE_DATE=YYYY-MM-DD (defaults to Pacific today)
+  SLATE_DATE=YYYY-MM-DD (defaults to Eastern today)
   SUPABASE_DB_URL / DATABASE_URL
   NHL_FETCH_DISABLE=1  # force offline path
 """
@@ -82,8 +82,8 @@ from backend.nhl.daily_capture import (
 from backend.nhl.daily_orchestration import verify_roster_observation_reuse
 
 # ---------------- Config ----------------
-PACIFIC = ZoneInfo("America/Los_Angeles")
-SLATE_DATE = os.environ.get("SLATE_DATE") or dt.datetime.now(PACIFIC).date().isoformat()
+EASTERN = ZoneInfo("America/New_York")
+SLATE_DATE = os.environ.get("SLATE_DATE") or dt.datetime.now(EASTERN).date().isoformat()
 
 DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
 if not DB_URL:

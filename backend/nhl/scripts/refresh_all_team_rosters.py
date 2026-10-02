@@ -29,8 +29,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from backend.nhl.player_external_identity import localized_text, resolve_player_external_identity
 
-PACIFIC = ZoneInfo("America/Los_Angeles")
-DATE = os.getenv("SLATE_DATE") or dt.datetime.now(PACIFIC).date().isoformat()
+EASTERN = ZoneInfo("America/New_York")
+DATE = os.getenv("SLATE_DATE") or dt.datetime.now(EASTERN).date().isoformat()
 BASE = "https://api-web.nhle.com/v1"
 PLACEHOLDER_RE = re.compile(r"^\s*(?:player|unknown)\s+\d+\s*$", re.IGNORECASE)
 

@@ -489,6 +489,33 @@ class PostgameReconciliationTest(unittest.TestCase):
                 ["SETTLED", "SETTLED", "PUSH"],
             )
 
+    def test_points_without_participation_identity_remain_unresolved(self):
+        with tempfile.TemporaryDirectory(prefix="nhl_points_unresolved_") as raw:
+            run = Path(raw)
+            pd.DataFrame([{
+                "game_id": 1, "player_id": 5, "line": 0.5,
+                "prob_over": 0.6,
+                "prediction_timestamp_utc": "2026-09-21T20:00:00Z",
+                "prediction_identity": "points-unresolved",
+            }]).to_csv(run / "immutable_predictions.csv", index=False)
+            pd.DataFrame(columns=["exclusion_reason"]).to_csv(
+                run / "prediction_exclusions.csv", index=False)
+            pd.DataFrame(columns=["exclusion_reason"]).to_csv(
+                run / "input_exclusions.csv", index=False)
+            schedule = pd.DataFrame([{
+                "game_id": 1, "scheduled_start_time_utc": "2026-09-21T23:00:00Z",
+                "game_type_code": 2,
+            }])
+            grades = _grade_points(run, schedule, pd.DataFrame(columns=[
+                "game_id", "player_id", "official_goals", "official_assists",
+                "participation_state",
+            ]))
+            self.assertEqual(len(grades["points_unresolved"]), 1)
+            self.assertEqual(
+                grades["points_unresolved"].grading_status.iloc[0],
+                "PARTICIPATION_STATUS_UNRESOLVED",
+            )
+
     def test_saves_missing_official_identity_is_unresolved_not_nonstarter(self):
         with tempfile.TemporaryDirectory(prefix="nhl_saves_unresolved_") as raw:
             run = Path(raw)

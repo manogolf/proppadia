@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Import NHL schedule for the Pacific SLATE_DATE into staging and merge.
+Import NHL schedule for the Eastern SLATE_DATE into staging and merge.
 - Endpoint: https://api-web.nhle.com/v1/schedule/YYYY-MM-DD
-- Interprets the operational day in America/Los_Angeles.
+- Interprets the operational day in America/New_York.
 - Self-heals: upserts real team rows into nhl.teams and seeds nhl.team_external_ids.
 """
 
@@ -28,8 +28,8 @@ import psycopg
 
 from backend.nhl.official_request_journal import RequestContext, official_get
 
-PACIFIC = ZoneInfo("America/Los_Angeles")
-DATE = os.getenv("SLATE_DATE") or dt.datetime.now(PACIFIC).date().isoformat()
+EASTERN = ZoneInfo("America/New_York")
+DATE = os.getenv("SLATE_DATE") or dt.datetime.now(EASTERN).date().isoformat()
 
 DB = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
 if not DB:
@@ -64,12 +64,12 @@ def _to_operational_date(iso_utc: str) -> str | None:
     if not iso_utc:
         return None
     try:
-        return dt.datetime.fromisoformat(iso_utc.replace("Z", "+00:00")).astimezone(PACIFIC).date().isoformat()
+        return dt.datetime.fromisoformat(iso_utc.replace("Z", "+00:00")).astimezone(EASTERN).date().isoformat()
     except Exception:
         return None
 
 def fetch_schedule_for_date(date_str: str) -> list[dict]:
-    """Keep only games whose start time falls on the Pacific slate date."""
+    """Keep only games whose start time falls on the Eastern slate date."""
     s = _session()
     candidates = [
         f"{BASE_URL}/{date_str}",
@@ -507,7 +507,7 @@ def main():
         raise
     if not games:
         health_path = _write_slate_health(DATE, games, "VALID_EMPTY_SLATE", True)
-        print(f"ℹ️ No NHL games for {DATE} (PT)")
+        print(f"ℹ️ No NHL games for {DATE} (ET)")
         print(f"✅ Slate health: {health_path}")
         return
 
@@ -588,7 +588,7 @@ def main():
 
             payload.append({
                 "game_id": gid,
-                "game_date": str(DATE),              # Pacific operational date
+                "game_date": str(DATE),              # Eastern operational date
                 "start_time_utc": start_iso,         # ISO string
                 "season": season,
                 "game_type": game_type,
@@ -619,7 +619,7 @@ def main():
             },
         })
         health_path = _write_slate_health(DATE, games, "READY", True)
-        print(f"✅ Upserted {rows} games for {DATE} (PT) (no stage tables)")
+        print(f"✅ Upserted {rows} games for {DATE} (ET) (no stage tables)")
         print(f"✅ Slate health: {health_path}")
 
 

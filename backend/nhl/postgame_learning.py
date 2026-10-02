@@ -6,7 +6,7 @@ import json
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -25,7 +25,18 @@ def prior_et_slate(now: datetime | None = None) -> str:
     now = now or datetime.now(ZoneInfo("America/New_York"))
     if now.tzinfo is None:
         raise ValueError("ET_CLOCK_MUST_BE_TIMEZONE_AWARE")
-    return (now.astimezone(ZoneInfo("America/New_York")).date() - timedelta(days=1)).isoformat()
+    return (datetime_et_date(now) - timedelta(days=1)).isoformat()
+
+
+def datetime_et_date(now: datetime) -> date:
+    if now.tzinfo is None:
+        raise ValueError("ET_CLOCK_MUST_BE_TIMEZONE_AWARE")
+    return now.astimezone(ZoneInfo("America/New_York")).date()
+
+
+def current_et_slate(now: datetime | None = None) -> str:
+    now = now or datetime.now(ZoneInfo("America/New_York"))
+    return datetime_et_date(now).isoformat()
 
 
 def _sha(path: Path) -> str:
@@ -204,15 +215,46 @@ def ensure_prior_learning(
                     "challenger_grade_status": "NOT_APPLICABLE", "provider_calls": 0,
                     "credits_consumed": 0}
         python = ROOT / ".venv/bin/python"
-        command = [str(python if python.is_file() else sys.executable), str(ROOT / "backend/nhl/scripts/run_nhl_postgame_reconciliation.py"),
-                   "--execute", "--date", slate_date, "--output-root", str(root)]
-        result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True, check=False)
-        if result.returncode == 2:
+        reconciler = str(ROOT / "backend/nhl/scripts/run_nhl_postgame_reconciliation.py")
+        base = [str(python if python.is_file() else sys.executable), reconciler,
+                "--date", slate_date, "--output-root", str(root)]
+        # The governed executor's database identity partition is built from
+        # typed, immutable authority and roster evidence. Acquire that evidence
+        # first, then hand its run ID back as both typed sources. No player
+        # landing source is required: identities without a safe binding remain
+        # unresolved by the reconciliation contract.
+        acquired = subprocess.run(
+            [*base, "--authority-roster-acquisition"], cwd=ROOT,
+            capture_output=True, text=True, check=False)
+        if acquired.returncode == 2:
             return {"prior_slate_date": slate_date, "official_outcomes_status": "NOT_FINAL",
                     "reconciliation_status": "NOT_FINAL", "reconciliation_package": None,
                     "moneyline_grade_status": "NOT_RUN", "puck_line_grade_status": "NOT_RUN",
                     "challenger_grade_status": "NOT_RUN", "failure": None,
                     "provider_calls": 0, "credits_consumed": 0}
+        if acquired.returncode:
+            detail = (acquired.stdout or "") + (acquired.stderr or "")
+            raise RuntimeError("GOVERNED_AUTHORITY_ROSTER_ACQUISITION_FAILED:" + detail[-1500:])
+        try:
+            acquisition = json.loads(acquired.stdout)
+            run_id = str(acquisition["run_id"])
+            if acquisition.get("status") != "COMPLETE" or not run_id:
+                raise ValueError("acquisition receipt not complete")
+        except (ValueError, KeyError, TypeError) as error:
+            raise RuntimeError("GOVERNED_AUTHORITY_ROSTER_ACQUISITION_RECEIPT_INVALID") from error
+        acquisition_requests = int(
+            (acquisition.get("request_accounting") or {}).get("total_logical_requests", 0))
+        result = subprocess.run(
+            [*base, "--execute",
+             "--response-source", f"AUTHORITY_RESPONSE_SOURCE={run_id}",
+             "--response-source", f"ROSTER_RESPONSE_SOURCE={run_id}"],
+            cwd=ROOT, capture_output=True, text=True, check=False)
+        if result.returncode == 2:
+            return {"prior_slate_date": slate_date, "official_outcomes_status": "NOT_FINAL",
+                    "reconciliation_status": "NOT_FINAL", "reconciliation_package": None,
+                    "moneyline_grade_status": "NOT_RUN", "puck_line_grade_status": "NOT_RUN",
+                    "challenger_grade_status": "NOT_RUN", "failure": None,
+                    "provider_calls": acquisition_requests, "credits_consumed": 0}
         if result.returncode:
             detail = (result.stdout or "") + (result.stderr or "")
             raise RuntimeError("GOVERNED_RECONCILIATION_FAILED:" + detail[-1500:])
@@ -265,6 +307,9 @@ def ensure_prior_learning(
                                           if "UNRESOLVED" in key or "STATUS_UNRESOLVED" in key)
                                for lane, counts in prop_counts.items()},
         "game_count": int(summary.get("games", len(games))),
-        "provider_calls": int((summary.get("official_request_accounting") or {}).get("total_logical_requests", 0)) if created else 0,
+        "provider_calls": (
+            acquisition_requests
+            + int((summary.get("official_request_accounting") or {}).get(
+                "total_logical_requests", 0)) if created else 0),
         "credits_consumed": 0,
     }

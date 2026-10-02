@@ -2,8 +2,10 @@ import json
 import subprocess
 import tempfile
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -42,6 +44,7 @@ class PriorDayOutcomeHandoffTest(unittest.TestCase):
                 patch.object(capture, "load_official_outcomes", return_value=outcomes):
             result = capture.ensure_prior_day_official_outcomes(
                 "unused-dsn", self.slate, outcome_root=Path(tmp),
+                now=datetime(2026, 10, 1, 9, 0, tzinfo=ZoneInfo("America/New_York")),
             )
 
         self.assertEqual(result["status"], "GOVERNED_RECONCILIATION_COMPLETE")
@@ -75,6 +78,7 @@ class PriorDayOutcomeHandoffTest(unittest.TestCase):
             ):
                 capture.ensure_prior_day_official_outcomes(
                     "unused-dsn", self.slate, outcome_root=Path(tmp),
+                    now=datetime(2026, 10, 1, 9, 0, tzinfo=ZoneInfo("America/New_York")),
                 )
         self.assertEqual(run.call_count, 3)
         self.assertNotIn("--execute", run.call_args.args[0])
@@ -90,6 +94,7 @@ class PriorDayOutcomeHandoffTest(unittest.TestCase):
                     patch.object(capture.subprocess, "run") as run:
                 result = capture.ensure_prior_day_official_outcomes(
                     "unused-dsn", self.slate, outcome_root=root,
+                    now=datetime(2026, 10, 1, 9, 0, tzinfo=ZoneInfo("America/New_York")),
                 )
         self.assertEqual(result["status"], "EXISTING_GOVERNED_PACKAGE_VALID")
         run.assert_not_called()

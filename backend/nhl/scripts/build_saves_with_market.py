@@ -12,7 +12,7 @@ Inputs
 
 Env
 ---
-SLATE_DATE=YYYY-MM-DD  (required; Pacific operational date)
+SLATE_DATE=YYYY-MM-DD  (required; Eastern operational date)
 
 Output columns:
 full_name, player_id, game_id, team_id, line, p_over,

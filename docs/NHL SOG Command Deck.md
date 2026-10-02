@@ -166,7 +166,7 @@ This is the canonical comprehensive runner. `bin/nhl_ops.sh daily` is its
 wrapper. Git retains removed `backend/nhl/scripts/nhl_all.sh`; the reported
 historical `backend/nhl/scripts/cli.py` has no retained tracked Git object.
 Neither is an independent current implementation.
-Operational slate dates use Pacific Time. Omit `--with-odds` for an explicitly
+Operational slate dates use Eastern Time (America/New_York). Omit `--with-odds` for an explicitly
 odds-free run; no provider request is made in that case. An explicit phase can
 be supplied with `--odds-phase EARLY`, `REFRESH`, or `FINAL_PREGAME`.
 

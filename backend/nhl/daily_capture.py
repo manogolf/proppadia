@@ -24,7 +24,8 @@ import requests
 from requests.adapters import HTTPAdapter
 
 
-PACIFIC = ZoneInfo("America/Los_Angeles")
+PACIFIC = ZoneInfo("America/Los_Angeles")  # Retained for legacy timestamp fields.
+EASTERN = ZoneInfo("America/New_York")
 UTC = timezone.utc
 ODDS_CONTRACT = "NHL_ODDS_RESEARCH_OBSERVATION_V1"
 ROSTER_CONTRACT = "NHL_ROSTER_RESEARCH_OBSERVATION_V1"
@@ -567,7 +568,7 @@ def load_canonical_slate(*, slate_date: str, raw_schedule_path: Path,
         if not start_raw:
             continue
         start = datetime.fromisoformat(str(start_raw).replace("Z", "+00:00"))
-        if start.astimezone(PACIFIC).date().isoformat() != slate_date:
+        if start.astimezone(EASTERN).date().isoformat() != slate_date:
             continue
         game_id = game.get("id") or game.get("gamePk") or game.get("gameId")
         home = game.get("homeTeam") or {}
@@ -656,8 +657,8 @@ def _bind_events(
             status = "DUPLICATE_PROVIDER_EVENT_ID"
         elif commence is None:
             status = "UNMATCHED_INVALID_START_TIME"
-        elif commence.astimezone(PACIFIC).date().isoformat() != slate_date:
-            status = "UNMATCHED_OUTSIDE_PACIFIC_SLATE"
+        elif commence.astimezone(EASTERN).date().isoformat() != slate_date:
+            status = "UNMATCHED_OUTSIDE_ET_SLATE"
             matches = []
         elif len(matches) > 1:
             status = "AMBIGUOUS_MULTIPLE_CANONICAL_GAMES"
@@ -1247,8 +1248,8 @@ def plan_first_puck_phases(
     completed = completed or {}
     first = datetime.fromisoformat(first_puck_utc.replace("Z", "+00:00")).astimezone(UTC)
     day = date.fromisoformat(slate_date)
-    early_anchor = datetime.combine(day, wall_time(6, 30), tzinfo=PACIFIC).astimezone(UTC)
-    refresh_anchor = datetime.combine(day, wall_time(13, 30), tzinfo=PACIFIC).astimezone(UTC)
+    early_anchor = datetime.combine(day, wall_time(6, 30), tzinfo=EASTERN).astimezone(UTC)
+    refresh_anchor = datetime.combine(day, wall_time(13, 30), tzinfo=EASTERN).astimezone(UTC)
     targets = {
         "EARLY": min(early_anchor, first - timedelta(hours=4, minutes=30)),
         "REFRESH": min(refresh_anchor, first - timedelta(hours=2, minutes=30)),
@@ -1273,8 +1274,10 @@ def plan_first_puck_phases(
         out.append({
             "schema_version": PLANNER_CONTRACT, "phase": phase, "state": state,
             "slate_date": slate_date, "target_utc": iso_utc(target), "target_pt": iso_pt(target),
+            "target_et": target.astimezone(EASTERN).isoformat(),
             "first_puck_utc": iso_utc(first), "first_puck_pt": iso_pt(first),
-            "prior_calendar_date": target.astimezone(PACIFIC).date().isoformat() < slate_date,
+            "first_puck_et": first.astimezone(EASTERN).isoformat(),
+            "prior_calendar_date": target.astimezone(EASTERN).date().isoformat() < slate_date,
             "requires_odds_availability": False,
         })
     return out

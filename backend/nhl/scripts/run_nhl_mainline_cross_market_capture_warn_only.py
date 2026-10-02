@@ -162,6 +162,7 @@ def _parse_json_output(output: str, *, expected_status: str) -> dict:
 
 def ensure_prior_day_official_outcomes(
     dsn: str, slate: str, *, outcome_root: Path = DEFAULT_OUTCOME_ROOT,
+    now: datetime | None = None,
 ) -> dict[str, object]:
     """Ensure yesterday's regular-season finals have the canonical governed package.
 
@@ -170,7 +171,8 @@ def ensure_prior_day_official_outcomes(
     used by cross-market history. It never substitutes database player stats
     for official scores.
     """
-    today = datetime.now(ZoneInfo("America/Los_Angeles")).date().isoformat()
+    today = (now or datetime.now(ZoneInfo("America/New_York"))).astimezone(
+        ZoneInfo("America/New_York")).date().isoformat()
     if slate != today:
         return {"status": "NOT_CURRENT_OPERATIONAL_SLATE"}
     prior_slate = (date.fromisoformat(slate) - timedelta(days=1)).isoformat()
@@ -355,7 +357,7 @@ def phase_for(schedule: pd.DataFrame, now: datetime, requested: str, force: bool
     minutes = (before.min() - pd.Timestamp(now)).total_seconds() / 60
     if requested != "AUTO":
         return (requested, "EXPLICIT_FORCE" if force else "EXPLICIT_PHASE")
-    local = now.astimezone(ZoneInfo("America/Los_Angeles"))
+    local = now.astimezone(ZoneInfo("America/New_York"))
     if 20 <= minutes <= 75:
         return "FINAL_PREGAME", f"FIRST_START_IN_{minutes:.1f}_MINUTES"
     if local.hour == 12 and local.minute <= 30:

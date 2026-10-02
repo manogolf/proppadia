@@ -25,7 +25,7 @@ SLATE_DATE = "2026-09-24"
 FROZEN_GAME_IDS = tuple(range(2026010037, 2026010048))
 FROZEN_GAME_SET_HASH = "92d828be583187109116de1eccda70c2bf8563288ec6ad39ce3976da43a9eec3"
 BUNDLE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{7,127}$")
-PACIFIC = ZoneInfo("America/Los_Angeles")
+EASTERN = ZoneInfo("America/New_York")
 ALLOWED_STATUS = {"scheduled", "live", "final", "off"}
 
 
@@ -185,7 +185,7 @@ def _verify_bundle(bundle_dir: Path, expected_manifest_sha256: str) -> tuple[dic
         seen_ids.add(game_id)
         start = _start_utc(game)
         start_dt = _aware_utc(start, "OFFICIAL_START_TIME")
-        if start_dt.astimezone(PACIFIC).date().isoformat() != SLATE_DATE:
+        if start_dt.astimezone(EASTERN).date().isoformat() != SLATE_DATE:
             if game_id in expected:
                 raise ValueError(f"OFFICIAL_GAME_DATE_MISMATCH:{game_id}")
             continue
