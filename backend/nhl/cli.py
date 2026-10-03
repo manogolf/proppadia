@@ -66,6 +66,7 @@ from backend.nhl.prediction_lineage import (
     SAVES_LINES,
     prepare_scoring_input,
     validate_prediction_output,
+    validate_sog_prediction_artifacts,
 )
 from backend.nhl.attachment_integrity import (
     AttachmentIntegrityError,
@@ -2300,11 +2301,25 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                 ) from exc
             print(f"⚠️ segmented SOG calibration failed; continuing with ordinal output: {exc}")
 
+    sog_scored_metadata, sog_unscored_metadata = validate_sog_prediction_artifacts(
+        scored_path=calibrated_pred_path,
+        unscored_path=unscored_pred_path if unscored_pred_path.is_file() else None,
+        slate=slate,
+        parent_daily_run_id=daily_run_id,
+        canonical_game_ids=[game.game_id for game in canonical_games],
+        expected_game_set_hash=recorder.canonical_game_set_hash,
+    )
     legacy_sog_identity = _require_current_prediction_artifact(
         calibrated_pred_path, slate=slate, expected_sha256=None)
+    legacy_sog_identity.update(sog_scored_metadata)
     sog_outputs = [legacy_sog_identity]
-    if unscored_pred_path.is_file():
-        sog_outputs.append(artifact_identity(unscored_pred_path))
+    if unscored_pred_path.is_file() and sog_unscored_metadata is not None:
+        unscored_identity = artifact_identity(unscored_pred_path)
+        unscored_identity.update(sog_unscored_metadata)
+        unscored_identity["parent_daily_run_id"] = daily_run_id
+        unscored_identity["canonical_game_count"] = len(recorder.canonical_game_ids)
+        unscored_identity["canonical_game_set_hash"] = recorder.canonical_game_set_hash
+        sog_outputs.append(unscored_identity)
 
     # 5b) Load SOG into nhl.predictions
     run(

@@ -16,6 +16,8 @@ from backend.nhl.daily_capture import canonical_game_set_hash
 EASTERN = ZoneInfo("America/New_York")
 POINTS_LINES = (0.5, 1.5, 2.5)
 SAVES_LINES = tuple(float(value) + 0.5 for value in range(18, 31))
+SOG_LINES = (1.5, 2.5, 3.5)
+SOG_WIDE_LINE_COLUMNS = {1.5: "p_over_1_5", 2.5: "p_over_2_5", 3.5: "p_over_3_5"}
 LINEAGE_COLUMNS = (
     "game_date",
     "game_start_utc",
@@ -345,3 +347,118 @@ def validate_prediction_output(
         "feature_input_cutoff_utc": feature_input_cutoff_utc,
         "validated_prediction_identity": True,
     }
+
+
+def validate_sog_prediction_artifacts(
+    *, scored_path: Path, unscored_path: Path | None, slate: str,
+    parent_daily_run_id: str, canonical_game_ids: Iterable[int],
+    expected_game_set_hash: str,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    """Validate legacy SOG prediction-grain artifacts and summarize their rows.
+
+    The legacy scorer emits one wide row per scored player/game identity and a
+    separate line-grain CSV for identities it could not score.  These counts
+    are derived from those files; population and roster diagnostics are not
+    used as substitutes.
+    """
+    scored_path = Path(scored_path)
+    if not scored_path.is_file() or scored_path.stat().st_size == 0:
+        raise RuntimeError(f"SOG_SCORED_ARTIFACT_MISSING:{scored_path}")
+    if not parent_daily_run_id or scored_path.parent.name != parent_daily_run_id:
+        raise RuntimeError("SOG_PREDICTION_RUN_ID_PATH_MISMATCH")
+
+    game_ids = tuple(sorted({int(value) for value in canonical_game_ids}))
+    if not game_ids or canonical_game_set_hash(game_ids) != expected_game_set_hash:
+        raise RuntimeError("SOG_CANONICAL_GAME_SET_HASH_MISMATCH")
+    canonical = set(game_ids)
+    scored = pd.read_csv(scored_path)
+    required = {"game_id", "player_id", "game_date", *SOG_WIDE_LINE_COLUMNS.values()}
+    missing = sorted(required - set(scored.columns))
+    if missing:
+        raise RuntimeError(f"SOG_SCORED_COLUMNS_MISSING:{','.join(missing)}")
+    if scored.empty:
+        raise RuntimeError("SOG_SCORED_ARTIFACT_EMPTY")
+    scored["game_id"] = _strict_integer_ids(scored["game_id"], label="SOG_GAME_ID")
+    scored["player_id"] = _strict_integer_ids(scored["player_id"], label="SOG_PLAYER_ID")
+    if not set(scored["game_id"]).issubset(canonical):
+        raise RuntimeError("SOG_NONCANONICAL_GAME_ID")
+    if not scored["game_date"].astype(str).eq(str(slate)).all():
+        raise RuntimeError("SOG_SLATE_DATE_MISMATCH")
+    scored_identity = ["game_id", "player_id"]
+    if scored.duplicated(scored_identity).any():
+        raise RuntimeError("SOG_DUPLICATE_SCORED_IDENTITY")
+    for column in SOG_WIDE_LINE_COLUMNS.values():
+        values = pd.to_numeric(scored[column], errors="coerce")
+        if values.isna().any() or not values.between(0.0, 1.0, inclusive="both").all():
+            raise RuntimeError(f"SOG_INVALID_LINE_PROBABILITY:{column}")
+
+    scored_identity_count = int(scored[scored_identity].drop_duplicates().shape[0])
+    scored_row_count = int(len(scored))
+    line_count = len(SOG_WIDE_LINE_COLUMNS)
+    scored_metadata: dict[str, Any] = {
+        "canonical_game_count": len(canonical),
+        "canonical_game_set_hash": expected_game_set_hash,
+        "natural_identity_count": scored_identity_count,
+        "line_count": line_count,
+        "conditional_prediction_count": scored_row_count * line_count,
+        "row_count": scored_row_count,
+        "parent_daily_run_id": parent_daily_run_id,
+        "validated_prediction_identity": True,
+    }
+
+    if unscored_path is None or not Path(unscored_path).is_file():
+        scored_metadata["unscored_artifact_available"] = False
+        return scored_metadata, None
+    unscored_path = Path(unscored_path)
+    if unscored_path.parent.name != parent_daily_run_id:
+        raise RuntimeError("SOG_UNSCORED_RUN_ID_PATH_MISMATCH")
+    scored_metadata["unscored_artifact_available"] = True
+    unscored = pd.read_csv(unscored_path)
+    unscored_required = {"game_id", "player_id", "line", "reason", "game_date"}
+    missing = sorted(unscored_required - set(unscored.columns))
+    if missing:
+        raise RuntimeError(f"SOG_UNSCORED_COLUMNS_MISSING:{','.join(missing)}")
+    if unscored.empty:
+        unscored_metadata: dict[str, Any] = {
+            "unscored_identity_count": 0,
+            "unscored_row_count": 0,
+            "unscored_reason_counts": {},
+        }
+        return scored_metadata, unscored_metadata
+    unscored["game_id"] = _strict_integer_ids(
+        unscored["game_id"], label="SOG_UNSCORED_GAME_ID")
+    unscored["player_id"] = _strict_integer_ids(
+        unscored["player_id"], label="SOG_UNSCORED_PLAYER_ID")
+    if not set(unscored["game_id"]).issubset(canonical):
+        raise RuntimeError("SOG_UNSCORED_NONCANONICAL_GAME_ID")
+    if not unscored["game_date"].astype(str).eq(str(slate)).all():
+        raise RuntimeError("SOG_UNSCORED_SLATE_DATE_MISMATCH")
+    unscored["line"] = pd.to_numeric(unscored["line"], errors="coerce")
+    if unscored["line"].isna().any():
+        raise RuntimeError("SOG_UNSCORED_LINE_INVALID")
+    unscored_key = ["game_id", "player_id", "line"]
+    if unscored.duplicated(unscored_key).any():
+        raise RuntimeError("SOG_DUPLICATE_UNSCORED_PREDICTION_KEY")
+    expected_lines = set(SOG_LINES)
+    for _, group in unscored.groupby(scored_identity, sort=False):
+        observed_lines = set(group["line"].astype(float))
+        if observed_lines != expected_lines or len(group) != len(SOG_LINES):
+            raise RuntimeError("SOG_UNSCORED_LINE_POPULATION_MISMATCH")
+        if group["reason"].isna().any() or group["reason"].astype(str).str.strip().eq("").any():
+            raise RuntimeError("SOG_UNSCORED_REASON_MISSING")
+        if group["reason"].nunique(dropna=False) != 1:
+            raise RuntimeError("SOG_UNSCORED_REASON_CONFLICT")
+    scored_keys = set(map(tuple, scored[scored_identity].drop_duplicates().to_numpy()))
+    unscored_keys = set(map(tuple, unscored[scored_identity].drop_duplicates().to_numpy()))
+    if scored_keys & unscored_keys:
+        raise RuntimeError("SOG_SCORED_UNSCORED_IDENTITY_OVERLAP")
+    unscored_metadata = {
+        "unscored_identity_count": len(unscored_keys),
+        "unscored_row_count": int(len(unscored)),
+        # Counts are line-grain rows, matching the unscored artifact's grain.
+        "unscored_reason_counts": {
+            str(reason): int(count)
+            for reason, count in unscored["reason"].value_counts(dropna=False).items()
+        },
+    }
+    return scored_metadata, unscored_metadata
