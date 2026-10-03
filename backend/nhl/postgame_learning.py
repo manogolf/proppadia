@@ -14,6 +14,7 @@ import pandas as pd
 
 from backend.nhl.cross_market_shadow.core import grade_capture, verify_manifest
 from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluation_eligible
+from backend.nhl.performance_summary import generate_from_artifacts
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -285,6 +286,25 @@ def ensure_prior_learning(
         else:
             counts = {}
         prop_counts[lane] = {str(key): int(value) for key, value in counts.items()}
+    challengers: dict[str, pd.DataFrame] = {}
+    challenger_sources: dict[str, Path] = {}
+    if grade_path:
+        grade_package = Path(grade_path)
+        verify_manifest(grade_package)
+        for lane, name in (
+            ("moneyline", "graded_moneyline_shot_finishing_challenger_v3_results.csv"),
+            ("puck_line", "graded_puck_line_v2_shot_prior_model_results.csv"),
+        ):
+            candidate = grade_package / name
+            if candidate.is_file():
+                challengers[lane] = pd.read_csv(candidate)
+                challenger_sources[lane] = candidate
+    performance_json, performance_md, performance = generate_from_artifacts(
+        package=package, restatement=restatement,
+        reconciliation_status="CREATED" if created else "REUSED_VALID_PACKAGE",
+        challengers=challengers or None,
+        challenger_source_artifacts=challenger_sources or None,
+    )
     return {
         "prior_slate_date": slate_date, "canonical_phase": (
             "REGULAR_SEASON" if games.game_type_code.astype(int).eq(2).all() else "MIXED_OR_NON_REGULAR"),
@@ -292,6 +312,9 @@ def ensure_prior_learning(
         "reconciliation_status": "CREATED" if created else "REUSED_VALID_PACKAGE",
         "reconciliation_package": str(package),
         "phase_restatement": str(restatement),
+        "performance_summary_json": str(performance_json),
+        "performance_summary_md": str(performance_md),
+        "performance_summary_identity": performance.get("summary_identity"),
         "moneyline_grade_status": ("NOT_AVAILABLE" if ml.empty else "COMPLETE"
                                     if ml.grading_status.eq("REGULAR_SEASON_GRADED").all()
                                     else "NON_EVALUATION_OR_INCOMPLETE"),
