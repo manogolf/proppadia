@@ -11,9 +11,10 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from backend.nhl.sog_attachment_integrity import verify_sog_integrity_package
 
 
-SCHEMA_VERSION = "NHL_DAILY_PERFORMANCE_SUMMARY_V5"
+SCHEMA_VERSION = "NHL_DAILY_PERFORMANCE_SUMMARY_V6"
 _WIN = "WIN"
 _LOSS = "LOSS"
 _PUSH = "PUSH"
@@ -413,6 +414,82 @@ def discover_daily_market_coverage(
             except (OSError, ValueError, KeyError, TypeError, pd.errors.ParserError,
                     json.JSONDecodeError):
                 continue
+    sog_report_path: Path | None = None
+    sog_receipt_manifest_sha: str | None = None
+    for _, receipt_path, receipt, receipt_manifest_sha in candidates:
+        lane = (receipt.get("lanes") or {}).get("sog_attachment") or {}
+        if lane.get("status") != "COMPLETE":
+            continue
+        identity = next((item for item in lane.get("outputs", [])
+                         if str(item.get("path", "")).endswith(
+                             "sog_attachment_integrity.json")), None)
+        if identity is None:
+            continue
+        candidate = Path(identity["path"])
+        try:
+            if _sha(candidate) != identity.get("sha256"):
+                continue
+            report, package_sha = verify_sog_integrity_package(candidate, slate_date)
+            if report.get("parent_daily_run_id") != receipt.get("parent_daily_run_id"):
+                continue
+            sog_report_path = candidate
+            sog_receipt_manifest_sha = receipt_manifest_sha
+            break
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+    if sog_report_path is None:
+        reconstruction_root = (Path(daily_run_root).parent
+                               / "sog_market_coverage_reconstructions"
+                               / "season=2026" / f"slate_date={slate_date}")
+        reconstruction_reports = sorted(
+            reconstruction_root.glob("reconstruction=*/sog_attachment_integrity.json"),
+            reverse=True,
+        ) if reconstruction_root.exists() else []
+        for candidate in reconstruction_reports:
+            try:
+                report, _ = verify_sog_integrity_package(candidate, slate_date)
+                if not report.get("reconstructed_from_retained_evidence"):
+                    continue
+                source_receipt_path = Path(report["source_daily_receipt_path"])
+                _, receipt_manifest_sha = _verify_daily_receipt(source_receipt_path, slate_date)
+                if receipt_manifest_sha != report.get("source_daily_receipt_manifest_sha256"):
+                    continue
+                sog_report_path = candidate
+                sog_receipt_manifest_sha = receipt_manifest_sha
+                break
+            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+                continue
+    if sog_report_path is not None:
+        try:
+            report, _ = verify_sog_integrity_package(sog_report_path, slate_date)
+            counts = report["counts"]
+            rows = int(counts["prediction_row_count"])
+            matched = int(counts["matched_count"])
+            unmatched = int(counts["unmatched_count"])
+            ambiguous = int(counts["ambiguous_count"])
+            if matched + unmatched + ambiguous != rows:
+                raise ValueError("SOG_MARKET_COVERAGE_COUNT_MISMATCH")
+            result["sog"] = {
+                "status": "AVAILABLE", "prediction_rows": rows,
+                "matched": matched, "unmatched": unmatched,
+                "ambiguous": ambiguous,
+                "match_rate": matched / rows if rows else None,
+                "source_artifact": str(sog_report_path.resolve()),
+                "source_artifact_sha256": _sha(sog_report_path),
+                "integrity_package_manifest_sha256": verify_sog_integrity_package(
+                    sog_report_path, slate_date)[1],
+                "daily_run_id": report.get("parent_daily_run_id"),
+                "daily_receipt_manifest_sha256": sog_receipt_manifest_sha,
+                "prediction_artifact_sha256": report["prediction_artifact_sha256"],
+                "odds_observation_manifest_sha256": report[
+                    "odds_observation_manifest_sha256"],
+                "population_binding": "EXACT_GAME_PLAYER_PROP_LINE_KEYS",
+                "reconstructed_from_retained_evidence": bool(
+                    report.get("reconstructed_from_retained_evidence")),
+                "affects_grading_denominator": False,
+            }
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            pass
     return result
 
 
@@ -640,6 +717,9 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
                 coverage["prediction_artifact_sha256"])
             source_hashes[f"{lane}_odds_observation_manifest_sha256"] = str(
                 coverage["odds_observation_manifest_sha256"])
+            if coverage.get("integrity_package_manifest_sha256"):
+                source_hashes[f"{lane}_integrity_package_manifest_sha256"] = str(
+                    coverage["integrity_package_manifest_sha256"])
     for name in ("graded_sog_source_exclusions.csv", "graded_sog_missing_predictions.csv"):
         path = package / name
         if path.is_file():

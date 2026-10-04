@@ -73,6 +73,10 @@ from backend.nhl.attachment_integrity import (
     audit_attachment_files,
     validate_odds_observation,
 )
+from backend.nhl.sog_attachment_integrity import (
+    audit_sog_attachment,
+    retain_sog_attachment_package,
+)
 from backend.nhl.postgame_learning import (
     current_et_slate, ensure_prior_learning, prior_et_slate,
 )
@@ -125,6 +129,7 @@ SOG_RECONCILE_ROWS_CSV = TMP_DIR / "nhl_sog_base_vs_betonline_rows.csv"
 SOG_RESIDUAL_DATASET_DEFAULT_CSV = ROOT / "backend" / "nhl" / "data" / "analysis" / "sog_poisson_residual_dataset_season_2025.csv"
 SOG_RECONCILE_DATASET_PATH = ROOT / "backend" / "nhl" / "data" / "analysis" / "sog_poisson_residual_dataset_reconcile.csv"
 ODDS_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "odds_observations"
+SOG_ATTACHMENT_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "sog_market_attachments"
 ROSTER_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "roster_observations"
 DAILY_RUN_RECEIPT_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "daily_runs"
 
@@ -173,6 +178,7 @@ def archive_site_artifacts(
         artifacts.extend([
             SITE_DIR / "sog_with_market.csv",
             SITE_DIR / "unmatched_sog.csv",
+            SITE_DIR / "sog_attachment_integrity.json",
             SOG_RECONCILE_MONTHLY_CSV,
             SOG_RECONCILE_MONTHLY_JSON,
             SOG_RECONCILE_MONTHLY_PUBLISHABLE_CSV,
@@ -1173,7 +1179,12 @@ def _write_attachment_integrity_report(path: Path, payload: dict[str, Any]) -> d
 
 def build_sog(slate: str, *, odds_json: Path | None = None,
               events_json: Path | None = None, pred_path: Path | None = None,
-              expected_pred_sha256: str | None = None):
+              expected_pred_sha256: str | None = None,
+              parent_daily_run_id: str | None = None,
+              odds_observation_dir: Path | None = None,
+              expected_odds_manifest_sha256: str | None = None,
+              odds_phase: str | None = None,
+              odds_replayed: bool = False):
     # Always regenerate (or overwrite) names for this slate and use the returned path
     names_csv = export_names_csv(slate)
 
@@ -1208,6 +1219,53 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
     unmatched_csv = SITE_DIR / "unmatched_sog.csv"
     if not unmatched_csv.exists() or unmatched_csv.stat().st_size == 0:
         raise AssertionError(f"[build-sog] expected artifact missing/empty: {unmatched_csv}")
+
+    if parent_daily_run_id is not None:
+        odds_lineage = None
+        if odds_json is not None and odds_observation_dir is not None and expected_odds_manifest_sha256:
+            predictions = pd.read_csv(pred_path)
+            odds_lineage = validate_odds_observation(
+                observation_dir=Path(odds_observation_dir), odds_json=Path(odds_json),
+                expected_manifest_sha256=expected_odds_manifest_sha256,
+                expected_parent_daily_run_id=parent_daily_run_id,
+                expected_slate_date=slate,
+                expected_season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+                expected_phase=odds_phase,
+                expected_game_set_hash=canonical_game_set_hash(
+                    pd.to_numeric(predictions["game_id"], errors="raise").astype(int)),
+                replayed=odds_replayed,
+            )
+        integrity = audit_sog_attachment(
+            prediction_path=pred_path, attachment_path=out_csv,
+            unmatched_path=unmatched_csv, slate_date=slate,
+            parent_daily_run_id=parent_daily_run_id,
+            odds_observation_path=odds_observation_dir,
+            odds_observation_manifest_sha256=(
+                odds_lineage["odds_observation_manifest_sha256"] if odds_lineage else None),
+            names_path=names_csv,
+        )
+        if odds_lineage:
+            integrity.update(odds_lineage)
+            integrity["odds_observation_phase"] = odds_phase
+            integrity["odds_observation_season"] = infer_nhl_season_from_date_yyyy_mm_dd(slate)
+        else:
+            integrity["status"] = "UNAVAILABLE_NO_GOVERNED_ODDS_OBSERVATION"
+            integrity["integrity_status"] = "UNAVAILABLE"
+            integrity["checks"]["odds_manifest_bound"] = False
+        report_path = SITE_DIR / "sog_attachment_integrity.json"
+        report_path.write_text(json.dumps(integrity, indent=2, sort_keys=True) + "\n")
+        package_path = (
+            SOG_ATTACHMENT_ROOT / f"season={infer_nhl_season_from_date_yyyy_mm_dd(slate)}"
+            / f"slate_date={slate}" / f"run_id={parent_daily_run_id}"
+        )
+        package_report, _ = retain_sog_attachment_package(
+            package_path=package_path, integrity=integrity,
+            attachment_path=out_csv, unmatched_path=unmatched_csv,
+            names_path=names_csv,
+        )
+        # Keep a compatibility copy in the site directory while the receipt binds
+        # the retained, create-only report package as the evidence authority.
+        shutil.copy2(package_report, report_path)
 
 
 def build_saves(slate: str, *, odds_json: Path | None = None,
@@ -1534,6 +1592,16 @@ def _run_independent_daily_lanes(
                 "expected_pred_sha256": identity["sha256"],
             }
             kwargs.update(_attachment_market_inputs(attachment_lane, odds_result))
+            if attachment_lane == "sog_attachment":
+                kwargs.update({
+                    "parent_daily_run_id": daily_run_id,
+                    "odds_observation_dir": (
+                        odds_result.observation_dir if captured and odds_result else None),
+                    "expected_odds_manifest_sha256": (
+                        odds_result.manifest_sha256 if captured and odds_result else None),
+                    "odds_phase": odds_phase,
+                    "odds_replayed": bool(odds_result and odds_result.replayed),
+                })
             if attachment_lane == "saves_attachment":
                 kwargs.update({
                     "parent_daily_run_id": daily_run_id,
@@ -1561,6 +1629,16 @@ def _run_independent_daily_lanes(
                 artifact_identity(attachment_path),
                 artifact_identity(SITE_DIR / f"unmatched_{prefix}.csv"),
             ]
+            if attachment_lane == "sog_attachment":
+                package_dir = (
+                    SOG_ATTACHMENT_ROOT
+                    / f"season={infer_nhl_season_from_date_yyyy_mm_dd(slate)}"
+                    / f"slate_date={slate}" / f"run_id={daily_run_id}"
+                )
+                outputs.extend(artifact_identity(package_dir / name) for name in (
+                    "sog_attachment_integrity.json", "sog_with_market.csv",
+                    "unmatched_sog.csv", "RUN_COMPLETE.json", "SHA256SUMS",
+                ))
             if prediction_lane in {"saves", "points"}:
                 expected_odds_manifest = (
                     odds_result.manifest_sha256 if captured and odds_result else None)
