@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -14,7 +15,10 @@ import pandas as pd
 
 from backend.nhl.cross_market_shadow.core import grade_capture, verify_manifest
 from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluation_eligible
-from backend.nhl.performance_summary import generate_from_artifacts
+from backend.nhl.performance_summary import (
+    discover_daily_market_coverage,
+    generate_from_artifacts,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -202,6 +206,8 @@ def _grade_final_capture(package: Path, slate_date: str, cross_root: Path) -> tu
 def ensure_prior_learning(
     slate_date: str, *, reconciliation_root: Path = DEFAULT_RECONCILIATION_ROOT,
     cross_market_root: Path = DEFAULT_CROSS_MARKET_ROOT,
+    daily_run_root: Path | None = None,
+    market_integrity_archive_root: Path | None = None,
     create_if_missing: bool = True,
 ) -> dict:
     """Reuse a valid package or ask the governed reconciler to create one."""
@@ -299,11 +305,25 @@ def ensure_prior_learning(
             if candidate.is_file():
                 challengers[lane] = pd.read_csv(candidate)
                 challenger_sources[lane] = candidate
+    coverage = discover_daily_market_coverage(
+        slate_date=slate_date,
+        grades={"points": pd.read_csv(restatement / "graded_points.csv")
+                if (restatement / "graded_points.csv").is_file() else pd.DataFrame(),
+                "saves": pd.read_csv(restatement / "graded_saves.csv")
+                if (restatement / "graded_saves.csv").is_file() else pd.DataFrame(),
+                "sog": pd.read_csv(package / "graded_sog.csv")
+                if (package / "graded_sog.csv").is_file() else pd.DataFrame()},
+        daily_run_root=Path(daily_run_root or os.environ.get(
+            "NHL_DAILY_RECEIPT_ROOT", ROOT / "artifacts/operational/nhl/daily_runs")),
+        integrity_archive_root=Path(market_integrity_archive_root or
+            ROOT / "backend/nhl/exports/odds_history"),
+    )
     performance_json, performance_md, performance = generate_from_artifacts(
         package=package, restatement=restatement,
         reconciliation_status="CREATED" if created else "REUSED_VALID_PACKAGE",
         challengers=challengers or None,
         challenger_source_artifacts=challenger_sources or None,
+        market_coverage=coverage,
     )
     return {
         "prior_slate_date": slate_date, "canonical_phase": (

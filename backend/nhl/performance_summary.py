@@ -5,6 +5,7 @@ import hashlib
 import json
 import math
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -12,7 +13,7 @@ from typing import Any
 import pandas as pd
 
 
-SCHEMA_VERSION = "NHL_DAILY_PERFORMANCE_SUMMARY_V4"
+SCHEMA_VERSION = "NHL_DAILY_PERFORMANCE_SUMMARY_V5"
 _WIN = "WIN"
 _LOSS = "LOSS"
 _PUSH = "PUSH"
@@ -254,17 +255,165 @@ def _unscored_sog(package: Path) -> dict[str, Any]:
     }
 
 
-def _coverage(frame: pd.DataFrame) -> dict[str, int] | None:
-    if "market_qualified" in frame:
-        qualified = frame.market_qualified.astype("string").str.lower().eq("true")
-        return {"predictions_with_matched_quotes": int(qualified.sum()),
-                "predictions_without_matched_quotes": int((~qualified).sum())}
-    if "market_attachment_status" in frame:
-        matched = frame.market_attachment_status.astype("string").str.upper().isin(
-            {"MATCHED", "ATTACHED", "MARKET_MATCHED", "QUALIFIED"})
-        return {"predictions_with_matched_quotes": int(matched.sum()),
-                "predictions_without_matched_quotes": int((~matched).sum())}
-    return None
+def _record_keys(frame: pd.DataFrame, columns: tuple[str, ...]) -> set[tuple[Any, ...]]:
+    if not set(columns).issubset(frame.columns) or frame.duplicated(list(columns)).any():
+        raise ValueError("PREDICTION_KEYS_MISSING_OR_DUPLICATED")
+    result = set()
+    for row in frame[list(columns)].itertuples(index=False, name=None):
+        result.add(tuple(float(value) if column == "line" else int(value)
+                         for column, value in zip(columns, row)))
+    return result
+
+
+def _verify_daily_receipt(receipt_path: Path, slate_date: str) -> tuple[dict[str, Any], str]:
+    run_dir = receipt_path.parent
+    receipt = json.loads(receipt_path.read_text())
+    marker = json.loads((run_dir / "RUN_COMPLETE.json").read_text())
+    if receipt.get("slate_date") != slate_date or marker.get("parent_daily_run_id") != receipt.get("parent_daily_run_id"):
+        raise ValueError("DAILY_RECEIPT_SLATE_OR_RUN_MISMATCH")
+    entries: dict[str, str] = {}
+    for line in (run_dir / "SHA256SUMS").read_text().splitlines():
+        digest, name = line.split("  ", 1)
+        candidate = run_dir / name
+        if Path(name).name != name or not candidate.is_file() or _sha(candidate) != digest:
+            raise ValueError("DAILY_RECEIPT_PACKAGE_HASH_MISMATCH")
+        entries[name] = digest
+    if entries.get("parent_receipt.json") != _sha(receipt_path) or entries.get("RUN_COMPLETE.json") != _sha(run_dir / "RUN_COMPLETE.json"):
+        raise ValueError("DAILY_RECEIPT_PACKAGE_INCOMPLETE")
+    if marker.get("final_classification") not in {"READY", "READY_WITH_BOUNDED_LANE_WARNING"}:
+        raise ValueError("DAILY_RECEIPT_NOT_READY")
+    return receipt, _sha(run_dir / "SHA256SUMS")
+
+
+def discover_daily_market_coverage(
+    *, slate_date: str, grades: dict[str, pd.DataFrame],
+    daily_run_root: Path, integrity_archive_root: Path,
+) -> dict[str, dict[str, Any]]:
+    """Bind retained attachment integrity counts to the exact graded key population."""
+    result: dict[str, dict[str, Any]] = {}
+    for lane in ("points", "saves", "sog"):
+        grade = grades.get(lane, pd.DataFrame())
+        result[lane] = {
+            "status": "UNAVAILABLE_FROM_RETAINED_BOUND_EVIDENCE",
+            "prediction_rows": int(len(grade)),
+            "matched": None, "unmatched": None, "ambiguous": None,
+        }
+    receipt_paths = sorted(Path(daily_run_root).glob("run_id=*/parent_receipt.json"))
+    candidates = []
+    for path in receipt_paths:
+        try:
+            receipt, manifest_sha = _verify_daily_receipt(path, slate_date)
+            candidates.append((str(receipt.get("ended_at_utc") or ""), path, receipt, manifest_sha))
+        except (OSError, ValueError, KeyError, json.JSONDecodeError):
+            continue
+    candidates.sort(key=lambda item: item[0], reverse=True)
+
+    for lane in ("points", "saves"):
+        grade = grades.get(lane, pd.DataFrame())
+        for _, receipt_path, receipt, receipt_manifest_sha in candidates:
+            run_id = str(receipt.get("parent_daily_run_id") or "")
+            attach_lane = receipt.get("lanes", {}).get(f"{lane}_attachment", {})
+            prediction_lane = receipt.get("lanes", {}).get(lane, {})
+            if attach_lane.get("status") != "COMPLETE" or prediction_lane.get("status") != "COMPLETE":
+                continue
+            integrity_identity = next((item for item in attach_lane.get("outputs", [])
+                                       if str(item.get("path", "")).endswith(
+                                           f"{lane}_attachment_integrity.json")), None)
+            prediction_identity = next((item for item in prediction_lane.get("outputs", [])
+                                        if str(item.get("path", "")).endswith("_predictions.csv")), None)
+            if not integrity_identity or not prediction_identity:
+                continue
+            archive_path = Path(integrity_archive_root) / slate_date / Path(integrity_identity["path"]).name
+            prediction_path = Path(prediction_identity.get("path", ""))
+            try:
+                if (_sha(archive_path) != integrity_identity.get("sha256")
+                        or _sha(prediction_path) != prediction_identity.get("sha256")):
+                    continue
+                report = json.loads(archive_path.read_text())
+                if report.get("status") != "PASS" or report.get("lane") != lane:
+                    continue
+                if report.get("parent_daily_run_id") != run_id:
+                    continue
+                if report.get("prediction_artifact_sha256") != prediction_identity.get("sha256"):
+                    continue
+                if str(Path(report.get("prediction_artifact_path", "")).resolve()) != str(prediction_path.resolve()):
+                    continue
+                odds_inputs = [item for item in attach_lane.get("inputs", [])
+                               if item.get("manifest_sha256")]
+                matching_odds = [item for item in odds_inputs
+                                 if item.get("manifest_sha256") == report.get(
+                                     "odds_observation_manifest_sha256")]
+                if not matching_odds or not report.get("odds_observation_manifest_sha256"):
+                    continue
+                counts = report.get("counts", {})
+                source_rows = int(prediction_identity.get("conditional_prediction_count")
+                                  or prediction_identity.get("row_count") or -1)
+                report_rows = int(counts.get("prediction_row_count", -1))
+                if (report_rows != source_rows or int(counts.get("attachment_row_count", -1)) != source_rows
+                        or counts.get("missing_prediction_key_count") != 0
+                        or counts.get("extra_attachment_key_count") != 0
+                        or counts.get("duplicate_prediction_key_count") != 0
+                        or counts.get("duplicate_attachment_key_count") != 0
+                        or counts.get("unique_prediction_key_count") != source_rows
+                        or counts.get("unique_attachment_key_count") != source_rows):
+                    continue
+                if any(report.get("checks", {}).get(key) is not True for key in (
+                    "prediction_keys_unique", "attachment_keys_unique",
+                    "prediction_attachment_key_set_equal", "lineage_matches",
+                    "output_count_equals_prediction_count", "statuses_exhaustive",
+                )):
+                    continue
+
+                predictions = pd.read_csv(prediction_path)
+                if ("game_date" in grade
+                        and grade["game_date"].astype(str).ne(slate_date).any()):
+                    continue
+                if lane == "points":
+                    if predictions.get("game_date", pd.Series(dtype=str)).astype(str).ne(slate_date).any():
+                        continue
+                    prediction_keys = _record_keys(predictions, ("player_id", "game_id", "line"))
+                    grade_keys = _record_keys(grade, ("player_id", "game_id", "line"))
+                else:
+                    if predictions.get("game_date", pd.Series(dtype=str)).astype(str).ne(slate_date).any():
+                        continue
+                    columns = [column for column in predictions if re.fullmatch(r"p_over_\d+_\d+", column)]
+                    if not columns:
+                        continue
+                    expanded_rows = []
+                    for row in predictions.itertuples(index=False):
+                        for column in columns:
+                            if pd.notna(getattr(row, column)):
+                                line = float(column.removeprefix("p_over_").replace("_", "."))
+                                expanded_rows.append((int(row.player_id), int(row.game_id), line))
+                    expanded = pd.DataFrame(expanded_rows, columns=["goalie_id", "game_id", "line"])
+                    prediction_keys = _record_keys(expanded, ("goalie_id", "game_id", "line"))
+                    grade_keys = _record_keys(grade, ("goalie_id", "game_id", "line"))
+                if prediction_keys != grade_keys or len(prediction_keys) != report_rows:
+                    continue
+                matched = int(counts["matched_count"])
+                unmatched = int(counts["unmatched_count"])
+                ambiguous = int(counts["ambiguous_count"])
+                if matched + unmatched + ambiguous != report_rows:
+                    continue
+                result[lane] = {
+                    "status": "AVAILABLE", "prediction_rows": report_rows,
+                    "matched": matched, "unmatched": unmatched,
+                    "ambiguous": ambiguous,
+                    "match_rate": matched / report_rows if report_rows else None,
+                    "source_artifact": str(archive_path.resolve()),
+                    "source_artifact_sha256": integrity_identity["sha256"],
+                    "daily_run_id": run_id,
+                    "daily_receipt_manifest_sha256": receipt_manifest_sha,
+                    "prediction_artifact_sha256": prediction_identity["sha256"],
+                    "odds_observation_manifest_sha256": report[
+                        "odds_observation_manifest_sha256"],
+                    "population_binding": "EXACT_GAME_PLAYER_LINE_KEYS",
+                }
+                break
+            except (OSError, ValueError, KeyError, TypeError, pd.errors.ParserError,
+                    json.JSONDecodeError):
+                continue
+    return result
 
 
 def summarize_frames(*, slate_date: str, games: int, phase: str,
@@ -272,6 +421,7 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
                      grades: dict[str, pd.DataFrame], source_artifacts: dict[str, str],
                      generated_at_utc: str | None = None,
                      challengers: dict[str, pd.DataFrame] | None = None,
+                     market_coverage: dict[str, dict[str, Any]] | None = None,
                      package: Path | None = None) -> dict[str, Any]:
     challengers = challengers or {}
     moneyline = grades.get("moneyline", pd.DataFrame())
@@ -298,13 +448,14 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
             model_name="puck_line_v2_shot_prior_challenger", challenger=True)
     if package is not None:
         models["sog"]["unscored"] = _unscored_sog(package)
-    for lane, frame in (("points", points), ("saves", saves)):
-        counts = _coverage(frame)
-        if counts is not None:
-            models[lane]["market_coverage_context"] = {
-                **counts,
-                "affects_grading_denominator": False,
-            }
+    market_coverage = market_coverage or {}
+    for lane, frame in (("points", points), ("saves", saves), ("sog", sog)):
+        models[lane]["market_coverage"] = dict(market_coverage.get(lane) or {
+            "status": "UNAVAILABLE_FROM_RETAINED_BOUND_EVIDENCE",
+            "prediction_rows": int(len(frame)),
+            "matched": None, "unmatched": None, "ambiguous": None,
+        })
+        models[lane]["market_coverage"]["affects_grading_denominator"] = False
     models["points"]["realized_points_definition"] = "official_goals + official_assists"
     unresolved = {
         "moneyline": models["moneyline"]["reference"].get("unresolved", 0),
@@ -400,16 +551,18 @@ def render_markdown(summary: dict[str, Any]) -> str:
               "- Market match status does not determine whether a prediction is graded.",
               "- No selection policy or promotion rule was applied."]
     coverage_rows = []
-    for lane in ("points", "saves"):
-        context = models.get(lane, {}).get("market_coverage_context")
-        if context is not None:
+    for lane in ("points", "saves", "sog"):
+        context = models.get(lane, {}).get("market_coverage", {})
+        if context.get("status") == "AVAILABLE":
             coverage_rows.append(
-                f"{lane.title()}: {context['predictions_with_matched_quotes']} matched; "
-                f"{context['predictions_without_matched_quotes']} unmatched"
+                f"{lane.upper() if lane == 'sog' else lane.title()}: {context['matched']} matched; "
+                f"{context['unmatched']} unmatched; {context['prediction_rows']} total"
             )
-    if coverage_rows:
-        lines[-4:-4] = ["", "## Market Coverage Context", *coverage_rows,
-                        "Quote matching is descriptive and does not affect grading."]
+        else:
+            coverage_rows.append(f"{lane.upper() if lane == 'sog' else lane.title()}: "
+                                 "retained bound coverage evidence unavailable")
+    lines[-4:-4] = ["", "## Market Coverage Context", *coverage_rows,
+                    "Quote matching is descriptive and does not affect grading."]
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -455,6 +608,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
                             reconciliation_status: str,
                             challengers: dict[str, pd.DataFrame] | None = None,
                             challenger_source_artifacts: dict[str, Path] | None = None,
+                            market_coverage: dict[str, dict[str, Any]] | None = None,
                             output_root: Path | None = None) -> tuple[Path, Path, dict[str, Any]]:
     """Build/reuse a summary package from retained reconciliation grade rows."""
     package = Path(package).resolve()
@@ -476,6 +630,16 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         "phase_restatement_lineage_sha256": _sha(restatement / "lineage.json"),
         **{f"{key}_grade_sha256": _sha(path) for key, path in grade_paths.items() if path.is_file()},
     }
+    for lane, coverage in (market_coverage or {}).items():
+        if coverage.get("status") == "AVAILABLE":
+            source_hashes[f"{lane}_attachment_integrity_sha256"] = str(
+                coverage["source_artifact_sha256"])
+            source_hashes[f"{lane}_daily_receipt_manifest_sha256"] = str(
+                coverage["daily_receipt_manifest_sha256"])
+            source_hashes[f"{lane}_attached_prediction_artifact_sha256"] = str(
+                coverage["prediction_artifact_sha256"])
+            source_hashes[f"{lane}_odds_observation_manifest_sha256"] = str(
+                coverage["odds_observation_manifest_sha256"])
     for name in ("graded_sog_source_exclusions.csv", "graded_sog_missing_predictions.csv"):
         path = package / name
         if path.is_file():
@@ -512,7 +676,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         package_identity=str(source_summary.get("substantive_identity") or package.name),
         grades=grades, source_artifacts=source_hashes,
         generated_at_utc=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        challengers=challengers, package=package,
+        challengers=challengers, market_coverage=market_coverage, package=package,
     )
     summary["official_outcomes_status"] = (
         "FINAL" if source_summary.get("status") == "COMPLETE"
