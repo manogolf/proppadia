@@ -53,6 +53,8 @@ class MoneylinePhaseDecision:
     decision_code: str
     authority_proposal_sha256: str
     authority_records_sha256: str
+    schedule_source_path: str | None = None
+    schedule_source_sha256: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -145,18 +147,6 @@ def classify_moneyline_row(
     authority = authority or verified_moneyline_phase_authority()
     _assert_authority_health(authority)
     game_pk = _game_pk(row)
-    game_date = row.get("game_date")
-    if require_freshness:
-        if game_date in (None, ""):
-            raise MoneylinePhaseGateError(
-                "MONEYLINE_AUTHORITY_FRESHNESS_UNPROVABLE", game_pk=game_pk
-            )
-        try:
-            authority.require_supported_window(game_date, game_date)
-        except GamePhaseAuthorityError as exc:
-            raise MoneylinePhaseGateError(
-                "MONEYLINE_PHASE_AUTHORITY_STALE", game_pk=game_pk, detail=exc.code
-            ) from exc
     try:
         record = authority.lookup_exact(game_pk)
     except GamePhaseAuthorityError as exc:
@@ -171,10 +161,29 @@ def classify_moneyline_row(
                 decision_code="EXCLUDED_SPECIAL_AUTHORITATIVE_TYPE",
                 authority_proposal_sha256=metadata.proposal_sha256,
                 authority_records_sha256=metadata.authority_records_sha256,
+                schedule_source_path=None,
+                schedule_source_sha256=None,
             )
         raise MoneylinePhaseGateError(
             "MONEYLINE_PHASE_AUTHORITY_INVALID", game_pk=game_pk, detail=exc.code
         ) from exc
+    if require_freshness:
+        game_date = row.get("game_date")
+        if game_date in (None, ""):
+            raise MoneylinePhaseGateError(
+                "MONEYLINE_AUTHORITY_FRESHNESS_UNPROVABLE", game_pk=game_pk
+            )
+        # The exact gamePk lookup is mandatory. Snapshot records also retain
+        # their bounded date horizon; novel run-local identities are fresh by
+        # their verified schedule-source hash, not by date coverage alone.
+        runtime_exact = bool(getattr(authority, "is_runtime_exact", lambda _pk: False)(game_pk))
+        if not runtime_exact:
+            try:
+                authority.require_supported_window(game_date, game_date)
+            except GamePhaseAuthorityError as exc:
+                raise MoneylinePhaseGateError(
+                    "MONEYLINE_PHASE_AUTHORITY_STALE", game_pk=game_pk, detail=exc.code
+                ) from exc
     return _decision_from_record(row, record, authority)
 
 
@@ -214,6 +223,8 @@ def _decision_from_record(
         decision_code=code,
         authority_proposal_sha256=metadata.proposal_sha256,
         authority_records_sha256=metadata.authority_records_sha256,
+        schedule_source_path=getattr(authority, "source_path", record.primary_source_path),
+        schedule_source_sha256=getattr(authority, "source_sha256", record.primary_source_sha256),
     )
 
 

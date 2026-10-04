@@ -1,0 +1,11 @@
+{
+  "contract_name": "MLB_2026_PHASE_AUTHORITY_EXPLICIT_SOURCE_SET_V1",
+  "parent_descriptor_path": "backend/mlb/season_transition/authority_snapshots/v3/descriptor.json",
+  "parent_descriptor_sha256": "1ddcb28828215704f4e75ad810e744853443c9b7ed7c8c42fb67a587a99fcb1e",
+  "schema_version": 1,
+  "source_set_id": "MLB_2026_POSTSEASON_AUTHORITY_V4_RETAINED_OCT03_OCT04",
+  "sources": [
+    {"source_path":"artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-03/20261003T233007383066Z_2026-08-05_2026-10-03_3ca020413ca5f0b94be053d91922ad8d7534713406758c80de9fe6ee411a7448.json","source_sha256":"3ca020413ca5f0b94be053d91922ad8d7534713406758c80de9fe6ee411a7448","source_bytes":4445413,"selected_game_pks":[849828,849829,849830,849835]},
+    {"source_path":"artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-04/20261004T153006154701Z_2026-08-05_2026-10-04_64a8ec297e9522f418e4405c2691007422d425ff5a00412cbb9c3a96a47c94e9.json","source_sha256":"64a8ec297e9522f418e4405c2691007422d425ff5a00412cbb9c3a96a47c94e9","source_bytes":4454018,"selected_game_pks":[849823,849825,849828,849829,849830,849835]}
+  ]
+}

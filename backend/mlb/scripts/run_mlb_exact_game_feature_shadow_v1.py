@@ -20,6 +20,10 @@ from backend.mlb.prospective_exact_game_feature_shadow_writer_v1 import (
     verify_package,
 )
 from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import (
+    RuntimeScheduleAuthority,
+    phase_authority_binding,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -131,6 +135,16 @@ def main() -> int:
             print(f"{existing} slate_date={args.slate_date} run_identity={args.run_identity} output={output}")
             return 0
         schedule_path, source = _schedule_source(args.slate_date, args.wrapper_started_at_utc)
+        phase_authority = RuntimeScheduleAuthority(
+            source_path=schedule_path,
+            expected_source_sha256=str(source["source_sha256"]),
+            base=HashedProposalAuthority(),
+        )
+        selection_path = _repo_path(
+            source.get("selection_receipt_path"), "IMMUTABLE_SELECTION_RECEIPT_MISSING")
+        selection_receipt = json.loads(selection_path.read_text())
+        if selection_receipt.get("phase_authority_binding") != phase_authority_binding(phase_authority):
+            raise ShadowWriterError("SHARED_PHASE_AUTHORITY_BINDING_MISMATCH")
         snapshot = load_read_only_snapshot(dsn)
         result = build_shadow(
             slate_date=args.slate_date,
@@ -139,7 +153,7 @@ def main() -> int:
             snapshot=snapshot,
             schedule_payload=json.loads(schedule_path.read_text()),
             schedule_source=source,
-            phase_authority=HashedProposalAuthority(),
+            phase_authority=phase_authority,
             code_commit=code_commit,
             contract_sha256=contract_sha256,
             interpreter=str(Path(sys.executable).resolve()),

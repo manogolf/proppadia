@@ -6,6 +6,9 @@ import argparse
 import hashlib
 import json
 import os
+import re
+import sys
+import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -31,11 +34,21 @@ from backend.mlb.public_game_predictions.finality_v1 import (
     reconcile_schedule_by_game_pk,
 )
 from backend.mlb.public_game_predictions.state_v1 import OfficialFinalGame, reconstruct_state
+from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
+from backend.mlb.season_transition.phase_authority_snapshot_v1 import (
+    ACTIVE_SELECTION_PATH,
+)
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import (
+    RuntimeScheduleAuthority,
+    phase_authority_binding,
+)
 
 STATSAPI = "https://statsapi.mlb.com/api/v1/schedule"
 GAME_FEED = "https://statsapi.mlb.com/api/v1.1/game/{game_pk}/feed/live"
 DEFAULT_RETAINED_SOURCE_DIR = Path("artifacts/ops/mlb_public_game_moneyline_sources")
 DEFAULT_RETAINED_HISTORY_DIR = Path("artifacts/ops/mlb_public_game_moneyline_history_schedules")
+DEFAULT_ATTEMPT_RECEIPT_DIR = Path("artifacts/ops/mlb_public_game_moneyline_attempts")
+_ATTEMPT_CONTEXT: dict[str, Any] = {}
 
 
 def _schedule_query(start_date: str, end_date: str) -> dict[str, Any]:
@@ -95,6 +108,36 @@ def _atomic_write(path: Path, raw: bytes) -> None:
     tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
     tmp.write_bytes(raw)
     os.replace(tmp, path)
+
+
+def _write_attempt_receipt(*, classification: str, error: BaseException | None = None) -> dict[str, str]:
+    """Publish one immutable run-specific attempt receipt; never replace an existing run."""
+    context = dict(_ATTEMPT_CONTEXT)
+    if not context:
+        return {}
+    identity = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(context["run_identity"])).strip("_.-")
+    if not identity:
+        identity = f"moneyline_{uuid.uuid4().hex}"
+    payload = {
+        "schema_version": "MLB_MONEYLINE_ATTEMPT_RECEIPT_V1",
+        **context,
+        "classification": classification,
+        "failure_type": type(error).__name__ if error is not None else None,
+        "failure": str(error)[:2000] if error is not None else None,
+        "finished_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+    raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() + b"\n"
+    path = DEFAULT_ATTEMPT_RECEIPT_DIR / str(context.get("mlb_date") or "unknown") / f"{identity}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_name(f".{path.name}.{uuid.uuid4().hex}.tmp")
+    try:
+        fd = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(raw); stream.flush(); os.fsync(stream.fileno())
+        os.link(temp, path)
+        return {"path": str(path), "sha256": hashlib.sha256(raw).hexdigest()}
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 def _retain_history_schedule(
@@ -262,6 +305,7 @@ def collect_official_finals(payload: dict, *, retained_source_dir: Path) -> Fina
 
 def _write_selection_receipt(
     history_source: dict[str, Any], collection: FinalCollection, *, root: Path,
+    phase_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     receipt = {
         "schema_version": "MLB_MONEYLINE_HISTORY_SELECTION_RECEIPT_V1",
@@ -270,6 +314,7 @@ def _write_selection_receipt(
         "dependency_isolation_proven": collection.dependency_isolation_proven,
         "dependency_team_ids": list(collection.dependency_team_ids),
         "decisions": list(collection.decisions),
+        "phase_authority_binding": phase_binding,
     }
     digest = receipt_sha256(receipt)
     schedule_path = Path(history_source["source_path"])
@@ -299,7 +344,7 @@ def _apply_dependency_blocks(
     return result
 
 
-def main() -> int:
+def _execute() -> int:
     parser=argparse.ArgumentParser()
     parser.add_argument('--mlb-date',default=date.today().isoformat())
     parser.add_argument('--prediction-cutoff-utc',default='auto')
@@ -310,7 +355,26 @@ def main() -> int:
     parser.add_argument('--retained-source-dir',type=Path,default=DEFAULT_RETAINED_SOURCE_DIR)
     parser.add_argument('--retained-history-dir',type=Path,default=DEFAULT_RETAINED_HISTORY_DIR)
     parser.add_argument('--output-json',type=Path)
+    parser.add_argument('--run-identity', default=os.getenv('MLB_RUN_IDENTITY'))
     args=parser.parse_args()
+    run_identity = args.run_identity or (
+        "moneyline_" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        + f"_{os.getpid()}_{uuid.uuid4().hex[:8]}"
+    )
+    _ATTEMPT_CONTEXT.clear()
+    _ATTEMPT_CONTEXT.update({
+        "run_identity": run_identity,
+        "mlb_date": args.mlb_date,
+        "started_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "daily_schedule_sha256": None,
+        "retained_schedule_source_path": None,
+        "retained_schedule_source_sha256": None,
+        "active_authority_descriptor_path": None,
+        "active_authority_descriptor_sha256": None,
+        "active_authority_selection_sha256": None,
+        "per_game_decisions": [],
+        "stage": "SCHEDULE_ACQUISITION",
+    })
     if args.skip_if_designated_snapshot_exists and not args.write_durable:
         parser.error('--skip-if-designated-snapshot-exists requires --write-durable')
     if args.schedule_json:
@@ -318,8 +382,10 @@ def main() -> int:
     else:
         schedule,schedule_raw=_fetch_schedule(args.mlb_date,args.mlb_date)
     schedule_hash=hashlib.sha256(schedule_raw).hexdigest()
+    _ATTEMPT_CONTEXT["daily_schedule_sha256"] = schedule_hash
     games_discovered=sum(1 for _ in _games(schedule))
     inserted_finals=canonical_duplicates=0
+    append_finals_after_phase_binding = False
     if args.finals_json:
         history_raw=args.finals_json.read_bytes();finals_payload=json.loads(history_raw)
         retrieved=datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
@@ -339,11 +405,57 @@ def main() -> int:
         )
         collection=collect_official_finals(history,retained_source_dir=args.retained_source_dir)
         finals=list(collection.finals)
-        inserted_finals=append_official_finals(finals);canonical_duplicates=len(finals)-inserted_finals
+        append_finals_after_phase_binding = True
     else:
         finals=[];collection=FinalCollection((),(),(),True);history_source=None
+    runtime_authority = None
+    phase_binding = None
+    if history_source is not None:
+        _ATTEMPT_CONTEXT.update({
+            "retained_schedule_source_path": history_source["source_path"],
+            "retained_schedule_source_sha256": history_source["source_sha256"],
+        })
+        selection_raw = ACTIVE_SELECTION_PATH.read_bytes()
+        active_selection = json.loads(selection_raw)
+        selected_descriptor_path = str(active_selection.get("descriptor_path") or "")
+        _ATTEMPT_CONTEXT.update({
+            "active_authority_descriptor_path": selected_descriptor_path,
+            "active_authority_descriptor_sha256": active_selection.get("descriptor_sha256"),
+            "active_authority_selection_sha256": hashlib.sha256(selection_raw).hexdigest(),
+            "stage": "PHASE_AUTHORITY_LOAD",
+        })
+        base_authority = HashedProposalAuthority()
+        base_metadata = base_authority.metadata
+        _ATTEMPT_CONTEXT.update({
+            "retained_schedule_source_path": history_source["source_path"],
+            "retained_schedule_source_sha256": history_source["source_sha256"],
+            "active_authority_descriptor_path": base_metadata.snapshot_descriptor_path,
+            "active_authority_descriptor_sha256": base_metadata.snapshot_descriptor_sha256,
+            "active_authority_selection_sha256": hashlib.sha256(selection_raw).hexdigest(),
+            "stage": "PHASE_AUTHORITY_INGESTION",
+        })
+        runtime_authority = RuntimeScheduleAuthority(
+            source_path=Path(history_source["source_path"]),
+            expected_source_sha256=str(history_source["source_sha256"]),
+            base=base_authority,
+        )
+        phase_binding = phase_authority_binding(runtime_authority)
+        metadata = runtime_authority.metadata
+        _ATTEMPT_CONTEXT.update({
+            "retained_schedule_source_path": history_source["source_path"],
+            "retained_schedule_source_sha256": history_source["source_sha256"],
+            "active_authority_descriptor_path": metadata.snapshot_descriptor_path,
+            "active_authority_descriptor_sha256": metadata.snapshot_descriptor_sha256,
+            "per_game_decisions": phase_binding["decisions"],
+            "stage": "PHASE_AUTHORITY_READY",
+        })
+    if append_finals_after_phase_binding:
+        _ATTEMPT_CONTEXT["stage"] = "OFFICIAL_FINALS_PERSISTENCE"
+        inserted_finals=append_official_finals(finals)
+        canonical_duplicates=len(finals)-inserted_finals
     selection_receipt=(None if history_source is None else _write_selection_receipt(
         history_source,collection,root=args.retained_history_dir,
+        phase_binding=phase_binding,
     ))
     cutoff=(datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
             if str(args.prediction_cutoff_utc).lower()=='auto' else _utc_text(args.prediction_cutoff_utc))
@@ -354,7 +466,8 @@ def main() -> int:
     grading_rows_written=0
     grading_rows_eligible=0
     if args.write_durable:
-        grade_inputs=fetch_ungraded_final_predictions(cutoff)
+        _ATTEMPT_CONTEXT["stage"] = "MONEYLINE_GRADING_READ_AND_GATE"
+        grade_inputs=fetch_ungraded_final_predictions(cutoff, authority=runtime_authority)
         grading_rows_eligible=len(grade_inputs)
         for item in grade_inputs:
             grade=build_official_final_grade(
@@ -364,7 +477,8 @@ def main() -> int:
                 official_source_sha256=item['official_source_sha256'],
                 grading_timestamp_utc=generated,
             )
-            grading_rows_written+=int(append_outcome_grade(grade))
+            _ATTEMPT_CONTEXT["stage"] = "MONEYLINE_GRADING_PERSISTENCE"
+            grading_rows_written+=int(append_outcome_grade(grade, authority=runtime_authority))
     skip_scoring=(args.skip_if_designated_snapshot_exists and
                   designated_snapshot_exists(args.mlb_date,SNAPSHOT_CLASS))
     if skip_scoring:
@@ -391,6 +505,9 @@ def main() -> int:
                 'dependency_blocked_predictions':0,'post_start_predictions':0,
                 'agreement_barrier_status':'VALID_EXISTING_IMMUTABLE_SNAPSHOT'}
         text=json.dumps(result,indent=2)
+        receipt = _write_attempt_receipt(classification="COMPLETED")
+        result["moneyline_attempt_receipt"] = receipt
+        text=json.dumps(result,indent=2)
         if args.output_json:
             args.output_json.parent.mkdir(parents=True,exist_ok=True)
             _atomic_write(args.output_json,(text+'\n').encode())
@@ -406,8 +523,9 @@ def main() -> int:
     admitted=[row for row in rows if row['admission_status']=='ADMITTED_SHADOW']
     state_written=predictions_written=0
     if args.write_durable:
+        _ATTEMPT_CONTEXT["stage"] = "MONEYLINE_PREDICTION_PERSISTENCE"
         state_written=int(append_state_snapshot(snapshot))
-        predictions_written=append_prediction_rows(admitted)
+        predictions_written=append_prediction_rows(admitted, authority=runtime_authority)
     result={'mode':'DURABLE_WRITE' if args.write_durable else 'DRY_RUN','mlb_date':args.mlb_date,
             'prediction_generated_at_utc':generated,
             'prediction_cutoff_utc':cutoff,'source_schedule_hash':schedule_hash,
@@ -439,11 +557,32 @@ def main() -> int:
                 'post_start':sum(1 for row in rows if row.get('failure_reason')=='PREGAME_CUTOFF_FAILED'),
             }}
     text=json.dumps(result,indent=2)
+    receipt = _write_attempt_receipt(classification="COMPLETED")
+    result["moneyline_attempt_receipt"] = receipt
+    text=json.dumps(result,indent=2)
     if args.output_json:
         args.output_json.parent.mkdir(parents=True,exist_ok=True)
         _atomic_write(args.output_json,(text+'\n').encode())
     print(text)
     return 0
+
+
+def main() -> int:
+    try:
+        return _execute()
+    except BaseException as error:
+        classification = str(_ATTEMPT_CONTEXT.get("stage") or "MONEYLINE_STAGE_EXCEPTION")
+        if "PhaseGate" in type(error).__name__ or "AUTHORITY" in str(error):
+            classification = "MONEYLINE_PHASE_GATE_FAILURE"
+        elif "PERSISTENCE" in classification:
+            classification = "MONEYLINE_PERSISTENCE_FAILURE"
+        try:
+            receipt = _write_attempt_receipt(classification=classification, error=error)
+            if receipt:
+                print(f"MLB_MONEYLINE_ATTEMPT_RECEIPT={receipt['path']} sha256={receipt['sha256']}", file=sys.stderr)
+        except Exception as receipt_error:
+            print(f"MLB_MONEYLINE_FAILURE_RECEIPT_WRITE_FAILED={type(receipt_error).__name__}:{receipt_error}", file=sys.stderr)
+        raise
 
 
 if __name__=='__main__': raise SystemExit(main())

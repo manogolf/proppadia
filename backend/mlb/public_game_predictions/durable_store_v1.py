@@ -143,13 +143,15 @@ def append_state_snapshot(snapshot: dict[str, Any]) -> bool:
     return inserted
 
 
-def append_prediction_rows(rows: Iterable[dict[str, Any]]) -> int:
+def append_prediction_rows(
+    rows: Iterable[dict[str, Any]], *, authority=None,
+) -> int:
     # Prediction admission is an exact-game authority boundary, not merely a
     # scoring/receipt label. Validate the entire admitted batch before opening
     # the database so stale or unknown gamePks cannot be persisted.
     materialized = [row for row in rows if row.get('admission_status') == 'ADMITTED_SHADOW']
     for row in materialized:
-        require_evaluation_row(row)
+        require_evaluation_row(row, authority=authority)
     inserted=0
     with pg_connect() as conn, conn.cursor() as cur:
         for row in materialized:
@@ -208,7 +210,9 @@ def fetch_prediction_rows(game_date: str) -> list[dict[str, Any]]:
         return rows
 
 
-def fetch_ungraded_final_predictions(cutoff_utc: str, *, game_date: str | None = None) -> list[dict[str, Any]]:
+def fetch_ungraded_final_predictions(
+    cutoff_utc: str, *, game_date: str | None = None, authority=None,
+) -> list[dict[str, Any]]:
     """Return frozen predictions eligible for official-final grading.
 
     ``game_date`` permits a governed correction replay to grade only its
@@ -250,18 +254,18 @@ def fetch_ungraded_final_predictions(cutoff_utc: str, *, game_date: str | None =
     # read.  No phase value is copied into either Moneyline ledger.
     admitted = []
     for item in rows:
-        decision = classify_moneyline_row(item['prediction'])
+        decision = classify_moneyline_row(item['prediction'], authority=authority)
         if decision.evaluation_partition in EVALUATION_PHASES:
             admitted.append(item)
     return admitted
 
 
-def append_outcome_grade(grade: dict[str, Any]) -> bool:
+def append_outcome_grade(grade: dict[str, Any], *, authority=None) -> bool:
     if grade.get('official_status')!='Final':
         raise PublicGamePredictionError('GRADING_REQUIRES_OFFICIAL_FINAL')
     # This is the last write boundary.  It independently prevents a caller
     # from bypassing the ordinary fetch/grade path with an unpartitioned row.
-    require_evaluation_row(grade)
+    require_evaluation_row(grade, authority=authority)
     payload_hash=canonical_payload_hash(grade)
     with pg_connect() as conn, conn.cursor() as cur:
         cur.execute("""
