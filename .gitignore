@@ -115,5 +115,6 @@ nhl/site/data/ambiguous_saves_alias_matches.csv
 nhl/site/data/odds_observation_latest.json
 nhl/site/data/points_attachment_integrity.json
 nhl/site/data/saves_attachment_integrity.json
+nhl/site/data/sog_attachment_integrity.json
 nhl_daily_LAST_FAIL.txt
 nhl_daily_STATUS.txt

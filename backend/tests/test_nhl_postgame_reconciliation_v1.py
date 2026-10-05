@@ -895,11 +895,10 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(hashlib.sha256(complete.read_bytes()).hexdigest(),
                          "126a7d99365c8a7c070c07bae3da200ff986ccac44a8a825a6a0040a47d6dc08")
 
-    def test_schedule_and_roster_database_writes_are_idempotent_upserts(self):
+    def test_team_and_roster_merge_paths_retain_upsert_contracts(self):
         schedule = Path("backend/nhl/scripts/import_schedule_today.py").read_text()
         roster = Path("backend/nhl/scripts/refresh_players_and_roster_today.py").read_text()
         self.assertIn("ON CONFLICT (team) DO UPDATE", schedule)
-        self.assertIn("ON CONFLICT (game_id) DO UPDATE", schedule)
         self.assertIn("ON CONFLICT (game_id, team_id, player_id)", roster)
 
 

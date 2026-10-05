@@ -205,8 +205,7 @@ def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
                 "model_version", "prediction_identity", "scheduled_start_time_utc",
                 "game_type_code", "market_qualified", "price"}
     if lane == "POINTS":
-        required |= {"prediction_eligible", "ladder_coherence_decision",
-                     "probability_construction"}
+        required |= {"prediction_eligible", "ladder_coherence_decision"}
     else:
         required |= {"starter_state", "selected_starter", "prediction_semantics"}
     _require_columns(frame, required, lane)
@@ -268,7 +267,10 @@ def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
             id_column: int(getattr(row, id_column)), "line": float(row.line),
             "model_version": row.model_version,
         }
-        if lane == "POINTS":
+        # Older immutable Points packages predate probability construction as
+        # an identity component. Presence in the manifest-bound prediction CSV
+        # identifies the newer identity shape; do not rewrite historical runs.
+        if lane == "POINTS" and "probability_construction" in frame.columns:
             identity_payload["probability_construction"] = row.probability_construction
         identity = prediction_only_digest(identity_payload)
         if identity != row.prediction_identity:
