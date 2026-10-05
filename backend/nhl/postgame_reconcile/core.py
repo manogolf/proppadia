@@ -929,7 +929,7 @@ def _grade_saves(run: Path, schedule: pd.DataFrame,
                  "actual_start_flag", "goalie_participation_state",
                  "starter_identity_method"]],
         on=["game_id", "goalie_id"], how="left", validate="many_to_one")
-    starters = joined.loc[joined.actual_start_flag.fillna(False).astype(bool)].copy()
+    starters = joined.loc[joined.actual_start_flag.astype("boolean").fillna(False).astype(bool)].copy()
     nonstarters = joined.loc[
         joined.actual_start_flag.eq(False) & joined.goalie_participation_state.notna()
     ].copy()
@@ -943,9 +943,9 @@ def _grade_saves(run: Path, schedule: pd.DataFrame,
     unpredicted["grading_status"] = unpredicted.actual_start_flag.map(
         lambda value: "UNPREDICTED_STARTER" if bool(value) else "UNPREDICTED_RELIEF_APPEARANCE")
     unpredicted_starters = unpredicted.loc[
-        unpredicted.actual_start_flag.fillna(False).astype(bool)].copy()
+        unpredicted.actual_start_flag.astype("boolean").fillna(False).astype(bool)].copy()
     unpredicted_relief = unpredicted.loc[
-        ~unpredicted.actual_start_flag.fillna(False).astype(bool)].copy()
+        ~unpredicted.actual_start_flag.astype("boolean").fillna(False).astype(bool)].copy()
     predicted_relief = nonstarters.loc[
         nonstarters.goalie_participation_state.eq("RELIEF_APPEARANCE")].copy()
     input_exclusions = pd.read_csv(run / "input_exclusions.csv")
