@@ -12,6 +12,8 @@ from typing import Any
 
 import pandas as pd
 from backend.nhl.sog_attachment_integrity import verify_sog_integrity_package
+from backend.nhl.sog_coverage_annotations import validate_annotation
+from backend.nhl.daily_capture import verify_package
 
 
 SCHEMA_VERSION = "NHL_DAILY_PERFORMANCE_SUMMARY_V6"
@@ -316,7 +318,6 @@ def discover_daily_market_coverage(
                            / "season=2026" / f"slate_date={slate_date}")
     for package in sorted(reconstruction_root.glob("reconstruction=*"), reverse=True):
         try:
-            from backend.nhl.daily_capture import verify_package
             manifest_sha = verify_package(package)
             coverage_path = package / "coverage.json"
             report = json.loads(coverage_path.read_text())
@@ -357,6 +358,24 @@ def discover_daily_market_coverage(
                 "population_binding": "EXACT_GAME_PLAYER_PROP_LINE_KEYS_PER_ARM",
                 "affects_grading_denominator": False,
             }
+            for annotation_dir in sorted(package.parent.glob("coverage_gap_annotation=*"), reverse=True):
+                try:
+                    annotation_manifest_sha = verify_package(annotation_dir)
+                    annotation_path = annotation_dir / "annotation.json"
+                    annotation = validate_annotation(
+                        json.loads(annotation_path.read_text()), slate_date=slate_date)
+                    if annotation.get("source_reconstruction_identity") != report.get(
+                            "reconstruction_identity"):
+                        continue
+                    result["sog"]["cause_annotations"] = annotation["game_annotations"]
+                    result["sog"]["coverage_state_counts"] = annotation.get(
+                        "coverage_state_counts", {})
+                    result["sog"]["cause_annotation_path"] = str(annotation_path.resolve())
+                    result["sog"]["cause_annotation_sha256"] = _sha(annotation_path)
+                    result["sog"]["cause_annotation_package_manifest_sha256"] = annotation_manifest_sha
+                    break
+                except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+                    continue
             break
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
             continue
@@ -717,6 +736,15 @@ def render_markdown(summary: dict[str, Any]) -> str:
         else:
             coverage_rows.append(f"{lane.upper() if lane == 'sog' else lane.title()}: "
                                  "retained bound coverage evidence unavailable")
+    for annotation in models.get("sog", {}).get("market_coverage", {}).get(
+            "cause_annotations", []):
+        if annotation.get("cause_classification") == (
+                "PRESTART_EVIDENCE_UNAVAILABLE_DUE_TO_PIPELINE_REPAIR_DELAY"):
+            coverage_rows.append(
+                f"SOG coverage caveat: Game {annotation['game_id']} has no valid prestart market snapshot "
+                "because the SOG market-retention repair was not completed before puck drop. "
+                "This is an operational evidence gap; bookmaker market absence is not inferred."
+            )
     lines[-4:-4] = ["", "## Market Coverage Context", *coverage_rows,
                     "Quote matching is descriptive and does not affect grading."]
     return "\n".join(lines).rstrip() + "\n"
