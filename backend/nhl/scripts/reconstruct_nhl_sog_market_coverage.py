@@ -169,10 +169,10 @@ def _verify_sources(receipt_path: Path, receipt: dict, slate: str,
         raise RuntimeError("CANONICAL_SLATE_RECEIPT_HASH_MISMATCH")
     observed_at = datetime.fromisoformat(
         str(odds_summary.get("observation_timestamp_utc", "")).replace("Z", "+00:00"))
-    if (odds_summary.get("strictly_prestart") is not True
-            or any(observed_at >= datetime.fromisoformat(
-                game.start_time_utc.replace("Z", "+00:00")) for game in games)):
-        raise RuntimeError("RETAINED_ODDS_NOT_STRICTLY_PRESTART")
+    eligible_games = [game for game in games if observed_at < datetime.fromisoformat(
+        game.start_time_utc.replace("Z", "+00:00"))]
+    if not eligible_games:
+        raise RuntimeError("RETAINED_ODDS_HAS_NO_GAME_SPECIFIC_PRESTART_COVERAGE")
     validate_odds_observation(
         observation_dir=odds_dir, odds_json=odds_dir / "raw_response.json",
         expected_manifest_sha256=odds_manifest_sha,
@@ -226,6 +226,11 @@ def reconstruct(slate: str) -> dict:
                     odds_observation_manifest_sha256=odds_sha,
                     names_path=names, reconstructed=True,
                     source_daily_receipt_manifest_sha256=receipt_manifest_sha,
+                    canonical_game_starts_utc={int(game.game_id): game.start_time_utc
+                                               for game in load_canonical_slate(
+                                                   slate_date=slate,
+                                                   raw_schedule_path=SLATE_ROOT / slate / "raw_schedule_response.json",
+                                                   slate_health_path=SLATE_ROOT / slate / "slate_health.json")},
                 )
                 odds_lineage = validate_odds_observation(
                     observation_dir=odds_dir, odds_json=odds_dir / "raw_response.json",

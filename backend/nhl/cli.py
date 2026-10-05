@@ -1235,6 +1235,15 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
                     pd.to_numeric(predictions["game_id"], errors="raise").astype(int)),
                 replayed=odds_replayed,
             )
+        canonical_games_for_sog = load_canonical_slate(
+            slate_date=slate,
+            raw_schedule_path=ROOT / "artifacts/operational/nhl/slates" / slate / "raw_schedule_response.json",
+            slate_health_path=ROOT / "artifacts/operational/nhl/slates" / slate / "slate_health.json",
+        )
+        pred_game_ids = set(pd.to_numeric(pd.read_csv(pred_path).game_id, errors="raise").astype(int))
+        canonical_game_ids = {int(game.game_id) for game in canonical_games_for_sog}
+        game_starts = ({int(game.game_id): game.start_time_utc for game in canonical_games_for_sog}
+                       if pred_game_ids == canonical_game_ids else None)
         integrity = audit_sog_attachment(
             prediction_path=pred_path, attachment_path=out_csv,
             unmatched_path=unmatched_csv, slate_date=slate,
@@ -1243,6 +1252,7 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
             odds_observation_manifest_sha256=(
                 odds_lineage["odds_observation_manifest_sha256"] if odds_lineage else None),
             names_path=names_csv,
+            canonical_game_starts_utc=game_starts,
         )
         if odds_lineage:
             integrity.update(odds_lineage)

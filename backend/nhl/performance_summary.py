@@ -309,6 +309,58 @@ def discover_daily_market_coverage(
             continue
     candidates.sort(key=lambda item: item[0], reverse=True)
 
+    # Prefer an immutable game-specific reconstruction when one is available.
+    # It selects the latest strictly prestart snapshot independently per game.
+    reconstruction_root = (Path(daily_run_root).parent
+                           / "sog_market_coverage_reconstructions"
+                           / "season=2026" / f"slate_date={slate_date}")
+    for package in sorted(reconstruction_root.glob("reconstruction=*"), reverse=True):
+        try:
+            from backend.nhl.daily_capture import verify_package
+            manifest_sha = verify_package(package)
+            coverage_path = package / "coverage.json"
+            report = json.loads(coverage_path.read_text())
+            if (report.get("schema_version") != "NHL_SOG_GAME_SPECIFIC_PRESTART_RECONSTRUCTION_V1"
+                    or report.get("classification") != "GAME_SPECIFIC_PRESTART_RECONSTRUCTION"
+                    or report.get("status") != "PASS" or report.get("slate_date") != slate_date):
+                continue
+            if report.get("identity_inputs", {}).get("algorithm_sha256") != _sha(
+                    Path(__file__).resolve().parents[1] / "scripts" / "reconstruct_nhl_sog_game_specific_coverage.py"):
+                continue
+            for source in report.get("source_snapshots", []):
+                source_package = Path(source["package_path"])
+                if verify_package(source_package) != source["package_manifest_sha256"]:
+                    raise ValueError("SOG_RECONSTRUCTION_SOURCE_PACKAGE_MISMATCH")
+                source_odds = Path(source["odds_observation_path"])
+                if verify_package(source_odds) != source["odds_manifest_sha256"]:
+                    raise ValueError("SOG_RECONSTRUCTION_SOURCE_ODDS_MISMATCH")
+            counts = report["counts"]
+            rows = int(counts["prestart_eligible_prediction_keys"])
+            result["sog"] = {
+                "status": "AVAILABLE_PARTIAL" if counts.get("poststart_excluded_prediction_keys", 0) else "AVAILABLE",
+                "prediction_rows": rows,
+                "eligible_prestart": rows,
+                "matched": int(counts["prestart_matched"]),
+                "unmatched": int(counts["prestart_unmatched"]),
+                "ambiguous": int(counts["ambiguous"]),
+                "poststart_excluded": int(counts["poststart_excluded_prediction_keys"]),
+                "per_arm": report.get("per_arm", {}),
+                "source_artifact": str(coverage_path.resolve()),
+                "source_artifact_sha256": _sha(coverage_path),
+                "integrity_package_manifest_sha256": manifest_sha,
+                "prediction_artifact_sha256": report["identity_inputs"]["prediction_sha256"],
+                "odds_observation_manifest_sha256": hashlib.sha256(json.dumps(
+                    sorted(source["odds_manifest_sha256"] for source in report["source_snapshots"]),
+                    separators=(",", ":")).encode()).hexdigest(),
+                "daily_receipt_manifest_sha256": None,
+                "reconstructed_from_retained_evidence": True,
+                "population_binding": "EXACT_GAME_PLAYER_PROP_LINE_KEYS_PER_ARM",
+                "affects_grading_denominator": False,
+            }
+            break
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+
     for lane in ("points", "saves"):
         grade = grades.get(lane, pd.DataFrame())
         for _, receipt_path, receipt, receipt_manifest_sha in candidates:
@@ -459,7 +511,7 @@ def discover_daily_market_coverage(
                 break
             except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
                 continue
-    if sog_report_path is not None:
+    if sog_report_path is not None and result["sog"].get("status") == "UNAVAILABLE_FROM_RETAINED_BOUND_EVIDENCE":
         try:
             report, _ = verify_sog_integrity_package(sog_report_path, slate_date)
             counts = report["counts"]
@@ -488,6 +540,17 @@ def discover_daily_market_coverage(
                     report.get("reconstructed_from_retained_evidence")),
                 "affects_grading_denominator": False,
             }
+            timing = report.get("game_specific_prestart")
+            if timing:
+                result["sog"].update({
+                    "status": "AVAILABLE_PARTIAL" if timing.get(
+                        "poststart_ineligible_prediction_keys", 0) else "AVAILABLE",
+                    "eligible_prestart": timing.get("prestart_eligible_prediction_keys", 0),
+                    "matched": timing.get("prestart_matched", 0),
+                    "unmatched": timing.get("prestart_unmatched", 0),
+                    "poststart_excluded": timing.get("poststart_ineligible_prediction_keys", 0),
+                    "eligible_game_count": timing.get("eligible_game_count", 0),
+                })
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
             pass
     return result
@@ -533,6 +596,9 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
             "matched": None, "unmatched": None, "ambiguous": None,
         })
         models[lane]["market_coverage"]["affects_grading_denominator"] = False
+        if lane == "sog" and models[lane]["market_coverage"].get("per_arm"):
+            models[lane]["arm_market_coverage"] = dict(
+                models[lane]["market_coverage"]["per_arm"])
     models["points"]["realized_points_definition"] = "official_goals + official_assists"
     unresolved = {
         "moneyline": models["moneyline"]["reference"].get("unresolved", 0),
@@ -630,11 +696,24 @@ def render_markdown(summary: dict[str, Any]) -> str:
     coverage_rows = []
     for lane in ("points", "saves", "sog"):
         context = models.get(lane, {}).get("market_coverage", {})
-        if context.get("status") == "AVAILABLE":
+        if context.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
+            coverage_size = (context.get("eligible_prestart", context["prediction_rows"])
+                             if lane == "sog" and context.get("poststart_excluded") is not None
+                             else context["prediction_rows"])
             coverage_rows.append(
                 f"{lane.upper() if lane == 'sog' else lane.title()}: {context['matched']} matched; "
-                f"{context['unmatched']} unmatched; {context['prediction_rows']} total"
+                f"{context['unmatched']} unmatched; "
+                f"{coverage_size} {'prestart eligible' if lane == 'sog' and context.get('poststart_excluded') is not None else 'total'}"
             )
+            if lane == "sog" and context.get("poststart_excluded") is not None:
+                coverage_rows[-1] += f"; {context['poststart_excluded']} poststart excluded"
+                for arm, values in sorted(context.get("per_arm", {}).items()):
+                    coverage_rows.append(
+                        f"  {arm}: {values['matched']} matched; {values['unmatched']} unmatched; "
+                        f"{values['eligible_prestart']} prestart eligible; "
+                        f"{values['poststart_excluded']} poststart excluded; "
+                        f"{values.get('not_in_operational_population', 0)} outside operational population"
+                    )
         else:
             coverage_rows.append(f"{lane.upper() if lane == 'sog' else lane.title()}: "
                                  "retained bound coverage evidence unavailable")
@@ -708,11 +787,12 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         **{f"{key}_grade_sha256": _sha(path) for key, path in grade_paths.items() if path.is_file()},
     }
     for lane, coverage in (market_coverage or {}).items():
-        if coverage.get("status") == "AVAILABLE":
+        if coverage.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
             source_hashes[f"{lane}_attachment_integrity_sha256"] = str(
                 coverage["source_artifact_sha256"])
-            source_hashes[f"{lane}_daily_receipt_manifest_sha256"] = str(
-                coverage["daily_receipt_manifest_sha256"])
+            if coverage.get("daily_receipt_manifest_sha256"):
+                source_hashes[f"{lane}_daily_receipt_manifest_sha256"] = str(
+                    coverage["daily_receipt_manifest_sha256"])
             source_hashes[f"{lane}_attached_prediction_artifact_sha256"] = str(
                 coverage["prediction_artifact_sha256"])
             source_hashes[f"{lane}_odds_observation_manifest_sha256"] = str(

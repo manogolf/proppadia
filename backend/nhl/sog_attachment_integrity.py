@@ -6,7 +6,7 @@ import json
 import re
 import shutil
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -78,6 +78,7 @@ def audit_sog_attachment(
     odds_observation_manifest_sha256: str | None,
     names_path: Path | None = None, reconstructed: bool = False,
     source_daily_receipt_manifest_sha256: str | None = None,
+    canonical_game_starts_utc: dict[int, str] | None = None,
 ) -> dict[str, Any]:
     predictions, identity_columns = prediction_key_frame(prediction_path)
     source_frame = pd.read_csv(prediction_path)
@@ -137,6 +138,47 @@ def audit_sog_attachment(
         "unmatched_count": len(unmatched_by_market),
         "ambiguous_count": ambiguous,
     }
+    timing: dict[str, Any] | None = None
+    if canonical_game_starts_utc is not None:
+        odds_dir = Path(odds_observation_path) if odds_observation_path else None
+        observed_at_text = None
+        if odds_dir and (odds_dir / "observation_summary.json").is_file():
+            observed_at_text = json.loads((odds_dir / "observation_summary.json").read_text()).get(
+                "observation_timestamp_utc")
+        if not observed_at_text:
+            raise ValueError("SOG_ATTACHMENT_OBSERVATION_TIMESTAMP_MISSING")
+        observed_at = datetime.fromisoformat(str(observed_at_text).replace("Z", "+00:00"))
+        if observed_at.tzinfo is None:
+            raise ValueError("SOG_ATTACHMENT_OBSERVATION_TIMESTAMP_NOT_UTC")
+        by_game: dict[str, Any] = {}
+        for game_id in sorted({key[1] for key in prediction_keys}):
+            start_text = canonical_game_starts_utc.get(game_id)
+            if start_text is None:
+                raise ValueError(f"SOG_ATTACHMENT_CANONICAL_GAME_START_MISSING:{game_id}")
+            start_at = datetime.fromisoformat(str(start_text).replace("Z", "+00:00"))
+            eligible = observed_at.astimezone(timezone.utc) < start_at.astimezone(timezone.utc)
+            game_keys = {key for key in pred_set if key[1] == game_id}
+            game_matched = game_keys & matched_keys
+            game_unmatched = game_keys & unmatched_by_market
+            by_game[str(game_id)] = {
+                "canonical_start_time_utc": start_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "eligible": eligible,
+                "prediction_keys": len(game_keys),
+                "matched": len(game_matched),
+                "unmatched": len(game_unmatched),
+                "ambiguous": 0,
+            }
+        timing = {
+            "contract": "NHL_SOG_GAME_SPECIFIC_PRESTART_V1",
+            "observation_timestamp_utc": observed_at.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "games": by_game,
+            "prestart_eligible_prediction_keys": sum(x["prediction_keys"] for x in by_game.values() if x["eligible"]),
+            "poststart_ineligible_prediction_keys": sum(x["prediction_keys"] for x in by_game.values() if not x["eligible"]),
+            "prestart_matched": sum(x["matched"] for x in by_game.values() if x["eligible"]),
+            "prestart_unmatched": sum(x["unmatched"] for x in by_game.values() if x["eligible"]),
+            "eligible_game_count": sum(bool(x["eligible"]) for x in by_game.values()),
+            "ineligible_game_count": sum(not bool(x["eligible"]) for x in by_game.values()),
+        }
     payload: dict[str, Any] = {
         "schema_version": SCHEMA_VERSION,
         "lane": "sog",
@@ -170,6 +212,8 @@ def audit_sog_attachment(
     }
     if source_daily_receipt_manifest_sha256:
         payload["source_daily_receipt_manifest_sha256"] = source_daily_receipt_manifest_sha256
+    if timing is not None:
+        payload["game_specific_prestart"] = timing
     return payload
 
 
@@ -254,12 +298,31 @@ def verify_sog_integrity_package(report_path: Path, slate_date: str) -> tuple[di
     if (odds_summary.get("slate_date") != slate_date
             or odds_summary.get("parent_daily_run_id") != report.get("parent_daily_run_id")):
         raise ValueError("SOG_ATTACHMENT_ODDS_LINEAGE_MISMATCH")
+    from backend.nhl.daily_capture import load_canonical_slate
+    slate_root = Path(__file__).resolve().parents[1] / ".." / "artifacts" / "operational" / "nhl" / "slates" / slate_date
+    slate_root = slate_root.resolve()
+    if (report.get("game_specific_prestart")
+            and (slate_root / "raw_schedule_response.json").is_file()
+            and (slate_root / "slate_health.json").is_file()):
+        games = load_canonical_slate(
+            slate_date=slate_date, raw_schedule_path=slate_root / "raw_schedule_response.json",
+            slate_health_path=slate_root / "slate_health.json")
+        starts = {int(game.game_id): game.start_time_utc for game in games}
+    else:
+        starts = {}
+    pred_frame, _ = prediction_key_frame(prediction_path)
+    pred_game_ids = {int(value) for value in pred_frame.game_id.unique()}
+    if starts and pred_game_ids != set(starts):
+        raise ValueError("SOG_ATTACHMENT_CANONICAL_GAME_IDENTITY_MISMATCH")
     observed_at = datetime.fromisoformat(
         str(odds_summary.get("observation_timestamp_utc", "")).replace("Z", "+00:00"))
-    first_puck = datetime.fromisoformat(
-        str(odds_summary.get("first_puck_utc", "")).replace("Z", "+00:00"))
-    if odds_summary.get("strictly_prestart") is not True or observed_at >= first_puck:
-        raise ValueError("SOG_ATTACHMENT_ODDS_NOT_STRICTLY_PRESTART")
+    if observed_at.tzinfo is None:
+        raise ValueError("SOG_ATTACHMENT_OBSERVATION_TIMESTAMP_NOT_UTC")
+    if not starts:
+        first_puck = datetime.fromisoformat(
+            str(odds_summary.get("first_puck_utc", "")).replace("Z", "+00:00"))
+        if odds_summary.get("strictly_prestart") is not True or observed_at >= first_puck:
+            raise ValueError("SOG_ATTACHMENT_ODDS_NOT_STRICTLY_PRESTART")
     odds_lineage = validate_odds_observation(
         observation_dir=odds_dir, odds_json=odds_dir / "raw_response.json",
         expected_manifest_sha256=odds_manifest_sha,
@@ -281,6 +344,7 @@ def verify_sog_integrity_package(report_path: Path, slate_date: str) -> tuple[di
         odds_observation_manifest_sha256=odds_manifest_sha,
         names_path=names_path,
         reconstructed=bool(report.get("reconstructed_from_retained_evidence")),
+        canonical_game_starts_utc=starts or None,
     )
     if audited.get("status") != "PASS" or audited.get("counts") != report.get("counts"):
         raise ValueError("SOG_ATTACHMENT_REAUDIT_MISMATCH")

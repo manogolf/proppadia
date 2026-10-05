@@ -78,6 +78,22 @@ def make_fixture(root: Path, *, attachment: pd.DataFrame | None = None,
 
 
 class SogMarketCoverageIntegrityTests(unittest.TestCase):
+    def test_game_specific_timing_is_strict_at_start_and_key_counts_reconcile(self):
+        with tempfile.TemporaryDirectory() as raw:
+            pred, names, attached, unmatched, odds = make_fixture(Path(raw))
+            report = audit_sog_attachment(
+                prediction_path=pred, attachment_path=attached, unmatched_path=unmatched,
+                slate_date=SLATE, parent_daily_run_id=RUN_ID,
+                odds_observation_path=odds, odds_observation_manifest_sha256=ODDS_SHA,
+                names_path=names,
+                canonical_game_starts_utc={2026020022: "2026-10-03T17:00:00Z"},
+            )
+            timing = report["game_specific_prestart"]
+            self.assertEqual(timing["prestart_eligible_prediction_keys"], 0)
+            self.assertEqual(timing["poststart_ineligible_prediction_keys"], 4)
+            self.assertEqual(timing["ineligible_game_count"], 1)
+            self.assertEqual(timing["prestart_matched"] + timing["prestart_unmatched"], 0)
+
     def test_daily_builder_retains_run_bound_integrity_package(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
