@@ -18,6 +18,7 @@ from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluatio
 from backend.nhl.performance_summary import (
     discover_daily_market_coverage,
     generate_from_artifacts,
+    select_authoritative_summary,
 )
 
 
@@ -325,6 +326,9 @@ def ensure_prior_learning(
         challenger_source_artifacts=challenger_sources or None,
         market_coverage=coverage,
     )
+    performance_json, performance = select_authoritative_summary(
+        root=performance_json.parent.parent, expected=performance)
+    performance_md = performance_json.parent / "performance_summary.md"
     return {
         "prior_slate_date": slate_date, "canonical_phase": (
             "REGULAR_SEASON" if games.game_type_code.astype(int).eq(2).all() else "MIXED_OR_NON_REGULAR"),
@@ -335,6 +339,8 @@ def ensure_prior_learning(
         "performance_summary_json": str(performance_json),
         "performance_summary_md": str(performance_md),
         "performance_summary_identity": performance.get("summary_identity"),
+        "performance_summary_revision": performance.get("summary_revision"),
+        "performance_summary_lineage_key": performance.get("revision_lineage_key"),
         "moneyline_grade_status": ("NOT_AVAILABLE" if ml.empty else "COMPLETE"
                                     if ml.grading_status.eq("REGULAR_SEASON_GRADED").all()
                                     else "NON_EVALUATION_OR_INCOMPLETE"),

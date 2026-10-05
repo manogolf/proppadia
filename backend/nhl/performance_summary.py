@@ -316,7 +316,28 @@ def discover_daily_market_coverage(
     reconstruction_root = (Path(daily_run_root).parent
                            / "sog_market_coverage_reconstructions"
                            / "season=2026" / f"slate_date={slate_date}")
-    for package in sorted(reconstruction_root.glob("reconstruction=*"), reverse=True):
+    annotation_reconstruction_ids: set[str] = set()
+    for annotation_dir in reconstruction_root.glob("coverage_gap_annotation=*"):
+        try:
+            verify_package(annotation_dir)
+            annotation = validate_annotation(
+                json.loads((annotation_dir / "annotation.json").read_text()), slate_date=slate_date)
+            annotation_reconstruction_ids.add(str(annotation.get("source_reconstruction_identity")))
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+    def has_matching_annotation(package: Path) -> bool:
+        try:
+            identity = json.loads((package / "coverage.json").read_text()).get(
+                "reconstruction_identity")
+            return identity in annotation_reconstruction_ids
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            return False
+
+    reconstruction_packages = sorted(reconstruction_root.glob("reconstruction=*"), reverse=True)
+    # Prefer evidence with a valid matching cause annotation. Newer reconstruction
+    # code can produce a different package identity for the same retained evidence.
+    reconstruction_packages.sort(key=lambda item: not has_matching_annotation(item))
+    for package in reconstruction_packages:
         try:
             manifest_sha = verify_package(package)
             coverage_path = package / "coverage.json"
@@ -326,7 +347,7 @@ def discover_daily_market_coverage(
                     or report.get("status") != "PASS" or report.get("slate_date") != slate_date):
                 continue
             if report.get("identity_inputs", {}).get("algorithm_sha256") != _sha(
-                    Path(__file__).resolve().parents[1] / "scripts" / "reconstruct_nhl_sog_game_specific_coverage.py"):
+                    Path(__file__).resolve().parents[0] / "scripts" / "reconstruct_nhl_sog_game_specific_coverage.py"):
                 continue
             for source in report.get("source_snapshots", []):
                 source_package = Path(source["package_path"])
@@ -508,31 +529,33 @@ def discover_daily_market_coverage(
             break
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
             continue
-    if sog_report_path is None:
-        reconstruction_root = (Path(daily_run_root).parent
-                               / "sog_market_coverage_reconstructions"
-                               / "season=2026" / f"slate_date={slate_date}")
-        reconstruction_reports = sorted(
-            reconstruction_root.glob("reconstruction=*/sog_attachment_integrity.json"),
-            reverse=True,
-        ) if reconstruction_root.exists() else []
-        for candidate in reconstruction_reports:
-            try:
-                report, _ = verify_sog_integrity_package(candidate, slate_date)
-                if not report.get("reconstructed_from_retained_evidence"):
-                    continue
-                source_receipt_path = Path(report["source_daily_receipt_path"])
-                _, receipt_manifest_sha = _verify_daily_receipt(source_receipt_path, slate_date)
-                if receipt_manifest_sha != report.get("source_daily_receipt_manifest_sha256"):
-                    continue
-                sog_report_path = candidate
-                sog_receipt_manifest_sha = receipt_manifest_sha
-                break
-            except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+    reconstruction_root = (Path(daily_run_root).parent
+                           / "sog_market_coverage_reconstructions"
+                           / "season=2026" / f"slate_date={slate_date}")
+    reconstruction_reports = sorted(
+        reconstruction_root.glob("reconstruction=*/sog_attachment_integrity.json"),
+        reverse=True,
+    ) if reconstruction_root.exists() else []
+    reconstruction_reports.sort(key=lambda candidate: not has_matching_annotation(candidate.parent))
+    for candidate in reconstruction_reports:
+        try:
+            report, _ = verify_sog_integrity_package(candidate, slate_date)
+            if not report.get("reconstructed_from_retained_evidence"):
                 continue
-    if sog_report_path is not None and result["sog"].get("status") == "UNAVAILABLE_FROM_RETAINED_BOUND_EVIDENCE":
+            source_receipt_path = Path(report["source_daily_receipt_path"])
+            _, receipt_manifest_sha = _verify_daily_receipt(source_receipt_path, slate_date)
+            if receipt_manifest_sha != report.get("source_daily_receipt_manifest_sha256"):
+                continue
+            sog_report_path = candidate
+            sog_receipt_manifest_sha = receipt_manifest_sha
+            break
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+    if sog_report_path is not None:
         try:
             report, _ = verify_sog_integrity_package(sog_report_path, slate_date)
+            cause_fields = {key: value for key, value in result["sog"].items()
+                            if key.startswith("cause_") or key == "coverage_state_counts"}
             counts = report["counts"]
             rows = int(counts["prediction_row_count"])
             matched = int(counts["matched_count"])
@@ -570,6 +593,7 @@ def discover_daily_market_coverage(
                     "poststart_excluded": timing.get("poststart_ineligible_prediction_keys", 0),
                     "eligible_game_count": timing.get("eligible_game_count", 0),
                 })
+            result["sog"].update(cause_fields)
         except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
             pass
     return result
@@ -788,6 +812,179 @@ def verify_summary_package(path: Path) -> None:
         raise RuntimeError("NHL_PERFORMANCE_SUMMARY_PACKAGE_INCOMPLETE")
 
 
+_LINEAGE_GRADE_KEYS = (
+    "moneyline_grade_sha256", "puck_line_grade_sha256", "sog_grade_sha256",
+    "points_grade_sha256", "saves_grade_sha256", "moneyline_challenger_grade_sha256",
+    "puck_line_challenger_grade_sha256",
+)
+_LINEAGE_RECON_KEYS = (
+    "reconciliation_manifest_sha256", "reconciliation_summary_sha256",
+    "canonical_game_outcomes_sha256", "phase_restatement_lineage_sha256",
+)
+
+
+def _summary_lineage_key(summary: dict[str, Any]) -> str:
+    """Stable governed grade lineage, intentionally excluding descriptive evidence."""
+    sources = summary.get("source_artifacts") or {}
+    facts = {
+        "slate_date": summary.get("slate_date"),
+        "package_identity": summary.get("package_identity"),
+        "canonical_phase": summary.get("canonical_phase"),
+        "source_artifacts": {key: sources[key] for key in (*_LINEAGE_RECON_KEYS, *_LINEAGE_GRADE_KEYS)
+                             if key in sources},
+    }
+    return hashlib.sha256(json.dumps(facts, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def _summary_descriptive_identity(summary: dict[str, Any]) -> str:
+    sources = summary.get("source_artifacts") or {}
+    descriptive_sources = {key: value for key, value in sources.items()
+                           if key not in (*_LINEAGE_RECON_KEYS, *_LINEAGE_GRADE_KEYS)}
+    facts = {"models": summary.get("models"), "source_artifacts": descriptive_sources}
+    return hashlib.sha256(json.dumps(facts, sort_keys=True, separators=(",", ":"),
+                                     allow_nan=False).encode()).hexdigest()
+
+
+def _compatible_summary_versions(root: Path, lineage_key: str) -> list[tuple[Path, dict[str, Any]]]:
+    found = []
+    for candidate in root.glob("performance_summary=*"):
+        try:
+            verify_summary_package(candidate)
+            summary = json.loads((candidate / "performance_summary.json").read_text())
+            if (summary.get("revision_lineage_key") or summary.get("summary_lineage_key")
+                    or _summary_lineage_key(summary)) == lineage_key:
+                found.append((candidate, summary))
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+    return found
+
+
+def _version_summary(summary: dict[str, Any], root: Path) -> tuple[Path, dict[str, Any]]:
+    """Allocate an immutable monotonic revision for a logical summary lineage."""
+    lineage_key = _summary_lineage_key(summary)
+    existing = _compatible_summary_versions(root, lineage_key)
+    descriptive_identity = _summary_descriptive_identity(summary)
+    for path, prior in existing:
+        if (isinstance(prior.get("summary_revision"), int)
+                and prior.get("revision_lineage_key") == lineage_key
+                and prior.get("descriptive_identity") == descriptive_identity):
+            return path / "performance_summary.json", prior
+
+    explicit = [(path, prior) for path, prior in existing
+                if isinstance(prior.get("summary_revision"), int)]
+    revision = max((int(prior["summary_revision"]) for _, prior in explicit), default=0) + 1
+    if explicit:
+        supersedes = sorted({prior["summary_identity"] for _, prior in explicit
+                             if int(prior["summary_revision"]) == revision - 1})
+    else:
+        supersedes = sorted({prior["summary_identity"] for _, prior in existing
+                             if prior.get("summary_identity")})
+
+    versioned = dict(summary)
+    versioned.update({"summary_revision": revision,
+                      "supersedes_summary_identities": supersedes,
+                      "revision_lineage_key": lineage_key,
+                      "descriptive_identity": descriptive_identity})
+    identity_payload = {"schema_version": versioned.get("schema_version"),
+                        "summary_lineage_key": lineage_key,
+                        "summary_revision": revision,
+                        "descriptive_identity": descriptive_identity,
+                        "supersedes_summary_identities": supersedes}
+    identity = hashlib.sha256(json.dumps(identity_payload, sort_keys=True,
+                                         separators=(",", ":")).encode()).hexdigest()
+    versioned["summary_identity"] = identity
+    destination = root / f"performance_summary={identity[:20]}"
+    versioned["summary_package"] = str(destination.resolve())
+    json_path, _ = _write_immutable_package(destination, versioned)
+    return json_path.resolve(), json.loads(json_path.read_text())
+
+
+def _grade_projection(summary: dict[str, Any]) -> dict[str, Any]:
+    def strip_coverage(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: strip_coverage(item) for key, item in value.items()
+                    if key not in {"market_coverage", "arm_market_coverage"}}
+        if isinstance(value, list):
+            return [strip_coverage(item) for item in value]
+        return value
+    return strip_coverage(summary.get("models") or {})
+
+
+def _descriptive_evidence_is_valid(summary: dict[str, Any]) -> bool:
+    coverage = ((summary.get("models") or {}).get("sog") or {}).get("market_coverage") or {}
+    source_path = coverage.get("source_artifact")
+    annotation_path = coverage.get("cause_annotation_path")
+    reconstruction_identity = None
+    if source_path:
+        path = Path(source_path)
+        if not path.is_file() or _sha(path) != coverage.get("source_artifact_sha256"):
+            return False
+        try:
+            reconstruction_identity = json.loads(path.read_text()).get("reconstruction_identity")
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            return False
+        if coverage.get("integrity_package_manifest_sha256"):
+            try:
+                if verify_package(path.parent) != coverage["integrity_package_manifest_sha256"]:
+                    return False
+            except (OSError, ValueError, KeyError, TypeError):
+                return False
+    if annotation_path:
+        path = Path(annotation_path)
+        try:
+            annotation = validate_annotation(json.loads(path.read_text()),
+                                             slate_date=str(summary.get("slate_date")))
+            if (_sha(path) != coverage.get("cause_annotation_sha256")
+                    or verify_package(path.parent) != coverage.get(
+                        "cause_annotation_package_manifest_sha256")
+                    or (reconstruction_identity is not None and annotation.get(
+                        "source_reconstruction_identity") != reconstruction_identity)):
+                return False
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            return False
+    return True
+
+
+def select_authoritative_summary(*, root: Path, expected: dict[str, Any]) -> tuple[Path, dict[str, Any]]:
+    """Select only complete summaries matching the current governed grade state."""
+    root = Path(root)
+    lineage_key = _summary_lineage_key(expected)
+    compatible = []
+    expected_sources = expected.get("source_artifacts") or {}
+    expected_grade_sources = {key: value for key, value in expected_sources.items()
+                              if key in (*_LINEAGE_GRADE_KEYS, *_LINEAGE_RECON_KEYS)}
+    for path, candidate in _compatible_summary_versions(root, lineage_key):
+        sources = candidate.get("source_artifacts") or {}
+        if (candidate.get("slate_date") != expected.get("slate_date")
+                or candidate.get("package_identity") != expected.get("package_identity")
+                or candidate.get("canonical_phase") != expected.get("canonical_phase")
+                or candidate.get("official_outcomes_status") != "FINAL"
+                or candidate.get("summary_identity") is None
+                or candidate.get("summary_identity", "")[:20] != path.name.removeprefix("performance_summary=")
+                or {key: value for key, value in sources.items()
+                    if key in (*_LINEAGE_GRADE_KEYS, *_LINEAGE_RECON_KEYS)} != expected_grade_sources
+                or _grade_projection(candidate) != _grade_projection(expected)
+                or not _descriptive_evidence_is_valid(candidate)):
+            continue
+        compatible.append((path, candidate))
+
+    if not compatible:
+        raise RuntimeError("NO_VALID_PERFORMANCE_SUMMARY_FOR_GOVERNED_LINEAGE")
+    versioned = [(path, summary) for path, summary in compatible
+                 if isinstance(summary.get("summary_revision"), int)]
+    if not versioned:
+        if len(compatible) != 1:
+            raise RuntimeError("LEGACY_SUMMARY_AUTHORITY_AMBIGUOUS")
+        return compatible[0][0] / "performance_summary.json", compatible[0][1]
+    highest = max(int(summary["summary_revision"]) for _, summary in versioned)
+    winners = [(path, summary) for path, summary in versioned
+               if int(summary["summary_revision"]) == highest]
+    identities = {summary.get("summary_identity") for _, summary in winners}
+    if len(identities) != 1:
+        raise RuntimeError("PERFORMANCE_SUMMARY_REVISION_CONFLICT")
+    return winners[0][0] / "performance_summary.json", winners[0][1]
+
+
 def generate_from_artifacts(*, package: Path, restatement: Path,
                             reconciliation_status: str,
                             challengers: dict[str, pd.DataFrame] | None = None,
@@ -828,6 +1025,16 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
             if coverage.get("integrity_package_manifest_sha256"):
                 source_hashes[f"{lane}_integrity_package_manifest_sha256"] = str(
                     coverage["integrity_package_manifest_sha256"])
+            if lane == "sog" and coverage.get("reconstructed_from_retained_evidence"):
+                source_hashes["sog_game_specific_reconstruction_sha256"] = str(
+                    coverage.get("source_artifact_sha256") or "")
+                source_hashes["sog_game_specific_reconstruction_manifest_sha256"] = str(
+                    coverage.get("integrity_package_manifest_sha256") or "")
+            if lane == "sog" and coverage.get("cause_annotation_sha256"):
+                source_hashes["sog_coverage_cause_annotation_sha256"] = str(
+                    coverage["cause_annotation_sha256"])
+                source_hashes["sog_coverage_cause_annotation_package_manifest_sha256"] = str(
+                    coverage.get("cause_annotation_package_manifest_sha256") or "")
     for name in ("graded_sog_source_exclusions.csv", "graded_sog_missing_predictions.csv"):
         path = package / name
         if path.is_file():
@@ -871,6 +1078,5 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         and source_marker.get("status") == "COMPLETE" else "INCOMPLETE")
     summary["summary_identity"] = identity
     summary["summary_package"] = str(destination.resolve())
-    json_path, markdown_path = _write_immutable_package(destination, summary)
-    summary = json.loads(json_path.read_text())
-    return json_path.resolve(), markdown_path.resolve(), summary
+    json_path, summary = _version_summary(summary, root)
+    return json_path, json_path.parent / "performance_summary.md", summary
