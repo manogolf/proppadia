@@ -54,6 +54,7 @@ from backend.mlb.identity.provider_event_game_binding_v1 import (
     write_receipts_immutable,
 )
 from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     getTeamIdFromAbbr,
@@ -606,6 +607,15 @@ def _build_schedule_maps(
     return (
         by_team, by_pair, EvidenceSource(path=source["path"], sha256=source["sha256"]),
         source["observed_at_utc"],
+    )
+
+
+def _runtime_phase_authority(schedule_source: EvidenceSource) -> RuntimeScheduleAuthority:
+    """Bind exact-game phase checks to the schedule response already retained for this run."""
+    return RuntimeScheduleAuthority(
+        source_path=Path(schedule_source.path),
+        expected_source_sha256=schedule_source.sha256,
+        base=HashedProposalAuthority(),
     )
 
 
@@ -1575,7 +1585,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         print(f"[mlb-wide-pred] offers_unique={len(offers)} flatten_counts={flatten_counts}")
 
-        authority = HashedProposalAuthority()
+        # The same immutable response used to resolve provider teams/start time
+        # is also the source-bound exact-game phase overlay.  This admits newly
+        # scheduled postseason gamePks without widening authority by date.
+        authority = _runtime_phase_authority(schedule_source)
         registry = load_receipt_registry(binding_root)
         resolved_offers, resolve_counts = _resolve_offers(
             offers=offers,

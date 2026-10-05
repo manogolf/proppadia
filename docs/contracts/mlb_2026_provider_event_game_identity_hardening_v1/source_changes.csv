@@ -1,10 +1,11 @@
 path,change,behavioral_scope
 backend/mlb/identity/provider_event_game_binding_v1.py,new shared resolver and immutable receipt,identity only
 backend/mlb/shared/mlb_api_v2.py,retain exact existing schedule response and preserve game number/doubleheader,source provenance only
-backend/mlb/scripts/build_mlb_predictions_wide.py,replace first/nearest fallback with certified binding and lineage handoff,prospective identity membership only
+backend/mlb/scripts/build_mlb_predictions_wide.py,replace first/nearest fallback with certified binding and lineage handoff; source-bind exact postseason phase decisions to the same retained schedule response,prospective identity membership and phase authority only
 backend/mlb/shared/prospective_lineage.py,require provider binding provenance,new prospective lineage only
 backend/mlb/totals_predictions/live_context_bridge_v1.py,optional immutable schedule retention and source path,source provenance only
 backend/mlb/markets/pinnacle_main_market_capture_v1.py,accept certified receipt and attach provenance,new prospective rows only
 backend/mlb/scripts/capture_mlb_pinnacle_main_markets_v1.py,certify before derived writes and retain existing schedule response,prospective identity/provenance only
 backend/mlb/tests/test_mlb_2026_provider_event_game_identity_hardening_v1.py,dependency-free deterministic coverage,test only
+backend/mlb/tests/test_mlb_wide_runtime_schedule_phase_authority_v1.py,retained-schedule postseason phase binding regression,test only
 backend/mlb/tests/test_prospective_lineage.py,update complete synthetic identity for mandatory provider event,test only

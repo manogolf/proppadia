@@ -8,7 +8,7 @@ No API/provider request, database connection, pipeline, schedule, model operatio
 
 ## Prospective behavior
 
-- `build_mlb_predictions_wide.py` retains the immutable official schedule response and the immutable provider snapshot, resolves each provider event before feature construction, excludes an ambiguous/unproven event, preserves `provider_event_id`, writes a shared immutable JSONL receipt, and passes its identity plus both source hashes into mandatory prospective lineage.
+- `build_mlb_predictions_wide.py` retains the immutable official schedule response and the immutable provider snapshot, resolves each provider event before feature construction, and uses that same hash-verified schedule response as the exact-game postseason phase overlay. An exact gamePk absent from the pinned snapshot is admitted only when the retained source supplies a valid identity; date coverage alone does not grant authority. The builder excludes ambiguous/unproven events, preserves `provider_event_id`, writes a shared immutable JSONL receipt, and passes its identity plus both source hashes into mandatory prospective lineage.
 - `capture_mlb_pinnacle_main_markets_v1.py` retains each already-fetched hydrated schedule response, certifies bindings through the shared resolver before ledger writes, and places receipt/schedule/provider provenance on new normalized rows. Existing pregame timing and price parsing remain unchanged.
 - Provider snapshots and schedule captures are raw evidence writes. No normalized/derived row is produced for an event lacking a certified receipt.
 - The receipt is idempotent for identical input, exclusive/immutable for a new identity, and fail-closed on conflicting content or reused event IDs mapped to different gamePks.
