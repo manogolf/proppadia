@@ -5,6 +5,7 @@ import contextlib
 import fcntl
 import hashlib
 import json
+import math
 import os
 import shutil
 import tempfile
@@ -304,7 +305,45 @@ def _local_spine(schedule: pd.DataFrame, slate_date: str) -> pd.DataFrame:
     return schedule
 
 
-def _verify_cross_market_identities(moneyline: pd.DataFrame, puck: pd.DataFrame) -> None:
+def _cross_market_final_runs(operational_root: Path, slate_date: str) -> list[Path]:
+    """Return only FINAL_PREGAME states explicitly retained for this slate."""
+    pattern = (Path(operational_root) / "cross_market_shadow" / "season=2026" /
+               f"slate_date={slate_date}" / "run_type=FINAL_PREGAME" / "state=*")
+    return sorted(pattern.parent.glob(pattern.name))
+
+
+def _verify_cross_market_identities(
+    moneyline: pd.DataFrame,
+    puck: pd.DataFrame,
+    *,
+    moneyline_feature_provenance: pd.DataFrame | None = None,
+) -> None:
+    provenance_by_game: dict[int, dict[str, Any]] = {}
+    if moneyline_feature_provenance is not None:
+        required = {"canonical_season", "slate_date", "game_id", "scheduled_start_time_utc",
+                    "home_team", "away_team", "feature_vector_json"}
+        _require_columns(moneyline_feature_provenance, required, "MONEYLINE_FEATURE_PROVENANCE")
+        if moneyline_feature_provenance.game_id.duplicated().any():
+            raise RuntimeError("IMMUTABLE_MONEYLINE_FEATURE_PROVENANCE_IDENTITY_CONFLICT")
+        for provenance in moneyline_feature_provenance.itertuples(index=False):
+            try:
+                values = json.loads(provenance.feature_vector_json)
+            except (TypeError, json.JSONDecodeError):
+                raise RuntimeError("IMMUTABLE_MONEYLINE_FEATURE_PROVENANCE_INVALID") from None
+            overlap = set(CROSS_MARKET_FEATURES).intersection(values)
+            if not overlap:
+                raise RuntimeError("IMMUTABLE_MONEYLINE_FEATURE_PROVENANCE_SCHEMA_INVALID")
+            values = {name: values[name] for name in overlap}
+            provenance_by_game[int(provenance.game_id)] = {
+                "canonical_season": int(provenance.canonical_season),
+                "slate_date": str(provenance.slate_date),
+                "scheduled_start_time_utc": pd.Timestamp(
+                    provenance.scheduled_start_time_utc).isoformat(),
+                "home_team": str(provenance.home_team),
+                "away_team": str(provenance.away_team),
+                "features": values,
+            }
+
     for row in moneyline.itertuples(index=False):
         raw = {name: getattr(row, name) for name in CROSS_MARKET_FEATURES}
         substantive = {
@@ -314,7 +353,30 @@ def _verify_cross_market_identities(moneyline: pd.DataFrame, puck: pd.DataFrame)
             "features": raw, "parameter_sha256": _sha(MONEYLINE_PARAMETER_PATH),
         }
         if digest_value(substantive) != row.substantive_prediction_sha256:
-            raise RuntimeError("IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH")
+            # Older packages used pandas' default CSV float formatting after
+            # hashing the in-memory values. Accept a mismatch only when the
+            # same manifest-bound provenance record supplies the exact values,
+            # matches this row's full identity, and differs solely by tiny
+            # float serialization error.
+            provenance = provenance_by_game.get(int(row.game_id))
+            if provenance is None or any((
+                provenance[key] != expected for key, expected in (
+                    ("canonical_season", int(row.canonical_season)),
+                    ("slate_date", str(row.slate_date)),
+                    ("scheduled_start_time_utc", pd.Timestamp(row.scheduled_start_time_utc).isoformat()),
+                    ("home_team", str(row.home_team)),
+                    ("away_team", str(row.away_team)),
+                )
+            )):
+                raise RuntimeError("IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH")
+            precise_features = provenance["features"]
+            if any(not math.isclose(
+                float(raw[name]), float(precise_features[name]), rel_tol=0.0, abs_tol=1e-15
+            ) for name in precise_features):
+                raise RuntimeError("IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH")
+            substantive["features"].update(precise_features)
+            if digest_value(substantive) != row.substantive_prediction_sha256:
+                raise RuntimeError("IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH")
     for row in puck.itertuples(index=False):
         raw = {name: getattr(row, name) for name in CROSS_MARKET_FEATURES}
         substantive = {
@@ -324,14 +386,30 @@ def _verify_cross_market_identities(moneyline: pd.DataFrame, puck: pd.DataFrame)
             "features": raw, "control_artifact_sha256": _sha(PUCK_PARAMETER_PATH),
         }
         if digest_value(substantive) != row.substantive_prediction_sha256:
-            raise RuntimeError("IMMUTABLE_PUCK_LINE_SUBSTANTIVE_IDENTITY_MISMATCH")
+            provenance = provenance_by_game.get(int(row.game_id))
+            if provenance is None or any((
+                provenance[key] != expected for key, expected in (
+                    ("canonical_season", int(row.canonical_season)),
+                    ("slate_date", str(row.slate_date)),
+                    ("scheduled_start_time_utc", pd.Timestamp(row.scheduled_start_time_utc).isoformat()),
+                    ("home_team", str(row.home_team)),
+                    ("away_team", str(row.away_team)),
+                )
+            )):
+                raise RuntimeError("IMMUTABLE_PUCK_LINE_SUBSTANTIVE_IDENTITY_MISMATCH")
+            precise_features = provenance["features"]
+            if any(not math.isclose(
+                float(raw[name]), float(precise_features[name]), rel_tol=0.0, abs_tol=1e-15
+            ) for name in precise_features):
+                raise RuntimeError("IMMUTABLE_PUCK_LINE_SUBSTANTIVE_IDENTITY_MISMATCH")
+            substantive["features"].update(precise_features)
+            if digest_value(substantive) != row.substantive_prediction_sha256:
+                raise RuntimeError("IMMUTABLE_PUCK_LINE_SUBSTANTIVE_IDENTITY_MISMATCH")
 
 
 def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> dict[str, Any]:
     """Resolve and fully validate immutable local inputs without I/O outside disk."""
-    cross_pattern = (operational_root / "cross_market_shadow" / "season=2026" /
-                     f"slate_date={slate_date}" / "run_type=FINAL_PREGAME" / "state=*")
-    cross_runs = sorted(cross_pattern.parent.glob(cross_pattern.name))
+    cross_runs = _cross_market_final_runs(operational_root, slate_date)
     if len(cross_runs) > 1:
         raise RuntimeError(f"IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:{len(cross_runs)}")
     # Preserve the established validation order for an existing card: its
@@ -376,6 +454,12 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
         schedule = pd.read_csv(cross / "schedule_event_identity.csv")
         schedule = _local_spine(schedule, slate_date)
         moneyline = pd.read_csv(cross / "v2_immutable_predictions.csv")
+        provenance_name = "moneyline_shot_finishing_challenger_v3_feature_provenance.csv"
+        moneyline_provenance_path = cross / provenance_name
+        moneyline_provenance = (
+            pd.read_csv(moneyline_provenance_path)
+            if provenance_name in cross_manifest and moneyline_provenance_path.is_file() else None
+        )
         puck = pd.read_csv(cross / "puck_line_v1_immutable_predictions.csv")
         common = {"canonical_season", "slate_date", "game_id", "scheduled_start_time_utc",
                   "home_team_id", "away_team_id", "home_team", "away_team",
@@ -389,7 +473,8 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
             if not frame.slate_date.astype(str).eq(slate_date).all():
                 raise RuntimeError(f"IMMUTABLE_{label}_SLATE_DATE_MISMATCH")
             _pregame(frame, "prediction_creation_time_utc", schedule)
-        _verify_cross_market_identities(moneyline, puck)
+        _verify_cross_market_identities(
+            moneyline, puck, moneyline_feature_provenance=moneyline_provenance)
         cross_observed = pd.to_datetime(status["run_timestamp_utc"], utc=True)
 
     ids = set(schedule.game_id.astype(int))

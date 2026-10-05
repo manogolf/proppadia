@@ -18,6 +18,10 @@ from backend.nhl.official_request_journal import (
 )
 
 from backend.nhl.postgame_reconcile.core import (
+    CROSS_MARKET_FEATURES,
+    MONEYLINE_PARAMETER_PATH,
+    _cross_market_final_runs,
+    _verify_cross_market_identities,
     _select_cross_market_final_run,
     _grade_points,
     _grade_saves,
@@ -28,6 +32,8 @@ from backend.nhl.postgame_reconcile.core import (
     validate_staging_identity_sets,
     validate_final_slate,
 )
+from backend.nhl.cross_market_shadow.core import digest_value
+from backend.nhl.postgame_learning import current_et_slate, prior_et_slate
 from backend.nhl.scripts.run_nhl_postgame_reconciliation import (
     _run,
     fetch_official,
@@ -133,6 +139,51 @@ class PostgameReconciliationTest(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_moneyline_csv_rounding_uses_manifest_bound_full_precision_provenance(self):
+        precise = {name: 0.0 for name in CROSS_MARKET_FEATURES}
+        precise["diff_std_goal_diff_pg"] = -0.33333333333333337
+        precise["diff_r10_goal_diff_pg"] = -0.33333333333333337
+        start = "2026-10-05T01:00:00+00:00"
+        features_for_digest = {
+            "canonical_season": 2026, "game_id": 2026020039,
+            "scheduled_start_time_utc": start, "home_team": "VAN", "away_team": "VGK",
+            "features": precise, "parameter_sha256": hashlib.sha256(
+                MONEYLINE_PARAMETER_PATH.read_bytes()).hexdigest(),
+        }
+        expected = digest_value(features_for_digest)
+        rounded = dict(precise)
+        rounded["diff_std_goal_diff_pg"] = -0.3333333333333333
+        rounded["diff_r10_goal_diff_pg"] = -0.3333333333333333
+        prediction = pd.DataFrame([{
+            "canonical_season": 2026, "slate_date": "2026-10-04", "game_id": 2026020039,
+            "scheduled_start_time_utc": start, "home_team": "VAN", "away_team": "VGK",
+            "substantive_prediction_sha256": expected, **rounded,
+        }])
+        provenance = pd.DataFrame([{
+            "canonical_season": 2026, "slate_date": "2026-10-04", "game_id": 2026020039,
+            "scheduled_start_time_utc": start, "home_team": "VAN", "away_team": "VGK",
+            "feature_vector_json": json.dumps(precise),
+        }])
+        _verify_cross_market_identities(
+            prediction, pd.DataFrame(), moneyline_feature_provenance=provenance)
+        provenance.loc[0, "slate_date"] = "2026-10-05"
+        with self.assertRaisesRegex(RuntimeError, "IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH"):
+            _verify_cross_market_identities(
+                prediction, pd.DataFrame(), moneyline_feature_provenance=provenance)
+
+    def test_october_fifth_et_boundary_keeps_prior_and_current_slates_distinct(self):
+        now = pd.Timestamp("2026-10-05T13:49:37-04:00").to_pydatetime()
+        self.assertEqual(current_et_slate(now), "2026-10-05")
+        self.assertEqual(prior_et_slate(now), "2026-10-04")
+        for slate in ("2026-10-04", "2026-10-05"):
+            state = (self.root / "cross_market_shadow" / "season=2026" /
+                     f"slate_date={slate}" / "run_type=FINAL_PREGAME" / "state=fixture")
+            state.mkdir(parents=True)
+        self.assertEqual([p.parts[-3] for p in _cross_market_final_runs(self.root, "2026-10-04")],
+                         ["slate_date=2026-10-04"])
+        self.assertEqual([p.parts[-3] for p in _cross_market_final_runs(self.root, "2026-10-05")],
+                         ["slate_date=2026-10-05"])
 
     def publish(self, **overrides):
         kwargs = dict(canonical=canonical(), official=official(), boxscores=boxscore(),

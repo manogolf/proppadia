@@ -978,7 +978,9 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         return destination
     destination.mkdir(parents=True, exist_ok=False)
     schedule.to_csv(destination / "schedule_event_identity.csv", index=False)
-    predictions.to_csv(destination / "v2_immutable_predictions.csv", index=False)
+    # The substantive digest is computed from in-memory binary floats above;
+    # 17 significant digits preserve those values across CSV round trips.
+    predictions.to_csv(destination / "v2_immutable_predictions.csv", index=False, float_format="%.17g")
     puck_predictions.to_csv(destination / "puck_line_v1_immutable_predictions.csv", index=False)
     if len(puck_v2_predictions):
         puck_v2_predictions.to_csv(destination / "puck_line_v2_shot_prior_challenger_predictions.csv", index=False)
