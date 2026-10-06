@@ -290,6 +290,57 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
                           coverage["saves"]["unmatched"], coverage["saves"]["ambiguous"]),
                          (2, 1, 1, 0))
 
+    def test_points_superset_projects_by_exact_grade_keys_when_model_state_changes(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            daily, archive, grade = self.write_daily_evidence(root, "points")
+            grade = grade.iloc[[0]].copy()
+            grade["canonical_scheduled_start_time_utc"] = "2026-10-02T23:00:00Z"
+            run_dir = next(daily.glob("run_id=*/"))
+            pred = pd.read_csv(run_dir / "points_predictions.csv")
+            pred["prob_over"] = [0.91, 0.09]  # changed model state, same proposition keys
+            pred.to_csv(run_dir / "points_predictions.csv", index=False)
+            receipt_path = run_dir / "parent_receipt.json"
+            receipt = json.loads(receipt_path.read_text())
+            pred_sha = hashlib.sha256((run_dir / "points_predictions.csv").read_bytes()).hexdigest()
+            receipt["lanes"]["points"]["outputs"][0]["sha256"] = pred_sha
+            receipt["lanes"]["points_attachment"]["outputs"][0]["prediction_artifact_sha256"] = pred_sha
+            receipt["lanes"]["points_attachment"]["outputs"][0]["path"] = str(
+                (root / "site" / "points_attachment_integrity.json").resolve())
+            obs = root / "observation"
+            obs.mkdir()
+            (obs / "observation_summary.json").write_text(json.dumps({
+                "observation_timestamp_utc": "2026-10-02T18:00:00Z"}))
+            receipt["lanes"]["points_attachment"]["inputs"] = [{
+                "manifest_sha256": "a" * 64, "path": str(obs)}]
+            integrity_path = archive / "2026-10-02" / "points_attachment_integrity.json"
+            integrity = json.loads(integrity_path.read_text())
+            integrity["prediction_artifact_sha256"] = pred_sha
+            attached = pd.DataFrame({"player_id": [11, 12], "game_id": [101, 101],
+                                     "line": [.5, 1.5]})
+            unmatched = attached.iloc[[1]]
+            attached.to_csv(archive / "2026-10-02" / "points_with_market.csv", index=False)
+            unmatched.to_csv(archive / "2026-10-02" / "unmatched_points.csv", index=False)
+            integrity["attachment_sha256"] = hashlib.sha256(
+                (archive / "2026-10-02" / "points_with_market.csv").read_bytes()).hexdigest()
+            integrity["unmatched_sha256"] = hashlib.sha256(
+                (archive / "2026-10-02" / "unmatched_points.csv").read_bytes()).hexdigest()
+            integrity_path.write_text(json.dumps(integrity))
+            report_sha = hashlib.sha256(integrity_path.read_bytes()).hexdigest()
+            receipt["lanes"]["points_attachment"]["outputs"][0]["sha256"] = report_sha
+            receipt_path.write_text(json.dumps(receipt))
+            (run_dir / "SHA256SUMS").write_text("".join(
+                f"{hashlib.sha256((run_dir / name).read_bytes()).hexdigest()}  {name}\n"
+                for name in ("parent_receipt.json", "RUN_COMPLETE.json")))
+            coverage = discover_daily_market_coverage(slate_date="2026-10-02",
+                grades={"points": grade}, daily_run_root=daily, integrity_archive_root=archive)
+        self.assertEqual(coverage["points"]["status"], "AVAILABLE")
+        self.assertEqual(coverage["points"]["prediction_rows"], 1)
+        self.assertEqual(coverage["points"]["matched"], 1)
+        self.assertEqual(coverage["points"]["unmatched"], 0)
+        self.assertEqual(coverage["points"]["match_rate"], 1.0)
+        self.assertEqual(coverage["points"]["source_prediction_rows"], 2)
+
     def test_wrong_slate_receipt_is_not_selected(self):
         with tempfile.TemporaryDirectory() as raw:
             root = Path(raw)
@@ -306,6 +357,15 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
             result = discover_daily_market_coverage(slate_date="2026-10-02",
                 grades={"points": points}, daily_run_root=daily, integrity_archive_root=archive)
         self.assertIsNone(result["points"]["matched"])
+
+    def test_same_row_count_with_different_points_keys_is_rejected(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            daily, archive, points = self.write_daily_evidence(root, "points")
+            points.loc[1, "player_id"] = 999  # same row count, different proposition key
+            result = discover_daily_market_coverage(slate_date="2026-10-02",
+                grades={"points": points}, daily_run_root=daily, integrity_archive_root=archive)
+        self.assertEqual(result["points"]["status"], "UNAVAILABLE_FROM_RETAINED_BOUND_EVIDENCE")
 
     def test_failed_integrity_report_rejects_coverage(self):
         with tempfile.TemporaryDirectory() as raw:

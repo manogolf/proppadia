@@ -481,18 +481,56 @@ def discover_daily_market_coverage(
                     expanded = pd.DataFrame(expanded_rows, columns=["goalie_id", "game_id", "line"])
                     prediction_keys = _record_keys(expanded, ("goalie_id", "game_id", "line"))
                     grade_keys = _record_keys(grade, ("goalie_id", "game_id", "line"))
-                if prediction_keys != grade_keys or len(prediction_keys) != report_rows:
+                projected_points = lane == "points" and grade_keys < prediction_keys
+                if prediction_keys != grade_keys and not projected_points:
                     continue
-                matched = int(counts["matched_count"])
-                unmatched = int(counts["unmatched_count"])
-                ambiguous = int(counts["ambiguous_count"])
-                if matched + unmatched + ambiguous != report_rows:
+                if len(prediction_keys) != report_rows:
                     continue
+                if projected_points:
+                    # Descriptive availability is a property of the proposition key.
+                    # Verify the retained full attachment, then project its unmatched
+                    # keys onto the governed grade population. The prediction hash may
+                    # differ when probabilities/features changed while proposition
+                    # identity stayed fixed.
+                    attachment_path = Path(integrity_archive_root) / slate_date / "points_with_market.csv"
+                    unmatched_path = Path(integrity_archive_root) / slate_date / "unmatched_points.csv"
+                    if (_sha(attachment_path) != report.get("attachment_sha256")
+                            or _sha(unmatched_path) != report.get("unmatched_sha256")):
+                        continue
+                    attached = pd.read_csv(attachment_path)
+                    unmatched_frame = pd.read_csv(unmatched_path)
+                    attached_keys = _record_keys(attached, ("player_id", "game_id", "line"))
+                    unmatched_keys = _record_keys(unmatched_frame, ("player_id", "game_id", "line"))
+                    if (attached_keys != prediction_keys or not unmatched_keys.issubset(attached_keys)
+                            or not grade_keys.issubset(attached_keys)):
+                        continue
+                    observation_path = Path(next((item.get("path", "") for item in odds_inputs
+                        if item.get("manifest_sha256") == report.get(
+                            "odds_observation_manifest_sha256")), ""))
+                    observation = json.loads((observation_path / "observation_summary.json").read_text())
+                    observed_at = pd.Timestamp(observation["observation_timestamp_utc"])
+                    start_column = ("canonical_scheduled_start_time_utc"
+                                    if "canonical_scheduled_start_time_utc" in grade
+                                    else "scheduled_start_time_utc")
+                    if start_column not in grade:
+                        continue
+                    starts = grade.groupby("game_id")[start_column].first()
+                    if any(observed_at >= pd.Timestamp(value) for value in starts):
+                        continue
+                    matched = len(grade_keys - unmatched_keys)
+                    unmatched = len(grade_keys & unmatched_keys)
+                    ambiguous = 0
+                else:
+                    matched = int(counts["matched_count"])
+                    unmatched = int(counts["unmatched_count"])
+                    ambiguous = int(counts["ambiguous_count"])
+                    if matched + unmatched + ambiguous != report_rows:
+                        continue
                 result[lane] = {
-                    "status": "AVAILABLE", "prediction_rows": report_rows,
+                    "status": "AVAILABLE", "prediction_rows": len(grade_keys),
                     "matched": matched, "unmatched": unmatched,
                     "ambiguous": ambiguous,
-                    "match_rate": matched / report_rows if report_rows else None,
+                    "match_rate": matched / len(grade_keys) if grade_keys else None,
                     "source_artifact": str(archive_path.resolve()),
                     "source_artifact_sha256": integrity_identity["sha256"],
                     "daily_run_id": run_id,
@@ -502,6 +540,22 @@ def discover_daily_market_coverage(
                         "odds_observation_manifest_sha256"],
                     "population_binding": "EXACT_GAME_PLAYER_LINE_KEYS",
                 }
+                if projected_points:
+                    result[lane].update({
+                        "source_prediction_rows": report_rows,
+                        "source_prediction_artifact_sha256": prediction_identity["sha256"],
+                        "population_binding": "EXACT_GRADE_KEY_PROJECTION_FROM_RETAINED_SUPERSET",
+                        "eligible_game_count": int(len(starts)),
+                        "eligible_prestart": len(grade_keys),
+                        "poststart_excluded": 0,
+                        "matched_key_projection": True,
+                        "attachment_path": str(attachment_path.resolve()),
+                        "attachment_sha256": report["attachment_sha256"],
+                        "unmatched_attachment_path": str(unmatched_path.resolve()),
+                        "unmatched_attachment_sha256": report["unmatched_sha256"],
+                        "daily_receipt_path": str(receipt_path.resolve()),
+                        "odds_observation_path": str(observation_path.resolve()),
+                    })
                 break
             except (OSError, ValueError, KeyError, TypeError, pd.errors.ParserError,
                     json.JSONDecodeError):
@@ -911,6 +965,33 @@ def _grade_projection(summary: dict[str, Any]) -> dict[str, Any]:
 
 
 def _descriptive_evidence_is_valid(summary: dict[str, Any]) -> bool:
+    points = ((summary.get("models") or {}).get("points") or {}).get("market_coverage") or {}
+    if points.get("matched_key_projection"):
+        try:
+            report_path = Path(points["source_artifact"])
+            attachment_path = Path(points["attachment_path"])
+            unmatched_path = Path(points["unmatched_attachment_path"])
+            receipt_path = Path(points["daily_receipt_path"])
+            observation_path = Path(points["odds_observation_path"])
+            if (_sha(report_path) != points.get("source_artifact_sha256")
+                    or _sha(attachment_path) != points.get("attachment_sha256")
+                    or _sha(unmatched_path) != points.get("unmatched_attachment_sha256")):
+                return False
+            report = json.loads(report_path.read_text())
+            if (report.get("status") != "PASS"
+                    or report.get("parent_daily_run_id") != points.get("daily_run_id")
+                    or report.get("prediction_artifact_sha256") != points.get(
+                        "source_prediction_artifact_sha256")
+                    or report.get("odds_observation_manifest_sha256") != points.get(
+                        "odds_observation_manifest_sha256")):
+                return False
+            _, receipt_manifest = _verify_daily_receipt(receipt_path, str(summary["slate_date"]))
+            if receipt_manifest != points.get("daily_receipt_manifest_sha256"):
+                return False
+            if verify_package(observation_path) != points.get("odds_observation_manifest_sha256"):
+                return False
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            return False
     coverage = ((summary.get("models") or {}).get("sog") or {}).get("market_coverage") or {}
     source_path = coverage.get("source_artifact")
     annotation_path = coverage.get("cause_annotation_path")
