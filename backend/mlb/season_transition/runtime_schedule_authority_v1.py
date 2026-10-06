@@ -226,6 +226,25 @@ class RuntimeScheduleAuthority(CanonicalGamePhaseAuthority):
     def is_runtime_exact(self, game_pk: int) -> bool:
         return int(game_pk) in self._overlay
 
+    def require_exact_game_date(self, game_pk: Any, game_date: Any) -> None:
+        """Permit dates beyond the pinned snapshot only for an exact sourced PK."""
+        try:
+            exact = int(game_pk)
+        except (TypeError, ValueError):
+            raise GamePhaseAuthorityError("GAME_PHASE_GAME_PK_MISSING") from None
+        source_game = self._all.get(exact)
+        if source_game is not None and str(source_game.get("officialDate") or "") == str(game_date):
+            return
+        inherited = getattr(self.base, "require_exact_game_date", None)
+        if inherited is not None:
+            inherited(exact, game_date)
+            return
+        if source_game is None or str(source_game.get("officialDate") or "") != str(game_date):
+            raise GamePhaseAuthorityError(
+                "GAME_PHASE_AUTHORITY_STALE", game_pk=exact,
+                detail=f"schedule_date_mismatch={game_date}",
+            )
+
 
 def source_bound_schedule_decisions(
     authority: RuntimeScheduleAuthority,

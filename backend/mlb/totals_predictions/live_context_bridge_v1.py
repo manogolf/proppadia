@@ -61,6 +61,31 @@ def fetch_hydrated_schedule(game_date: str, retain_path: Path | None = None) -> 
     return json.loads(raw), observed, hashlib.sha256(raw).hexdigest()
 
 
+def load_retained_schedule(
+    source_path: Path, expected_source_sha256: str, *, observed_at_utc: str | None = None,
+) -> tuple[dict[str, Any], str, str]:
+    """Load only the immutable schedule already retained by the natural run."""
+    path = Path(source_path)
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise TotalsLiveContextError(f"RETAINED_SCHEDULE_UNAVAILABLE:{path}:{exc}") from None
+    digest = hashlib.sha256(raw).hexdigest()
+    if digest != str(expected_source_sha256):
+        raise TotalsLiveContextError("RETAINED_SCHEDULE_HASH_MISMATCH")
+    lowered = raw.lower()
+    if b'"score"' in lowered or b'"runs"' in lowered or b'"iswinner"' in lowered:
+        raise TotalsLiveContextError("OUTCOME_FIELD_PRESENT_IN_RETAINED_SCHEDULE")
+    try:
+        payload = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise TotalsLiveContextError("RETAINED_SCHEDULE_MALFORMED") from None
+    if not isinstance(payload, dict) or not isinstance(payload.get("dates"), list):
+        raise TotalsLiveContextError("RETAINED_SCHEDULE_SHAPE_INVALID")
+    observed = observed_at_utc or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return payload, observed, digest
+
+
 def normalize_schedule(
     payload: dict[str, Any],
     observed_at_utc: str,

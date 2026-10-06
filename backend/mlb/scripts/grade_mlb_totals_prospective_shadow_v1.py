@@ -21,6 +21,7 @@ from backend.mlb.totals_predictions.prospective_shadow_v1 import (
 )
 from backend.mlb.totals_predictions.phase_gating_v1 import (
     REGULAR_SEASON,
+    authority_with_retained_schedule_rows,
     partition_totals_rows,
     require_evaluation_phase,
     verified_totals_phase_authority,
@@ -181,6 +182,9 @@ def run(
     connection = connect_ledger(ledger_path); before = counts(connection)
     retained_predictions = rows_for_date(connection, game_date)
     if not retained_predictions: raise RuntimeError("NO_FROZEN_TOTALS_PREDICTIONS")
+    phase_authority = authority_with_retained_schedule_rows(
+        retained_predictions, base=phase_authority
+    )
     prediction_partitions = partition_totals_rows(
         retained_predictions, authority=phase_authority,
         unique_identity_fields=("game_pk",),

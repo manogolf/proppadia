@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import hashlib
 import json
 from datetime import datetime
 from pathlib import Path
@@ -58,34 +59,45 @@ def test_auto_window_0530_is_primary_and_0830_or_later_retries_missing():
 
 def test_daily_0830_scores_and_later_runs_retry_missing(monkeypatch, tmp_path):
     today = datetime.now(ZoneInfo("America/New_York")).date().isoformat(); calls=[]
+    schedule_path=tmp_path/"schedule.json";schedule_path.write_text("{}")
+    schedule_hash=hashlib.sha256(schedule_path.read_bytes()).hexdigest()
     monkeypatch.setattr(daily,"score",lambda *args,**kwargs:calls.append(("score",args[0])) or {"rows":1,"new_rows":1})
     monkeypatch.setattr(daily,"attach_markets",lambda *args,**kwargs:calls.append(("markets",args[0])) or {"predictions_with_market":0,"market_unavailable_predictions":1})
     monkeypatch.setattr(daily,"grade",lambda *args,**kwargs:pytest.fail("no pending grade dates expected"))
-    result=daily.run(today,"2000-01-01","auto","2026-08-07T15:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3")
+    result=daily.run(today,"2000-01-01","auto","2026-08-07T15:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3",
+        schedule_source_path=schedule_path,expected_schedule_source_sha256=schedule_hash,phase_authority=_phase_authority())
     assert result["resolved_mode"]==daily.SCORE_MISSING and calls==[("score",today),("markets",today)]
     calls.clear()
-    result=daily.run(today,"2000-01-01","auto","2026-08-07T18:00:00Z",tmp_path,tmp_path/"p2.sqlite3",tmp_path/"m2.sqlite3")
+    result=daily.run(today,"2000-01-01","auto","2026-08-07T18:00:00Z",tmp_path,tmp_path/"p2.sqlite3",tmp_path/"m2.sqlite3",
+        schedule_source_path=schedule_path,expected_schedule_source_sha256=schedule_hash,phase_authority=_phase_authority())
     assert result["resolved_mode"]==daily.SCORE_MISSING and calls==[("score",today),("markets",today)]
 
 
 def test_daily_0530_is_primary_scoring_pass(monkeypatch, tmp_path):
     today=datetime.now(ZoneInfo("America/New_York")).date().isoformat(); calls=[]
+    schedule_path=tmp_path/"schedule.json";schedule_path.write_text("{}")
+    schedule_hash=hashlib.sha256(schedule_path.read_bytes()).hexdigest()
     monkeypatch.setattr(daily,"score",lambda *args,**kwargs:calls.append(("score",args[0])) or {"rows":1,"new_rows":1})
     monkeypatch.setattr(daily,"attach_markets",lambda *args,**kwargs:calls.append(("markets",args[0])) or {"predictions_with_market":0,"market_unavailable_predictions":1})
-    result=daily.run(today,"2000-01-01","auto","2026-08-07T12:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3")
+    result=daily.run(today,"2000-01-01","auto","2026-08-07T12:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3",
+        schedule_source_path=schedule_path,expected_schedule_source_sha256=schedule_hash,phase_authority=_phase_authority())
     assert result["resolved_mode"]==daily.PRIMARY_SCORE and calls==[("score",today),("markets",today)]
 
 
 def test_existing_identity_is_bypassed_before_context_reconstruction(monkeypatch, tmp_path):
     ledger=tmp_path/"p.sqlite3";connection=connect_ledger(ledger);add_prediction(connection,"2026-08-07",10)
     monkeypatch.setattr(shadow,"verified_totals_phase_authority",lambda:_phase_authority(10))
-    monkeypatch.setattr(shadow,"fetch_hydrated_schedule",lambda *_:({},"2026-08-07T15:00:00Z","b"*64))
+    schedule_path=tmp_path/"schedule.json";schedule_path.write_text("{}")
+    schedule_hash=hashlib.sha256(schedule_path.read_bytes()).hexdigest()
+    monkeypatch.setattr(shadow,"load_retained_schedule",lambda *_:({},"2026-08-07T15:00:00Z",schedule_hash))
     monkeypatch.setattr(shadow,"normalize_schedule",lambda *_:[{"game_pk":10,"game_date":"2026-08-07"}])
     monkeypatch.setattr(shadow,"build_history",lambda :{})
     monkeypatch.setattr(shadow,"dynamic_environment",lambda *_:{})
     monkeypatch.setattr(shadow,"market_inventory",lambda *_:([],[]))
     monkeypatch.setattr(shadow,"attach_context",lambda *_:pytest.fail("existing identity context reconstructed"))
-    result=shadow.run("2026-08-07",tmp_path/"out",ledger)
+    result=shadow.run("2026-08-07",tmp_path/"out",ledger,
+        phase_authority=_phase_authority(10),schedule_source_path=schedule_path,
+        expected_schedule_source_sha256=schedule_hash)
     assert result["new_rows"]==0 and result["attempts"][0]["context_action"]=="EXISTING_CONTEXT_NOT_RECONSTRUCTED"
 
 

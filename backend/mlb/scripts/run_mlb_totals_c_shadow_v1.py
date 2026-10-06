@@ -147,6 +147,7 @@ def raw_rows(game_date: str, raw_ledger_path: Path) -> list[dict[str, Any]]:
             "raw_identity": identity, "game_date": game_date, "game_pk": int(game_pk), "scheduled_start_utc": scheduled,
             "raw_prediction_timestamp_utc": predicted, "feature_state_hash": feature_hash,
             "schedule_source_hash": schedule_hash, "market_source_hash": market_hash,
+            "schedule_source_path": prediction.get("schedule_source_path"),
             "raw_prediction_sha256": prediction_sha, "raw_context_sha256": context_sha,
             "prediction": prediction, "context": context,
         })
@@ -303,6 +304,7 @@ def score_from_raw(game_date: str, scoring_mode: str, run_tag: str, raw_ledger_p
             "feature_contract_hash": FEATURE_CONTRACT_HASH, "feature_state_hash": source["feature_state_hash"],
             "source_raw_identity": source["raw_identity"], "source_raw_prediction_sha256": source["raw_prediction_sha256"],
             "source_raw_context_sha256": source["raw_context_sha256"], "schedule_source_sha256": source["schedule_source_hash"],
+            "schedule_source_path": source.get("schedule_source_path"),
             "market_source_sha256": source["market_source_hash"],
             "away_probable_starter_id": raw_prediction.get("away_probable_starter_id"),
             "away_probable_starter_name": raw_prediction.get("away_probable_starter_name"),

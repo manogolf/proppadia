@@ -14,6 +14,7 @@ import re
 from dataclasses import asdict, dataclass
 from functools import lru_cache
 from numbers import Integral, Real
+from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from backend.mlb.season_transition.game_phase_authority_v1 import (
@@ -22,6 +23,8 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     GamePhaseAuthorityRecord,
     HashedProposalAuthority,
 )
+from backend.mlb.season_transition.phase_authority_snapshot_v1 import REPO_ROOT
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 
 
 REGULAR_SEASON = "REGULAR_SEASON"
@@ -88,6 +91,54 @@ class TotalsPhasePartitions:
 @lru_cache(maxsize=1)
 def verified_totals_phase_authority() -> HashedProposalAuthority:
     return HashedProposalAuthority()
+
+
+def authority_with_retained_schedule_rows(
+    rows: Iterable[Mapping[str, Any]], *,
+    base: CanonicalGamePhaseAuthority | None = None,
+) -> CanonicalGamePhaseAuthority:
+    """Rehydrate each prediction's exact, hash-bound schedule overlay for grading."""
+    authority = base or verified_totals_phase_authority()
+    sources: dict[str, str] = {}
+    for row in rows:
+        path, digest = row.get("schedule_source_path"), row.get("schedule_source_sha256")
+        if path in (None, "") and digest in (None, ""):
+            continue
+        if not path and digest:
+            # Legacy rows can rely on the pinned authority only when it already
+            # contains their exact game identity; stale identities still fail
+            # later at classification rather than gaining date-only coverage.
+            try:
+                authority.lookup_exact(exact_game_pk(row))
+            except GamePhaseAuthorityError as exc:
+                raise TotalsPhaseGateError(
+                    "TOTALS_RETAINED_SCHEDULE_BINDING_INCOMPLETE",
+                    game_pk=exact_game_pk(row), detail=exc.code,
+                ) from exc
+            continue
+        if not path or not digest:
+            raise TotalsPhaseGateError(
+                "TOTALS_RETAINED_SCHEDULE_BINDING_INCOMPLETE", game_pk=exact_game_pk(row)
+            )
+        prior = sources.get(str(path))
+        if prior is not None and prior != str(digest):
+            raise TotalsPhaseGateError(
+                "TOTALS_RETAINED_SCHEDULE_HASH_CONFLICT", game_pk=exact_game_pk(row)
+            )
+        sources[str(path)] = str(digest)
+    for source_path, digest in sorted(sources.items()):
+        path = Path(source_path)
+        if not path.is_absolute():
+            path = REPO_ROOT / path
+        try:
+            authority = RuntimeScheduleAuthority(
+                source_path=path, expected_source_sha256=digest, base=authority
+            )
+        except GamePhaseAuthorityError as exc:
+            raise TotalsPhaseGateError(
+                "TOTALS_RETAINED_SCHEDULE_INVALID", detail=exc.code
+            ) from exc
+    return authority
 
 
 def require_evaluation_phase(value: str) -> str:
@@ -206,9 +257,19 @@ def classify_totals_row(
         try:
             authority.require_supported_window(game_date, game_date)
         except GamePhaseAuthorityError as exc:
-            raise TotalsPhaseGateError(
-                "TOTALS_PHASE_AUTHORITY_STALE", game_pk=game_pk, detail=exc.code
-            ) from exc
+            exact_date_check = getattr(authority, "require_exact_game_date", None)
+            if exact_date_check is not None:
+                try:
+                    exact_date_check(game_pk, game_date)
+                except GamePhaseAuthorityError:
+                    raise TotalsPhaseGateError(
+                        "TOTALS_PHASE_AUTHORITY_STALE", game_pk=game_pk,
+                        detail=exc.code,
+                    ) from exc
+            else:
+                raise TotalsPhaseGateError(
+                    "TOTALS_PHASE_AUTHORITY_STALE", game_pk=game_pk, detail=exc.code
+                ) from exc
     try:
         record = authority.lookup_exact(game_pk)
     except GamePhaseAuthorityError as exc:

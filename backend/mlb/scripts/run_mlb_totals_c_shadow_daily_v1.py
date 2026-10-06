@@ -21,12 +21,14 @@ from backend.mlb.totals_predictions.c_shadow_v1 import (
 from backend.mlb.totals_predictions.prospective_shadow_v1 import payload_hash as raw_payload_hash
 from backend.mlb.totals_predictions.phase_gating_v1 import (
     REGULAR_SEASON,
+    authority_with_retained_schedule_rows,
     classify_totals_row,
     partition_totals_rows,
     require_evaluation_phase,
     verified_totals_phase_authority,
 )
 from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 
 
 def now_utc() -> str:
@@ -41,18 +43,21 @@ def pending_dates(connection: sqlite3.Connection, completed_through: str) -> lis
 
 def raw_outcomes(game_date: str, raw_ledger_path: Path) -> dict[int, dict[str, Any]]:
     connection = sqlite3.connect(raw_ledger_path)
-    rows = connection.execute("""SELECT p.game_id,p.canonical_identity,o.grading_payload_json,o.grading_payload_sha256,o.graded_at_utc
+    rows = connection.execute("""SELECT p.game_id,p.canonical_identity,o.grading_payload_json,o.grading_payload_sha256,o.graded_at_utc,p.prediction_payload_json
       FROM totals_shadow_predictions p JOIN totals_shadow_outcomes o USING(canonical_identity)
       WHERE p.game_date=? ORDER BY p.game_id""", (game_date,)).fetchall()
     connection.close()
     output = {}
-    for game_pk, identity, payload_json, digest, graded in rows:
+    for game_pk, identity, payload_json, digest, graded, prediction_json in rows:
         payload = json.loads(payload_json)
         if raw_payload_hash(payload) != digest:
             raise RuntimeError(f"RAW_OUTCOME_PAYLOAD_HASH_MISMATCH_{identity}")
         output[int(game_pk)] = {"raw_identity": identity, "game_date": game_date,
             "game_pk": int(game_pk), "payload": payload, "payload_sha256": digest,
             "raw_graded_at_utc": graded}
+        prediction = json.loads(prediction_json)
+        output[int(game_pk)]["schedule_source_path"] = prediction.get("schedule_source_path")
+        output[int(game_pk)]["schedule_source_sha256"] = prediction.get("schedule_source_sha256")
     return output
 
 
@@ -66,6 +71,9 @@ def grade_date(
     phase_authority = phase_authority or verified_totals_phase_authority()
     connection = connect_ledger(c_ledger_path)
     retained_predictions = predictions_for_date(connection, game_date)
+    phase_authority = authority_with_retained_schedule_rows(
+        retained_predictions, base=phase_authority
+    )
     phase_partitions = partition_totals_rows(
         retained_predictions, authority=phase_authority,
         unique_identity_fields=("source_raw_identity",),
@@ -132,6 +140,9 @@ def cluster_counts(
     retained = [json.loads(row[0]) for row in connection.execute(
         "SELECT prediction_payload_json FROM totals_c_shadow_predictions ORDER BY game_date,game_pk"
     )]
+    phase_authority = authority_with_retained_schedule_rows(
+        retained, base=phase_authority
+    )
     partitions = partition_totals_rows(
         retained, authority=phase_authority,
         unique_identity_fields=("source_raw_identity",),
@@ -182,7 +193,6 @@ def run(slate_date: str, completed_through: str, mode: str, wrapper_started_at_u
         raw_lifecycle_json: Path | None = None, evaluation_phase: str = REGULAR_SEASON,
         phase_authority: CanonicalGamePhaseAuthority | None = None) -> dict[str, Any]:
     require_evaluation_phase(evaluation_phase)
-    phase_authority = phase_authority or verified_totals_phase_authority()
     resolved = resolve_mode(mode, wrapper_started_at_utc)
     if resolved in (PRIMARY_SCORE, SCORE_MISSING):
         current_et = datetime.now(ZoneInfo("America/New_York")).date().isoformat()
@@ -191,6 +201,20 @@ def run(slate_date: str, completed_through: str, mode: str, wrapper_started_at_u
     raw_lifecycle = json.loads(raw_lifecycle_json.read_text()) if raw_lifecycle_json else None
     if raw_lifecycle and raw_lifecycle.get("resolved_mode") != resolved:
         raise RuntimeError("C_RAW_LIFECYCLE_MODE_MISMATCH")
+    if phase_authority is None and raw_lifecycle and raw_lifecycle.get("schedule_source_path"):
+        source_path = (Path(__file__).resolve().parents[3] / raw_lifecycle["schedule_source_path"]).resolve()
+        try:
+            source_hash = hashlib.sha256(source_path.read_bytes()).hexdigest()
+        except OSError as exc:
+            raise RuntimeError(f"C_RETAINED_SCHEDULE_REQUIRED:{source_path}:{exc}") from None
+        if source_hash != raw_lifecycle.get("schedule_source_sha256"):
+            raise RuntimeError("C_RAW_LIFECYCLE_SCHEDULE_HASH_MISMATCH")
+        phase_authority = RuntimeScheduleAuthority(
+            source_path=source_path,
+            expected_source_sha256=source_hash,
+            base=verified_totals_phase_authority(),
+        )
+    phase_authority = phase_authority or verified_totals_phase_authority()
     connection = connect_ledger(c_ledger_path)
     before = counts(connection)
     grading = [grade_date(day, c_ledger_path, raw_ledger_path, phase_authority=phase_authority) for day in pending_dates(connection, completed_through)]

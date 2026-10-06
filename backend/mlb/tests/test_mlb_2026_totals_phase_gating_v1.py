@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import inspect
 import tempfile
 import unittest
@@ -18,6 +19,7 @@ from backend.mlb.totals_predictions import c_shadow_v1 as c_ledger
 from backend.mlb.totals_predictions import prospective_shadow_v1 as raw_ledger
 from backend.mlb.totals_predictions.phase_gating_v1 import (
     TotalsPhaseGateError,
+    authority_with_retained_schedule_rows,
     canonical_rows_sha256,
     classify_totals_row,
     partition_totals_rows,
@@ -29,6 +31,8 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     GamePhaseAuthorityMetadata,
     GamePhaseAuthorityRecord,
 )
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
+from backend.mlb.season_transition.phase_authority_snapshot_v1 import REPO_ROOT
 
 
 def metadata(**changes: int | str) -> GamePhaseAuthorityMetadata:
@@ -127,6 +131,63 @@ def row(game_pk: int = 1, game_date: str = "2026-09-22", **changes: object) -> d
 
 
 class TotalsPhaseGatingV1Tests(unittest.TestCase):
+    def test_retained_october_6_schedule_authorizes_exact_division_series_games(self) -> None:
+        source = REPO_ROOT / (
+            "backend/mlb/exports/provider_event_game_bindings/schedule_sources/2026-10-06/"
+            "statsapi_schedule__local_daily_20261006T123004Z.json"
+        )
+        source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+        authority = RuntimeScheduleAuthority(
+            source_path=source, expected_source_sha256=source_hash,
+        )
+        decisions = []
+        for game_pk in (849819, 849826):
+            decision = classify_totals_row(
+                row(game_pk, "2026-10-06", source_game_type="D"),
+                authority=authority,
+            )
+            record_value = authority.lookup_exact(game_pk)
+            self.assertEqual(decision.evaluation_partition, "POSTSEASON")
+            self.assertEqual(record_value.source_game_type, "D")
+            self.assertEqual(record_value.source_round, "NL Division Series")
+            self.assertEqual(record_value.primary_source_sha256, source_hash)
+            decisions.append(decision)
+        self.assertEqual({item.game_pk for item in decisions}, {849819, 849826})
+
+    def test_retained_prediction_binding_rehydrates_exact_schedule_for_grading(self) -> None:
+        source = REPO_ROOT / (
+            "backend/mlb/exports/provider_event_game_bindings/schedule_sources/2026-10-06/"
+            "statsapi_schedule__local_daily_20261006T123004Z.json"
+        )
+        source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
+        overlay = authority_with_retained_schedule_rows([
+            row(849819, "2026-10-06", source_game_type="D",
+                schedule_source_path=source.relative_to(REPO_ROOT).as_posix(),
+                schedule_source_sha256=source_hash),
+        ])
+        decision = classify_totals_row(
+            row(849819, "2026-10-06", source_game_type="D"), authority=overlay,
+        )
+        self.assertEqual(decision.evaluation_partition, "POSTSEASON")
+        self.assertEqual(overlay.lookup_exact(849819).primary_source_sha256, source_hash)
+
+    def test_runtime_overlay_requires_exact_schedule_date_and_identity(self) -> None:
+        source = REPO_ROOT / (
+            "backend/mlb/exports/provider_event_game_bindings/schedule_sources/2026-10-06/"
+            "statsapi_schedule__local_daily_20261006T123004Z.json"
+        )
+        authority = RuntimeScheduleAuthority(
+            source_path=source, expected_source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+        )
+        with self.assertRaisesRegex(TotalsPhaseGateError, "SOURCE_TYPE_CONFLICT"):
+            classify_totals_row(
+                row(849819, "2026-10-06", source_game_type="R"), authority=authority,
+            )
+        with self.assertRaisesRegex(TotalsPhaseGateError, "PHASE_AUTHORITY_STALE"):
+            classify_totals_row(row(849819, "2026-10-07", source_game_type="D"), authority=authority)
+        with self.assertRaises(TotalsPhaseGateError):
+            classify_totals_row(row(849820, "2026-10-06", source_game_type="D"), authority=authority)
+
     def test_all_supported_postseason_rounds_are_transient_labels(self) -> None:
         rounds = {
             "F": "WILD_CARD", "D": "DIVISION_SERIES",

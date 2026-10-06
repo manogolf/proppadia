@@ -23,6 +23,7 @@ set +e
   --completed-through "$completed_through" \
   --mode "$mode" \
   --wrapper-started-at-utc "$wrapper_started_at_utc" \
+  --run-tag "$run_tag" \
   --output-json "$attempt_path" >/dev/null
 lifecycle_rc=$?
 set -e

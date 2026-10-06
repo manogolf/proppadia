@@ -13,7 +13,7 @@ import pandas as pd
 
 from backend.mlb.totals_predictions.live_context_bridge_v1 import (
     GOVERNED_STARTER_HISTORY_TIERS, attach_context, build_history, canonical_hash, distribution, feature_row,
-    fetch_hydrated_schedule, load_candidate, normalize_schedule, score_context,
+    load_candidate, load_retained_schedule, normalize_schedule, score_context,
 )
 from backend.mlb.totals_predictions.prospective_shadow_v1 import (
     MODEL_VERSION, SNAPSHOT_CLASS, append_context, append_prediction, append_prediction_with_context, canonical_identity,
@@ -26,6 +26,7 @@ from backend.mlb.totals_predictions.phase_gating_v1 import (
     verified_totals_phase_authority,
 )
 from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 
 ROOT = Path(__file__).resolve().parents[3]
 EXPERIMENT = "MLB_TOTALS_PROSPECTIVE_SHADOW_V1"
@@ -144,14 +145,32 @@ def run(
     *,
     evaluation_phase: str = REGULAR_SEASON,
     phase_authority: CanonicalGamePhaseAuthority | None = None,
+    schedule_source_path: Path | None = None,
+    expected_schedule_source_sha256: str | None = None,
 ) -> dict[str, Any]:
     require_evaluation_phase(evaluation_phase)
-    phase_authority = phase_authority or verified_totals_phase_authority()
+    if schedule_source_path is None or expected_schedule_source_sha256 is None:
+        raise RuntimeError("TOTALS_RETAINED_SCHEDULE_REQUIRED")
+    schedule_source_path = Path(schedule_source_path)
+    phase_authority = phase_authority or RuntimeScheduleAuthority(
+        source_path=schedule_source_path,
+        expected_source_sha256=expected_schedule_source_sha256,
+        base=verified_totals_phase_authority(),
+    )
     if evaluation_phase != REGULAR_SEASON:
         output_dir = output_dir / "postseason"
     output_dir.mkdir(parents=True, exist_ok=True); candidate = load_candidate()
     snapshot_slug = game_date.replace("-", "_")
-    payload, observed, schedule_hash = fetch_hydrated_schedule(game_date); schedule = normalize_schedule(payload, observed, schedule_hash); history = build_history(); env = dynamic_environment(history, game_date)
+    payload, observed, schedule_hash = load_retained_schedule(
+        schedule_source_path, expected_schedule_source_sha256)
+    try:
+        source_path = str(schedule_source_path.resolve().relative_to(ROOT.resolve()))
+    except ValueError:
+        source_path = str(schedule_source_path.resolve())
+    schedule = normalize_schedule(payload, observed, schedule_hash, source_path)
+    if any(str(item.get("game_date")) != game_date for item in schedule):
+        raise RuntimeError("TOTALS_RETAINED_SCHEDULE_DATE_MISMATCH")
+    history = build_history(); env = dynamic_environment(history, game_date)
     phase_partitions = partition_totals_rows(
         schedule, authority=phase_authority, unique_identity_fields=("game_pk",)
     )
@@ -221,7 +240,13 @@ def run(
             "park_fallback_status": context["park_state"]["fallback_status"], "context_quality_state": context["data_quality_status"],
             "dynamic_league_environment": env, "model_version": MODEL_VERSION, "model_hash": candidate["canonical_model_hash"],
             "expected_total": score["expected_total"], "interval_80_low": score["interval_80_low"], "interval_80_high": score["interval_80_high"],
-            **probabilities, **market, "feature_state_hash": canonical_hash(feature_state), "schedule_source_sha256": schedule_hash,
+            **probabilities, **market, "feature_state_hash": canonical_hash(feature_state),
+            "schedule_source_path": (
+                str(schedule_source_path.resolve().relative_to(ROOT.resolve()))
+                if schedule_source_path.resolve().is_relative_to(ROOT.resolve())
+                else str(schedule_source_path.resolve())
+            ),
+            "schedule_source_sha256": schedule_hash,
             "official_schedule_observed_at_utc": observed, "grading_status": "UNGRADED_OUTCOME_SEPARATE_LEDGER"}
         action, context_action = append_prediction_with_context(connection, row, feature_state)
         attempts.append({"canonical_identity": identity, "ledger_action": action, "context_action": context_action, "game_pk": context["game_pk"],
@@ -291,7 +316,10 @@ def run(
 def main() -> None:
     parser=argparse.ArgumentParser();parser.add_argument("--date",required=True);parser.add_argument("--output-dir",type=Path,required=True);parser.add_argument("--ledger-path",type=Path,default=DEFAULT_LEDGER)
     parser.add_argument("--evaluation-phase", choices=("REGULAR_SEASON", "POSTSEASON"), default="REGULAR_SEASON")
-    args=parser.parse_args();print(json.dumps(run(args.date,args.output_dir,args.ledger_path,evaluation_phase=args.evaluation_phase),indent=2,default=str))
+    parser.add_argument("--schedule-source-path",type=Path,required=True)
+    parser.add_argument("--expected-schedule-source-sha256",required=True)
+    args=parser.parse_args();print(json.dumps(run(args.date,args.output_dir,args.ledger_path,evaluation_phase=args.evaluation_phase,
+        schedule_source_path=args.schedule_source_path,expected_schedule_source_sha256=args.expected_schedule_source_sha256),indent=2,default=str))
 
 
 if __name__=="__main__":main()

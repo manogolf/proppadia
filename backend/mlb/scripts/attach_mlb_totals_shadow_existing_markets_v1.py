@@ -27,6 +27,7 @@ from backend.mlb.totals_predictions.prospective_shadow_v1 import (
 )
 from backend.mlb.totals_predictions.phase_gating_v1 import (
     REGULAR_SEASON,
+    authority_with_retained_schedule_rows,
     partition_totals_rows,
     require_evaluation_phase,
     verified_totals_phase_authority,
@@ -63,6 +64,9 @@ def run(
     created_at = now_utc()
     phase_authority = phase_authority or verified_totals_phase_authority()
     retained_predictions = rows_for_date(connect_prediction_ledger(prediction_ledger_path), game_date)
+    phase_authority = authority_with_retained_schedule_rows(
+        retained_predictions, base=phase_authority
+    )
     phase_partitions = partition_totals_rows(
         retained_predictions, authority=phase_authority,
         unique_identity_fields=("game_pk",),
