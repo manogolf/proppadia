@@ -77,6 +77,7 @@ from backend.nhl.sog_attachment_integrity import (
     audit_sog_attachment,
     retain_sog_attachment_package,
 )
+from backend.nhl.market_attachment_retention import retain_market_attachment_package
 from backend.nhl.postgame_learning import (
     current_et_slate, ensure_prior_learning, prior_et_slate,
 )
@@ -130,6 +131,8 @@ SOG_RESIDUAL_DATASET_DEFAULT_CSV = ROOT / "backend" / "nhl" / "data" / "analysis
 SOG_RECONCILE_DATASET_PATH = ROOT / "backend" / "nhl" / "data" / "analysis" / "sog_poisson_residual_dataset_reconcile.csv"
 ODDS_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "odds_observations"
 SOG_ATTACHMENT_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "sog_market_attachments"
+POINTS_ATTACHMENT_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "points_market_attachments"
+SAVES_ATTACHMENT_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "saves_market_attachments"
 ROSTER_OBSERVATION_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "roster_observations"
 DAILY_RUN_RECEIPT_ROOT = ROOT / "artifacts" / "operational" / "nhl" / "daily_runs"
 
@@ -1177,6 +1180,25 @@ def _write_attachment_integrity_report(path: Path, payload: dict[str, Any]) -> d
     return identity
 
 
+def _market_attachment_retention_receipt_outputs(
+    package_dir: Path, *, lane: str, parent_daily_run_id: str, manifest_sha256: str,
+) -> list[dict[str, Any]]:
+    """Expose every retained Points/Saves package object in its daily receipt."""
+    package_dir = Path(package_dir).resolve()
+    outputs: list[dict[str, Any]] = [{
+        "path": str(package_dir), "manifest_sha256": manifest_sha256,
+        "parent_daily_run_id": parent_daily_run_id,
+        "retention_schema_version": f"NHL_{lane.upper()}_MARKET_ATTACHMENT_RETENTION_V1",
+    }]
+    names = [f"{lane}_attachment_integrity.json", f"{lane}_with_market.csv",
+             f"unmatched_{lane}.csv"]
+    if lane == "saves":
+        names.append("ambiguous_saves_alias_matches.csv")
+    names.extend(["RUN_COMPLETE.json", "SHA256SUMS"])
+    outputs.extend(artifact_identity(package_dir / name) for name in names)
+    return outputs
+
+
 def build_sog(slate: str, *, odds_json: Path | None = None,
               events_json: Path | None = None, pred_path: Path | None = None,
               expected_pred_sha256: str | None = None,
@@ -1661,19 +1683,54 @@ def _run_independent_daily_lanes(
                     expected_odds_manifest_sha256=expected_odds_manifest,
                 )
                 integrity.update(odds_lineage)
+                integrity["slate_date"] = slate
+                integrity["canonical_game_set_hash"] = recorder.canonical_game_set_hash
+                integrity["proposition"] = (
+                    "player_points" if prediction_lane == "points" else "goalie_saves")
                 unmatched_path = SITE_DIR / f"unmatched_{prefix}.csv"
                 integrity["unmatched_path"] = str(unmatched_path.resolve())
                 integrity["unmatched_sha256"] = sha256_file(unmatched_path)
+                ambiguous_path = None
                 if attachment_lane == "saves_attachment":
                     ambiguous_path = SITE_DIR / "ambiguous_saves_alias_matches.csv"
                     integrity["ambiguous_inventory_path"] = str(ambiguous_path.resolve())
                     integrity["ambiguous_inventory_sha256"] = sha256_file(ambiguous_path)
+                observation_timestamp = None
+                if captured and odds_result is not None:
+                    observation = json.loads((odds_result.observation_dir
+                                              / "observation_summary.json").read_text())
+                    observation_timestamp = observation.get("observation_timestamp_utc")
+                    integrity["odds_observation_identity"] = (
+                        observation.get("invocation_id") or odds_result.observation_dir.name)
+                integrity["odds_observation_timestamp_utc"] = observation_timestamp
+                integrity["prediction_row_count"] = integrity["counts"]["prediction_row_count"]
+                integrity["exact_proposition_key_count"] = integrity["counts"][
+                    "unique_prediction_key_count"]
+                pred_frame = pd.read_csv(Path(identity["path"]))
+                integrity["natural_identity_count"] = int(
+                    pred_frame[["game_id", "player_id"]].drop_duplicates().shape[0])
                 report_path = SITE_DIR / f"{prefix}_attachment_integrity.json"
+                package_root = (POINTS_ATTACHMENT_ROOT if prediction_lane == "points"
+                                else SAVES_ATTACHMENT_ROOT)
+                package_dir = (package_root
+                    / f"season={infer_nhl_season_from_date_yyyy_mm_dd(slate)}"
+                    / f"slate_date={slate}" / f"run_id={daily_run_id}")
+                starts = {int(game.game_id): str(game.start_time_utc)
+                          for game in canonical_games}
+                retained_report, retained_manifest_sha = retain_market_attachment_package(
+                    lane=prediction_lane, package_path=package_dir, integrity=integrity,
+                    prediction_path=Path(identity["path"]), attachment_path=attachment_path,
+                    unmatched_path=unmatched_path, ambiguous_path=ambiguous_path,
+                    canonical_game_set_sha256=recorder.canonical_game_set_hash,
+                    canonical_game_starts_utc=starts)
+                shutil.copy2(retained_report, report_path)
                 report_identity = _write_attachment_integrity_report(report_path, integrity)
                 outputs.append(report_identity)
-                if attachment_lane == "saves_attachment":
-                    outputs.append(artifact_identity(
-                        SITE_DIR / "ambiguous_saves_alias_matches.csv"))
+                if ambiguous_path is not None:
+                    outputs.append(artifact_identity(ambiguous_path))
+                outputs.extend(_market_attachment_retention_receipt_outputs(
+                    package_dir, lane=prediction_lane, parent_daily_run_id=daily_run_id,
+                    manifest_sha256=retained_manifest_sha))
                 attachment_contexts[attachment_lane] = {
                     "lane": prediction_lane,
                     "prediction_path": Path(identity["path"]),
