@@ -36,7 +36,7 @@ def grade_frames():
         "contract_arm": ["ARM_A"] * 5,
         "grading_state": ["WIN", "LOSS", "PUSH", "UNRESOLVED_UNGRADED", "WIN"],
         "selected_side": ["OVER", "UNDER", "OVER", "UNDER", "OVER"],
-        "line": [1.5, 1.5, 1.5, 1.5, 2.5],
+        "line": [1.5, 1.5, 2.0, 1.5, 2.5],
         "p_over": [.6, .3, .7, .2, .55],
         "p_under": [.4, .7, .3, .8, .45],
         "model_version": ["sog-v1"] * 5,
@@ -46,7 +46,7 @@ def grade_frames():
         "prediction_correct": [True, False, None, None],
         "settled_side": ["OVER", "UNDER", "PUSH", None],
         "model_side": ["OVER", "OVER", "UNDER", "OVER"],
-        "line": [.5, .5, .5, 1.5],
+        "line": [.5, .5, 1.0, 1.5],
         "prob_over": [.8, .7, .5, .2],
         "market_qualified": [True, False, True, False],
         "model_version": ["points-v1"] * 4,
@@ -55,7 +55,7 @@ def grade_frames():
         "grading_status": ["SETTLED", "SETTLED", "PUSH", "DID_NOT_START_NOT_GRADEABLE_CONDITIONAL", "STARTER_STATUS_UNRESOLVED"],
         "prediction_correct": [True, False, None, None, None],
         "model_side": ["OVER", "UNDER", "OVER", "OVER", "UNDER"],
-        "line": [20.5, 20.5, 20.5, 20.5, 21.5],
+        "line": [20.5, 20.5, 20.0, 20.5, 21.5],
         "prob_over": [.8, .2, .5, .6, .4],
         "actual_start_flag": [True, True, True, False, None],
         "model_version": ["saves-v1"] * 5,
@@ -84,11 +84,13 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
     def test_sog_win_loss_push_unresolved(self):
         row = self.summary()["models"]["sog"]["ARM_A"]["overall"]
         self.assertEqual((row["wins"], row["losses"], row["pushes"], row["unresolved"]), (2, 1, 1, 1))
+        self.assertTrue(row["pushes_applicable"])
 
     def test_sog_line_counts(self):
         row = self.summary()["models"]["sog"]["ARM_A"]["by_line"]["1.5"]
         self.assertEqual((row["settled"], row["wins"], row["losses"], row["pushes"], row["unresolved"]),
-                         (3, 1, 1, 1, 1))
+                         (2, 1, 1, 0, 1))
+        self.assertFalse(row["pushes_applicable"])
 
     def test_points_win_loss_push_unresolved(self):
         row = self.summary()["models"]["points"]["reference"]["overall"]
@@ -96,7 +98,7 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
 
     def test_points_by_line(self):
         row = self.summary()["models"]["points"]["reference"]["by_line"]["0.5"]
-        self.assertEqual((row["settled"], row["wins"], row["losses"], row["pushes"]), (3, 1, 1, 1))
+        self.assertEqual((row["settled"], row["wins"], row["losses"], row["pushes"]), (2, 1, 1, 0))
         self.assertEqual(self.summary()["models"]["points"]["realized_points_definition"],
                          "official_goals + official_assists")
 
@@ -164,6 +166,103 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
         self.assertIn("Market Coverage Context", markdown)
         self.assertIn("Quote matching is descriptive and does not affect grading.", markdown)
         self.assertIn("retained bound coverage evidence unavailable", markdown)
+
+    def test_nonpushable_markets_render_wl_and_keep_machine_semantics(self):
+        grades = grade_frames()
+        grades["sog"] = grades["sog"].copy()
+        grades["sog"].loc[grades["sog"].grading_state.eq("PUSH"), "grading_state"] = "LOSS"
+        grades["sog"].loc[grades["sog"].line.eq(2.0), "line"] = 2.5
+        for lane in ("points", "saves"):
+            grades[lane] = grades[lane].copy()
+            push = grades[lane].grading_status.eq("PUSH")
+            grades[lane].loc[push, "grading_status"] = "SETTLED"
+            grades[lane].loc[push, "prediction_correct"] = False
+            grades[lane].loc[push, "line"] += 0.5
+        summary = self.summary(grades=grades)
+        markdown = render_markdown(summary)
+        self.assertIn("Reference: 1-1 |", markdown)
+        self.assertIn("Overall: 2-2 |", markdown)
+        self.assertNotIn("Overall: 2-2-0", markdown)
+        self.assertNotIn("P | Unresolved", markdown)
+        self.assertNotIn("OVER 1-0-0", markdown)
+        for lane in ("moneyline", "puck_line"):
+            for section in summary["models"][lane].values():
+                self.assertFalse(section["pushes_applicable"])
+                self.assertEqual(section["pushes"], 0)
+                self.assertEqual(section["graded"], section["correct"] + section["incorrect"])
+        for lane in ("sog", "points", "saves"):
+            rows = summary["models"][lane]
+            for value in rows.values():
+                if isinstance(value, dict) and "overall" in value:
+                    for counts in (value["overall"], *value["by_side"].values(),
+                                   *value["by_line"].values()):
+                        if not counts["pushes_applicable"]:
+                            self.assertEqual(counts["pushes"], 0)
+                            self.assertEqual(counts["settled"], counts["wins"] + counts["losses"])
+
+    def test_impossible_push_fails_closed_with_source_context(self):
+        for lane in ("sog", "points", "saves"):
+            grades = grade_frames()
+            grades[lane] = grades[lane].copy()
+            push_index = (grades[lane].grading_state.eq("PUSH") if lane == "sog"
+                          else grades[lane].grading_status.eq("PUSH"))
+            grades[lane].loc[push_index, "line"] = 1.5
+            with self.subTest(lane=lane), self.assertRaisesRegex(
+                ValueError, "IMPOSSIBLE_PUSH_FOR_NON_PUSHABLE_CONTRACT"
+            ) as raised:
+                summarize_frames(
+                    slate_date="2026-10-05", games=4, phase="REGULAR_SEASON",
+                    reconciliation_status="CREATED", package_identity="oct5",
+                    grades=grades, source_artifacts={f"{lane}_grade_sha256": "grade-hash"},
+                )
+            self.assertIn("slate_date=2026-10-05", str(raised.exception))
+            self.assertIn("line=1.5", str(raised.exception))
+            self.assertIn("grade_source=grade-hash", str(raised.exception))
+
+    def test_moneyline_and_puck_line_push_rows_fail_closed(self):
+        for lane in ("moneyline", "puck_line"):
+            grades = grade_frames()
+            grades[lane] = grades[lane].copy()
+            grades[lane].loc[0, "grading_status"] = "PUSH"
+            with self.subTest(lane=lane), self.assertRaisesRegex(
+                ValueError, "IMPOSSIBLE_PUSH_FOR_NON_PUSHABLE_CONTRACT"
+            ):
+                summarize_frames(
+                    slate_date="2026-10-05", games=4, phase="REGULAR_SEASON",
+                    reconciliation_status="CREATED", package_identity="oct5",
+                    grades=grades, source_artifacts={},
+                )
+
+    def test_whole_number_prop_line_still_supports_push_presentation(self):
+        grades = grade_frames()
+        summary = self.summary(grades=grades)
+        markdown = render_markdown(summary)
+        self.assertTrue(summary["models"]["sog"]["ARM_A"]["by_line"]["2"]["pushes_applicable"])
+        self.assertIn("| Line | Settled | W | L | P | Unresolved | Win % |", markdown)
+        self.assertIn("Overall: 2-1-1 |", markdown)
+
+    def test_grade_hashes_coverage_and_counts_are_preserved(self):
+        hashes = {"moneyline_grade_sha256": "a" * 64,
+                  "puck_line_grade_sha256": "b" * 64,
+                  "sog_grade_sha256": "c" * 64,
+                  "points_grade_sha256": "d" * 64,
+                  "saves_grade_sha256": "e" * 64}
+        grades = grade_frames()
+        coverage = {lane: {"status": "AVAILABLE", "prediction_rows": 9,
+                           "matched": 4, "unmatched": 5, "ambiguous": 0}
+                    for lane in ("sog", "points", "saves")}
+        summary = summarize_frames(
+            slate_date="2026-10-02", games=5, phase="REGULAR_SEASON",
+            reconciliation_status="CREATED", package_identity="pkg-hash",
+            grades=grades, source_artifacts=hashes,
+            generated_at_utc="2026-10-03T15:00:00Z", market_coverage=coverage,
+        )
+        self.assertEqual(summary["source_artifacts"], hashes)
+        for lane in coverage:
+            self.assertEqual(summary["models"][lane]["market_coverage"]["matched"], 4)
+        self.assertEqual(summary["models"]["points"]["reference"]["overall"]["unresolved"], 1)
+        self.assertEqual(summary["models"]["saves"]["reference"]["overall"][
+            "confirmed_did_not_start_not_gradeable"], 1)
 
     def test_immutable_generation_is_idempotent_and_markdown_matches_json(self):
         with tempfile.TemporaryDirectory() as raw:

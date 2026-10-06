@@ -155,9 +155,29 @@ def _prop_counts(frame: pd.DataFrame, mask: pd.Series, *, lane: str,
                  pushes: pd.Series) -> dict[str, Any]:
     selected = mask.fillna(False)
     w, l, p = (_count_rows(frame, selected & part) for part in (wins, losses, pushes))
+    selected_lines = pd.to_numeric(frame.loc[selected].get(
+        "line", pd.Series(dtype="float64")), errors="coerce").dropna()
+    applicability = any(float(value).is_integer() for value in selected_lines.tolist())
+    impossible = selected & pushes & pd.to_numeric(
+        frame.get("line", pd.Series(pd.NA, index=frame.index)), errors="coerce"
+    ).map(lambda value: pd.notna(value) and not float(value).is_integer())
+    impossible_count = _count_rows(frame, impossible)
+    if impossible_count:
+        lines = sorted({str(value) for value in frame.loc[impossible, "line"].dropna().tolist()})
+        raise ValueError(
+            "IMPOSSIBLE_PUSH_FOR_NON_PUSHABLE_CONTRACT:"
+            f"market={lane};lines={','.join(lines)};push_count={impossible_count}"
+        )
+    settled = w + l + p
+    if not applicability and settled != w + l:
+        raise ValueError(
+            "NONPUSHABLE_SETTLED_COUNT_MISMATCH:"
+            f"market={lane};settled={settled};wins={w};losses={l};pushes={p}"
+        )
     decided = w + l
     return {
-        "settled": w + l + p, "wins": w, "losses": l, "pushes": p,
+        "settled": settled, "wins": w, "losses": l, "pushes": p,
+        "pushes_applicable": applicability,
         "unresolved": _count_rows(frame, selected & ~status.isin(
             ["WIN", "LOSS", "PUSH"] if lane == "sog" else ["SETTLED", "PUSH",
                 "DID_NOT_START_NOT_GRADEABLE_CONDITIONAL", "NONSTARTER_EXCLUDED_FROM_CONDITIONAL_EVALUATION"])),
@@ -200,12 +220,15 @@ def _grouped_props(frame: pd.DataFrame, *, lane: str) -> dict[str, Any]:
                     "unresolved": int((mask & status.eq("STARTER_STATUS_UNRESOLVED")).sum()),
                 })
     correct = wins
+    pushable = bool(overall["pushes_applicable"])
     result: dict[str, Any] = {
         "overall": overall,
         "by_side": side_stats,
         "by_line": by_line,
         "probability_context": _probability_context(frame, correct, probability),
-        "win_rate_denominator": "wins_plus_losses; pushes excluded",
+        "win_rate_denominator": (
+            "wins_plus_losses; pushes excluded" if pushable else "wins_plus_losses"
+        ),
     }
     return result
 
@@ -227,6 +250,76 @@ def _model_groups(frame: pd.DataFrame, *, lane: str) -> dict[str, Any]:
             **_grouped_props(group, lane="sog"),
         }
     return groups
+
+
+def _assert_game_market_nonpushable(
+    frame: pd.DataFrame, *, market: str, slate_date: str, grade_source: str,
+) -> None:
+    if frame.empty:
+        return
+    push = pd.Series(False, index=frame.index)
+    for column in ("grading_status", "evaluation_status", "settlement_status",
+                   "settled_side", "outcome", "result"):
+        if column in frame:
+            push |= frame[column].astype("string").str.upper().eq("PUSH").fillna(False)
+    count = _count_rows(frame, push)
+    if count:
+        model_columns = ("model_name", "model_version", "model_family", "control_name")
+        model_identity = ",".join(
+            f"{column}={','.join(sorted(frame.loc[push, column].dropna().astype(str).unique()))}"
+            for column in model_columns if column in frame and frame.loc[push, column].notna().any()
+        ) or "model=unknown"
+        raise ValueError(
+            "IMPOSSIBLE_PUSH_FOR_NON_PUSHABLE_CONTRACT:"
+            f"slate_date={slate_date};market={market};{model_identity};line=n/a;"
+            f"push_count={count};grade_source={grade_source}"
+        )
+    eligible_column = "evaluation_status" if "evaluation_status" in frame else "grading_status"
+    if eligible_column in frame:
+        eligible = frame[eligible_column].astype("string").eq("REGULAR_SEASON_GRADED")
+        correct_column = "correct" if eligible_column == "evaluation_status" else "prediction_correct"
+        if correct_column in frame:
+            settled = int((eligible & _bool_series(frame, correct_column).notna()).sum())
+            wins = int((eligible & _bool_series(frame, correct_column).eq(True)).sum())
+            losses = int((eligible & _bool_series(frame, correct_column).eq(False)).sum())
+            if settled != wins + losses:
+                raise ValueError(
+                    "NONPUSHABLE_SETTLED_COUNT_MISMATCH:"
+                    f"slate_date={slate_date};market={market};settled={settled};"
+                    f"wins={wins};losses={losses};grade_source={grade_source}"
+                )
+
+
+def _assert_prop_push_integrity(
+    frame: pd.DataFrame, *, market: str, slate_date: str, grade_source: str,
+) -> None:
+    if frame.empty:
+        return
+    if "line" not in frame:
+        raise ValueError(f"PUSH_APPLICABILITY_LINE_MISSING:slate_date={slate_date};market={market}")
+    _, _, pushes, _, _, _ = _prop_outcome(frame, lane=market)
+    lines = pd.to_numeric(frame["line"], errors="coerce")
+    missing_line_pushes = pushes & lines.isna()
+    if missing_line_pushes.any():
+        raise ValueError(
+            "IMPOSSIBLE_PUSH_FOR_NON_PUSHABLE_CONTRACT:"
+            f"slate_date={slate_date};market={market};line=UNKNOWN;"
+            f"push_count={int(missing_line_pushes.sum())};grade_source={grade_source}"
+        )
+    impossible = pushes & lines.notna() & ~lines.map(float.is_integer)
+    if impossible.any():
+        context_columns = [column for column in ("contract_arm", "evaluation_lane", "model", "model_version")
+                           if column in frame]
+        for line, group in frame.loc[impossible].groupby(lines.loc[impossible]):
+            model = ",".join(
+                f"{column}={','.join(sorted(group[column].dropna().astype(str).unique()))}"
+                for column in context_columns
+            ) or "model=reference"
+            raise ValueError(
+                "IMPOSSIBLE_PUSH_FOR_NON_PUSHABLE_CONTRACT:"
+                f"slate_date={slate_date};market={market};{model};line={line:g};"
+                f"push_count={len(group)};grade_source={grade_source}"
+            )
 
 
 def _unscored_sog(package: Path) -> dict[str, Any]:
@@ -666,6 +759,24 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
     sog = grades.get("sog", pd.DataFrame())
     points = grades.get("points", pd.DataFrame())
     saves = grades.get("saves", pd.DataFrame())
+    source_artifacts = dict(source_artifacts)
+    for lane, frame in (("moneyline", moneyline), ("puck_line", puck_line)):
+        _assert_game_market_nonpushable(
+            frame, market=lane, slate_date=slate_date,
+            grade_source=source_artifacts.get(f"{lane}_grade_sha256", "UNBOUND"),
+        )
+    for lane, frame in challengers.items():
+        if lane in {"moneyline", "puck_line"}:
+            _assert_game_market_nonpushable(
+                frame, market=lane, slate_date=slate_date,
+                grade_source=source_artifacts.get(
+                    f"{lane}_challenger_grade_sha256", "UNBOUND"),
+            )
+    for lane, frame in (("sog", sog), ("points", points), ("saves", saves)):
+        _assert_prop_push_integrity(
+            frame, market=lane, slate_date=slate_date,
+            grade_source=source_artifacts.get(f"{lane}_grade_sha256", "UNBOUND"),
+        )
     models = {
         "moneyline": {"reference": _game_summary(
             moneyline, lane="moneyline", model_name="moneyline_reference")},
@@ -725,15 +836,20 @@ def render_markdown(summary: dict[str, Any]) -> str:
         return "n/a" if value is None else f"{100 * float(value):.1f}%"
 
     def game_line(value: dict[str, Any]) -> str:
-        return (f"{value['correct']}-{value['incorrect']} | {rate(value.get('accuracy'))}"
+        record = f"{value['correct']}-{value['incorrect']}"
+        if value.get("pushes_applicable", False):
+            record += f"-{value.get('pushes', 0)}"
+        return (f"{record} | {rate(value.get('accuracy'))}"
                 f"; graded {value['graded']}; unresolved {value['unresolved']}")
 
     def prop_body(display: dict[str, Any], title: str) -> list[str]:
         lines: list[str] = []
         overall = display.get("overall", {})
+        record = f"{overall.get('wins', 0)}-{overall.get('losses', 0)}"
+        if overall.get("pushes_applicable", False):
+            record += f"-{overall.get('pushes', 0)}"
         lines.append(
-            f"Overall: {overall.get('wins', 0)}-{overall.get('losses', 0)}-"
-            f"{overall.get('pushes', 0)} | {rate(overall.get('win_rate'))}; "
+            f"Overall: {record} | {rate(overall.get('win_rate'))}; "
             f"settled {overall.get('settled', 0)}; unresolved {overall.get('unresolved', 0)}"
         )
         if title == "Saves":
@@ -742,16 +858,27 @@ def render_markdown(summary: dict[str, Any]) -> str:
         side = display.get("by_side", {})
         if side:
             lines.append("By side: " + "; ".join(
-                f"{name} {v.get('wins', 0)}-{v.get('losses', 0)}-{v.get('pushes', 0)}"
+                f"{name} {v.get('wins', 0)}-{v.get('losses', 0)}"
+                + (f"-{v.get('pushes', 0)}" if v.get("pushes_applicable", False) else "")
                 for name, v in side.items()))
         by_line = display.get("by_line", {})
         if by_line:
-            lines += ["", "By line:", "| Line | Settled | W | L | P | Unresolved | Win % |",
-                      "|---:|---:|---:|---:|---:|---:|---:|"]
+            has_pushable_line = any(values.get("pushes_applicable", False)
+                                    for values in by_line.values())
+            if has_pushable_line:
+                lines += ["", "By line:", "| Line | Settled | W | L | P | Unresolved | Win % |",
+                          "|---:|---:|---:|---:|---:|---:|---:|"]
+            else:
+                lines += ["", "By line:", "| Line | Settled | W | L | Unresolved | Win % |",
+                          "|---:|---:|---:|---:|---:|---:|"]
             for line, values in by_line.items():
-                lines.append(f"| {line} | {values.get('settled', 0)} | {values.get('wins', 0)} | "
-                             f"{values.get('losses', 0)} | {values.get('pushes', 0)} | "
-                             f"{values.get('unresolved', 0)} | {rate(values.get('win_rate'))} |")
+                rendered = (f"| {line} | {values.get('settled', 0)} | {values.get('wins', 0)} | "
+                            f"{values.get('losses', 0)} | ")
+                if has_pushable_line:
+                    rendered += (f"{values.get('pushes', 0)} | "
+                                 if values.get("pushes_applicable", False) else "— | ")
+                rendered += f"{values.get('unresolved', 0)} | {rate(values.get('win_rate'))} |"
+                lines.append(rendered)
         return lines
 
     def prop_section(title: str, models: dict[str, Any]) -> list[str]:
@@ -785,9 +912,18 @@ def render_markdown(summary: dict[str, Any]) -> str:
     unscored = models["sog"].get("unscored", {})
     if unscored:
         lines.append(f"Unscored identities: {unscored.get('unscored_identities', 0)}")
+    has_pushable_contract = any(
+        isinstance(model, dict) and bool(model.get("overall", {}).get("pushes_applicable"))
+        for lane in ("sog", "points", "saves")
+        for model in models.get(lane, {}).values()
+    )
+    notes = (["- Pushes are reported separately only for contracts where they are applicable."]
+             if has_pushable_contract else [
+                 "- Current Moneyline, ±1.5 Puck Line, and half-point prop contracts are non-pushable."
+             ])
     lines += ["", *prop_section("Points", models["points"]), "",
               *prop_section("Saves", models["saves"]), "", "## Notes",
-              "- Win rate excludes pushes; pushes are reported separately.",
+              *notes,
               "- Market match status does not determine whether a prediction is graded.",
               "- No selection policy or promotion rule was applied."]
     coverage_rows = []
