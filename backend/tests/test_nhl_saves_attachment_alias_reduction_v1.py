@@ -52,6 +52,9 @@ def odds_candidate(
         "market_identity": market,
         "line_str": "18.5",
         "price_over": price,
+        # Production normalization always includes both price columns; one
+        # side may be absent from the observed market and remains null.
+        "price_under": None,
         "source_quote_count": 1,
     }
 
@@ -120,6 +123,7 @@ def test_full_name_alias_only_matches():
         alias="alex lyon", identity="alex lyon", market="market-1", price=-110)])
     assert output.loc[0, "attachment_status"] == "MATCHED"
     assert output.loc[0, "price_over"] == -110
+    assert pd.isna(output.loc[0, "price_under"])
     assert output.loc[0, "matched_alias_type"] == "AUTHORITATIVE_FULL_NAME"
 
 
