@@ -16,6 +16,7 @@ from backend.nhl.attachment_integrity import (
 from backend.nhl.daily_capture import sha256_file
 from backend.nhl.daily_orchestration import DailyRunRecorder
 from backend.nhl.scripts import build_saves_with_market as saves
+from backend.nhl.scripts import build_points_with_market as points
 
 
 SLATE = "2026-09-24"
@@ -314,6 +315,39 @@ def test_points_attachment_retains_one_row_per_prediction_key(tmp_path):
     assert result["counts"]["prediction_row_count"] == 3
     assert result["counts"]["attachment_row_count"] == 3
     assert result["counts"]["duplicate_attachment_key_count"] == 0
+
+
+def test_points_name_enrichment_joins_player_and_game_without_roster_fanout(tmp_path, monkeypatch):
+    predictions = tmp_path / "predictions.csv"
+    names = tmp_path / "names.csv"
+    output = tmp_path / "points.csv"
+    unmatched = tmp_path / "unmatched.csv"
+    pd.DataFrame({
+        "player_id": [8480842, 8480842],
+        "game_id": [2026020053, 2026020055],
+        "game_date": ["2026-10-07"] * 2,
+        "line": [0.5, 0.5], "prob_over": [0.7, 0.71],
+    }).to_csv(predictions, index=False)
+    pd.DataFrame({
+        "player_id": [8480842, 8480842],
+        "game_id": [2026020053, 2026020055],
+        "team_id": [5, 22], "full_name": ["Filip Hallander"] * 2,
+        "game_date": ["2026-10-07"] * 2,
+    }).to_csv(names, index=False)
+    monkeypatch.setenv("SLATE_DATE", "2026-10-07")
+    monkeypatch.setattr(sys, "argv", [
+        "build_points_with_market.py", "--pred", str(predictions),
+        "--names", str(names), "--out", str(output),
+        "--unmatched", str(unmatched),
+    ])
+
+    points.main()
+
+    result = pd.read_csv(output)
+    assert len(result) == 2
+    assert not result.duplicated(["game_id", "player_id", "line"]).any()
+    assert result.set_index("game_id").team_id.to_dict() == {2026020053: 5, 2026020055: 22}
+    assert result.price_over.isna().all()
 
 
 def test_retained_refresh_evidence_hashes_remain_unchanged():

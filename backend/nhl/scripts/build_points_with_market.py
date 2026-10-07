@@ -290,7 +290,7 @@ def main():
     long = melt_preds(pred_wide)  # player_id, game_id, line, p_over
 
     names = read_csv_required(Path(args.names))
-    name_cols = [c for c in ["player_id", "team_id", "full_name", "game_date"] if c in names.columns]
+    name_cols = [c for c in ["player_id", "game_id", "team_id", "full_name", "game_date"] if c in names.columns]
     names = names[name_cols].copy()
 
     # ---- Add more name sources if present (union by player_id; keep first seen) ----
@@ -303,11 +303,17 @@ def main():
         if p.exists():
             try:
                 df_extra = pd.read_csv(p)
-                use = [c for c in ["player_id","full_name","team_id","game_date"] if c in df_extra.columns]
+                use = [c for c in ["player_id","game_id","full_name","team_id","game_date"] if c in df_extra.columns]
                 if use:
-                    df_extra = df_extra[use].dropna(subset=["player_id"]).drop_duplicates(subset=["player_id"])
-                    names = pd.concat([names, df_extra], ignore_index=True)\
-                            .drop_duplicates(subset=["player_id"], keep="first")
+                    df_extra = df_extra[use].dropna(subset=["player_id"])
+                    extra_keys = ["player_id", "game_id"] if "game_id" in df_extra.columns else ["player_id"]
+                    df_extra = df_extra.drop_duplicates(subset=extra_keys)
+                    # Preserve the game-scoped identity rows already supplied
+                    # by the authoritative slate names export. Auxiliary names
+                    # only fill player IDs absent from that export.
+                    known_ids = set(names["player_id"].dropna())
+                    df_extra = df_extra[~df_extra["player_id"].isin(known_ids)]
+                    names = pd.concat([names, df_extra], ignore_index=True)
             except Exception:
                 pass
 
@@ -318,8 +324,11 @@ def main():
         if c in names.columns:
             names[c] = pd.to_numeric(names[c], errors="coerce").astype("Int64")
 
-    # Primary join: by player_id (brings team_id and full_name when available)
-    df = long.merge(names, on=["player_id"], how="left")
+    # The slate name export is game scoped: a player can appear for multiple
+    # games (for example after a roster/team move). Keep that identity grain
+    # when enriching predictions so one player's other game cannot fan out rows.
+    name_join_keys = ["player_id", "game_id"] if "game_id" in names.columns else ["player_id"]
+    df = long.merge(names, on=name_join_keys, how="left", validate="many_to_one")
 
     # Build name_norm/short for odds join (after we’ve pulled names from names CSV)
     base_name = df["full_name"].fillna("")
@@ -341,7 +350,10 @@ def main():
                 df["full_name_odds"],
             )
     else:
-        df["price_over"] = pd.NA  # no odds available
+        # A valid empty/no-market observation still has the full expected
+        # market shape for downstream calculations.
+        df["price_over"] = pd.NA
+        df["price_under"] = pd.NA
 
     odds_lineage: dict[str, str] = {}
     if args.odds_json:

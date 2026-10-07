@@ -237,6 +237,24 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
         self.assertEqual(saves.price_under, -105)
         self.assertEqual(saves.source_quote_count_under, 1)
 
+    def test_points_quote_evidence_retains_multiple_books_without_row_expansion(self):
+        scenarios = (
+            ("two sportsbooks", ["draftkings", "fanduel"]),
+            ("sportsbook and exchange", ["draftkings", "novig"]),
+            ("several exchanges", ["betopenly", "novig", "prophetx"]),
+        )
+        for label, book_keys in scenarios:
+            with self.subTest(label=label):
+                raw = [{"bookmakers": [
+                    {"key": book, "markets": [{"key": "player_points", "outcomes": [
+                        {"name": "Over", "description": "Alex Example", "point": 0.5, "price": -120 + index},
+                    ]}]} for index, book in enumerate(book_keys)
+                ]}]
+                points = parse_points_odds(raw)
+                self.assertEqual(len(points), 1)
+                self.assertEqual(points.iloc[0].source_quote_count_over, len(book_keys))
+                self.assertEqual(points.iloc[0].source_books_over, "|".join(sorted(book_keys)))
+
 
 if __name__ == "__main__":
     unittest.main()
