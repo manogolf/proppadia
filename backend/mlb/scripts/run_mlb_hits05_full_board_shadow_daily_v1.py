@@ -21,6 +21,7 @@ from backend.mlb.scripts.score_mlb_hits05_full_board_shadow_v1 import (
     now_utc,
     parse_dt,
     rel,
+    retained_schedule_phase_authority,
     score_board,
 )
 from backend.mlb.scripts.validate_mlb_hits05_full_board_shadow_v1 import PACKAGE, validate
@@ -56,12 +57,14 @@ def run_daily(slate_date: str, run_tag: str, ledger_path: Path, capture_time: da
     if parent is None:
         scoring = _missed_run(slate_date, run_tag, capture_time, ledger_path, "GOVERNED_NONMARKET_PARENT_NOT_AVAILABLE")
     else:
+        phase_authority = retained_schedule_phase_authority(parent, slate_date)
         scoring = score_board(
             slate_date=slate_date,
             run_tag=run_tag,
             parent_dir=parent,
             capture_time=capture_time,
             ledger_path=ledger_path,
+            phase_authority=phase_authority,
         )
     markets = attach_date(slate_date, ledger_path)
     prior = (date.fromisoformat(slate_date) - timedelta(days=1)).isoformat()

@@ -20,6 +20,7 @@ Notes:
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import os
 import re
@@ -54,7 +55,9 @@ from backend.mlb.identity.provider_event_game_binding_v1 import (
     write_receipts_immutable,
 )
 from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
-from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import (
+    RuntimeScheduleAuthority, phase_authority_binding,
+)
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     getTeamIdFromAbbr,
@@ -617,6 +620,32 @@ def _runtime_phase_authority(schedule_source: EvidenceSource) -> RuntimeSchedule
         expected_source_sha256=schedule_source.sha256,
         base=HashedProposalAuthority(),
     )
+
+
+def _write_phase_overlay_receipt(
+    binding_root: Path, slate_date: str, run_identity: str,
+    schedule_source: EvidenceSource, authority: RuntimeScheduleAuthority,
+) -> tuple[Path, str]:
+    path = binding_root / "THE_ODDS_API" / slate_date / f"phase_overlay__{run_identity}.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    body = json.dumps({
+        "schema_version": "MLB_WIDE_RUN_PHASE_OVERLAY_RECEIPT_V1",
+        "run_identity": run_identity,
+        "schedule_source_path": schedule_source.path,
+        "schedule_source_sha256": schedule_source.sha256,
+        "authority_descriptor_sha256": authority.metadata.snapshot_descriptor_sha256,
+        "authority_proposal_sha256": authority.metadata.proposal_sha256,
+        "authority_records_sha256": authority.metadata.authority_records_sha256,
+        "game_decisions": phase_authority_binding(authority)["decisions"],
+    }, sort_keys=True, indent=2) + "\n"
+    if path.exists():
+        if path.read_text(encoding="utf-8") != body:
+            raise RuntimeError(f"IMMUTABLE_PHASE_OVERLAY_RECEIPT_CONFLICT:{path}")
+    else:
+        temporary = path.with_name(path.name + ".tmp")
+        temporary.write_text(body, encoding="utf-8")
+        os.replace(temporary, path)
+    return path, hashlib.sha256(body.encode()).hexdigest()
 
 
 def _late_slate_all_games_started(
@@ -1589,6 +1618,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         # is also the source-bound exact-game phase overlay.  This admits newly
         # scheduled postseason gamePks without widening authority by date.
         authority = _runtime_phase_authority(schedule_source)
+        phase_receipt_path, phase_receipt_sha256 = _write_phase_overlay_receipt(
+            binding_root, str(slate_date), binding_run_token, schedule_source, authority,
+        )
         registry = load_receipt_registry(binding_root)
         resolved_offers, resolve_counts = _resolve_offers(
             offers=offers,
@@ -1623,6 +1655,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         receipt_sha = write_receipts_immutable(receipt_path, unique_receipts.values())
         lineage_context["binding_receipt_path"] = str(receipt_path.resolve())
         lineage_context["binding_receipt_sha256"] = receipt_sha
+        lineage_context["phase_overlay_receipt_path"] = str(phase_receipt_path.resolve())
+        lineage_context["phase_overlay_receipt_sha256"] = phase_receipt_sha256
 
         pred_rows, pred_counts, feature_rows = _predict_rows(
             resolved_offers,

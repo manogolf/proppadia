@@ -30,7 +30,11 @@ from backend.mlb.hits05_full_board_shadow.phase_gating_v1 import (
     verified_full_board_hits_phase_authority,
 )
 from backend.mlb.prediction import make_prediction as prediction_runtime
-from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
+from backend.mlb.season_transition.game_phase_authority_v1 import (
+    CanonicalGamePhaseAuthority,
+    HashedProposalAuthority,
+)
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     normalizeTeamAbbreviation,
@@ -333,6 +337,37 @@ def load_schedule_context(parent_dir: Path, slate_date: str) -> tuple[dict[int, 
     return games, path
 
 
+def retained_schedule_phase_authority(
+    parent_dir: Path, slate_date: str,
+) -> RuntimeScheduleAuthority:
+    """Build exact-PK overlay only from the parent's manifest-bound schedule."""
+    _, path = load_schedule_context(parent_dir, slate_date)
+    manifest_path = parent_dir / "governed_lineup_capture" / f"raw_capture_manifest_{slate_date}.csv"
+    try:
+        manifest = pd.read_csv(manifest_path, dtype=str, keep_default_na=False)
+    except (OSError, pd.errors.ParserError) as exc:
+        raise RuntimeError(f"RETAINED_SCHEDULE_MANIFEST_INVALID:{manifest_path}:{exc}") from None
+    required = {"source", "fetch_status", "raw_response_path", "raw_response_sha256"}
+    if not required <= set(manifest.columns):
+        raise RuntimeError(f"RETAINED_SCHEDULE_MANIFEST_SCHEMA_INVALID:{manifest_path}")
+    matches = manifest[
+        (manifest["source"] == "statsapi_schedule")
+        & (manifest["fetch_status"] == "OK")
+        & (manifest["raw_response_path"].map(lambda value: (ROOT / value).resolve()) == path.resolve())
+    ]
+    if len(matches) != 1:
+        raise RuntimeError(f"RETAINED_SCHEDULE_MANIFEST_BINDING_INVALID:count={len(matches)}")
+    digest = str(matches.iloc[0].get("raw_response_sha256") or "")
+    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    if len(digest) != 64 or digest != actual:
+        raise RuntimeError("RETAINED_SCHEDULE_MANIFEST_HASH_MISMATCH")
+    return RuntimeScheduleAuthority(
+        source_path=path,
+        expected_source_sha256=digest,
+        base=HashedProposalAuthority(),
+    )
+
+
 def _time_bucket(start: datetime) -> str:
     hour_et = start.astimezone(__import__("zoneinfo").ZoneInfo("America/New_York")).hour
     if hour_et < 12:
@@ -470,6 +505,18 @@ def classify_lineup_rows(
             "capture_timestamp_utc": iso(capture_time),
             "scheduled_start_utc": iso(start) if start else "",
             "eligibility_contract": ELIGIBILITY_CONTRACT,
+            "phase_authority_decision": (
+                phase_decision.decision_code if phase_decision is not None else "NOT_REACHED_LINEUP_INELIGIBLE"
+            ),
+            "phase_authority_proposal_sha256": (
+                phase_decision.authority_proposal_sha256 if phase_decision is not None else ""
+            ),
+            "phase_authority_records_sha256": (
+                phase_decision.authority_records_sha256 if phase_decision is not None else ""
+            ),
+            "schedule_source_sha256": (
+                phase_authority.source_sha256 if isinstance(phase_authority, RuntimeScheduleAuthority) else ""
+            ),
         }
         observations.append(observation)
         if reason:
@@ -490,6 +537,12 @@ def classify_lineup_rows(
             "away_team": schedule_row["away_team"],
             "scheduled_start_utc": iso(start),
             "game_type": phase_decision.source_game_type,
+            "phase_authority_decision": phase_decision.decision_code,
+            "phase_authority_proposal_sha256": phase_decision.authority_proposal_sha256,
+            "phase_authority_records_sha256": phase_decision.authority_records_sha256,
+            "schedule_source_sha256": (
+                phase_authority.source_sha256 if isinstance(phase_authority, RuntimeScheduleAuthority) else ""
+            ),
             "doubleheader": schedule_row["doubleheader"],
             "game_number": schedule_row["game_number"],
             "lineup_slot": int(integer(source.get("lineup_slot")) or 0),
@@ -796,6 +849,14 @@ def score_board(
         "market_inputs_in_model": False,
         "market_required_for_population": False,
         "outcomes_accessed": 0,
+        "phase_authority_source_path": (
+            phase_authority.source_path if isinstance(phase_authority, RuntimeScheduleAuthority) else None
+        ),
+        "phase_authority_source_sha256": (
+            phase_authority.source_sha256 if isinstance(phase_authority, RuntimeScheduleAuthority) else None
+        ),
+        "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
+        "phase_authority_records_sha256": phase_authority.metadata.authority_records_sha256,
     }
     ledger.append_run(connection, run_payload)
     return {**run_payload, "ledger_counts": ledger.counts(connection)}

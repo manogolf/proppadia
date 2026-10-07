@@ -22,6 +22,7 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     GamePhaseAuthorityRecord,
     HashedProposalAuthority,
 )
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 
 
 REGULAR_SEASON = "REGULAR_SEASON"
@@ -211,7 +212,10 @@ def classify_full_board_hits_row(
     if require_freshness:
         game_date = _game_date(row, game_pk)
         try:
-            authority.require_supported_window(game_date, game_date)
+            if isinstance(authority, RuntimeScheduleAuthority):
+                authority.require_exact_game_date(game_pk, game_date)
+            else:
+                authority.require_supported_window(game_date, game_date)
         except GamePhaseAuthorityError as exc:
             raise FullBoardHitsPhaseGateError(
                 "FULL_BOARD_HITS_PHASE_AUTHORITY_STALE",

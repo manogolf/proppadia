@@ -86,6 +86,61 @@ def load_retained_schedule(
     return payload, observed, digest
 
 
+_PREGAME_OUTCOME_FIELDS = frozenset({"score", "runs", "iswinner", "leaguerecord", "linescore"})
+
+
+def load_retained_schedule_projection(
+    source_path: Path, expected_source_sha256: str, *, observed_at_utc: str | None = None,
+) -> tuple[dict[str, Any], str, str, str]:
+    """Verify retained source bytes, then project away outcome-bearing fields.
+
+    The strict ``load_retained_schedule`` contract remains unchanged. This
+    explicit projection is the only route for outcome-enriched retained
+    schedules; authority continues to bind to the original source digest.
+    """
+    path = Path(source_path)
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise TotalsLiveContextError(f"RETAINED_SCHEDULE_UNAVAILABLE:{path}:{exc}") from None
+    source_digest = hashlib.sha256(raw).hexdigest()
+    if source_digest != str(expected_source_sha256):
+        raise TotalsLiveContextError("RETAINED_SCHEDULE_HASH_MISMATCH")
+    try:
+        payload = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise TotalsLiveContextError("RETAINED_SCHEDULE_MALFORMED") from None
+    if not isinstance(payload, dict) or not isinstance(payload.get("dates"), list):
+        raise TotalsLiveContextError("RETAINED_SCHEDULE_SHAPE_INVALID")
+
+    def strip_outcomes(value: Any) -> Any:
+        if isinstance(value, dict):
+            return {key: strip_outcomes(item) for key, item in value.items()
+                    if str(key).lower() not in _PREGAME_OUTCOME_FIELDS}
+        if isinstance(value, list):
+            return [strip_outcomes(item) for item in value]
+        return value
+
+    projected = strip_outcomes(payload)
+    serialized = json.dumps(projected, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+    projection_digest = hashlib.sha256(serialized).hexdigest()
+    if any(str(key).lower() in _PREGAME_OUTCOME_FIELDS
+           for item in _walk_mappings(projected) for key in item):
+        raise TotalsLiveContextError("PREGAME_SCHEDULE_PROJECTION_OUTCOME_FIELD_REMAINS")
+    observed = observed_at_utc or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    return projected, observed, source_digest, projection_digest
+
+
+def _walk_mappings(value: Any):
+    if isinstance(value, dict):
+        yield value
+        for item in value.values():
+            yield from _walk_mappings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from _walk_mappings(item)
+
+
 def normalize_schedule(
     payload: dict[str, Any],
     observed_at_utc: str,

@@ -13,7 +13,7 @@ import pandas as pd
 
 from backend.mlb.totals_predictions.live_context_bridge_v1 import (
     GOVERNED_STARTER_HISTORY_TIERS, attach_context, build_history, canonical_hash, distribution, feature_row,
-    load_candidate, load_retained_schedule, normalize_schedule, score_context,
+    load_candidate, load_retained_schedule_projection, normalize_schedule, score_context,
 )
 from backend.mlb.totals_predictions.prospective_shadow_v1 import (
     MODEL_VERSION, SNAPSHOT_CLASS, append_context, append_prediction, append_prediction_with_context, canonical_identity,
@@ -161,7 +161,7 @@ def run(
         output_dir = output_dir / "postseason"
     output_dir.mkdir(parents=True, exist_ok=True); candidate = load_candidate()
     snapshot_slug = game_date.replace("-", "_")
-    payload, observed, schedule_hash = load_retained_schedule(
+    payload, observed, schedule_hash, schedule_projection_hash = load_retained_schedule_projection(
         schedule_source_path, expected_schedule_source_sha256)
     try:
         source_path = str(schedule_source_path.resolve().relative_to(ROOT.resolve()))
@@ -247,6 +247,7 @@ def run(
                 else str(schedule_source_path.resolve())
             ),
             "schedule_source_sha256": schedule_hash,
+            "schedule_projection_sha256": schedule_projection_hash,
             "official_schedule_observed_at_utc": observed, "grading_status": "UNGRADED_OUTCOME_SEPARATE_LEDGER"}
         action, context_action = append_prediction_with_context(connection, row, feature_state)
         attempts.append({"canonical_identity": identity, "ledger_action": action, "context_action": context_action, "game_pk": context["game_pk"],
@@ -259,7 +260,22 @@ def run(
     )
     rows = list(ledger_partitions.selected(evaluation_phase))
     if not rows:
-        raise RuntimeError(f"NO_TOTALS_PREDICTIONS_FOR_{evaluation_phase}")
+        return {
+            "declaration": f"TOTALS_NO_{evaluation_phase}_TARGETS",
+            "status": "NO_EVALUATION_TARGETS",
+            "reason": f"NO_TOTALS_PREDICTIONS_FOR_{evaluation_phase}",
+            "evaluation_phase": evaluation_phase,
+            "game_date": game_date,
+            "phase_partition_counts": phase_partitions.counts(),
+            "ledger_phase_partition_counts": ledger_partitions.counts(),
+            "ledger_before": before,
+            "ledger_after": counts(connection),
+            "schedule_source_sha256": schedule_hash,
+            "schedule_projection_sha256": schedule_projection_hash,
+            "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
+            "attempts": attempts,
+            "outcomes_accessed": 0,
+        }
     contexts = contexts_for_date(connection, game_date); after = counts(connection)
 
     flat = []
