@@ -32,7 +32,7 @@ from backend.nhl.postgame_reconcile.core import (
     validate_staging_identity_sets,
     validate_final_slate,
 )
-from backend.nhl.cross_market_shadow.core import digest_value
+from backend.nhl.cross_market_shadow.core import digest_value, moneyline_substantive_identity
 from backend.nhl.postgame_learning import current_et_slate, prior_et_slate
 from backend.nhl.scripts.run_nhl_postgame_reconciliation import (
     _run,
@@ -171,6 +171,62 @@ class PostgameReconciliationTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH"):
             _verify_cross_market_identities(
                 prediction, pd.DataFrame(), moneyline_feature_provenance=provenance)
+
+    def test_moneyline_identity_survives_csv_round_trip_and_rejects_changes(self):
+        features = {name: 0.0 for name in CROSS_MARKET_FEATURES}
+        features.update({
+            "diff_r10_goal_diff_pg": 0.16666666666666669,
+            "diff_std_shot_diff_pg": -0.66666666666666607,
+            "diff_days_rest": 1.0,
+            "home_back_to_back": 0.0,
+        })
+        fields = {
+            "canonical_season": 2026, "game_id": 2026020047,
+            "scheduled_start_time_utc": "2026-10-06T23:00:00+00:00",
+            "home_team": "NYR", "away_team": "NJD", "features": features,
+            "parameter_sha256": hashlib.sha256(MONEYLINE_PARAMETER_PATH.read_bytes()).hexdigest(),
+        }
+        expected = moneyline_substantive_identity(**fields)
+        csv_path = self.root / "moneyline_identity.csv"
+        pd.DataFrame([{
+            "canonical_season": fields["canonical_season"], "game_id": fields["game_id"],
+            "scheduled_start_time_utc": fields["scheduled_start_time_utc"],
+            "home_team": fields["home_team"], "away_team": fields["away_team"],
+            "substantive_prediction_sha256": expected, **features,
+        }]).to_csv(csv_path, index=False, float_format="%.17g")
+        loaded = pd.read_csv(csv_path, float_precision="round_trip")
+        row = loaded.iloc[0]
+        observed_features = {name: float(row[name]) for name in CROSS_MARKET_FEATURES}
+        observed = moneyline_substantive_identity(
+            canonical_season=row.canonical_season, game_id=row.game_id,
+            scheduled_start_time_utc=row.scheduled_start_time_utc,
+            home_team=row.home_team, away_team=row.away_team,
+            features=observed_features, parameter_sha256=fields["parameter_sha256"],
+        )
+        self.assertEqual(observed, expected)
+        _verify_cross_market_identities(loaded, pd.DataFrame())
+        changed = loaded.copy()
+        observed_features["diff_std_shot_diff_pg"] += 0.01
+        changed.loc[0, "diff_std_shot_diff_pg"] = observed_features["diff_std_shot_diff_pg"]
+        self.assertNotEqual(moneyline_substantive_identity(
+            canonical_season=row.canonical_season, game_id=row.game_id,
+            scheduled_start_time_utc=row.scheduled_start_time_utc,
+            home_team=row.home_team, away_team=row.away_team,
+            features=observed_features, parameter_sha256=fields["parameter_sha256"],
+        ), expected)
+        with self.assertRaisesRegex(RuntimeError, "IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH"):
+            _verify_cross_market_identities(changed, pd.DataFrame())
+        changed = loaded.copy()
+        changed.loc[0, "game_id"] += 1
+        with self.assertRaisesRegex(RuntimeError, "IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH"):
+            _verify_cross_market_identities(changed, pd.DataFrame())
+        self.assertNotEqual(moneyline_substantive_identity(
+            canonical_season=row.canonical_season, game_id=int(row.game_id) + 1,
+            scheduled_start_time_utc=row.scheduled_start_time_utc,
+            home_team=row.home_team, away_team=row.away_team,
+            features={name: float(row[name]) for name in CROSS_MARKET_FEATURES},
+            parameter_sha256=fields["parameter_sha256"],
+        ), expected)
 
     def test_october_fifth_et_boundary_keeps_prior_and_current_slates_distinct(self):
         now = pd.Timestamp("2026-10-05T13:49:37-04:00").to_pydatetime()

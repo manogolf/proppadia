@@ -21,6 +21,7 @@ from backend.nhl.cross_market_shadow.core import (
     PARAMETER_PATH as MONEYLINE_PARAMETER_PATH,
     PUCK_PARAMETER_PATH,
     digest_value,
+    moneyline_substantive_identity,
 )
 from backend.nhl.sog_cold_start.core import (
     CONTRACT_PATH as SOG_CONTRACT_PATH,
@@ -348,13 +349,13 @@ def _verify_cross_market_identities(
 
     for row in moneyline.itertuples(index=False):
         raw = {name: getattr(row, name) for name in CROSS_MARKET_FEATURES}
-        substantive = {
-            "canonical_season": int(row.canonical_season), "game_id": int(row.game_id),
-            "scheduled_start_time_utc": pd.Timestamp(row.scheduled_start_time_utc).isoformat(),
-            "home_team": row.home_team, "away_team": row.away_team,
-            "features": raw, "parameter_sha256": _sha(MONEYLINE_PARAMETER_PATH),
-        }
-        if digest_value(substantive) != row.substantive_prediction_sha256:
+        observed_identity = moneyline_substantive_identity(
+            canonical_season=row.canonical_season, game_id=row.game_id,
+            scheduled_start_time_utc=row.scheduled_start_time_utc,
+            home_team=row.home_team, away_team=row.away_team,
+            features=raw, parameter_sha256=_sha(MONEYLINE_PARAMETER_PATH),
+        )
+        if observed_identity != row.substantive_prediction_sha256:
             # Older packages used pandas' default CSV float formatting after
             # hashing the in-memory values. Accept a mismatch only when the
             # same manifest-bound provenance record supplies the exact values,
@@ -376,8 +377,13 @@ def _verify_cross_market_identities(
                 float(raw[name]), float(precise_features[name]), rel_tol=0.0, abs_tol=1e-15
             ) for name in precise_features):
                 raise RuntimeError("IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH")
-            substantive["features"].update(precise_features)
-            if digest_value(substantive) != row.substantive_prediction_sha256:
+            verified_features = {**raw, **precise_features}
+            if moneyline_substantive_identity(
+                canonical_season=row.canonical_season, game_id=row.game_id,
+                scheduled_start_time_utc=row.scheduled_start_time_utc,
+                home_team=row.home_team, away_team=row.away_team,
+                features=verified_features, parameter_sha256=_sha(MONEYLINE_PARAMETER_PATH),
+            ) != row.substantive_prediction_sha256:
                 raise RuntimeError("IMMUTABLE_MONEYLINE_SUBSTANTIVE_IDENTITY_MISMATCH")
     for row in puck.itertuples(index=False):
         raw = {name: getattr(row, name) for name in CROSS_MARKET_FEATURES}
@@ -455,7 +461,7 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
             raise RuntimeError("IMMUTABLE_CROSS_MARKET_RUN_IDENTITY_MISMATCH")
         schedule = pd.read_csv(cross / "schedule_event_identity.csv")
         schedule = _local_spine(schedule, slate_date)
-        moneyline = pd.read_csv(cross / "v2_immutable_predictions.csv")
+        moneyline = pd.read_csv(cross / "v2_immutable_predictions.csv", float_precision="round_trip")
         provenance_name = "moneyline_shot_finishing_challenger_v3_feature_provenance.csv"
         moneyline_provenance_path = cross / provenance_name
         moneyline_provenance = (

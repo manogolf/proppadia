@@ -104,6 +104,20 @@ def digest_value(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode()).hexdigest()
 
 
+def moneyline_substantive_identity(
+    *, canonical_season: Any, game_id: Any, scheduled_start_time_utc: Any,
+    home_team: Any, away_team: Any, features: dict[str, Any], parameter_sha256: str,
+) -> str:
+    """Hash the canonical Moneyline identity shared by producer and verifier."""
+    canonical_features = {name: float(features[name]) for name in FEATURES}
+    return digest_value({
+        "canonical_season": int(canonical_season), "game_id": int(game_id),
+        "scheduled_start_time_utc": pd.Timestamp(scheduled_start_time_utc).isoformat(),
+        "home_team": str(home_team), "away_team": str(away_team),
+        "features": canonical_features, "parameter_sha256": str(parameter_sha256),
+    })
+
+
 def sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as handle:
@@ -280,12 +294,12 @@ def build_v2_predictions(schedule: pd.DataFrame, history: pd.DataFrame, predicti
             scaled[feature] * parameters["coefficients"][feature] for feature in FEATURES
         )
         probability = 1 / (1 + math.exp(-logit))
-        substantive = {
-            "canonical_season": int(target.canonical_season), "game_id": int(target.game_id),
-            "scheduled_start_time_utc": target.scheduled_start_time_utc.isoformat(),
-            "home_team": target.home_team, "away_team": target.away_team,
-            "features": feature_values, "parameter_sha256": sha256(PARAMETER_PATH),
-        }
+        substantive_identity = moneyline_substantive_identity(
+            canonical_season=target.canonical_season, game_id=target.game_id,
+            scheduled_start_time_utc=target.scheduled_start_time_utc,
+            home_team=target.home_team, away_team=target.away_team,
+            features=feature_values, parameter_sha256=sha256(PARAMETER_PATH),
+        )
         row = {name: target[name] for name in SCHEDULE_COLUMNS}
         row.update(feature_values)
         for feature in FEATURES:
@@ -305,7 +319,7 @@ def build_v2_predictions(schedule: pd.DataFrame, history: pd.DataFrame, predicti
             "prediction_creation_time_utc": created.isoformat(),
             "game_type_code": int(target.game_type_code),
             "game_type_label": phase_for_game_type(target.game_type_code),
-            "substantive_prediction_sha256": digest_value(substantive),
+            "substantive_prediction_sha256": substantive_identity,
             "control_name": CONTROL_NAME, "control_artifact_sha256": sha256(PARAMETER_PATH),
             "prediction_status": (
                 "POST_START_REJECTED" if not prestart else
