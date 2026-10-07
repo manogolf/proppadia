@@ -4,6 +4,7 @@
     "games": [
       {
         "gamePk": 900001,
+        "gameType": "R",
         "gameDate": "2026-08-06T22:05:00Z",
         "officialDate": "2026-08-06",
         "status": {"abstractGameState": "Preview", "detailedState": "Scheduled"},
@@ -17,6 +18,7 @@
       },
       {
         "gamePk": 900002,
+        "gameType": "R",
         "gameDate": "2026-08-07T01:05:00Z",
         "officialDate": "2026-08-06",
         "status": {"abstractGameState": "Preview", "detailedState": "Scheduled"},
