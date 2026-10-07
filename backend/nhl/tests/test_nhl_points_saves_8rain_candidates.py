@@ -14,6 +14,7 @@ from backend.nhl.scripts.select_nhl_points_saves_8rain_candidates import (
 )
 from backend.nhl.scripts.build_points_with_market import parse_points_odds
 from backend.nhl.scripts.build_saves_with_market import parse_odds_candidates
+from backend.nhl.prediction_lineage import POINTS_LINES, SAVES_LINES
 
 
 class PointsSavesEightRainPolicyTests(unittest.TestCase):
@@ -254,6 +255,25 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
                 self.assertEqual(len(points), 1)
                 self.assertEqual(points.iloc[0].source_quote_count_over, len(book_keys))
                 self.assertEqual(points.iloc[0].source_books_over, "|".join(sorted(book_keys)))
+
+    def test_alternate_provider_markets_stay_distinct_from_prediction_quotes(self):
+        raw = [{"bookmakers": [{"key": "kalshi", "markets": [
+            {"key": "player_points", "outcomes": [
+                {"name": "Over", "description": "Alex Example", "point": 0.5, "price": -110},
+            ]},
+            {"key": "player_points_alternate", "outcomes": [
+                {"name": "Over", "description": "Alex Example", "point": 1.0, "price": -110},
+            ]},
+            {"key": "player_total_saves_alternate", "outcomes": [
+                {"name": "Over", "description": "Goalie Example", "point": 24, "price": -110},
+            ]},
+        ]}]}]
+        points = parse_points_odds(raw)
+        saves = parse_odds_candidates(raw)
+        self.assertEqual(points.line_str.tolist(), ["0.5"])
+        self.assertTrue(saves.empty)
+        self.assertEqual(POINTS_LINES, (0.5, 1.5, 2.5))
+        self.assertEqual(SAVES_LINES, tuple(float(line) + 0.5 for line in range(18, 31)))
 
 
 if __name__ == "__main__":

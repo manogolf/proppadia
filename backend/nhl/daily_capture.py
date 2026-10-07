@@ -24,6 +24,7 @@ import requests
 from requests.adapters import HTTPAdapter
 
 from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
+from backend.nhl.odds_markets import NHL_COMPREHENSIVE_PROP_MARKETS_CSV
 
 
 PACIFIC = ZoneInfo("America/Los_Angeles")  # Retained for legacy timestamp fields.
@@ -884,7 +885,7 @@ def capture_odds_observation(
     latest_pointer_path: Path | None = None,
     invocation_id: str | None = None, now: datetime | None = None,
     days_from: int = 1,
-    markets: str = "player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
+    markets: str = NHL_COMPREHENSIVE_PROP_MARKETS_CSV,
     regions: str = NHL_ODDS_REGIONS_CSV, odds_format: str = "american",
     credit_rules: Mapping[str, Any] | None = None,
     reuse_observation_dir: Path | None = None,

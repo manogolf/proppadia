@@ -35,6 +35,10 @@ from backend.nhl.daily_capture import (
     write_roster_observation,
 )
 from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
+from backend.nhl.odds_markets import (
+    NHL_COMPREHENSIVE_PROP_MARKETS,
+    NHL_COMPREHENSIVE_PROP_MARKETS_CSV,
+)
 from backend.nhl.daily_capture import _market_rows
 from backend.nhl.attachment_integrity import (
     AttachmentIntegrityError,
@@ -212,6 +216,26 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
                          (result.observation_dir / "transport_response_bodies.jsonl").read_text().splitlines()]
             self.assertEqual(base64.b64decode(transport[-1]["body_base64"]), provider.result.raw_response_bytes)
             self.assertEqual(provider.calls, 1)
+
+    def test_absent_kalshi_bookmaker_is_nonblocking_and_other_quotes_survive(self):
+        payload = [{**provider_event(), "bookmakers": [{
+            "key": "draftkings", "markets": [{
+                "key": "player_points", "outcomes": [{
+                    "name": "Over", "description": "Sample Player", "price": -110, "point": 0.5,
+                }],
+            }],
+        }]}]
+        provider = FakeProvider(ProviderCapture(
+            None, [provider_event()], payload,
+            [exchange(body=json.dumps(payload).encode())],
+            (json.dumps(payload) + "\n").encode(),
+        ))
+        with tempfile.TemporaryDirectory() as temp:
+            result = self.capture(Path(temp), provider)
+            self.assertEqual(result.classification, "CAPTURED_NONEMPTY")
+            rows = _market_rows(provider.result.odds_payload)
+            self.assertEqual({row["bookmaker"] for row in rows}, {"draftkings"})
+            self.assertEqual({row["market"] for row in rows}, {"player_points"})
 
     def test_run_scoped_latest_pointer_leaves_default_pointer_untouched(self):
         payload = [market_event()]
@@ -803,13 +827,13 @@ class BoundedOddsTopologyTests(unittest.TestCase):
         })
         plan, _ = build_odds_request_plan(
             events=events, canonical_games=canonical, slate_date=SLATE,
-            markets="player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
+            markets=NHL_COMPREHENSIVE_PROP_MARKETS_CSV,
             regions=NHL_ODDS_REGIONS_CSV, credit_rules=credit_rules)
         responses = [discovery]
         event_by_id = {str(event.get("id")): event for event in events}
         for index, event_id in enumerate(plan.selected_provider_event_ids):
-            headers = ({"content-type": "application/json", "x-requests-last": "8",
-                        "x-requests-remaining": str(992 - index * 8)}
+            headers = ({"content-type": "application/json", "x-requests-last": "18",
+                        "x-requests-remaining": str(982 - index * 18)}
                        if paid_headers is None else paid_headers[index])
             status = 200 if paid_statuses is None else paid_statuses[index]
             responses.append(self.Response(
@@ -843,7 +867,7 @@ class BoundedOddsTopologyTests(unittest.TestCase):
             self.assertEqual(claim["canonical_game_set_hash"],
                              "92d828be583187109116de1eccda70c2bf8563288ec6ad39ce3976da43a9eec3")
             self.assertEqual(claim["regions"], ["us", "us2", "us_ex"])
-            self.assertEqual(claim["maximum_credits"], 132)
+            self.assertEqual(claim["maximum_credits"], 198)
             self.assertEqual(len(claim["selected_provider_event_ids"]), 11)
 
     def test_empty_unmatched_and_partial_discovery_never_expand_paid_plan(self):
@@ -981,8 +1005,37 @@ class BoundedOddsTopologyTests(unittest.TestCase):
                          "us,us2,us_ex")
         self.assertEqual(derive_odds_credit_bound(
             paid_request_count=11,
-            markets=("player_shots_on_goal", "player_shots_on_goal_alternate", "player_total_saves", "player_points"),
-            regions=("us", "us2", "us_ex")), (0, 12, 132))
+            markets=NHL_COMPREHENSIVE_PROP_MARKETS,
+            regions=("us", "us2", "us_ex")), (0, 18, 198))
+
+    def test_comprehensive_market_defaults_include_alternates_and_update_credit_ceiling(self):
+        expected = (
+            "player_shots_on_goal", "player_shots_on_goal_alternate",
+            "player_total_saves", "player_total_saves_alternate",
+            "player_points", "player_points_alternate",
+        )
+        self.assertEqual(NHL_COMPREHENSIVE_PROP_MARKETS, expected)
+        self.assertEqual(inspect.signature(capture_odds_observation).parameters["markets"].default,
+                         ",".join(expected))
+        self.assertEqual(inspect.signature(cli.fetch_odds).parameters["markets"].default,
+                         ",".join(expected))
+        self.assertEqual(derive_odds_credit_bound(
+            paid_request_count=NHL_ABSOLUTE_GAME_REQUEST_CEILING,
+            markets=expected, regions=("us", "us2", "us_ex")), (0, 18, 288))
+
+    def test_exact_alternate_market_keys_keep_kalshi_identity_and_do_not_conflate(self):
+        payload = [{"id": "event", "bookmakers": [{"key": "kalshi", "markets": [
+            {"key": "player_points", "outcomes": [{"name": "Over", "description": "Alex Example", "price": -110, "point": 0.5}]},
+            {"key": "player_points_alternate", "outcomes": [{"name": "Over", "description": "Alex Example", "price": -110, "point": 1.0}]},
+            {"key": "player_total_saves_alternate", "outcomes": [{"name": "Over", "description": "Goalie Example", "price": -110, "point": 24.0}]},
+        ]}]}]
+        rows = _market_rows(payload)
+        self.assertEqual({(row["bookmaker"], row["market"]) for row in rows}, {
+            ("kalshi", "player_points"),
+            ("kalshi", "player_points_alternate"),
+            ("kalshi", "player_total_saves_alternate"),
+        })
+        self.assertEqual(_market_rows([{"id": "event", "bookmakers": []}]), [])
 
     def test_exchange_bookmaker_keys_are_retained_and_distinct(self):
         payload = [{"id": "event", "bookmakers": [
@@ -997,10 +1050,10 @@ class BoundedOddsTopologyTests(unittest.TestCase):
             ([{"content-type": "application/json"}, {"content-type": "application/json"}],
              "CAPTURED_NONEMPTY", 2),
             ([{"content-type": "application/json", "x-requests-last": "bad"},
-              {"content-type": "application/json", "x-requests-last": "12"}],
+             {"content-type": "application/json", "x-requests-last": "18"}],
              "FAILED_BUDGET_GUARD", 1),
-            ([{"content-type": "application/json", "x-requests-last": "13"},
-              {"content-type": "application/json", "x-requests-last": "12"}],
+            ([{"content-type": "application/json", "x-requests-last": "19"},
+              {"content-type": "application/json", "x-requests-last": "18"}],
              "FAILED_BUDGET_GUARD", 1),
         ]
         for index, (headers, classification, paid) in enumerate(cases):
