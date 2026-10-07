@@ -1,4 +1,5 @@
 import json
+import inspect
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -7,9 +8,14 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from backend.nhl.cross_market_shadow.core import quota_estimate, run_capture, verify_manifest
+from backend.nhl.cross_market_shadow.core import (
+    MAX_ESTIMATED_CREDITS_PER_RUN, REGIONS, MARKETS, normalize_markets,
+    quota_estimate, run_capture, verify_manifest, fetch_markets,
+)
 from backend.nhl.cross_market_shadow.core import normalize_game_types, SCHEDULE_COLUMNS
-from backend.nhl.scripts.activate_nhl_2026_mainline_cross_market_prospective_shadow_v1 import fixture_files
+from backend.nhl.scripts.activate_nhl_2026_mainline_cross_market_prospective_shadow_v1 import (
+    FakeResponse, fixture_files,
+)
 from backend.nhl.scripts.run_nhl_mainline_cross_market_capture_warn_only import (
     phase_for,
     prior_capture_suppression,
@@ -86,8 +92,49 @@ class MainlineIntradayRefreshTest(unittest.TestCase):
     def test_request_and_credit_budget_remains_bounded(self):
         estimate = quota_estimate()
         self.assertEqual(estimate["http_request_count"], 1)
+        self.assertEqual(REGIONS, ("us", "us2", "us_ex"))
+        self.assertEqual(MARKETS, ("h2h", "spreads"))
+        self.assertEqual(inspect.signature(fetch_markets).parameters["regions"].default, REGIONS)
+        self.assertEqual(estimate["region_count"], 3)
+        self.assertEqual(estimate["estimated_credit_upper_bound"], 6)
+        self.assertEqual(MAX_ESTIMATED_CREDITS_PER_RUN, 6)
         self.assertTrue(estimate["within_request_bound"])
         self.assertTrue(estimate["within_credit_bound"])
+        with tempfile.TemporaryDirectory(prefix="nhl_mainline_request_regions_") as raw:
+            output = Path(raw) / "odds.json"
+            with patch("backend.nhl.cross_market_shadow.core.urllib.request.urlopen",
+                       return_value=FakeResponse()):
+                fetch_markets("fixture-key", output)
+            envelope = json.loads(output.read_text())
+            self.assertEqual(envelope["request_metadata"]["regions"], ["us", "us2", "us_ex"])
+            self.assertEqual(envelope["quota"]["estimated_credit_upper_bound"], 6)
+            self.assertEqual(envelope["quota"]["credits_consumed"], 4)
+
+    def test_exchange_and_sportsbook_keys_remain_distinct_and_optional(self):
+        with tempfile.TemporaryDirectory(prefix="nhl_exchange_books_") as raw:
+            inputs = fixture_files(Path(raw))
+            schedule = pd.read_csv(inputs["schedule"])
+            event = {
+                "id": "event-2026010001", "home_team": "Montreal Canadiens",
+                "away_team": "Ottawa Senators", "commence_time": "2026-09-19T23:00:00Z",
+                "bookmakers": [
+                    {"key": "draftkings", "title": "DraftKings", "last_update": "2026-09-19T17:55:00Z",
+                     "markets": [{"key": "h2h", "last_update": "2026-09-19T17:55:00Z",
+                                  "outcomes": [{"name": "Montreal Canadiens", "price": -120},
+                                               {"name": "Ottawa Senators", "price": 105}]}]},
+                    {"key": "kalshi", "title": "Kalshi", "last_update": "2026-09-19T17:55:00Z",
+                     "markets": [{"key": "h2h", "last_update": "2026-09-19T17:55:00Z",
+                                  "outcomes": [{"name": "Montreal Canadiens", "price": -118},
+                                               {"name": "Ottawa Senators", "price": 103}]}]},
+                ],
+            }
+            envelope = {"capture_timestamp_utc": "2026-09-19T18:00:00Z", "provider_response": [event]}
+            quotes, _, _ = normalize_markets(envelope, schedule)
+            self.assertEqual(set(quotes.sportsbook_key), {"draftkings", "kalshi"})
+            self.assertEqual(quotes.sportsbook_key.nunique(), 2)
+            event["bookmakers"] = event["bookmakers"][:1]
+            sportsbook_only, _, _ = normalize_markets(envelope, schedule)
+            self.assertEqual(set(sportsbook_only.sportsbook_key), {"draftkings"})
 
     def test_empty_strict_prior_history_retains_v2_required_schema(self):
         schedule = pd.DataFrame([{

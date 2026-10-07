@@ -291,7 +291,7 @@ def run_validation(work: Path) -> tuple[list[dict], dict]:
     check("credential redaction", sentinel not in mock_text and mock_payload["request_metadata"]["credential_persisted"] is False, "sentinel absent")
     check("quota headers and credits recorded", mock_payload["quota"]["credits_consumed"] == 4 and mock_payload["quota"]["requests_remaining"] == "996", mock_payload["quota"])
     bounded = quota_estimate()
-    over = quota_estimate(("us", "us2", "eu"))
+    over = quota_estimate(("us", "us2", "us_ex", "eu"))
     check("quota request and credit bounds", bounded["within_request_bound"] and bounded["within_credit_bound"] and not over["within_credit_bound"], {"normal": bounded, "over": over})
 
     morning_root = work / "morning"
@@ -353,7 +353,7 @@ def contracts(staging: Path, summary: dict) -> None:
     write_json(staging / "source_market_contract.json", {
         "provider": "The Odds API", "sport_key": "icehockey_nhl",
         "markets": {"h2h": "full-game winner including overtime/shootout", "spreads": "standard home -1.5 / away +1.5 only"},
-        "regions": ["us", "us2"], "book_policy": "retain all returned books; flag BetOnline only when provider key is betonlineag",
+        "regions": ["us", "us2", "us_ex"], "book_policy": "retain all returned books; flag BetOnline only when provider key is betonlineag",
         "binding": "exact normalized home/away plus commence time within 15 minutes; ambiguity retained and unqualified",
         "pregame": "source update and observation timestamps both strictly before scheduled start",
         "labels": {"FIRST_SEEN": "earliest observed qualified price; not opening", "LATEST_PRESTART": "latest observed qualified price before start; not close"},
@@ -387,7 +387,7 @@ def contracts(staging: Path, summary: dict) -> None:
     })
     write_json(staging / "quota_policy.json", {
         "maximum_http_requests_per_capture": 1, "markets_per_request": 2,
-        "regions": 2, "estimated_credit_upper_bound": 4,
+        "regions": 3, "estimated_credit_upper_bound": 6,
         "response_headers": ["x-requests-last", "x-requests-remaining", "x-requests-used"],
         "missing_credential": "FAIL_CLOSED", "unbounded_polling": "PROHIBITED",
         "activation_live_calls": 0, "activation_live_credits_consumed": 0,

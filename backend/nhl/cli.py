@@ -25,6 +25,8 @@ Conventions:
 
 from __future__ import annotations
 
+from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
+
 import argparse
 import json
 import os
@@ -1057,7 +1059,7 @@ def export_names_csv(slate: str) -> Path:
 def fetch_odds(
     days_from: int = 1,
     markets: str = "player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
-    regions: str = "us,us2",
+    regions: str = NHL_ODDS_REGIONS_CSV,
     odds_format: str = "american",
     *,
     slate: str | None = None,

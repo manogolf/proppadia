@@ -8,6 +8,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
 
 from .core import capture_run
 
@@ -18,7 +19,7 @@ def main() -> None:
     fetch = commands.add_parser("fetch")
     fetch.add_argument("--api-key", required=True)
     fetch.add_argument("--output", type=Path, required=True)
-    fetch.add_argument("--regions", default="us,us2")
+    fetch.add_argument("--regions", default=NHL_ODDS_REGIONS_CSV)
     run = commands.add_parser("run")
     run.add_argument("--payload-json", type=Path, required=True)
     run.add_argument("--games-csv", type=Path, required=True)

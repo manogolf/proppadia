@@ -5,12 +5,13 @@ import argparse,json,urllib.parse,urllib.request
 from datetime import datetime,timezone
 from pathlib import Path
 from .core import grade_run,historical_parity,run_shadow
+from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
 
 def main():
  ap=argparse.ArgumentParser(); sub=ap.add_subparsers(dest='cmd',required=True)
  p=sub.add_parser('parity'); p.add_argument('--matrix',type=Path,required=True); p.add_argument('--predictions',type=Path,required=True); p.add_argument('--output',type=Path,required=True)
  r=sub.add_parser('run'); r.add_argument('--schedule-csv',type=Path,required=True); r.add_argument('--history-csv',type=Path,required=True); r.add_argument('--odds-json',type=Path); r.add_argument('--output-root',type=Path,default=Path('backend/nhl/exports/mainline_shadow')); r.add_argument('--slate-date',required=True); r.add_argument('--run-timestamp-utc',required=True); r.add_argument('--run-type',choices=['MIDDAY','FINAL_PREGAME'],required=True); r.add_argument('--historical-fixture',action='store_true')
- f=sub.add_parser('fetch-h2h'); f.add_argument('--api-key',required=True); f.add_argument('--output',type=Path,required=True); f.add_argument('--regions',default='us,us2')
+ f=sub.add_parser('fetch-h2h'); f.add_argument('--api-key',required=True); f.add_argument('--output',type=Path,required=True); f.add_argument('--regions',default=NHL_ODDS_REGIONS_CSV)
  g=sub.add_parser('grade'); g.add_argument('--run-dir',type=Path,required=True); g.add_argument('--outcomes-csv',type=Path,required=True); g.add_argument('--grade-root',type=Path,required=True); g.add_argument('--grading-timestamp-utc',required=True)
  a=ap.parse_args()
  if a.cmd=='parity':

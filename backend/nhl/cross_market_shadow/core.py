@@ -17,6 +17,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from backend.nhl.game_phase import GAME_TYPE_PHASE, phase_for_game_type, regular_season_evaluation_eligible
+from backend.nhl.odds_regions import NHL_ODDS_REGIONS
 from sklearn.metrics import roc_auc_score
 from .shot_prior import (
     CHALLENGER_NAME, POLICY_VERSION, build_shot_prior_challenger,
@@ -49,11 +50,11 @@ SCHEDULE_COLUMNS = [
 ]
 GAME_TYPES = GAME_TYPE_PHASE
 MAX_REQUESTS_PER_RUN = 1
-MAX_ESTIMATED_CREDITS_PER_RUN = 4
+MAX_ESTIMATED_CREDITS_PER_RUN = 6
 MARKETS = ("h2h", "spreads")
 NHL_OPERATIONAL_TZ = ZoneInfo("America/New_York")
 TIME_WARNING_MINUTES = 15
-REGIONS = ("us", "us2")
+REGIONS = NHL_ODDS_REGIONS
 PRIOR_SOURCE_DIR = Path(__file__).resolve().parents[3] / "artifacts" / "analysis" / "model_development"
 PRIOR_TEAM_SOURCE = PRIOR_SOURCE_DIR / "nhl_season_2025_frozen_moneyline_replay_and_sog_novelty_v1" / "2026-09-15" / "season_2025_team_game_source.csv"
 PRIOR_TEAM_MANIFEST = PRIOR_TEAM_SOURCE.parent / "SHA256SUMS"

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import base64
+import inspect
 import tempfile
 import threading
 import time
@@ -33,6 +34,8 @@ from backend.nhl.daily_capture import (
     verify_package,
     write_roster_observation,
 )
+from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
+from backend.nhl.daily_capture import _market_rows
 from backend.nhl.attachment_integrity import (
     AttachmentIntegrityError,
     validate_odds_observation,
@@ -801,7 +804,7 @@ class BoundedOddsTopologyTests(unittest.TestCase):
         plan, _ = build_odds_request_plan(
             events=events, canonical_games=canonical, slate_date=SLATE,
             markets="player_shots_on_goal,player_shots_on_goal_alternate,player_total_saves,player_points",
-            regions="us,us2", credit_rules=credit_rules)
+            regions=NHL_ODDS_REGIONS_CSV, credit_rules=credit_rules)
         responses = [discovery]
         event_by_id = {str(event.get("id")): event for event in events}
         for index, event_id in enumerate(plan.selected_provider_event_ids):
@@ -839,7 +842,8 @@ class BoundedOddsTopologyTests(unittest.TestCase):
                                 f"slate_date={SLATE}/phase=EARLY.claim.json").read_text())
             self.assertEqual(claim["canonical_game_set_hash"],
                              "92d828be583187109116de1eccda70c2bf8563288ec6ad39ce3976da43a9eec3")
-            self.assertEqual(claim["maximum_credits"], 88)
+            self.assertEqual(claim["regions"], ["us", "us2", "us_ex"])
+            self.assertEqual(claim["maximum_credits"], 132)
             self.assertEqual(len(claim["selected_provider_event_ids"]), 11)
 
     def test_empty_unmatched_and_partial_discovery_never_expand_paid_plan(self):
@@ -972,15 +976,31 @@ class BoundedOddsTopologyTests(unittest.TestCase):
         self.assertEqual(derive_odds_credit_bound(
             paid_request_count=11,
             markets=("a", "b", "c", "d"), regions=("us", "us2")), (0, 8, 88))
+        self.assertEqual(NHL_ODDS_REGIONS_CSV, "us,us2,us_ex")
+        self.assertEqual(inspect.signature(capture_odds_observation).parameters["regions"].default,
+                         "us,us2,us_ex")
+        self.assertEqual(derive_odds_credit_bound(
+            paid_request_count=11,
+            markets=("player_shots_on_goal", "player_shots_on_goal_alternate", "player_total_saves", "player_points"),
+            regions=("us", "us2", "us_ex")), (0, 12, 132))
+
+    def test_exchange_bookmaker_keys_are_retained_and_distinct(self):
+        payload = [{"id": "event", "bookmakers": [
+            {"key": key, "markets": [{"key": "player_points", "outcomes": [{"name": "Over", "price": -110, "point": 0.5}]}]}
+            for key in ("draftkings", "kalshi", "polymarket", "novig", "prophetx", "betopenly")
+        ]}]
+        self.assertEqual({row["bookmaker"] for row in _market_rows(payload)}, {
+            "draftkings", "kalshi", "polymarket", "novig", "prophetx", "betopenly",
+        })
         canonical, events = self.canonical(2), [self.event(0), self.event(1)]
         cases = [
             ([{"content-type": "application/json"}, {"content-type": "application/json"}],
              "CAPTURED_NONEMPTY", 2),
             ([{"content-type": "application/json", "x-requests-last": "bad"},
-              {"content-type": "application/json", "x-requests-last": "8"}],
+              {"content-type": "application/json", "x-requests-last": "12"}],
              "FAILED_BUDGET_GUARD", 1),
-            ([{"content-type": "application/json", "x-requests-last": "9"},
-              {"content-type": "application/json", "x-requests-last": "8"}],
+            ([{"content-type": "application/json", "x-requests-last": "13"},
+              {"content-type": "application/json", "x-requests-last": "12"}],
              "FAILED_BUDGET_GUARD", 1),
         ]
         for index, (headers, classification, paid) in enumerate(cases):

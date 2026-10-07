@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 from .core import daily_status, fetch_markets, grade_capture, run_capture
+from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
 
 
 def main() -> None:
@@ -15,7 +16,7 @@ def main() -> None:
     commands = parser.add_subparsers(dest="command", required=True)
     fetch = commands.add_parser("fetch-markets")
     fetch.add_argument("--output", type=Path, required=True)
-    fetch.add_argument("--regions", default="us,us2")
+    fetch.add_argument("--regions", default=NHL_ODDS_REGIONS_CSV)
     run = commands.add_parser("run")
     run.add_argument("--schedule-csv", type=Path, required=True)
     run.add_argument("--history-csv", type=Path, required=True)
