@@ -3,76 +3,77 @@
     "conflicting": 0,
     "duplicate": 0,
     "missing": 0,
-    "proposal_sha256": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
-    "records_sha256": "5a7cdc460cc42ca2b4ed328c74e978b9da6967f95d7a7c4ba888b3b8d3401a84",
-    "supported_through_date": "2026-09-27",
+    "proposal_sha256": "bd6753e5fe4c9d3eca4f3b083d20ea56c791686ff9988e430c69c348a040796d",
+    "records_sha256": "4e1f6a75af3f2b9e584fd48fe46902263b104ba9c18255f820f031aab406098e",
+    "supported_through_date": "2026-10-05",
     "unknown": 0
   },
   "cross_lane": {
     "identity_conflicts": 0,
-    "intersection": 467,
-    "raw_only": 141,
+    "intersection": 482,
+    "raw_only": 143,
     "totals_c_only": 0
   },
   "hash_invariance": true,
   "hashes_after_regular_gate": {
-    "market_inputs_sha256": "4e98c6794b8663e0680ce63f24d6cdfbf6abc142bc21b1351c9b4925807a34fa",
-    "raw_feature_inputs_sha256": "fef17fccf6ef0a9b28ae35457e3479d83ec40a85821ac9a118416191f7fb1850",
-    "raw_outcome_inputs_sha256": "560644a012ed0113d41c314680ff4f5795a609c1d24ad272b080dac01e308cc7",
-    "raw_prediction_inputs_sha256": "056687f7b13a12daa6673416acbe41694686d79a82f533d04ad5195c745d00a5",
-    "raw_proper_score_inputs_sha256": "90809900807f53ca7c7f19f1672d047991c2ac0aee1685f44fb842ebb5c5bf41",
-    "raw_regular_membership_sha256": "f057e96906da93f46f6241f79836c7fb573aef6f09bb060896b40aaf46745767",
-    "totals_c_outcome_inputs_sha256": "0181af807ea96340a662dc41bea407ae57c7ff3861083fd59d06c7cc23d3f66b",
-    "totals_c_prediction_inputs_sha256": "21d99d266f18bab4150ff3987a4878ae2af7405d145ea5b50849e44f88dff7ca",
-    "totals_c_proper_score_inputs_sha256": "30a69220545967ca91e0ce5163d5ccc7bc3ade85b9f02716015ab2c4eec98e65",
-    "totals_c_regular_membership_sha256": "d7d3c06acf102c39b8ec04a95c445e24ead7bcbb7e51dacca5d1394fc6dc63be"
+    "market_inputs_sha256": "2fc2963a9561c0c2aa522dc68fc5bd386286f133cc9f939d419382e5e2dd52ed",
+    "raw_feature_inputs_sha256": "ee47958739ed71c594ab3a65ade91e06da7abb7417e40a08e570b272dfe1414e",
+    "raw_outcome_inputs_sha256": "255b81a5b547123df31b3ef3828c2ce8221132c9f50cfd9c3f0bdcc51182d370",
+    "raw_prediction_inputs_sha256": "7b7548357e306ac287c3b4667ab94d7239d51a4f77f2ff57eb0cba3c26d759d9",
+    "raw_proper_score_inputs_sha256": "39db24dd1b45f574d63c334b3790ff1b977a49820d31496282d6159ffdceed2f",
+    "raw_regular_membership_sha256": "f12a9f7fddc2d9aafe7c928104e10ca42615eb2aff082e0202e08cdcca55747a",
+    "totals_c_outcome_inputs_sha256": "aa57801c2a911ecadb9db995585d6ed4f79427fd98b69c48dbeece8b2c481e97",
+    "totals_c_prediction_inputs_sha256": "b1fed5c582369148cda946c6d2a7badaffaa18b1116d3effd610c725a1829f5a",
+    "totals_c_proper_score_inputs_sha256": "9d72495a6cdfe2d6a64db87126837b76a634444b6516ebbac1f78e31edbc5239",
+    "totals_c_regular_membership_sha256": "d7cff3fa2c3634e4c2948f11eba1c5dbd23bea37b1ab25480f53a1bf331d4223"
   },
   "hashes_before_gate": {
-    "market_inputs_sha256": "4e98c6794b8663e0680ce63f24d6cdfbf6abc142bc21b1351c9b4925807a34fa",
-    "raw_feature_inputs_sha256": "fef17fccf6ef0a9b28ae35457e3479d83ec40a85821ac9a118416191f7fb1850",
-    "raw_outcome_inputs_sha256": "560644a012ed0113d41c314680ff4f5795a609c1d24ad272b080dac01e308cc7",
-    "raw_prediction_inputs_sha256": "056687f7b13a12daa6673416acbe41694686d79a82f533d04ad5195c745d00a5",
-    "raw_proper_score_inputs_sha256": "90809900807f53ca7c7f19f1672d047991c2ac0aee1685f44fb842ebb5c5bf41",
-    "raw_regular_membership_sha256": "f057e96906da93f46f6241f79836c7fb573aef6f09bb060896b40aaf46745767",
-    "totals_c_outcome_inputs_sha256": "0181af807ea96340a662dc41bea407ae57c7ff3861083fd59d06c7cc23d3f66b",
-    "totals_c_prediction_inputs_sha256": "21d99d266f18bab4150ff3987a4878ae2af7405d145ea5b50849e44f88dff7ca",
-    "totals_c_proper_score_inputs_sha256": "30a69220545967ca91e0ce5163d5ccc7bc3ade85b9f02716015ab2c4eec98e65",
-    "totals_c_regular_membership_sha256": "d7d3c06acf102c39b8ec04a95c445e24ead7bcbb7e51dacca5d1394fc6dc63be"
+    "market_inputs_sha256": "2fc2963a9561c0c2aa522dc68fc5bd386286f133cc9f939d419382e5e2dd52ed",
+    "raw_feature_inputs_sha256": "ee47958739ed71c594ab3a65ade91e06da7abb7417e40a08e570b272dfe1414e",
+    "raw_outcome_inputs_sha256": "255b81a5b547123df31b3ef3828c2ce8221132c9f50cfd9c3f0bdcc51182d370",
+    "raw_prediction_inputs_sha256": "7b7548357e306ac287c3b4667ab94d7239d51a4f77f2ff57eb0cba3c26d759d9",
+    "raw_proper_score_inputs_sha256": "39db24dd1b45f574d63c334b3790ff1b977a49820d31496282d6159ffdceed2f",
+    "raw_regular_membership_sha256": "f12a9f7fddc2d9aafe7c928104e10ca42615eb2aff082e0202e08cdcca55747a",
+    "totals_c_outcome_inputs_sha256": "aa57801c2a911ecadb9db995585d6ed4f79427fd98b69c48dbeece8b2c481e97",
+    "totals_c_prediction_inputs_sha256": "b1fed5c582369148cda946c6d2a7badaffaa18b1116d3effd610c725a1829f5a",
+    "totals_c_proper_score_inputs_sha256": "9d72495a6cdfe2d6a64db87126837b76a634444b6516ebbac1f78e31edbc5239",
+    "totals_c_regular_membership_sha256": "d7cff3fa2c3634e4c2948f11eba1c5dbd23bea37b1ab25480f53a1bf331d4223"
   },
   "ledger_file_sha256_after": {
-    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "5deba9bc7c4aad9140b434404276558bf5381138f710fa2677fb0ac8c4ca3f01",
-    "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d2fb9c0ce6fcba5548a151a7b41574519cb0a3728abb7facc380ea0e8b74b53a",
-    "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "c5bd726c5fb3b71be8d86a1a9ee424708b0c5f11cd77edfcb1cc0079dc94037a"
+    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "7ade61e0a263066f59bc7d93a60c518299560ea6161f657aeff91a9d5a0b23c1",
+    "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d966be9c4ffc726656498172aa971f0e86aba03d58c28df61176ead665eff426",
+    "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "3bcc21bd7dc885ec78042b3daeabc6fb371cb2c4ab811752297575317bee027f"
   },
   "ledger_file_sha256_before": {
-    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "5deba9bc7c4aad9140b434404276558bf5381138f710fa2677fb0ac8c4ca3f01",
-    "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d2fb9c0ce6fcba5548a151a7b41574519cb0a3728abb7facc380ea0e8b74b53a",
-    "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "c5bd726c5fb3b71be8d86a1a9ee424708b0c5f11cd77edfcb1cc0079dc94037a"
+    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "7ade61e0a263066f59bc7d93a60c518299560ea6161f657aeff91a9d5a0b23c1",
+    "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d966be9c4ffc726656498172aa971f0e86aba03d58c28df61176ead665eff426",
+    "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "3bcc21bd7dc885ec78042b3daeabc6fb371cb2c4ab811752297575317bee027f"
   },
   "ledger_files_byte_unchanged": true,
   "market": {
-    "retained_rows_for_raw_population": 42738
+    "retained_rows_for_raw_population": 43363
   },
   "raw_totals": {
-    "context_rows": 608,
-    "distinct_game_pks": 608,
+    "context_rows": 625,
+    "distinct_game_pks": 625,
     "earliest_date": "2026-08-06",
-    "latest_date": "2026-09-20",
-    "outcome_rows": 597,
+    "latest_date": "2026-10-04",
+    "outcome_rows": 610,
     "phase_counts": {
-      "REGULAR_SEASON": 608
+      "POSTSEASON": 2,
+      "REGULAR_SEASON": 623
     },
-    "prediction_rows": 608
+    "prediction_rows": 625
   },
   "totals_c": {
-    "distinct_game_pks": 467,
+    "distinct_game_pks": 482,
     "earliest_date": "2026-08-17",
-    "latest_date": "2026-09-20",
-    "outcome_rows": 452,
+    "latest_date": "2026-09-27",
+    "outcome_rows": 467,
     "phase_counts": {
-      "REGULAR_SEASON": 467
+      "REGULAR_SEASON": 482
     },
-    "prediction_rows": 467
+    "prediction_rows": 482
   },
   "violations": {
     "conflicting": 0,

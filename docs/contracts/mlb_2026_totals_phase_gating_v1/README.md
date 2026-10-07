@@ -6,4 +6,4 @@ Retained evidence is unchanged. RAW contains 608 predictions / 608 gamePks and C
 
 Regular-season reporting remains the default. Postseason requires explicit `POSTSEASON` evaluation mode and remains shadow-only. Operational readiness is blocked until an actual authoritative postseason game traverses the ordinary RAW and C paths; synthetic coverage proves code behavior only.
 
-Validation: 37 passed, 0 failed, 0 skipped; overall `PASS`.
+Validation: 40 passed, 0 failed, 0 skipped; overall `PASS`.

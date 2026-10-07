@@ -1,12 +1,12 @@
 {
   "checks": {
-    "all_retained_regular": true,
-    "c_exact_subset": true,
-    "c_expected_population": true,
+    "all_retained_regular": false,
+    "c_exact_subset": false,
+    "c_expected_population": false,
     "hash_invariance": true,
     "ledger_files_byte_unchanged": true,
     "no_training_or_model_mutation": true,
-    "raw_expected_population": true,
+    "raw_expected_population": false,
     "selector_publication_threshold_status_unchanged": true,
     "tests": "PASS",
     "zero_violations": true
