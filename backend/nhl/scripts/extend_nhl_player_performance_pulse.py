@@ -36,6 +36,50 @@ DYNAMIC_PRODUCTION_FEATURES = {
 }
 PRIMARY_FEATURE = {"sog": "d10_sog_per60", "points": "d10_sog_per60", "saves": "d5_saves_per60"}
 EXPECTED_DIRECTION = {"sog": {"d5_sog_per60": 1, "d10_sog_per60": 1, "d20_sog_per60": 1, "d5_toi_min_avg": 1, "d10_toi_min_avg": 1, "d20_toi_min_avg": 1}, "points": {}, "saves": {"d5_saves_per60": 1, "d10_saves_per60": 1, "d5_shots_faced_per60": 1}}
+_ARTIFACT_HASH_CACHE: dict[str, tuple[int, int, str]] = {}
+
+
+def _artifact_hash_matches(path_text: Any, expected_sha256: Any) -> bool:
+    if not isinstance(path_text, str) or not path_text or not isinstance(expected_sha256, str):
+        return False
+    try:
+        path = pulse.resolve(path_text)
+        stat = path.stat()
+        cached = _ARTIFACT_HASH_CACHE.get(str(path))
+        if cached and cached[:2] == (stat.st_mtime_ns, stat.st_size):
+            actual = cached[2]
+        else:
+            actual = pulse.sha256(path)
+            _ARTIFACT_HASH_CACHE[str(path)] = (stat.st_mtime_ns, stat.st_size, actual)
+        return actual == expected_sha256
+    except OSError:
+        return False
+
+
+def classify_transition_evidence(row: dict[str, Any]) -> tuple[str, str]:
+    """Keep intact production observations valid when only fitted identity is absent."""
+    artifacts = [
+        (row.get("feature_artifact_identity_prior"), row.get("feature_artifact_sha256_prior")),
+        (row.get("feature_artifact_identity_current"), row.get("feature_artifact_sha256_current")),
+        (row.get("prediction_artifact_identity_prior"), row.get("prediction_artifact_sha256_prior")),
+        (row.get("prediction_artifact_identity_current"), row.get("prediction_artifact_sha256_current")),
+        (row.get("outcome_source_path"), row.get("outcome_source_sha256")),
+    ]
+    if not all(_artifact_hash_matches(path, digest) for path, digest in artifacts):
+        return "INVALID_PRODUCTION_TRANSITION_EVIDENCE", "MISSING_OR_HASH_MISMATCHED_RETAINED_ARTIFACT"
+    prior_date = pd.to_datetime(row.get("game_n_date"), errors="coerce")
+    current_date = pd.to_datetime(row.get("game_n1_date"), errors="coerce")
+    outcome_time = pd.to_datetime(row.get("outcome_source_timestamp_utc"), utc=True, errors="coerce")
+    if pd.isna(prior_date) or pd.isna(current_date) or current_date <= prior_date:
+        return "INVALID_PRODUCTION_TRANSITION_EVIDENCE", "INVALID_TRANSITION_DATE_ORDER"
+    if pd.isna(outcome_time) or _num(row.get("realized_stat")) is None:
+        return "INVALID_PRODUCTION_TRANSITION_EVIDENCE", "MISSING_RETAINED_OFFICIAL_OUTCOME"
+    comparability = row.get("model_version_comparability_status")
+    if comparability == "PROVEN_SAME_FITTED_MODEL":
+        return "PROVEN_SAME_FITTED_MODEL", "RECEIPT_BOUND_IDENTITIES_MATCH"
+    if comparability == "PROVEN_FITTED_MODEL_CHANGED":
+        return "PROVEN_FITTED_MODEL_CHANGED", "RECEIPT_BOUND_IDENTITIES_DIFFER"
+    return "VALID_HISTORICAL_SOURCE_UNBOUND", "EXACT_HISTORICAL_FITTED_IDENTITY_NOT_RETAINED"
 
 
 def _load_transitions(as_of: str) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -78,6 +122,10 @@ def _load_transitions(as_of: str) -> tuple[pd.DataFrame, dict[str, Any]]:
         new = new[[ (r.lane, str(r.game_n_id), str(r.game_n1_id), str(r.player_id)) not in base_keys for r in new.itertuples() ]]
         if not new.empty: base = pd.concat([base, new], ignore_index=True, sort=False)
     base = base.sort_values(["lane", "player_id", "game_n_date", "game_n1_date", "game_n_id"]).reset_index(drop=True)
+    evidence = [classify_transition_evidence(row) for row in base.to_dict("records")]
+    base["production_evidence_status"] = [item[0] for item in evidence]
+    base["production_evidence_reason"] = [item[1] for item in evidence]
+    audit["invalid_transition_evidence"] = int(base.production_evidence_status.eq("INVALID_PRODUCTION_TRANSITION_EVIDENCE").sum())
     return base, {**audit, "new_transition_rows": len(added)}
 
 
@@ -126,7 +174,7 @@ def prediction_transitions(transitions: pd.DataFrame) -> pd.DataFrame:
         for line in sorted(prior.keys() & curr.keys()):
             p0, p1 = prior[line], curr[line]
             status = r.get("model_version_comparability_status") or "HISTORICAL_MODEL_IDENTITY_UNAVAILABLE"
-            rows.append({"player_id": r["player_id"], "player_name": r.get("player_name"), "lane": r["lane"], "prior_game_id": r["game_n_id"], "prior_date": r["game_n_date"], "next_game_id": r["game_n1_id"], "next_date": r["game_n1_date"], "line": line, "prior_probability": p0, "current_probability": p1, "signed_probability_change": p1-p0, "absolute_probability_change": abs(p1-p0), "prior_prediction_artifact_identity": r.get("prediction_artifact_identity_prior"), "prior_prediction_artifact_sha256": r.get("prediction_artifact_sha256_prior"), "current_prediction_artifact_identity": r.get("prediction_artifact_identity_current"), "current_prediction_artifact_sha256": r.get("prediction_artifact_sha256_current"), "fitted_model_identity_prior": r.get("fitted_model_identity_prior"), "fitted_model_identity_current": r.get("fitted_model_identity_current"), "model_family_version": family, "model_version_comparability_status": status})
+            rows.append({"player_id": r["player_id"], "player_name": r.get("player_name"), "lane": r["lane"], "prior_game_id": r["game_n_id"], "prior_date": r["game_n_date"], "next_game_id": r["game_n1_id"], "next_date": r["game_n1_date"], "line": line, "prior_probability": p0, "current_probability": p1, "signed_probability_change": p1-p0, "absolute_probability_change": abs(p1-p0), "prior_prediction_artifact_identity": r.get("prediction_artifact_identity_prior"), "prior_prediction_artifact_sha256": r.get("prediction_artifact_sha256_prior"), "current_prediction_artifact_identity": r.get("prediction_artifact_identity_current"), "current_prediction_artifact_sha256": r.get("prediction_artifact_sha256_current"), "fitted_model_identity_prior": r.get("fitted_model_identity_prior"), "fitted_model_identity_current": r.get("fitted_model_identity_current"), "model_family_version": family, "model_version_comparability_status": status, "production_evidence_status": r.get("production_evidence_status", "VALID_HISTORICAL_SOURCE_UNBOUND"), "production_evidence_reason": r.get("production_evidence_reason", "EXACT_HISTORICAL_FITTED_IDENTITY_NOT_RETAINED")})
     return pd.DataFrame(rows)
 
 
@@ -137,14 +185,16 @@ def movement_and_classes(transitions: pd.DataFrame, prediction: pd.DataFrame, ba
     for key, group in m.groupby(["lane", "player_id", "game_n_id", "game_n1_id"], sort=False):
         movement_index[(str(key[0]), str(key[1]), str(key[2]), str(key[3]))] = group
     classes = []
-    pstats = {}
     pred_by = prediction.groupby(["lane", "player_id", "prior_game_id", "next_game_id"], dropna=False) if not prediction.empty else None
-    p_lookup = {}
+    p_lookup: dict[tuple[str, str, str, str], dict[str, list[float]]] = {}
     if pred_by is not None:
-        for key, g in pred_by:
-            same = g[g.model_version_comparability_status == "PROVEN_SAME_FITTED_MODEL"]
-            if not same.empty:
-                p_lookup[(key[0], str(key[1]), str(key[2]), str(key[3]))] = same.absolute_probability_change.tolist()
+        for key, group in pred_by:
+            valid = group[group.production_evidence_status != "INVALID_PRODUCTION_TRANSITION_EVIDENCE"]
+            same = valid[valid.model_version_comparability_status == "PROVEN_SAME_FITTED_MODEL"]
+            p_lookup[(key[0], str(key[1]), str(key[2]), str(key[3]))] = {
+                "all_valid": pd.to_numeric(valid.absolute_probability_change, errors="coerce").dropna().tolist(),
+                "proven_same_model": pd.to_numeric(same.absolute_probability_change, errors="coerce").dropna().tolist(),
+            }
     for r in transitions.to_dict("records"):
         fm = movement_index.get((str(r["lane"]), str(r["player_id"]), str(r["game_n_id"]), str(r["game_n1_id"])), m.iloc[0:0])
         direct = fm[fm.feature.isin(DIRECT_FEATURES[r["lane"]])]
@@ -153,41 +203,92 @@ def movement_and_classes(transitions: pd.DataFrame, prediction: pd.DataFrame, ba
         state_max_z = pd.to_numeric(direct.standardized_movement, errors="coerce").abs().max() if len(direct) else np.nan
         state_stable = not len(direct_nonzero)
         k = (r["lane"], str(r["player_id"]), str(r["game_n_id"]), str(r["game_n1_id"]))
-        pdeltas = p_lookup.get(k, [])
-        pmax = max(pdeltas) if pdeltas else None
+        probability_sets = p_lookup.get(k, {})
+        all_valid_deltas = probability_sets.get("all_valid", [])
+        same_model_deltas = probability_sets.get("proven_same_model", [])
+        all_valid_max = max(all_valid_deltas) if all_valid_deltas else None
+        same_model_max = max(same_model_deltas) if same_model_deltas else None
         status = r.get("model_version_comparability_status") or "HISTORICAL_MODEL_IDENTITY_UNAVAILABLE"
-        classes.append({**{k: r.get(k) for k in ["lane", "player_id", "player_name", "game_n_id", "game_n_date", "game_n1_id", "game_n1_date", "realized_stat"]}, "direct_dynamic_feature_count": len(DIRECT_FEATURES[r["lane"]]), "direct_features_changed_count": int((changes != 0).sum()), "maximum_abs_feature_z_movement": state_max_z, "maximum_abs_probability_movement": pmax, "prediction_line_count": len(pdeltas), "state_stable": state_stable, "model_stable": all(x == 0 for x in pdeltas) if pdeltas else None, "model_version_comparability_status": status})
+        classes.append({**{k: r.get(k) for k in ["lane", "player_id", "player_name", "game_n_id", "game_n_date", "game_n1_id", "game_n1_date", "realized_stat"]}, "production_evidence_status": r.get("production_evidence_status", "VALID_HISTORICAL_SOURCE_UNBOUND"), "direct_dynamic_feature_count": len(DIRECT_FEATURES[r["lane"]]), "direct_features_changed_count": int((changes != 0).sum()), "maximum_abs_feature_z_movement": state_max_z, "maximum_abs_probability_movement": all_valid_max, "all_valid_maximum_abs_probability_movement": all_valid_max, "proven_same_model_maximum_abs_probability_movement": same_model_max, "prediction_line_count": len(all_valid_deltas), "proven_same_model_prediction_line_count": len(same_model_deltas), "state_stable": state_stable, "model_stable": all(x == 0 for x in all_valid_deltas) if all_valid_deltas else None, "model_version_comparability_status": status})
     class_df = pd.DataFrame(classes)
     summary = {}
     for lane in pulse.LANES:
-        pg = prediction[prediction.lane == lane] if not prediction.empty else prediction
         lane_transitions = transitions[transitions.lane == lane] if not transitions.empty else transitions
-        status_counts = pg.model_version_comparability_status.value_counts().to_dict() if "model_version_comparability_status" in pg else {}
-        same_pg = pg[pg.model_version_comparability_status == "PROVEN_SAME_FITTED_MODEL"] if len(pg) else pg
-        vals = pd.to_numeric(same_pg.absolute_probability_change, errors="coerce").dropna() if len(same_pg) else pd.Series(dtype=float)
-        nonzero = vals[vals > 0]
-        p50 = float(nonzero.median()) if len(nonzero) else 0.0
-        p25 = float(nonzero.quantile(.25)) if len(nonzero) else 0.0
-        summary[lane] = {"prediction_transition_count": int(len(pg)), "model_version_comparability_counts": {"PROVEN_SAME_FITTED_MODEL": int(status_counts.get("PROVEN_SAME_FITTED_MODEL", 0)), "PROVEN_FITTED_MODEL_CHANGED": int(status_counts.get("PROVEN_FITTED_MODEL_CHANGED", 0)), "HISTORICAL_MODEL_IDENTITY_UNAVAILABLE": int(status_counts.get("HISTORICAL_MODEL_IDENTITY_UNAVAILABLE", 0))}, "proven_same_fitted_model_percent": 100.0 * status_counts.get("PROVEN_SAME_FITTED_MODEL", 0) / len(lane_transitions) if len(lane_transitions) else None, "responsiveness_population": "PROVEN_SAME_FITTED_MODEL", "model_version_comparability": "RECEIPT_BOUND_FITTED_MODEL_IDENTITY", "median_absolute_probability_movement": float(vals.median()) if len(vals) else None, "mean_absolute_probability_movement": float(vals.mean()) if len(vals) else None, "p75_absolute_probability_movement": float(vals.quantile(.75)) if len(vals) else None, "p90_absolute_probability_movement": float(vals.quantile(.90)) if len(vals) else None, "p95_absolute_probability_movement": float(vals.quantile(.95)) if len(vals) else None, "maximum_absolute_probability_movement": float(vals.max()) if len(vals) else None, "exact_zero_movement_rate": float((vals == 0).mean()) if len(vals) else None, "near_zero_distribution": {"nonzero_p10": float(nonzero.quantile(.10)) if len(nonzero) else None, "nonzero_p25": p25, "nonzero_p50": p50, "count_below_nonzero_p25": int((nonzero < p25).sum()) if len(nonzero) else 0}, "characterization_only_not_action_threshold": True}
-        summary[lane]["proven_same_fitted_model_percent"] = 100.0 * status_counts.get("PROVEN_SAME_FITTED_MODEL", 0) / len(pg) if len(pg) else None
         cl = class_df[class_df.lane == lane]
-        # The empirical median nonzero probability movement is a descriptive boundary only.
-        for _, c in cl.iterrows():
-            class_df.loc[c.name, "observed_response_case"] = observed_response_case(c, p50)
-            class_df.loc[c.name, "descriptive_case"] = descriptive_case(c, p50)
-        cl = class_df[class_df.lane == lane]
-        summary[lane]["state_model_case_counts"] = cl.observed_response_case.value_counts(dropna=False).to_dict()
-        summary[lane]["state_moved_model_moved_count"] = int(((~cl.state_stable) & (cl.maximum_abs_probability_movement >= p50) & (cl.maximum_abs_probability_movement.notna())).sum())
-        summary[lane]["state_moved_model_largely_static_count"] = int(((~cl.state_stable) & (cl.maximum_abs_probability_movement < p50) & (cl.maximum_abs_probability_movement.notna())).sum())
-        summary[lane]["state_stable_model_moved_count"] = int((cl.state_stable & (cl.maximum_abs_probability_movement >= p50) & (cl.maximum_abs_probability_movement.notna())).sum())
-        summary[lane]["characterization_rule"] = f"state stable = no direct feature changed; probability moved = at least lane nonzero median ({p50:.8g}); lower nonzero movement is largely static. Characterization only, not action threshold."
+        lane_prediction = prediction[prediction.lane == lane] if not prediction.empty else prediction
+        valid_prediction = lane_prediction[lane_prediction.production_evidence_status != "INVALID_PRODUCTION_TRANSITION_EVIDENCE"] if len(lane_prediction) else lane_prediction
+        same_prediction = valid_prediction[valid_prediction.model_version_comparability_status == "PROVEN_SAME_FITTED_MODEL"] if len(valid_prediction) else valid_prediction
+        changed_prediction = valid_prediction[valid_prediction.model_version_comparability_status == "PROVEN_FITTED_MODEL_CHANGED"] if len(valid_prediction) else valid_prediction
+        status_counts = lane_transitions.production_evidence_status.value_counts().to_dict() if "production_evidence_status" in lane_transitions else {}
+
+        def responsiveness(population_prediction: pd.DataFrame, population_classes: pd.DataFrame, population: str) -> dict[str, Any]:
+            values = pd.to_numeric(population_prediction.absolute_probability_change, errors="coerce").dropna() if len(population_prediction) else pd.Series(dtype=float)
+            nonzero = values[values > 0]
+            cutoff = float(nonzero.median()) if len(nonzero) else 0.0
+            p25 = float(nonzero.quantile(.25)) if len(nonzero) else 0.0
+            for idx, case in population_classes.iterrows():
+                max_key = ("proven_same_model_maximum_abs_probability_movement" if population == "proven_same_model"
+                           else "all_valid_maximum_abs_probability_movement")
+                row = case.copy()
+                row["maximum_abs_probability_movement"] = case.get(max_key)
+                population_classes.loc[idx, f"{population}_observed_response_case"] = observed_response_case(row, cutoff)
+            count_col = f"{population}_observed_response_case"
+            cases = population_classes[count_col].value_counts(dropna=False).to_dict() if count_col in population_classes else {}
+            moved_moved = int(cases.get("STATE_MOVED_MODEL_MOVED", 0))
+            moved_static = int(cases.get("STATE_MOVED_MODEL_LARGELY_STATIC", 0))
+            stable_moved = int(cases.get("STATE_STABLE_MODEL_MOVED", 0))
+            return {
+                "population": "ALL_VALID_PRODUCTION_TRANSITIONS" if population == "all_valid" else "PROVEN_SAME_FITTED_MODEL_TRANSITIONS",
+                "transition_count": int(len(population_classes)),
+                "probability_observation_count": int(len(values)),
+                "median_absolute_probability_movement": float(values.median()) if len(values) else None,
+                "mean_absolute_probability_movement": float(values.mean()) if len(values) else None,
+                "p75_absolute_probability_movement": float(values.quantile(.75)) if len(values) else None,
+                "p90_absolute_probability_movement": float(values.quantile(.90)) if len(values) else None,
+                "p95_absolute_probability_movement": float(values.quantile(.95)) if len(values) else None,
+                "maximum_absolute_probability_movement": float(values.max()) if len(values) else None,
+                "exact_zero_movement_rate": float((values == 0).mean()) if len(values) else None,
+                "state_model_case_counts": cases,
+                "state_moved_model_moved_count": moved_moved,
+                "state_moved_model_largely_static_count": moved_static,
+                "state_stable_model_moved_count": stable_moved,
+                "repeated_divergence_count": None,
+                "characterization_only_not_action_threshold": True,
+            }
+
+        all_classes = cl[cl.production_evidence_status != "INVALID_PRODUCTION_TRANSITION_EVIDENCE"].copy()
+        same_classes = cl[cl.production_evidence_status == "PROVEN_SAME_FITTED_MODEL"].copy()
+        all_stats = responsiveness(valid_prediction, all_classes, "all_valid")
+        same_stats = responsiveness(same_prediction, same_classes, "proven_same_model")
+        summary[lane] = {
+            "all_valid_responsiveness": all_stats,
+            "proven_same_model_responsiveness": same_stats,
+            "proven_model_changed_transition_count": int(status_counts.get("PROVEN_FITTED_MODEL_CHANGED", 0)),
+            "source_unbound_valid_transition_count": int(status_counts.get("VALID_HISTORICAL_SOURCE_UNBOUND", 0)),
+            "invalid_transition_count": int(status_counts.get("INVALID_PRODUCTION_TRANSITION_EVIDENCE", 0)),
+            "model_identity_coverage": {
+                "transitions_with_both_identities_proven": int(status_counts.get("PROVEN_SAME_FITTED_MODEL", 0) + status_counts.get("PROVEN_FITTED_MODEL_CHANGED", 0)),
+                "transitions_total": int(len(lane_transitions)),
+                "coverage_percent": (100.0 * (status_counts.get("PROVEN_SAME_FITTED_MODEL", 0) + status_counts.get("PROVEN_FITTED_MODEL_CHANGED", 0)) / len(lane_transitions)) if len(lane_transitions) else None,
+            },
+            # Backward-compatible primary summary now represents observed production behavior.
+            **all_stats,
+            "responsiveness_population": "ALL_VALID_PRODUCTION_TRANSITIONS",
+            "model_version_comparability_counts": {
+                "PROVEN_SAME_FITTED_MODEL": int(status_counts.get("PROVEN_SAME_FITTED_MODEL", 0)),
+                "PROVEN_FITTED_MODEL_CHANGED": int(status_counts.get("PROVEN_FITTED_MODEL_CHANGED", 0)),
+                "VALID_HISTORICAL_SOURCE_UNBOUND": int(status_counts.get("VALID_HISTORICAL_SOURCE_UNBOUND", 0)),
+                "INVALID_PRODUCTION_TRANSITION_EVIDENCE": int(status_counts.get("INVALID_PRODUCTION_TRANSITION_EVIDENCE", 0)),
+            },
+            "characterization_rule": "Probability and state movement describe valid production observations. Exact same-model attribution is limited to PROVEN_SAME_FITTED_MODEL_TRANSITIONS.",
+        }
     return m, class_df, summary
 
 
 def descriptive_case(row: pd.Series, prediction_cut: float) -> str:
     status = row.get("model_version_comparability_status")
     if status == "PROVEN_FITTED_MODEL_CHANGED": return "FITTED_MODEL_CHANGED_EXCLUDED_FROM_RESPONSIVENESS"
-    if status != "PROVEN_SAME_FITTED_MODEL": return "HISTORICAL_MODEL_IDENTITY_UNAVAILABLE"
+    if status != "PROVEN_SAME_FITTED_MODEL": return "VALID_HISTORICAL_SOURCE_UNBOUND_OBSERVATION"
     if row.get("state_stable") and row.get("model_stable"): return "STATE_STABLE_MODEL_STABLE"
     if not row.get("state_stable") and row.get("model_stable"): return "STATE_MOVED_MODEL_LARGELY_STATIC"
     if row.get("state_stable") and not row.get("model_stable"): return "STATE_STABLE_MODEL_MOVED"
@@ -229,15 +330,20 @@ def feature_prediction_relationships(movements: pd.DataFrame, pred: pd.DataFrame
     movement_index = {}
     for key, group in movements.groupby(["lane", "player_id", "game_n_id", "game_n1_id"], sort=False):
         movement_index[(str(key[0]), str(key[1]), str(key[2]), str(key[3]))] = group
-    for r in pred[pred.model_version_comparability_status == "PROVEN_SAME_FITTED_MODEL"].to_dict("records"):
-        fm = movement_index.get((str(r["lane"]), str(r["player_id"]), str(r["prior_game_id"]), str(r["next_game_id"])), movements.iloc[0:0])
-        for f in DIRECT_FEATURES[r["lane"]]:
-            x = fm[fm.feature == f]
-            if x.empty: continue
-            expanded.append({"lane": r["lane"], "player_id": r["player_id"], "prior_game_id": r["prior_game_id"], "next_game_id": r["next_game_id"], "line": r["line"], "feature": f, "standardized_feature_movement": x.iloc[0].get("standardized_movement"), "signed_feature_change": x.iloc[0].get("signed_change"), "signed_probability_change": r["signed_probability_change"], "model_version_comparability_status": r["model_version_comparability_status"]})
+    populations = {
+        "ALL_VALID_PRODUCTION_TRANSITIONS": pred[pred.production_evidence_status != "INVALID_PRODUCTION_TRANSITION_EVIDENCE"],
+        "PROVEN_SAME_FITTED_MODEL_TRANSITIONS": pred[(pred.production_evidence_status == "PROVEN_SAME_FITTED_MODEL") & (pred.model_version_comparability_status == "PROVEN_SAME_FITTED_MODEL")],
+    }
+    for population, selected in populations.items():
+        for r in selected.to_dict("records"):
+            fm = movement_index.get((str(r["lane"]), str(r["player_id"]), str(r["prior_game_id"]), str(r["next_game_id"])), movements.iloc[0:0])
+            for f in DIRECT_FEATURES[r["lane"]]:
+                x = fm[fm.feature == f]
+                if x.empty: continue
+                expanded.append({"lane": r["lane"], "player_id": r["player_id"], "prior_game_id": r["prior_game_id"], "next_game_id": r["next_game_id"], "line": r["line"], "feature": f, "standardized_feature_movement": x.iloc[0].get("standardized_movement"), "signed_feature_change": x.iloc[0].get("signed_change"), "signed_probability_change": r["signed_probability_change"], "model_version_comparability_status": r["model_version_comparability_status"], "population": population, "causal_claim": False})
     frame = pd.DataFrame(expanded)
     rows = []
-    for (lane, feature), g in frame.groupby(["lane", "feature"]):
+    for (population, lane, feature), g in frame.groupby(["population", "lane", "feature"]):
         a = pd.to_numeric(g.standardized_feature_movement, errors="coerce")
         b = pd.to_numeric(g.signed_probability_change, errors="coerce")
         valid = a.notna() & b.notna()
@@ -247,14 +353,16 @@ def feature_prediction_relationships(movements: pd.DataFrame, pred: pd.DataFrame
         agreement = (((a[moved] * b[moved]) > 0).mean()) if direction == 1 and moved.sum() else None
         for band, lo, hi in [("LOW", -np.inf, a.abs().quantile(.33)), ("MEDIUM", a.abs().quantile(.33), a.abs().quantile(.67)), ("HIGH", a.abs().quantile(.67), np.inf)]:
             mask = valid & a.abs().ge(lo) & a.abs().le(hi)
-            rows.append({"lane": lane, "feature": feature, "movement_band": band, "row_count": int(mask.sum()), "mean_absolute_probability_movement": float(pd.to_numeric(g.loc[mask, "signed_probability_change"], errors="coerce").abs().mean()) if mask.any() else None, "correlation_standardized_feature_vs_signed_probability": float(corr) if pd.notna(corr) else None, "directional_agreement_rate_known_positive_effect": float(agreement) if agreement is not None else None, "causal_claim": False, "model_version_comparability_status": "PROVEN_SAME_FITTED_MODEL"})
+            rows.append({"lane": lane, "feature": feature, "movement_band": band, "population": population, "row_count": int(mask.sum()), "mean_absolute_probability_movement": float(pd.to_numeric(g.loc[mask, "signed_probability_change"], errors="coerce").abs().mean()) if mask.any() else None, "correlation_standardized_feature_vs_signed_probability": float(corr) if pd.notna(corr) else None, "directional_agreement_rate_known_positive_effect": float(agreement) if agreement is not None else None, "causal_claim": False, "model_version_comparability_status": "PROVEN_SAME_FITTED_MODEL" if population == "PROVEN_SAME_FITTED_MODEL_TRANSITIONS" else "MIXED_OR_SOURCE_UNBOUND_PRODUCTION_OBSERVATIONS"})
     return pd.DataFrame(rows)
 
 
-def divergence_pulse(classes: pd.DataFrame, movements: pd.DataFrame) -> pd.DataFrame:
+def divergence_pulse(classes: pd.DataFrame, movements: pd.DataFrame, population: str = "proven_same_model") -> pd.DataFrame:
     rows = []
-    # Probability-response divergence is meaningful only within one fitted model.
-    classes = classes[classes.model_version_comparability_status == "PROVEN_SAME_FITTED_MODEL"]
+    if population == "proven_same_model":
+        classes = classes[classes.production_evidence_status == "PROVEN_SAME_FITTED_MODEL"]
+    else:
+        classes = classes[classes.production_evidence_status != "INVALID_PRODUCTION_TRANSITION_EVIDENCE"]
     for lane, g in classes.groupby("lane"):
         positive_prob = g.maximum_abs_probability_movement.dropna()
         p50 = positive_prob[positive_prob > 0].median() if (positive_prob > 0).any() else 0.0
@@ -272,9 +380,9 @@ def divergence_pulse(classes: pd.DataFrame, movements: pd.DataFrame) -> pd.DataF
                     yes = bool((row.maximum_abs_feature_z_movement >= state_p50) and (row.maximum_abs_probability_movement <= p25)) if pattern.startswith("STATE_MOVED") else bool(row.state_stable and row.maximum_abs_probability_movement >= p50)
                     if yes: run.append(row)
                     else:
-                        if len(run) >= 2: rows.append(_divergence_row(lane, player_id, pattern, run))
+                        if len(run) >= 2: rows.append({**_divergence_row(lane, player_id, pattern, run), "population": "PROVEN_SAME_FITTED_MODEL_TRANSITIONS" if population == "proven_same_model" else "ALL_VALID_PRODUCTION_TRANSITIONS", "interpretation": "same_fitted_model_observation" if population == "proven_same_model" else "descriptive_production_behavior_not_same_model_attribution"})
                         run = []
-                if len(run) >= 2: rows.append(_divergence_row(lane, player_id, pattern, run))
+                if len(run) >= 2: rows.append({**_divergence_row(lane, player_id, pattern, run), "population": "PROVEN_SAME_FITTED_MODEL_TRANSITIONS" if population == "proven_same_model" else "ALL_VALID_PRODUCTION_TRANSITIONS", "interpretation": "same_fitted_model_observation" if population == "proven_same_model" else "descriptive_production_behavior_not_same_model_attribution"})
     # Also preserve runs where a specific dynamic model input is unchanged over
     # two or more new-game transitions; source coverage limits interpretation.
     index={}
@@ -289,7 +397,7 @@ def divergence_pulse(classes: pd.DataFrame, movements: pd.DataFrame) -> pd.DataF
                 all_rows.append(bool(not hit.empty and _num(hit.iloc[0].get("signed_change")) == 0))
             for start,length in consecutive_runs(all_rows,2):
                 span=pg.iloc[start:start+length]
-                rows.append({"lane":lane,"player_id":int(player),"pattern":"DYNAMIC_FEATURE_IDENTICAL_ACROSS_NEW_GAMES","feature":feature,"persistence_transitions":length,"start_game_date":span.iloc[0].game_n_date,"end_game_date":span.iloc[-1].game_n1_date,"model_version_comparability_status":"PROVEN_SAME_FITTED_MODEL","characterization_only_not_action_threshold":True})
+                rows.append({"lane":lane,"player_id":int(player),"pattern":"DYNAMIC_FEATURE_IDENTICAL_ACROSS_NEW_GAMES","feature":feature,"persistence_transitions":length,"start_game_date":span.iloc[0].game_n_date,"end_game_date":span.iloc[-1].game_n1_date,"model_version_comparability_status":"PROVEN_SAME_FITTED_MODEL" if population == "proven_same_model" else "VALID_HISTORICAL_SOURCE_UNBOUND_OR_MIXED","production_evidence_status":span.iloc[-1].get("production_evidence_status"),"population":"PROVEN_SAME_FITTED_MODEL_TRANSITIONS" if population == "proven_same_model" else "ALL_VALID_PRODUCTION_TRANSITIONS","interpretation":"same_fitted_model_observation" if population == "proven_same_model" else "descriptive_production_behavior_not_same_model_attribution","characterization_only_not_action_threshold":True})
     return pd.DataFrame(rows)
 
 
@@ -404,6 +512,10 @@ def main() -> int:
     if not (BASE/"player_state_transitions.csv").exists(): raise SystemExit(f"Base pulse not found: {BASE}")
     out.mkdir(parents=True)
     transitions,audit=_load_transitions(args.as_of_date)
+    if "production_evidence_status" not in transitions:
+        transitions["production_evidence_status"] = "VALID_HISTORICAL_SOURCE_UNBOUND"
+    if "production_evidence_reason" not in transitions:
+        transitions["production_evidence_reason"] = "EXACT_HISTORICAL_FITTED_IDENTITY_NOT_RETAINED"
     for col in ("fitted_model_identity_prior", "fitted_model_identity_current"):
         if col not in transitions:
             transitions[col] = None
@@ -411,6 +523,8 @@ def main() -> int:
         transitions["model_version_comparability_status"] = [pulse.comparability_status(a, b) for a, b in zip(
             transitions.fitted_model_identity_prior, transitions.fitted_model_identity_current)]
     pred=prediction_transitions(transitions)
+    if "production_evidence_status" not in pred:
+        pred["production_evidence_status"] = pd.Series(dtype=str)
     old_mov=pd.read_csv(BASE/"feature_movements.csv")
     # Build movements for only new transitions from the paired state JSON; retain original observations.
     keys=set(zip(pd.read_csv(BASE/"player_state_transitions.csv").lane.astype(str),pd.read_csv(BASE/"player_state_transitions.csv").player_id.astype(str),pd.read_csv(BASE/"player_state_transitions.csv").game_n_id.astype(str),pd.read_csv(BASE/"player_state_transitions.csv").game_n1_id.astype(str)))
@@ -424,19 +538,23 @@ def main() -> int:
             delta=y-x if x is not None and y is not None else None
             new_mov.append({"lane":r["lane"],"player_id":r["player_id"],"game_n_id":r["game_n_id"],"game_n1_id":r["game_n1_id"],"feature":f,"prior_value":x,"current_value":y,"signed_change":delta,"absolute_change":abs(delta) if delta is not None else None,"percent_change":delta/abs(x)*100 if delta is not None and x else None,"standardized_movement":None,"movement_status":"VALUE" if delta is not None else "MISSING_TO_PRESENT" if x is None else "PRESENT_TO_MISSING"})
     all_mov=combine_movement_frames(old_mov,new_mov)
-    # Standardize added deltas against the retained per-lane/feature population.
+    # Preserve all retained standardized observations. Standardize only newly
+    # appended raw movement rows against their retained lane/feature baseline.
+    new_movement_keys = {(str(row["lane"]), str(row["player_id"]), str(row["game_n_id"]), str(row["game_n1_id"]), str(row["feature"])) for row in new_mov}
     for (lane,feature),g in all_mov.groupby(["lane","feature"]):
-        ix=g.index
-        signed=pd.to_numeric(g.signed_change,errors="coerce")
-        sd=signed.std(ddof=1)
-        if len(signed.dropna())>=2 and sd and sd>0:
-            all_mov.loc[ix,"standardized_movement"]=(signed-signed.mean())/sd
+        old = g[~g.apply(lambda row: (str(row.lane), str(row.player_id), str(row.game_n_id), str(row.game_n1_id), str(row.feature)) in new_movement_keys, axis=1)]
+        new_ix = g.index[g.apply(lambda row: (str(row.lane), str(row.player_id), str(row.game_n_id), str(row.game_n1_id), str(row.feature)) in new_movement_keys, axis=1)]
+        signed = pd.to_numeric(old.signed_change, errors="coerce").dropna()
+        sd = signed.std(ddof=1)
+        if len(new_ix) and len(signed) >= 2 and pd.notna(sd) and sd > 0:
+            all_mov.loc[new_ix, "standardized_movement"] = (pd.to_numeric(all_mov.loc[new_ix, "signed_change"], errors="coerce") - signed.mean()) / sd
     direct_mov,classes,stats=movement_and_classes(transitions,pred,all_mov)
     relation=feature_prediction_relationships(direct_mov,pred)
-    divergence=divergence_pulse(classes,direct_mov)
-    stale=stale_state_pulse(transitions,direct_mov)
+    divergence=pd.concat([divergence_pulse(classes,direct_mov,"all_valid"),divergence_pulse(classes,direct_mov,"proven_same_model")],ignore_index=True,sort=False)
+    valid_transitions=transitions[transitions.production_evidence_status != "INVALID_PRODUCTION_TRANSITION_EVIDENCE"]
+    stale=stale_state_pulse(valid_transitions,direct_mov)
     window=prospective_window_lineage(args.as_of_date,transitions)
-    exemplars_out=exemplars(transitions,classes,pred)
+    exemplars_out=exemplars(valid_transitions,classes,pred)
     # Preserve the five original files exactly; revision files carry enriched
     # analyses and a new full transition CSV that includes newly available rows.
     for name in ["rolling_state_audit.csv","independent_rolling_checks.csv"]:
@@ -455,16 +573,32 @@ def main() -> int:
     if checkp.exists():
         chk=pd.read_csv(checkp)
         unresolved_base=int(chk.status.astype(str).eq("UNRESOLVED_SOURCE_COVERAGE").sum())
-    classification={"sog":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED_WITH_WARNINGS","points":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED_WITH_WARNINGS","saves":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED_WITH_WARNINGS"}
+    classification={"sog":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED","points":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED","saves":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED"}
     for lane in classification:
         lane_changes=all_mov[(all_mov.lane==lane)&all_mov.feature.isin(DIRECT_FEATURES[lane])]
-        prediction_rows=pred[pred.lane==lane]
+        prediction_rows=pred[(pred.lane==lane)&(pred.production_evidence_status!="INVALID_PRODUCTION_TRANSITION_EVIDENCE")]
         if lane_changes.signed_change.dropna().ne(0).sum()==0 or prediction_rows.empty:
             classification[lane]="DYNAMIC_FEATURE_EVOLUTION_BLOCKED_BY_EVIDENCE"
-    summary={"schema_version":"NHL_PLAYER_PERFORMANCE_PULSE_REVISION_V2","revision":2,"as_of_date":args.as_of_date,"base_package":str(BASE.relative_to(ROOT)),"same_player_state_transitions":transitions.groupby("lane").size().to_dict(),"new_transition_rows":audit["new_transition_rows"],"artifact_audit":audit,"prediction_movement":stats,"model_version_comparability_by_lane":{lane:stats.get(lane,{}).get("model_version_comparability_counts",{"PROVEN_SAME_FITTED_MODEL":0,"PROVEN_FITTED_MODEL_CHANGED":0,"HISTORICAL_MODEL_IDENTITY_UNAVAILABLE":0}) for lane in pulse.LANES},"historical_model_identity_unavailable_dates":sorted(transitions.loc[transitions.model_version_comparability_status=="HISTORICAL_MODEL_IDENTITY_UNAVAILABLE","game_n1_date"].astype(str).unique().tolist()),"direct_dynamic_feature_count":{k:len(v) for k,v in DYNAMIC_PRODUCTION_FEATURES.items()},"direct_fitted_feature_count":{k:len(v) for k,v in DIRECT_FEATURES.items()},"feature_movement_distribution":{lane:{feature:pulse.stats_summary(pd.to_numeric(all_mov.loc[(all_mov.lane==lane)&(all_mov.feature==feature),"absolute_change"],errors="coerce").dropna().tolist()) for feature in DIRECT_FEATURES[lane] if ((all_mov.lane==lane)&(all_mov.feature==feature)).any()} for lane in DIRECT_FEATURES},"feature_prediction_relationships":relation.to_dict("records"),"repeated_divergence_case_count":divergence.groupby("lane").size().to_dict() if not divergence.empty else {},"potential_stale_dynamic_state_cases":0,"stale_state_case_counts":stale.status.value_counts().to_dict() if not stale.empty else {},"confirmed_stale_state_failures":0,"historical_unresolved_rolling_cases":unresolved_base,"same_game_leakage_findings":{"pregame_state_after_game_start":0,"realized_game_n_outcome_after_next_feature_cutoff":0,"basis":"Only states meeting strict recorded cutoff and lane-end-before-game-start checks were admitted; completed-game source timestamps must precede next pregame cutoff."},"future_leakage_findings":{"future_game_rows_admitted":0,"basis":"State cutoff and lane end were required before each game's start; strict-prior SQL semantics are confirmed in source but historical raw contributing-window membership remains partly unavailable."},"lane_classification":classification,"overall_classification":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED_WITH_WARNINGS","classification_reason":"Only proven-same-model transitions contribute to state-response characterization; identities are taken from scoring-time daily receipts.","exemplars":exemplars_out,"prospective_forward_validation":{"mechanism":"Capture immutable per-date pregame feature/prediction artifacts and hashes; join final official game N outcome timestamp; compare to the next retained pregame state. Record rolling contributor IDs/count/entering/displaced IDs in prospective_window_lineage.csv.","current_as_of_note":"No same-player Oct. 6 completed-game to Oct. 7 pregame state pair was present in retained lane populations; Oct. 7 games had not completed at capture time, so no prospective contribution window could yet be verified.","provider_calls":0,"paid_credits":0,"database_mutation":False,"history_completeness":"Partial where contributing game IDs are reconstructed only from retained reconciliation packages."},"reusable_command":".venv/bin/python backend/nhl/scripts/extend_nhl_player_performance_pulse.py --as-of-date YYYY-MM-DD","tests_required_before_future_revisions":True,"model_version_comparability":"RECEIPT_BOUND_FITTED_MODEL_IDENTITY","characterization_rules":"Characterization only, not action thresholds."}
+    transition_counts={lane:{status:int(transitions.loc[transitions.lane==lane,"production_evidence_status"].eq(status).sum()) for status in ("VALID_HISTORICAL_SOURCE_UNBOUND","PROVEN_SAME_FITTED_MODEL","PROVEN_FITTED_MODEL_CHANGED","INVALID_PRODUCTION_TRANSITION_EVIDENCE")} for lane in pulse.LANES}
+    invalid_total=sum(counts.get("INVALID_PRODUCTION_TRANSITION_EVIDENCE",0) for counts in transition_counts.values())
+    empty_response={"transition_count":0,"median_absolute_probability_movement":None,"repeated_divergence_count":0}
+    all_responsiveness={lane:stats.get(lane,{}).get("all_valid_responsiveness",empty_response) for lane in pulse.LANES}
+    proven_responsiveness={lane:stats.get(lane,{}).get("proven_same_model_responsiveness",empty_response) for lane in pulse.LANES}
+    identity_coverage={lane:stats.get(lane,{}).get("model_identity_coverage",{"transitions_total":0,"transitions_with_both_identities_proven":0,"coverage_percent":None}) for lane in pulse.LANES}
+    repeated_counts={lane:{population:int(len(divergence[(divergence.lane==lane)&(divergence.population==population)])) if not divergence.empty else 0 for population in ("ALL_VALID_PRODUCTION_TRANSITIONS","PROVEN_SAME_FITTED_MODEL_TRANSITIONS")} for lane in pulse.LANES}
+    for lane in pulse.LANES:
+        stats.setdefault(lane,{})
+        stats[lane].setdefault("all_valid_responsiveness",dict(empty_response))["repeated_divergence_count"]=repeated_counts[lane]["ALL_VALID_PRODUCTION_TRANSITIONS"]
+        stats[lane].setdefault("proven_same_model_responsiveness",dict(empty_response))["repeated_divergence_count"]=repeated_counts[lane]["PROVEN_SAME_FITTED_MODEL_TRANSITIONS"]
+    population_comparison={}
+    for lane in pulse.LANES:
+        all_stats=all_responsiveness[lane]; same_stats=proven_responsiveness[lane]
+        population_comparison[lane]={"all_valid_transition_count":all_stats["transition_count"],"proven_same_transition_count":same_stats["transition_count"],"all_valid_median_absolute_probability_movement":all_stats["median_absolute_probability_movement"],"proven_same_median_absolute_probability_movement":same_stats["median_absolute_probability_movement"],"median_absolute_movement_difference_all_valid_minus_proven_same":(all_stats["median_absolute_probability_movement"]-same_stats["median_absolute_probability_movement"]) if same_stats["median_absolute_probability_movement"] is not None else None,"comparison_status":"DESCRIPTIVE_ONLY_NO_ACCEPTANCE_THRESHOLD" if same_stats["transition_count"] else "WAITING_FOR_PROVEN_SAME_MODEL_OBSERVATIONS"}
+    summary={"schema_version":"NHL_PLAYER_PERFORMANCE_PULSE_REVISION_V3","revision":3,"as_of_date":args.as_of_date,"base_package":str(BASE.relative_to(ROOT)),"same_player_state_transitions":transitions.groupby("lane").size().to_dict(),"new_transition_rows":audit["new_transition_rows"],"artifact_audit":audit,"all_valid_responsiveness":all_responsiveness,"proven_same_model_responsiveness":proven_responsiveness,"prediction_movement":stats,"production_evidence_counts_by_lane":transition_counts,"model_identity_coverage":identity_coverage,"model_version_comparability_by_lane":{lane:stats.get(lane,{}).get("model_version_comparability_counts",{}) for lane in pulse.LANES},"historical_source_unbound_dates":sorted(transitions.loc[transitions.production_evidence_status=="VALID_HISTORICAL_SOURCE_UNBOUND","game_n1_date"].astype(str).unique().tolist()),"direct_dynamic_feature_count":{k:len(v) for k,v in DYNAMIC_PRODUCTION_FEATURES.items()},"direct_fitted_feature_count":{k:len(v) for k,v in DIRECT_FEATURES.items()},"feature_movement_distribution":{lane:{feature:pulse.stats_summary(pd.to_numeric(all_mov.loc[(all_mov.lane==lane)&(all_mov.feature==feature),"absolute_change"],errors="coerce").dropna().tolist()) for feature in DIRECT_FEATURES[lane] if ((all_mov.lane==lane)&(all_mov.feature==feature)).any()} for lane in DIRECT_FEATURES},"feature_prediction_relationships":relation.to_dict("records"),"repeated_divergence_case_count":repeated_counts,"potential_stale_dynamic_state_cases":0,"stale_state_case_counts":stale.status.value_counts().to_dict() if not stale.empty else {},"confirmed_stale_state_failures":0,"true_invalid_or_audit_failure_count":invalid_total+int(audit.get("missing_artifacts",0))+int(audit.get("hash_mismatches",0))+int(audit.get("invalid_new_model_identity",0)),"historical_unresolved_rolling_cases":unresolved_base,"dynamic_state_status":classification,"model_identity_coverage_status":identity_coverage,"same_game_leakage_findings":{"pregame_state_after_game_start":0,"realized_game_n_outcome_after_next_feature_cutoff":0,"basis":"Retained transition history passed the source pulse's strict pregame cutoff and lane-end checks; newly added transitions require completed outcome timestamps before the next feature cutoff."},"future_leakage_findings":{"future_game_rows_admitted":0,"basis":"Retained transitions preserve prior strict-prior eligibility; source completeness limits rolling lineage, not transition validity."},"lane_classification":classification,"overall_classification":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED" if all(value=="DYNAMIC_FEATURE_EVOLUTION_VERIFIED" for value in classification.values()) else "DYNAMIC_FEATURE_EVOLUTION_BLOCKED_BY_EVIDENCE","classification_reason":"Dynamic state health is determined from integrity-valid production transitions. Historical fitted identity coverage is reported separately and limits exact same-model attribution only.","exemplars":exemplars_out,"prospective_forward_validation":{"mechanism":"Capture immutable per-date pregame feature/prediction artifacts and hashes; join final official game N outcome timestamp; compare to the next retained pregame state. Record rolling contributor IDs/count/entering/displaced IDs in prospective_window_lineage.csv.","current_as_of_note":"No same-player Oct. 6 completed-game to Oct. 7 pregame state pair was present in retained lane populations; Oct. 7 games had not completed at capture time, so no prospective contribution window could yet be verified.","provider_calls":0,"paid_credits":0,"database_mutation":False,"history_completeness":"Partial where contributing game IDs are reconstructed only from retained reconciliation packages."},"reusable_command":".venv/bin/python backend/nhl/scripts/extend_nhl_player_performance_pulse.py --as-of-date YYYY-MM-DD","tests_required_before_future_revisions":True,"model_version_comparability":"EXACT_IDENTITY_COVERAGE_REPORTED_SEPARATELY","characterization_rules":"Characterization only, not action thresholds."}
+    summary["population_comparison"]=population_comparison
     pulse.write_json(out/"summary.json", summary, indent=2, sort_keys=True)
-    pulse.write_json(out/"revision_metadata.json", {"revision":2,"base_summary_sha256":hashlib.sha256((BASE/"summary.json").read_bytes()).hexdigest(),"as_of_date":args.as_of_date,"source_revision_files":["player_state_transitions.csv","feature_movements.csv","rolling_state_audit.csv","independent_rolling_checks.csv"],"created_deterministically":True,"provider_calls":0,"paid_credits":0}, indent=2, sort_keys=True)
-    (out/"README.md").write_text(f"""# NHL Dynamic Player Performance Pulse — Revision 2\n\nAs-of date: `{args.as_of_date}`. This immutable revision preserves the base package and adds prediction responsiveness, descriptive divergence, and prospective lineage outputs.\n\nEvery transition is classified from receipt-bound fitted-model hashes. Only `PROVEN_SAME_FITTED_MODEL` transitions contribute to responsiveness characterization; model changes remain visible in their own population, and older predictions without retained identities are labeled `HISTORICAL_MODEL_IDENTITY_UNAVAILABLE`. Characterization is descriptive, not an action threshold.\n\nNo provider calls, paid credits, training, scoring, or database mutation are performed.\n\nFiles: `summary.json`, `player_state_transitions.csv`, `feature_movements.csv`, `prediction_transitions.csv`, `independent_rolling_checks.csv`, `rolling_state_audit.csv`, `divergence_pulse.csv`, `stale_state_pulse.csv`, `feature_prediction_relationships.csv`, `feature_inventory.json`, `prospective_window_lineage.csv`, `revision_metadata.json`.\n\nReusable command: `.venv/bin/python backend/nhl/scripts/extend_nhl_player_performance_pulse.py --as-of-date YYYY-MM-DD`\n""")
+    pulse.write_json(out/"revision_metadata.json", {"revision":3,"base_summary_sha256":hashlib.sha256((BASE/"summary.json").read_bytes()).hexdigest(),"as_of_date":args.as_of_date,"source_revision_files":["player_state_transitions.csv","feature_movements.csv","rolling_state_audit.csv","independent_rolling_checks.csv"],"created_deterministically":True,"provider_calls":0,"paid_credits":0}, indent=2, sort_keys=True)
+    (out/"README.md").write_text(f"""# NHL Dynamic Player Performance Pulse — Revision 3\n\nAs-of date: `{args.as_of_date}`. This immutable revision preserves all integrity-valid production transitions as learning evidence and reports a separate proven-same-model population for controlled attribution.\n\n`ALL_VALID_PRODUCTION_TRANSITIONS` includes source-unbound historical rows and proven model-change rows when their retained prediction, state, outcome, and temporal evidence is valid. `PROVEN_SAME_FITTED_MODEL_TRANSITIONS` requires matching receipt-bound fitted identities. Source-unbound observations support descriptive production behavior, movement distributions, and outcome analysis; they do not support a claim that state change alone caused probability movement under an identical model. Missing newer metadata does not retroactively invalidate otherwise valid observations.\n\nDynamic-state health and exact model-identity coverage are reported independently. Population comparisons are descriptive and use no acceptance threshold. The prospective fitted-model identity contract remains in force.\n\nNo provider calls, paid credits, training, rescoring, or database mutation are performed.\n\nFiles include `summary.json`, transition and movement CSVs, both population analyses, rolling audits, and prospective lineage.\n\nReusable command: `.venv/bin/python backend/nhl/scripts/extend_nhl_player_performance_pulse.py --as-of-date YYYY-MM-DD`\n""")
     print("NHL PLAYER PERFORMANCE PULSE: COMPLETE")
     print(f"As-of: {args.as_of_date}")
     print(f"New transitions: {audit['new_transition_rows']}")

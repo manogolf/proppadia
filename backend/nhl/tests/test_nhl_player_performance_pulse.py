@@ -20,6 +20,34 @@ spec.loader.exec_module(pulse)
 
 
 class PlayerPerformancePulseTests(unittest.TestCase):
+    def test_integrity_valid_source_unbound_transition_is_valid_learning_evidence(self):
+        with tempfile.TemporaryDirectory() as temp:
+            paths = []
+            for name in ("feature0", "feature1", "prediction0", "prediction1", "outcome"):
+                path = Path(temp) / name
+                path.write_text(name)
+                paths.append((str(path), pulse.pulse.sha256(path)))
+            row = dict(zip(("feature_artifact_identity_prior", "feature_artifact_identity_current", "prediction_artifact_identity_prior", "prediction_artifact_identity_current", "outcome_source_path"), [x[0] for x in paths]))
+            row.update(dict(zip(("feature_artifact_sha256_prior", "feature_artifact_sha256_current", "prediction_artifact_sha256_prior", "prediction_artifact_sha256_current", "outcome_source_sha256"), [x[1] for x in paths])))
+            row.update(game_n_date="2026-10-01", game_n1_date="2026-10-02", outcome_source_timestamp_utc="2026-10-02T10:00:00Z", realized_stat=1, model_version_comparability_status="HISTORICAL_MODEL_IDENTITY_UNAVAILABLE")
+            self.assertEqual(pulse.classify_transition_evidence(row)[0], "VALID_HISTORICAL_SOURCE_UNBOUND")
+            row["prediction_artifact_sha256_current"] = "0" * 64
+            self.assertEqual(pulse.classify_transition_evidence(row)[0], "INVALID_PRODUCTION_TRANSITION_EVIDENCE")
+
+    def test_two_responsiveness_populations_keep_unbound_changed_and_same_rows_distinct(self):
+        statuses = ["VALID_HISTORICAL_SOURCE_UNBOUND", "PROVEN_SAME_FITTED_MODEL", "PROVEN_FITTED_MODEL_CHANGED", "INVALID_PRODUCTION_TRANSITION_EVIDENCE"]
+        transitions = pd.DataFrame([{"lane":"sog","player_id":i,"game_n_id":i,"game_n1_id":i+100,"game_n_date":"2026-10-01","game_n1_date":"2026-10-02","realized_stat":1,"production_evidence_status":status,"model_version_comparability_status":status} for i,status in enumerate(statuses,1)])
+        predictions = pd.DataFrame([{"lane":"sog","player_id":i,"prior_game_id":i,"next_game_id":i+100,"absolute_probability_change":.1*i,"signed_probability_change":.1*i,"production_evidence_status":status,"model_version_comparability_status":status} for i,status in enumerate(statuses,1)])
+        movements = pd.DataFrame([{"lane":"sog","player_id":i,"game_n_id":i,"game_n1_id":i+100,"feature":"d10_sog_per60","signed_change":1.,"standardized_movement":1.} for i in range(1,5)])
+        _, _, stats = pulse.movement_and_classes(transitions,predictions,movements)
+        self.assertEqual(stats["sog"]["all_valid_responsiveness"]["transition_count"],3)
+        self.assertEqual(stats["sog"]["all_valid_responsiveness"]["probability_observation_count"],3)
+        self.assertEqual(stats["sog"]["proven_same_model_responsiveness"]["transition_count"],1)
+        self.assertEqual(stats["sog"]["source_unbound_valid_transition_count"],1)
+        self.assertEqual(stats["sog"]["proven_model_changed_transition_count"],1)
+        self.assertEqual(stats["sog"]["invalid_transition_count"],1)
+        self.assertEqual(stats["sog"]["model_identity_coverage"]["coverage_percent"],50)
+
     def test_player_name_selection_skips_missing_and_blank_values(self):
         select = pulse.pulse.first_valid_player_name
         self.assertEqual(select("Current Name", "Prior Name"), "Current Name")
@@ -210,7 +238,7 @@ class PlayerPerformancePulseTests(unittest.TestCase):
                 self.assertIn("NHL PLAYER PERFORMANCE PULSE: COMPLETE", report)
                 self.assertIn("As-of: 2026-10-08", report)
                 self.assertIn("New transitions: 7", report)
-                self.assertIn("Classification: DYNAMIC_FEATURE_EVOLUTION_VERIFIED_WITH_WARNINGS", report)
+                self.assertIn("Classification: DYNAMIC_FEATURE_EVOLUTION_BLOCKED_BY_EVIDENCE", report)
                 self.assertIn(f"Package: {out}", report)
                 self.assertIn(f"Summary: {out / 'summary.json'}", report)
                 self.assertIn(f"Report: {out / 'README.md'}", report)
