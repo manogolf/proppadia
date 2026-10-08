@@ -1,0 +1,60 @@
+{
+  "date_end": "2026-10-08",
+  "date_start": "2026-09-29",
+  "git_tracked_nhl_model_artifact_paths": 0,
+  "historical_pulse_transitions_reconsidered_by_lane": {
+    "points": 1132,
+    "saves": 63,
+    "sog": 1132
+  },
+  "historical_pulse_transitions_still_unresolved_by_lane": {
+    "points": 1132,
+    "saves": 63,
+    "sog": 1132
+  },
+  "historical_pulse_transitions_upgraded_model_changed_by_lane": {
+    "points": 0,
+    "saves": 0,
+    "sog": 0
+  },
+  "historical_pulse_transitions_upgraded_same_model_by_lane": {
+    "points": 0,
+    "saves": 0,
+    "sog": 0
+  },
+  "identity_partially_recovered_by_lane": {
+    "points": 0,
+    "saves": 0,
+    "sog": 0
+  },
+  "identity_proven_by_lane": {
+    "points": 0,
+    "saves": 0,
+    "sog": 0
+  },
+  "launchagent_definitions_examined": [
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.nhl.morning-orchestration.plist",
+    "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.nhl.mainline-cross-market-shadow.plist"
+  ],
+  "note": "Receipt/output hashes establish retained artifact integrity, not which exact source/model bytes or scoring configuration executed. LaunchAgent definitions identify entrypoints and working directory but do not bind a run to a checkout commit. No retrospective identity is pulse eligible. Original receipts and prediction values are not modified.",
+  "prediction_hash_failures": 0,
+  "receipt_package_integrity_failures": 0,
+  "receipts_with_exact_repository_commit": 0,
+  "repository_state_unproven_by_lane": {
+    "points": 28,
+    "saves": 28,
+    "sog": 28
+  },
+  "retained_receipts_examined": 45,
+  "same_model_pairs_recovered_by_lane": {
+    "points": 0,
+    "saves": 0,
+    "sog": 0
+  },
+  "scored_lane_runs_by_lane": {
+    "points": 28,
+    "saves": 28,
+    "sog": 28
+  },
+  "scored_lane_runs_in_ledger": 84
+}
