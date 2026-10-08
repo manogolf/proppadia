@@ -220,7 +220,14 @@ def test_points_scorer_preserves_lineage_through_three_lines(tmp_path, monkeypat
         pd.DataFrame(unbound).to_csv(command[command.index("--out") + 1], index=False)
         return subprocess.CompletedProcess(command, 0)
 
+    captured_identity = {}
+
+    def fake_fitted_model_identity(**kwargs):
+        captured_identity.update(kwargs)
+        return {"test_identity": True}
+
     monkeypatch.setattr(score_nhl_points_with_lineage.subprocess, "run", frozen_scorer)
+    monkeypatch.setattr(score_nhl_points_with_lineage, "fitted_model_identity", fake_fitted_model_identity)
     monkeypatch.setattr(sys, "argv", [
         "score_nhl_points_with_lineage.py", "--features-csv", str(input_path),
         "--model-root", str(model_root), "--out", str(out)])
@@ -230,6 +237,10 @@ def test_points_scorer_preserves_lineage_through_three_lines(tmp_path, monkeypat
     assert set(result.line) == set(POINTS_LINES)
     assert set(result.game_date) == {SLATE}
     assert set(result.parent_daily_run_id) == {RUN_ID}
+    assert ("feature_construction", Path(score_nhl_points_with_lineage.__file__).resolve().parents[1]
+            / "sql" / "export_points.sql") in captured_identity["components"]
+    assert captured_identity["scoring_configuration"]["feature_contract_version"] == "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2"
+    assert captured_identity["scoring_configuration"]["feature_contract_sha256"]
 
 
 def test_saves_scorer_wide_output_preserves_lineage(tmp_path, monkeypatch):

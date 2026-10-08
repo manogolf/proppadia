@@ -63,8 +63,30 @@ def frozen_identity() -> dict[str, Any]:
     return json.loads(IDENTITY_PATH.read_text())
 
 
+def verify_feature_contract_identity(identity: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Verify and return the versioned Points feature-construction contract."""
+    identity = identity or frozen_identity()
+    contract = identity.get("feature_contract")
+    if not isinstance(contract, dict) or not contract.get("version"):
+        raise RuntimeError("POINTS_FEATURE_CONTRACT_MISSING")
+    if digest(contract) != identity.get("feature_contract_sha256"):
+        raise RuntimeError("POINTS_FEATURE_CONTRACT_HASH_DRIFT")
+    construction = identity.get("feature_construction") or {}
+    construction_path = ROOT / construction.get("path", "")
+    if not construction_path.is_file():
+        raise RuntimeError("POINTS_FEATURE_CONSTRUCTION_MISSING")
+    if sha256_file(construction_path) != construction.get("sha256"):
+        raise RuntimeError("POINTS_FEATURE_CONSTRUCTION_HASH_DRIFT")
+    return {
+        "version": contract["version"],
+        "sha256": identity["feature_contract_sha256"],
+        "feature_construction_sha256": construction["sha256"],
+    }
+
+
 def verify_frozen_identity() -> dict[str, Any]:
     identity = frozen_identity()
+    verify_feature_contract_identity(identity)
     scorer = ROOT / identity["scorer_path"]
     model_root = ROOT / identity["model_root"]
     if sha256_file(scorer) != identity["scorer_sha256"]:
@@ -448,6 +470,9 @@ def run_shadow(
             "player_input_sha256": sha256_file(player_inputs_csv), "player_input_manifest_sha256": sha256_file(player_inputs_manifest),
             "quote_run_id": quote_meta["run_id"], "quote_manifest_sha256": sha256_file(quote_run_dir / "SHA256SUMS"),
             "frozen_identity_sha256": sha256_file(IDENTITY_PATH), "scorer_parity": parity,
+            "feature_contract_version": identity["feature_contract"]["version"],
+            "feature_contract_sha256": identity["feature_contract_sha256"],
+            "feature_construction_sha256": identity["feature_construction"]["sha256"],
             "probability_construction": "EQUAL_WEIGHT_ISOTONIC_EXCEEDANCE_V1",
             "line_event_mapping": {"0.5": "P(points>=1)", "1.5": "P(points>=2)", "2.5": "P(points>=3)"},
             "ladder_counts": {str(key): int(value) for key, value in ladder.ladder_coherence_decision.value_counts().items()},

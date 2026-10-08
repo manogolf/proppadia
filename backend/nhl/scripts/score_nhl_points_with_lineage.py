@@ -13,6 +13,7 @@ import pandas as pd
 
 from backend.nhl.prediction_lineage import bind_scorer_output_lineage
 from backend.nhl.model_identity import fitted_model_identity
+from backend.nhl.points_shadow.core import verify_feature_contract_identity
 
 
 def main() -> None:
@@ -24,6 +25,7 @@ def main() -> None:
 
     output = Path(args.out)
     output.parent.mkdir(parents=True, exist_ok=True)
+    feature_contract = verify_feature_contract_identity()
     unbound = output.with_name(f".{output.name}.{uuid.uuid4().hex}.unbound.csv")
     scorer = Path(__file__).with_name("score_points_phoenix.py")
     command = [
@@ -42,7 +44,10 @@ def main() -> None:
         if not lines:
             lines = sorted(float(directory.name.replace("_", ".")) for directory in Path(args.model_root).iterdir()
                            if directory.is_dir() and directory.name.replace("_", "").replace(".", "").isdigit())
-        components = [("scorer", scorer)]
+        components = [
+            ("scorer", scorer),
+            ("feature_construction", Path(__file__).resolve().parents[1] / "sql" / "export_points.sql"),
+        ]
         for line in lines:
             tag = f"{line:g}".replace(".", "_")
             line_dir = Path(args.model_root) / tag
@@ -51,7 +56,13 @@ def main() -> None:
         evidence = fitted_model_identity(
             model_family="phoenix", model_version="phoenix_v2", components=components,
             prediction_path=output, scoring_run_id=output.parent.name,
-            scoring_configuration={"scored_lines": lines, "output_cardinality": "many_to_one"})
+            scoring_configuration={
+                "scored_lines": lines,
+                "output_cardinality": "many_to_one",
+                "feature_contract_version": feature_contract["version"],
+                "feature_contract_sha256": feature_contract["sha256"],
+                "feature_construction_sha256": feature_contract["feature_construction_sha256"],
+            })
         print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({"fitted_model_evidence": evidence}, sort_keys=True))
     finally:
         unbound.unlink(missing_ok=True)

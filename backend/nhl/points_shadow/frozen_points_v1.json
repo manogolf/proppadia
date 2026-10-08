@@ -12,9 +12,17 @@
   },
   "feature_construction": {
     "path": "backend/nhl/sql/export_points.sql",
-    "sha256": "4ff6e3700a96b883829d887ef67273c6322f682f04fc181e48cb2b0a6c991bc1",
-    "strict_prior_contract": "regular-season logs only; game_date strictly before slate date; bounded 120-day history"
+    "sha256": "4c627c065393446dc44bda92d0035008b4fee058077eb5a7c7b7ea0827966a98",
+    "strict_prior_contract": "player last-5/last-10 regular-season history strictly before target date across canonical seasons; player season-to-date sums use nhl.games.season; team history retains its existing 120-day bound"
   },
+  "feature_contract": {
+    "version": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2",
+    "player_rolling_history": "Latest qualifying regular-season games by canonical player identity, strictly before target game date, ordered by game date/start time/game ID; last-N windows cross season boundaries and age out naturally.",
+    "player_season_to_date": "Regular-season games in the target nhl.games.season only, strictly before target game date.",
+    "team_history": "UNCHANGED: existing 120-day-bounded team rolling windows; the team denominator in last10_team_sog_share retains this behavior.",
+    "training_compatibility": "Historical Phoenix training frame was not retained; training feature boundary cannot be proven."
+  },
+  "feature_contract_sha256": "95689810d1c7413ecfbdde0da580a01004198963cdd5018f937a8ccb12f27cf2",
   "gate_contract": {
     "lines": [0.5, 1.5, 2.5],
     "material_crossing_probability": 0.01,
