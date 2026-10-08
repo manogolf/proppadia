@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
+import numpy as np
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -19,6 +20,44 @@ spec.loader.exec_module(pulse)
 
 
 class PlayerPerformancePulseTests(unittest.TestCase):
+    def test_strict_json_normalizes_missing_and_nonfinite_values(self):
+        value = {
+            "python_nan": float("nan"),
+            "numpy_nan": np.float64("nan"),
+            "positive_infinity": float("inf"),
+            "negative_infinity": np.float64("-inf"),
+            "finite_float": np.float64(1.25),
+            "integer": np.int64(4),
+            "boolean": np.bool_(True),
+            "nested": [pd.NA, {"value": -2.5, "missing": pd.NaT}],
+            "none": None,
+        }
+        encoded = pulse.pulse.strict_json_dumps(value, sort_keys=True)
+        parsed = json.loads(encoded, parse_constant=lambda token: self.fail(f"invalid JSON token: {token}"))
+        self.assertEqual(parsed, {
+            "python_nan": None,
+            "numpy_nan": None,
+            "positive_infinity": None,
+            "negative_infinity": None,
+            "finite_float": 1.25,
+            "integer": 4,
+            "boolean": True,
+            "nested": [None, {"value": -2.5, "missing": None}],
+            "none": None,
+        })
+        self.assertNotIn("NaN", encoded)
+        self.assertNotIn("Infinity", encoded)
+        self.assertEqual(pulse.pulse.strict_json_dumps(1.25), "1.25")
+
+    def test_shared_json_writer_emits_strict_json(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "summary.json"
+            pulse.pulse.write_json(target, {"unavailable": np.float64("nan")}, indent=2)
+            contents = target.read_text()
+            self.assertEqual(json.loads(contents), {"unavailable": None})
+            self.assertNotIn("NaN", contents)
+            self.assertNotIn("Infinity", contents)
+
     def _transition(self, player, game_a, game_b, pred_a, pred_b, lane="sog"):
         return {
             "lane": lane,
@@ -127,6 +166,10 @@ class PlayerPerformancePulseTests(unittest.TestCase):
                 self.assertIn(f"Report: {out / 'README.md'}", report)
                 self.assertTrue((out / "summary.json").is_file())
                 self.assertTrue((out / "README.md").is_file())
+                summary_text = (out / "summary.json").read_text()
+                json.loads(summary_text, parse_constant=lambda token: self.fail(f"invalid JSON token: {token}"))
+                self.assertNotIn("NaN", summary_text)
+                self.assertNotIn("Infinity", summary_text)
 
                 summary_before = (out / "summary.json").read_bytes()
                 refusal_output = io.StringIO()

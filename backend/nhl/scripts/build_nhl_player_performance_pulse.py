@@ -11,6 +11,7 @@ import argparse
 import hashlib
 import json
 import math
+import numbers
 import re
 from pathlib import Path
 from typing import Any
@@ -87,6 +88,38 @@ LANES = {
         "outcome_aliases": ["official_saves", "saves"],
     },
 }
+
+
+def normalize_json_value(value: Any) -> Any:
+    """Convert pandas/numpy missing and non-finite scalars to JSON null values."""
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, dict):
+        return {key: normalize_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [normalize_json_value(item) for item in value]
+    if isinstance(value, np.ndarray):
+        return normalize_json_value(value.tolist())
+    if isinstance(value, np.generic):
+        return normalize_json_value(value.item())
+    if isinstance(value, numbers.Real):
+        return float(value) if math.isfinite(float(value)) else None
+    try:
+        missing = pd.isna(value)
+    except (TypeError, ValueError):
+        missing = False
+    if isinstance(missing, (bool, np.bool_)) and missing:
+        return None
+    return value
+
+
+def strict_json_dumps(value: Any, **kwargs: Any) -> str:
+    """Serialize pulse JSON after normalization, rejecting non-standard tokens."""
+    return json.dumps(normalize_json_value(value), allow_nan=False, **kwargs)
+
+
+def write_json(path: Path, value: Any, **kwargs: Any) -> None:
+    Path(path).write_text(strict_json_dumps(value, **kwargs) + "\n")
 
 
 def sha256(path: Path) -> str:
@@ -242,21 +275,21 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
             p = p.sort_values("line").drop_duplicates(keys + ["line"])
             ladder_rows = []
             for identity, ladder_group in p.groupby(keys, sort=False):
-                ladder_rows.append({"game_id": identity[0], "player_id": identity[1], "prediction_ladder": json.dumps([{"line": _jsonval(r.get("line")), "prob_over": _jsonval(r.get("prob_over"))} for _, r in ladder_group.iterrows()])})
+                ladder_rows.append({"game_id": identity[0], "player_id": identity[1], "prediction_ladder": strict_json_dumps([{"line": _jsonval(r.get("line")), "prob_over": _jsonval(r.get("prob_over"))} for _, r in ladder_group.iterrows()])})
             probs = pd.DataFrame(ladder_rows)
             d = d.merge(probs[keys + ["prediction_ladder"]], on=keys, how="left")
         elif lane in ("sog", "saves"):
             ladder_rows = []
             for _, prediction in p.iterrows():
                 columns = cfg["prediction_line_cols"] if lane == "sog" else [c for c in p.columns if c.startswith("p_over_")]
-                ladder_rows.append({"game_id": prediction.game_id, "player_id": prediction.player_id, "prediction_ladder": json.dumps([{"line": float(col.removeprefix("p_over_").replace("_", ".")), "prob_over": _jsonval(prediction.get(col))} for col in columns if col in p.columns])})
+                ladder_rows.append({"game_id": prediction.game_id, "player_id": prediction.player_id, "prediction_ladder": strict_json_dumps([{"line": float(col.removeprefix("p_over_").replace("_", ".")), "prob_over": _jsonval(prediction.get(col))} for col in columns if col in p.columns])})
             d = d.merge(pd.DataFrame(ladder_rows), on=keys, how="left")
         else:
             prob_col = next((c for c in ["prob_over", "prob_over_1.5", "expected_saves"] if c in p.columns), None)
             if prob_col:
                 p = p.sort_values("line" if "line" in p.columns else keys).drop_duplicates(keys)
                 d = d.merge(p[keys + [prob_col]], on=keys, how="left")
-                d["prediction_ladder"] = d[prob_col].map(lambda x: json.dumps([{"line": None, "prob_over": _jsonval(x)}]))
+                d["prediction_ladder"] = d[prob_col].map(lambda x: strict_json_dumps([{"line": None, "prob_over": _jsonval(x)}]))
             else:
                 d["prediction_ladder"] = "[]"
         for _, row in d.iterrows():
@@ -361,8 +394,8 @@ def main() -> int:
                     "elapsed_days": (pd.Timestamp(nxt["slate_date"])-pd.Timestamp(cur["slate_date"])).days,
                     "realized_stat": cur.get("outcome_value"), "outcome_source_timestamp_utc": cur.get("outcome_source_timestamp_utc"),
                     "outcome_source_path": cur.get("outcome_path"), "outcome_source_sha256": cur.get("outcome_sha256"),
-                    "feature_state_prior": json.dumps(prevvals, sort_keys=True), "feature_state_current": json.dumps(nowvals, sort_keys=True),
-                    "prediction_prior": json.dumps(p_ladder, sort_keys=True), "prediction_current": json.dumps(n_ladder, sort_keys=True),
+                    "feature_state_prior": strict_json_dumps(prevvals, sort_keys=True), "feature_state_current": strict_json_dumps(nowvals, sort_keys=True),
+                    "prediction_prior": strict_json_dumps(p_ladder, sort_keys=True), "prediction_current": strict_json_dumps(n_ladder, sort_keys=True),
                     "model_family_version": nxt.get("model_family_version"),
                     "feature_artifact_identity_prior": cur.get("feature_path"), "feature_artifact_sha256_prior": cur.get("feature_sha256"),
                     "feature_artifact_identity_current": nxt.get("feature_path"), "feature_artifact_sha256_current": nxt.get("feature_sha256"),
@@ -413,7 +446,7 @@ def main() -> int:
         "independent_rolling_check_counts": pd.Series([r["status"] for r in rolling_checks], dtype="string").value_counts().to_dict(),
         "limits": ["This attachment ends mid-sentence after section 6; omitted later requirements could not be applied.", "Historical model parameter hashes are not bound to these run receipts, so parameter stability is not inferred.", "SOG feature input hashes are not receipt-bound; its input is identified by the successful scoring command and retrospectively hashed.", "Independent rolling recomputation is limited to retained official regular-season outcome rows since 2026-09-29; unresolved differences may reflect shorter audit history versus production logs that include earlier games and, for some fields, preseason appearances. Goalie windows are not independently recomputed."],
     }
-    (out / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    write_json(out / "summary.json", summary, indent=2, sort_keys=True)
     return 0
 
 
