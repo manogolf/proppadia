@@ -17,10 +17,11 @@ from zoneinfo import ZoneInfo
 
 BASE = "https://app.8rainstation.com/public/api/catalog/"
 ROOT = Path("artifacts/operational/nhl/8rain_catalog")
+PLAYER_CATALOG_LIMIT = 2000
 ENDPOINTS = {
     "model_spec.json": "model-spec?league=nhl",
     "teams.json": "teams?league=nhl",
-    "players.json": "players?league=nhl",
+    "players.json": f"players?league=nhl&limit={PLAYER_CATALOG_LIMIT}",
 }
 
 
@@ -78,6 +79,11 @@ def validate_catalog(path: Path) -> dict:
         raise ValueError("8RAIN_CATALOG_ENTITY_INVALID:teams.json")
     if any(not isinstance(row, dict) for row in players["data"]):
         raise ValueError("8RAIN_CATALOG_ENTITY_INVALID:players.json")
+    player_url = str((metadata.get("endpoints") or {}).get("players.json", ""))
+    if f"limit={PLAYER_CATALOG_LIMIT}" not in player_url:
+        raise ValueError("8RAIN_PLAYER_CATALOG_LIMIT_UNSPECIFIED")
+    if len(players["data"]) >= PLAYER_CATALOG_LIMIT:
+        raise ValueError("8RAIN_PLAYER_CATALOG_LIMIT_REACHED_PAGINATION_REQUIRED")
     if not any(row.get("code") and row.get("name") for row in teams["data"]):
         raise ValueError("8RAIN_CATALOG_NO_MAPPABLE_TEAMS")
     if not any(row.get("code") and row.get("name") for row in players["data"]):
@@ -89,6 +95,8 @@ def validate_catalog(path: Path) -> dict:
         "catalog_sha256": hashlib.sha256(metadata_path.read_bytes()).hexdigest(),
         "files": hashes,
         "player_count": len(players["data"]),
+        "player_catalog_completeness": "LIKELY_COMPLETE",
+        "player_catalog_limit": PLAYER_CATALOG_LIMIT,
         "team_count": len(teams["data"]),
         "league_code": "nhl",
         "schema_version": metadata.get("schema_version"),
@@ -162,6 +170,8 @@ def fetch_catalog(root: Path, *, slate_date: str,
             "slate_date": slate_date,
             "retrieved_at_utc": fetched_at.isoformat(timespec="microseconds").replace("+00:00", "Z"),
             "endpoints": endpoint_urls,
+            "player_catalog_completeness": "LIKELY_COMPLETE",
+            "player_catalog_limit": PLAYER_CATALOG_LIMIT,
             "files": file_records,
         }
         (staging / "catalog_metadata.json").write_text(
