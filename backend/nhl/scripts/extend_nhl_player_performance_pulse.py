@@ -41,9 +41,11 @@ EXPECTED_DIRECTION = {"sog": {"d5_sog_per60": 1, "d10_sog_per60": 1, "d20_sog_pe
 def _load_transitions(as_of: str) -> tuple[pd.DataFrame, dict[str, Any]]:
     base = pd.read_csv(BASE / "player_state_transitions.csv")
     base = base[base.game_n1_date.astype(str) <= as_of].copy()
+    all_records = pulse.run_records()
+    base = pulse.enrich_transition_player_names(base, pulse.roster_identity_names(all_records))
     # Add only transitions made newly observable by the requested as-of state.
     prior_date = (pd.Timestamp(as_of) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    recs = [(p, r) for p, r in pulse.run_records() if str(r.get("slate_date")) in {prior_date, as_of}]
+    recs = [(p, r) for p, r in all_records if str(r.get("slate_date")) in {prior_date, as_of}]
     audit = {"missing_artifacts": 0, "hash_mismatches": 0, "eligible_state_rows": 0}
     states = {lane: pulse.collect_states(lane, recs, audit) for lane in pulse.LANES}
     added = []
@@ -75,7 +77,7 @@ def _load_transitions(as_of: str) -> tuple[pd.DataFrame, dict[str, Any]]:
 
 def _transition_from_states(lane: str, a: pd.Series, b: pd.Series) -> dict[str, Any]:
     return {
-        "lane": lane, "player_id": int(a.player_id), "player_name": b.get("player_name") or a.get("player_name"),
+        "lane": lane, "player_id": int(a.player_id), "player_name": pulse.first_valid_player_name(b.get("player_name"), a.get("player_name")),
         "team_id_game_n": a.get("team_id"), "team_id_game_n1": b.get("team_id"),
         "game_n_id": int(a.game_id), "game_n_date": str(a.slate_date), "game_n1_id": int(b.game_id), "game_n1_date": str(b.slate_date),
         "elapsed_days": (pd.Timestamp(b.slate_date)-pd.Timestamp(a.slate_date)).days,

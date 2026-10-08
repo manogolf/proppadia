@@ -149,6 +149,90 @@ def find_outcome(date: str, filename: str) -> Path | None:
     return max(found, key=lambda x: x.stat().st_mtime_ns) if found else None
 
 
+def first_valid_player_name(*values: Any) -> str | None:
+    """Return the first nonblank player name, skipping pandas/numpy missing values."""
+    for value in values:
+        if not isinstance(value, str):
+            try:
+                missing = pd.isna(value)
+            except (TypeError, ValueError):
+                missing = False
+            if isinstance(missing, (bool, np.bool_)) and missing:
+                continue
+        if value is None:
+            continue
+        name = str(value).strip()
+        if name:
+            return name
+    return None
+
+
+def roster_identity_names(records: list[tuple[Path, dict[str, Any]]]) -> dict[tuple[int, int], str]:
+    """Read receipt-bound official NHL roster names keyed by (game_id, player_id)."""
+    candidates: dict[tuple[int, int], set[str]] = {}
+    snapshots: dict[Path, dict[tuple[int, int], set[str]]] = {}
+    for _, receipt in records:
+        ref = receipt.get("roster_observation") or {}
+        raw_path = ref.get("path")
+        if not raw_path:
+            continue
+        roster_dir = resolve(str(raw_path))
+        snapshot_path = roster_dir / "roster_snapshot.jsonl"
+        if roster_dir not in snapshots:
+            names: dict[tuple[int, int], set[str]] = {}
+            manifest = roster_dir / "SHA256SUMS"
+            if not snapshot_path.is_file() or not manifest.is_file():
+                snapshots[roster_dir] = names
+                continue
+            if ref.get("manifest_sha256") and sha256(manifest) != ref["manifest_sha256"]:
+                snapshots[roster_dir] = names
+                continue
+            expected_hash = None
+            for line in manifest.read_text().splitlines():
+                parts = line.split(None, 1)
+                if len(parts) == 2 and parts[1].strip().lstrip("*") == "roster_snapshot.jsonl":
+                    expected_hash = parts[0]
+                    break
+            if not expected_hash or sha256(snapshot_path) != expected_hash:
+                snapshots[roster_dir] = names
+                continue
+            for line in snapshot_path.read_text().splitlines():
+                try:
+                    row = json.loads(line)
+                    if row.get("official_source_identity") != "NHL_API_ROSTER":
+                        continue
+                    key = (int(row["game_id"]), int(row["player_id"]))
+                except (ValueError, TypeError, KeyError, json.JSONDecodeError):
+                    continue
+                name = first_valid_player_name(
+                    " ".join(str(row.get(k) or "").strip() for k in ("first_name", "last_name"))
+                )
+                if name:
+                    names.setdefault(key, set()).add(name)
+            snapshots[roster_dir] = names
+        for key, values in snapshots[roster_dir].items():
+            candidates.setdefault(key, set()).update(values)
+    return {key: next(iter(names)) for key, names in candidates.items() if len(names) == 1}
+
+
+def enrich_transition_player_names(
+    transitions: pd.DataFrame, identity_names: dict[tuple[int, int], str]
+) -> pd.DataFrame:
+    """Fill missing transition names from receipt-bound identities for either game."""
+    if transitions.empty or "player_name" not in transitions:
+        return transitions.copy()
+    result = transitions.copy()
+    result["player_name"] = [
+        first_valid_player_name(
+            row.get("player_name"),
+            identity_names.get((int(row.game_n1_id), int(row.player_id))),
+            identity_names.get((int(row.game_n_id), int(row.player_id))),
+        )
+        for _, row in result.iterrows()
+    ]
+    return result
+
+
 def parse_start(row: pd.Series) -> pd.Timestamp | None:
     value = row.get("game_start_utc")
     if value is None or pd.isna(value) or not str(value).strip():
@@ -209,6 +293,7 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
     grouped: dict[tuple[str, int, int], dict[str, Any]] = {}
     for receipt_path, receipt in records:
         date = str(receipt["slate_date"])
+        roster_names = roster_identity_names([(receipt_path, receipt)])
         lane_rec = receipt.get("lanes", {}).get("points" if lane == "points" else "saves" if lane == "saves" else "legacy_sog", {})
         if lane_rec.get("status") != "COMPLETE":
             continue
@@ -294,10 +379,13 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
                 d["prediction_ladder"] = "[]"
         for _, row in d.iterrows():
             k = (str(date), int(row.game_id), int(row.player_id))
-            name = row.get("full_name", row.get("player_name", ""))
+            name = first_valid_player_name(
+                row.get("full_name"), row.get("player_name"),
+                roster_names.get((int(row.game_id), int(row.player_id))),
+            )
             candidate = {
                 "lane": lane, "slate_date": date, "game_id": int(row.game_id), "player_id": int(row.player_id),
-                "player_name": "" if pd.isna(name) else str(name), "team_id": _jsonval(row.get("team_id")),
+                "player_name": name, "team_id": _jsonval(row.get("team_id")),
                 "opponent_id": _jsonval(row.get("opponent_id")), "game_start_utc": _iso(row.game_start),
                 "feature_cutoff_utc": _iso(row.feature_cutoff), "lane_end_utc": _iso(row.lane_end),
                 "parent_daily_run_id": receipt.get("parent_daily_run_id"), "feature_path": str(inp.relative_to(ROOT)),

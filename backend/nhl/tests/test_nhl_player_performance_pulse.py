@@ -20,6 +20,56 @@ spec.loader.exec_module(pulse)
 
 
 class PlayerPerformancePulseTests(unittest.TestCase):
+    def test_player_name_selection_skips_missing_and_blank_values(self):
+        select = pulse.pulse.first_valid_player_name
+        self.assertEqual(select("Current Name", "Prior Name"), "Current Name")
+        self.assertEqual(select(np.nan, "Prior Name"), "Prior Name")
+        self.assertEqual(select(None, "Prior Name"), "Prior Name")
+        self.assertEqual(select("   ", "Prior Name"), "Prior Name")
+        self.assertEqual(select(pd.NA, " ", "Retained Official Name"), "Retained Official Name")
+        self.assertIsNone(select(np.nan, None, "  "))
+        self.assertIsNone(select(np.nan))
+
+    def test_official_receipt_bound_roster_is_identity_fallback(self):
+        with tempfile.TemporaryDirectory() as temp:
+            roster_dir = Path(temp) / "observation"
+            roster_dir.mkdir()
+            snapshot = roster_dir / "roster_snapshot.jsonl"
+            snapshot.write_text(json.dumps({
+                "game_id": 20, "player_id": 200, "first_name": "Official",
+                "last_name": "Player", "official_source_identity": "NHL_API_ROSTER",
+            }) + "\n")
+            sums = roster_dir / "SHA256SUMS"
+            sums.write_text(f"{pulse.pulse.sha256(snapshot)}  roster_snapshot.jsonl\n")
+            receipt = {"roster_observation": {
+                "path": str(roster_dir), "manifest_sha256": pulse.pulse.sha256(sums),
+            }}
+            names = pulse.pulse.roster_identity_names([(Path("receipt.json"), receipt)])
+            self.assertEqual(names[(20, 200)], "Official Player")
+            self.assertEqual(pulse.pulse.first_valid_player_name(np.nan, None, names[(20, 200)]), "Official Player")
+
+    def test_transition_and_exemplar_carry_resolved_name_without_changing_analytics(self):
+        prior = pd.Series({
+            "player_id": 100, "player_name": "Authoritative Name", "game_id": 1,
+            "slate_date": "2026-10-01", "team_id": 2, "outcome_value": 1,
+            "feature_values": {"d10_sog_per60": 4.0}, "prediction_ladder": '[{"line": 1.5, "prob_over": 0.4}]',
+        })
+        current = pd.Series({
+            "player_name": np.nan, "game_id": 2, "slate_date": "2026-10-03", "team_id": 2,
+            "feature_values": {"d10_sog_per60": 5.0}, "prediction_ladder": '[{"line": 1.5, "prob_over": 0.6}]',
+        })
+        transition = pulse._transition_from_states("sog", prior, current)
+        self.assertEqual(transition["player_name"], "Authoritative Name")
+        self.assertEqual((transition["game_n_id"], transition["game_n1_id"], transition["realized_stat"]), (1, 2, 1))
+        self.assertEqual(json.loads(transition["feature_state_prior"]), {"d10_sog_per60": 4.0})
+        self.assertEqual(json.loads(transition["feature_state_current"]), {"d10_sog_per60": 5.0})
+        transitions = pd.DataFrame([transition])
+        exemplar = pulse.exemplars(transitions, pd.DataFrame(), pd.DataFrame())["sog"]["improving_state"]
+        self.assertEqual(exemplar["player_name"], "Authoritative Name")
+        self.assertEqual(exemplar["player_id"], 100)
+        self.assertIsNone(pulse.pulse.normalize_json_value(pulse.pulse.first_valid_player_name(np.nan)))
+        self.assertEqual(json.loads(pulse.pulse.strict_json_dumps({"player_name": np.nan}))["player_name"], None)
+
     def test_strict_json_normalizes_missing_and_nonfinite_values(self):
         value = {
             "python_nan": float("nan"),
