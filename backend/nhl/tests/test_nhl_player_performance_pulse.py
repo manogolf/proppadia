@@ -1,7 +1,12 @@
 import importlib.util
+import io
 import json
+import tempfile
 import unittest
+import warnings
+from contextlib import ExitStack, redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -32,6 +37,103 @@ class PlayerPerformancePulseTests(unittest.TestCase):
             "prediction_artifact_sha256_current": f"hash-{game_b}",
             "model_family_version": "phoenix_v2",
         }
+
+    def test_movement_frame_concat_preserves_schema_without_futurewarning(self):
+        old_mov = pd.DataFrame({
+            "lane": ["sog"],
+            "player_id": [10],
+            "standardized_movement": [0.25],
+            "feature": ["d10_sog_per60"],
+            "signed_change": [1.0],
+        })
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            unchanged = pulse.combine_movement_frames(old_mov, [])
+        pd.testing.assert_frame_equal(unchanged, old_mov)
+
+        new_mov = [{
+            "lane": "points",
+            "player_id": 11,
+            "standardized_movement": None,
+            "feature": "is_home",
+            "signed_change": 0.0,
+        }]
+        with warnings.catch_warnings(record=True) as caught_nonempty:
+            warnings.simplefilter("always")
+            combined = pulse.combine_movement_frames(old_mov, new_mov)
+
+        self.assertEqual(list(combined.columns), list(old_mov.columns))
+        self.assertEqual(combined.lane.tolist(), ["sog", "points"])
+        self.assertEqual(combined.player_id.tolist(), [10, 11])
+        self.assertEqual(combined.feature.tolist(), ["d10_sog_per60", "is_home"])
+        self.assertTrue(pd.isna(combined.loc[1, "standardized_movement"]))
+        self.assertEqual(combined.standardized_movement.dtype, old_mov.standardized_movement.dtype)
+        warning_text = "DataFrame concatenation with empty or all-NA entries"
+        for caught_group in (caught, caught_nonempty):
+            self.assertFalse(any(
+                issubclass(item.category, FutureWarning) and warning_text in str(item.message)
+                for item in caught_group
+            ))
+
+    def test_cli_reports_package_paths_and_refuses_existing_revision(self):
+        movement_columns = [
+            "lane", "player_id", "game_n_id", "game_n1_id", "feature",
+            "prior_value", "current_value", "signed_change", "absolute_change",
+            "percent_change", "standardized_movement", "movement_status",
+        ]
+        transitions = pd.DataFrame(columns=["lane", "game_n1_date"])
+        predictions = pd.DataFrame(columns=["lane", "absolute_probability_change"])
+        empty_movements = pd.DataFrame(columns=movement_columns)
+        audit = {"missing_artifacts": 0, "hash_mismatches": 0, "eligible_state_rows": 0, "new_transition_rows": 7}
+
+        with tempfile.TemporaryDirectory() as temp:
+            temp_root = Path(temp)
+            base = temp_root / "base"
+            base.mkdir()
+            out = temp_root / "revision"
+            (base / "player_state_transitions.csv").write_text("lane,player_id,game_n_id,game_n1_id,game_n1_date\n")
+            (base / "feature_movements.csv").write_text(",".join(movement_columns) + "\n")
+            (base / "rolling_state_audit.csv").write_text("status\n")
+            (base / "independent_rolling_checks.csv").write_text("status\n")
+            (base / "summary.json").write_text("{}\n")
+
+            args = ["extend_nhl_player_performance_pulse.py", "--as-of-date", "2026-10-08", "--base-package", str(base), "--output-dir", str(out)]
+            output = io.StringIO()
+            with ExitStack() as stack:
+                stack.enter_context(patch.object(pulse, "ROOT", temp_root))
+                stack.enter_context(patch.object(pulse, "_load_transitions", return_value=(transitions, audit)))
+                stack.enter_context(patch.object(pulse, "prediction_transitions", return_value=predictions))
+                stack.enter_context(patch.object(
+                    pulse, "movement_and_classes",
+                    side_effect=lambda _transitions, _predictions, movements: (movements, pd.DataFrame(columns=["lane"]), {}),
+                ))
+                stack.enter_context(patch.object(pulse, "feature_prediction_relationships", return_value=pd.DataFrame()))
+                stack.enter_context(patch.object(pulse, "divergence_pulse", return_value=pd.DataFrame()))
+                stack.enter_context(patch.object(pulse, "stale_state_pulse", return_value=pd.DataFrame(columns=["status"])))
+                stack.enter_context(patch.object(pulse, "prospective_window_lineage", return_value=pd.DataFrame()))
+                stack.enter_context(patch.object(pulse, "exemplars", return_value={}))
+                stack.enter_context(patch("sys.argv", args))
+                with redirect_stdout(output):
+                    self.assertEqual(pulse.main(), 0)
+
+                report = output.getvalue()
+                self.assertIn("NHL PLAYER PERFORMANCE PULSE: COMPLETE", report)
+                self.assertIn("As-of: 2026-10-08", report)
+                self.assertIn("New transitions: 7", report)
+                self.assertIn("Classification: DYNAMIC_FEATURE_EVOLUTION_VERIFIED_WITH_WARNINGS", report)
+                self.assertIn(f"Package: {out}", report)
+                self.assertIn(f"Summary: {out / 'summary.json'}", report)
+                self.assertIn(f"Report: {out / 'README.md'}", report)
+                self.assertTrue((out / "summary.json").is_file())
+                self.assertTrue((out / "README.md").is_file())
+
+                summary_before = (out / "summary.json").read_bytes()
+                refusal_output = io.StringIO()
+                with redirect_stdout(refusal_output), self.assertRaises(SystemExit):
+                    pulse.main()
+                self.assertEqual(refusal_output.getvalue(), "")
+                self.assertEqual((out / "summary.json").read_bytes(), summary_before)
 
     def test_same_player_same_line_only_and_probability_deltas(self):
         transitions = pd.DataFrame([

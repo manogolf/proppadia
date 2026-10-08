@@ -352,6 +352,21 @@ def _num(v: Any) -> float | None:
     except (TypeError,ValueError): return None
 
 
+def combine_movement_frames(old_mov: pd.DataFrame, new_mov: list[dict[str, Any]]) -> pd.DataFrame:
+    """Append new movement rows without letting all-NA columns affect concat dtypes."""
+    new_mov_df = pd.DataFrame(new_mov)
+    if new_mov_df.empty:
+        return old_mov.copy()
+
+    # New standardized movements are intentionally unknown until the combined
+    # population is evaluated below. Give these all-NA columns the established
+    # dtype where available, while retaining every column in the result.
+    for column in new_mov_df.columns:
+        if column in old_mov.columns and new_mov_df[column].isna().all():
+            new_mov_df[column] = new_mov_df[column].astype(old_mov[column].dtype)
+    return pd.concat([old_mov, new_mov_df], ignore_index=True, sort=False)
+
+
 def main() -> int:
     global BASE
     ap=argparse.ArgumentParser()
@@ -380,7 +395,7 @@ def main() -> int:
             if x is None and y is None: continue
             delta=y-x if x is not None and y is not None else None
             new_mov.append({"lane":r["lane"],"player_id":r["player_id"],"game_n_id":r["game_n_id"],"game_n1_id":r["game_n1_id"],"feature":f,"prior_value":x,"current_value":y,"signed_change":delta,"absolute_change":abs(delta) if delta is not None else None,"percent_change":delta/abs(x)*100 if delta is not None and x else None,"standardized_movement":None,"movement_status":"VALUE" if delta is not None else "MISSING_TO_PRESENT" if x is None else "PRESENT_TO_MISSING"})
-    all_mov=pd.concat([old_mov,pd.DataFrame(new_mov)],ignore_index=True,sort=False)
+    all_mov=combine_movement_frames(old_mov,new_mov)
     # Standardize added deltas against the retained per-lane/feature population.
     for (lane,feature),g in all_mov.groupby(["lane","feature"]):
         ix=g.index
@@ -422,6 +437,13 @@ def main() -> int:
     (out/"summary.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\n")
     (out/"revision_metadata.json").write_text(json.dumps({"revision":2,"base_summary_sha256":hashlib.sha256((BASE/"summary.json").read_bytes()).hexdigest(),"as_of_date":args.as_of_date,"source_revision_files":["player_state_transitions.csv","feature_movements.csv","rolling_state_audit.csv","independent_rolling_checks.csv"],"created_deterministically":True,"provider_calls":0,"paid_credits":0},indent=2,sort_keys=True)+"\n")
     (out/"README.md").write_text(f"""# NHL Dynamic Player Performance Pulse — Revision 2\n\nAs-of date: `{args.as_of_date}`. This immutable revision preserves the base package and adds prediction responsiveness, descriptive divergence, and prospective lineage outputs.\n\nModel/version comparability remains **unproven** because historical receipts do not bind fitted artifact hashes. The empirical groups are characterization only and are not action thresholds. Historical rolling differences are not promoted to failures.\n\nNo provider calls, paid credits, training, scoring, or database mutation are performed.\n\nFiles: `summary.json`, `player_state_transitions.csv`, `feature_movements.csv`, `prediction_transitions.csv`, `independent_rolling_checks.csv`, `rolling_state_audit.csv`, `divergence_pulse.csv`, `stale_state_pulse.csv`, `feature_prediction_relationships.csv`, `feature_inventory.json`, `prospective_window_lineage.csv`, `revision_metadata.json`.\n\nReusable command: `.venv/bin/python backend/nhl/scripts/extend_nhl_player_performance_pulse.py --as-of-date YYYY-MM-DD`\n""")
+    print("NHL PLAYER PERFORMANCE PULSE: COMPLETE")
+    print(f"As-of: {args.as_of_date}")
+    print(f"New transitions: {audit['new_transition_rows']}")
+    print(f"Classification: {summary['overall_classification']}")
+    print(f"Package: {out}")
+    print(f"Summary: {out / 'summary.json'}")
+    print(f"Report: {out / 'README.md'}")
     return 0
 
 
