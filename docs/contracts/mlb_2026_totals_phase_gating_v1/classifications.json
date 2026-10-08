@@ -1,6 +1,6 @@
 {
   "cross_lane_phase_consistency": "READY_EXACT_GAME_PK",
-  "historical_restatement_requirement": "NOT_REQUIRED_RETAINED_ROWS_ALL_AUTHORITATIVE_REGULAR_SEASON",
+  "historical_restatement_requirement": "NOT_REQUIRED_FOR_PHASE_MEMBERSHIP; POPULATION_EXPECTATIONS_UNRESOLVED",
   "market_roi_effect": "NONE_NO_ROI_RECALCULATION",
   "model_selector_publication_status": "UNCHANGED_SHADOW_ONLY_UNQUALIFIED_UNPUBLISHED",
   "postseason_code_readiness": "READY_SYNTHETIC_FIXTURES_ONLY",
@@ -9,7 +9,9 @@
   "raw_totals_regular_season_integrity": "READY",
   "remaining_blockers": [
     "actual authoritative postseason game has not passed through ordinary RAW and C paths",
-    "current frozen authority supports only through 2026-09-27 and contains no postseason rows"
+    "current frozen authority supports only through 2026-09-27 and contains no postseason rows",
+    "independent retained RAW/C population census is unavailable",
+    "SciPy coefficient discrepancy remains open pending a controlled comparison in the original pinned environment"
   ],
   "totals_c_regular_season_integrity": "READY"
 }

@@ -9,15 +9,18 @@
     "backend.mlb.tests.test_mlb_game_phase_file_authority_hits_pilot_v1"
   ],
   "dependency_free_runner": "unittest",
-  "failed": 0,
+  "failed": 1,
   "output_tail": [
-    "..................................",
-    "----------------------------------------------------------------------",
-    "Ran 34 tests in 2.285s",
+    "  File \"/Users/jerrystrain/Projects/proppadia/backend/mlb/tests/test_mlb_game_phase_file_authority_hits_pilot_v1.py\", line 229, in test_stale_authority_window_blocks",
+    "    with self.assertRaisesRegex(",
+    "AssertionError: GamePhaseAuthorityError not raised",
     "",
-    "OK"
+    "----------------------------------------------------------------------",
+    "Ran 35 tests in 2.568s",
+    "",
+    "FAILED (failures=1)"
   ],
-  "passed": 34,
-  "returncode": 0,
+  "passed": 0,
+  "returncode": 1,
   "skipped": 0
 }

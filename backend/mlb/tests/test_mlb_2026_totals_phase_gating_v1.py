@@ -33,6 +33,7 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
 )
 from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 from backend.mlb.season_transition.phase_authority_snapshot_v1 import REPO_ROOT
+from backend.mlb.scripts.validate_mlb_2026_totals_phase_gating_v1 import aggregate_status
 
 
 def metadata(**changes: int | str) -> GamePhaseAuthorityMetadata:
@@ -131,6 +132,11 @@ def row(game_pk: int = 1, game_date: str = "2026-09-22", **changes: object) -> d
 
 
 class TotalsPhaseGatingV1Tests(unittest.TestCase):
+    def test_aggregate_status_requires_every_check(self) -> None:
+        self.assertEqual(aggregate_status({"one": True, "two": False}), "FAIL")
+        self.assertEqual(aggregate_status({"one": True, "two": "INCONCLUSIVE"}), "INCONCLUSIVE")
+        self.assertEqual(aggregate_status({"one": True, "two": "PASS"}), "PASS")
+
     def test_retained_october_6_schedule_authorizes_exact_division_series_games(self) -> None:
         source = REPO_ROOT / (
             "backend/mlb/exports/provider_event_game_bindings/schedule_sources/2026-10-06/"

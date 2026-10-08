@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import csv
 import json
 import os
@@ -57,6 +58,54 @@ def _safe_read_csv(path: Path) -> list[dict[str, Any]]:
             return [dict(row) for row in csv.DictReader(f)]
     except Exception:
         return []
+
+
+def _moneyline_run_bound_authority(date: str) -> dict[str, Any]:
+    """Verify latest retained Moneyline run evidence without widening global authority."""
+    root = Path("artifacts/ops/mlb_public_game_moneyline_attempts") / date
+    receipts = sorted(root.glob("*.json")) if root.exists() else []
+    if not receipts:
+        return {"status": "UNAVAILABLE_OR_BLOCKED", "reason": "NO_RETAINED_MONEYLINE_RUN_RECEIPT"}
+    try:
+        parsed = [(json.loads(path.read_text(encoding="utf-8")), path) for path in receipts]
+        receipt, receipt_path = max(parsed, key=lambda item: str(item[0].get("finished_at_utc") or ""))
+        decisions = receipt.get("per_game_decisions")
+        if receipt.get("classification") != "COMPLETED" or not isinstance(decisions, list) or not decisions:
+            raise ValueError("LATEST_RECEIPT_NOT_COMPLETED_WITH_DECISIONS")
+        descriptor_path = Path(str(receipt["active_authority_descriptor_path"]))
+        schedule_path = Path(str(receipt["retained_schedule_source_path"]))
+        selection_path = Path("backend/mlb/season_transition/authority_snapshots/active_selection.json")
+        digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+        if digest(descriptor_path) != receipt.get("active_authority_descriptor_sha256"):
+            raise ValueError("ACTIVE_DESCRIPTOR_HASH_MISMATCH")
+        if digest(schedule_path) != receipt.get("retained_schedule_source_sha256"):
+            raise ValueError("RETAINED_SCHEDULE_HASH_MISMATCH")
+        if digest(selection_path) != receipt.get("active_authority_selection_sha256"):
+            raise ValueError("ACTIVE_SELECTION_HASH_MISMATCH")
+        phases: dict[str, int] = defaultdict(int)
+        seen: set[int] = set()
+        for item in decisions:
+            game_pk = int(item["game_pk"])
+            if game_pk in seen or item.get("authority_decision") != "EXACT_GAME_AUTHORITY_ACCEPTED":
+                raise ValueError(f"DUPLICATE_OR_UNACCEPTED_GAME:{game_pk}")
+            seen.add(game_pk)
+            phases[str(item["normalized_phase"])] += 1
+        return {
+            "status": "VERIFIED_SOURCE_BOUND",
+            "run_identity": receipt.get("run_identity"),
+            "finished_at_utc": receipt.get("finished_at_utc"),
+            "receipt_path": receipt_path.as_posix(),
+            "receipt_sha256": digest(receipt_path),
+            "descriptor_path": descriptor_path.as_posix(),
+            "descriptor_sha256": receipt["active_authority_descriptor_sha256"],
+            "schedule_source_path": schedule_path.as_posix(),
+            "schedule_source_sha256": receipt["retained_schedule_source_sha256"],
+            "decision_count": len(decisions),
+            "phase_counts": dict(sorted(phases.items())),
+            "scope": "RUN_BOUND_MONEYLINE_ONLY_NOT_GLOBAL_PHASE_AUTHORITY_OR_MODEL_READINESS",
+        }
+    except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        return {"status": "UNAVAILABLE_OR_BLOCKED", "reason": f"RUN_BOUND_EVIDENCE_INVALID:{exc}"}
 
 
 def _row_count(path: Path) -> int | None:
@@ -326,6 +375,7 @@ def _write_daily_index(
                 report_date=date,
                 reason=str(exc),
             )
+    moneyline_run_evidence = _moneyline_run_bound_authority(date)
     boards = _board_rows(date)
     ops_latest = out_root / "mlb_daily_ops_brief_latest.md"
     ops_dated = out_root / f"mlb_daily_ops_brief_{date}.md"
@@ -519,6 +569,15 @@ def _write_daily_index(
         f"- Reason: {gate['reason']}",
         "",
         *render_phase_reporting_markdown(phase_reporting),
+        "",
+        "## Moneyline Run-Bound Authority (Separate from Static Index Horizon)",
+        "",
+        f"- Latest retained Moneyline run evidence: `{moneyline_run_evidence.get('status')}`",
+        f"- Run: `{moneyline_run_evidence.get('run_identity', 'unknown')}`; completed `{moneyline_run_evidence.get('finished_at_utc', 'unknown')}`",
+        f"- Source-bound decisions: `{moneyline_run_evidence.get('decision_count', 'unknown')}`; phase counts `{json.dumps(moneyline_run_evidence.get('phase_counts', {}), sort_keys=True)}`",
+        f"- Evidence reason when unavailable: `{moneyline_run_evidence.get('reason', 'none')}`",
+        "- This verifies only this completed Moneyline run; it does not extend the static shared index horizon or establish cross-lane/global phase authority. Unknown, conflicting, or unverified games remain fail-closed.",
+        "- Model readiness remains governed by qualified-model evidence; run-bound phase authority does not qualify a model.",
         "- Scope note: all other counts on this home screen are navigation, availability, or source-health counts unless explicitly bound to an exact-gamePk phase partition.",
         "",
         f"▶ {_dashboard_link(index_path, ops_dated if ops_dated.exists() else ops_latest, 'Start Morning Review', True, link_items)}",

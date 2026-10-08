@@ -1,121 +1,586 @@
 {
   "authority": {
     "authority_interface": "MLB_CANONICAL_GAME_PHASE_AUTHORITY_V1",
-    "authority_records_sha256": "5a7cdc460cc42ca2b4ed328c74e978b9da6967f95d7a7c4ba888b3b8d3401a84",
+    "authority_records_sha256": "4e1f6a75af3f2b9e584fd48fe46902263b104ba9c18255f820f031aab406098e",
     "backend": "MLB_2026_HASHED_PROPOSAL_AUTHORITY_V1",
     "conflicting_count": 0,
     "duplicate_identity_count": 0,
     "missing_count": 0,
+    "parent_descriptor_sha256": "1ddcb28828215704f4e75ad810e744853443c9b7ed7c8c42fb67a587a99fcb1e",
     "phase_contract_name": "MLB_2026_REGULAR_SEASON_CLOSE_AND_POSTSEASON_DATA_PLAN_V1",
     "phase_contract_sha256": "eed52e24d123c24e0fbbff21249705d653d77787eab98eb756d5c9752a481c19",
     "phase_contract_version": "contract_v1",
     "phase_counts": {
+      "POSTSEASON": 15,
       "PRESEASON": 489,
       "REGULAR_SEASON": 2430
     },
-    "proposal_count": 2919,
-    "proposal_path": "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/canonical_game_phase_backfill_proposal.jsonl",
-    "proposal_sha256": "b4f04273225643f691d438b492af8c36a40f2b63f62c34f60442261abc850879",
-    "source_file_count": 464,
-    "source_manifest_path": "docs/contracts/mlb_2026_canonical_phase_source_completion_v1/canonical_backfill_proposal/retained_source_manifest.jsonl",
-    "source_manifest_sha256": "766ea3ac7c230ea149e3189cd12b2070df645c27a16b86100143517d79456100",
-    "source_observation_count": 9092,
+    "proposal_count": 2934,
+    "proposal_path": "backend/mlb/season_transition/authority_snapshots/v4/canonical_game_phase_full_snapshot.jsonl",
+    "proposal_sha256": "bd6753e5fe4c9d3eca4f3b083d20ea56c791686ff9988e430c69c348a040796d",
+    "snapshot_descriptor_path": "backend/mlb/season_transition/authority_snapshots/v4/descriptor.json",
+    "snapshot_descriptor_sha256": "7828f1bdd35fa9fa763d8e7100a4215d4fa5fb928d13497535f27872bdd47a77",
+    "snapshot_id": "MLB_2026_GAME_PHASE_AUTHORITY_BD6753E5FE4C9D3E",
+    "snapshot_status": "GOVERNED",
+    "source_file_count": 468,
+    "source_manifest_path": "backend/mlb/season_transition/authority_snapshots/v4/retained_source_manifest.jsonl",
+    "source_manifest_sha256": "9ec981f427570cf3baee7c18d7cc34a6cb9d8e979d0cbe8440715e5dcc68b9c1",
+    "source_observation_count": 12037,
     "source_type_counts": {
+      "D": 6,
       "E": 38,
+      "F": 9,
       "R": 2430,
       "S": 451
     },
     "supported_from_date": "2026-02-20",
     "supported_season": 2026,
-    "supported_through_date": "2026-09-27",
+    "supported_through_date": "2026-10-05",
     "unknown_count": 0
   },
   "ledger": {
-    "bytes": 160362496,
+    "bytes": 174276608,
     "path": "backend/mlb/exports/model_v2/hits05_full_board_shadow_v1/hits05_full_board_shadow_v1.sqlite3",
     "read_mode": "sqlite_uri_mode_ro_immutable_1",
-    "sha256_after": "ac0d0ca57564293a5673e835e2d617893ce81e31c57ef347459a6cd2926fde15",
-    "sha256_before": "ac0d0ca57564293a5673e835e2d617893ce81e31c57ef347459a6cd2926fde15",
+    "sha256_after": "a7e176a80970298879527c07d04e2ace1ef764359c9b2e5e0bb291142b9e9f85",
+    "sha256_before": "a7e176a80970298879527c07d04e2ace1ef764359c9b2e5e0bb291142b9e9f85",
     "stat_unchanged_during_read": true
   },
+  "regular_metrics": {
+    "retained_rows": 6570,
+    "withheld_unsupported_authority_rows": [
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849823,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849825,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      }
+    ]
+  },
   "reports": {
-    "file_count": 141,
-    "file_manifest_sha256": "226f141b086afc73ec117915d75982eecb8fd077ddb10123068d22580a499da3",
-    "progress_latest_bytes": 15405290,
+    "file_count": 158,
+    "file_manifest_sha256": "de1acc39d71112f32c27a9fdfa2fa53314c501e472f88a1f827d3f4e3831488f",
+    "progress_latest_bytes": 16492990,
     "progress_latest_counts": {
-      "appearance_resolved": 5863,
+      "all_phase_prospective_predictions": 6606,
+      "appearance_resolved": 6025,
       "duplicate_outcome_identities": 0,
       "duplicate_prediction_identities": 0,
-      "eligibility_observation_rows": 18877,
-      "feature_context_rows": 6039,
-      "market_observation_rows": 21944,
+      "eligibility_observation_rows": 20729,
+      "feature_context_rows": 6606,
+      "market_observation_rows": 23136,
       "no_appearance_unresolved": 14,
-      "outcome_rows": 5877,
-      "prediction_rows": 6039,
-      "prospective_predictions": 6039,
-      "qualifying_game_date_clusters": 29,
-      "rank_snapshot_rows": 13995,
-      "run_rows": 144
+      "outcome_rows": 6039,
+      "prediction_rows": 6606,
+      "prospective_predictions": 6570,
+      "qualifying_game_date_clusters": 30,
+      "rank_snapshot_rows": 15201,
+      "run_rows": 161
     },
     "progress_latest_decision_category": "FULL_BOARD_ORDERING_ONLY",
     "progress_latest_path": "artifacts/analysis/mlb/hits05_full_board_shadow/progress_latest.json",
-    "progress_latest_sha256": "add4c9a7eef3c17b041cda14fd6c70b1e7eb795dc7f1e6af5c5758ba3cc77dad"
+    "progress_latest_sha256": "5c63f760dd3fc5aafeff26f23d4d8872aab2164d4a9b4d93a18d0ac6a38faa26"
   },
   "sources": {
     "eligibility": {
-      "distinct_game_pks": 394,
-      "missing_or_conflicting_game_pks": [],
+      "distinct_game_pks": 450,
+      "missing_or_conflicting_game_pks": [
+        849819,
+        849822,
+        849826,
+        849827,
+        849832,
+        849833,
+        849838
+      ],
       "phase_game_pk_counts": {
-        "REGULAR_SEASON": 394
+        "MISSING_AUTHORITY": 7,
+        "POSTSEASON": 2,
+        "REGULAR_SEASON": 441
       },
-      "rows": 18877
+      "rows": 20881
     },
     "grading": {
-      "distinct_game_pks": 358,
+      "distinct_game_pks": 368,
       "missing_or_conflicting_game_pks": [],
       "phase_game_pk_counts": {
-        "REGULAR_SEASON": 358
+        "REGULAR_SEASON": 368
       },
-      "rows": 5877
+      "rows": 6039
     },
     "outcomes": {
-      "distinct_game_pks": 358,
+      "distinct_game_pks": 368,
       "missing_or_conflicting_game_pks": [],
       "phase_game_pk_counts": {
-        "REGULAR_SEASON": 358
+        "REGULAR_SEASON": 368
       },
-      "rows": 5877
+      "rows": 6039
     },
     "predictions": {
-      "distinct_game_pks": 368,
-      "missing_or_conflicting_game_pks": [],
+      "distinct_game_pks": 406,
+      "missing_or_conflicting_game_pks": [
+        849822,
+        849827,
+        849832,
+        849838
+      ],
       "phase_game_pk_counts": {
-        "REGULAR_SEASON": 368
+        "MISSING_AUTHORITY": 4,
+        "POSTSEASON": 2,
+        "REGULAR_SEASON": 400
       },
-      "rows": 6039
+      "rows": 6669
     },
     "prices": {
-      "distinct_game_pks": 368,
+      "distinct_game_pks": 402,
       "missing_or_conflicting_game_pks": [],
       "phase_game_pk_counts": {
-        "REGULAR_SEASON": 368
+        "POSTSEASON": 2,
+        "REGULAR_SEASON": 400
       },
-      "rows": 21944
+      "rows": 23136
     },
     "reports": {
-      "distinct_game_pks": 368,
-      "missing_or_conflicting_game_pks": [],
+      "distinct_game_pks": 406,
+      "missing_or_conflicting_game_pks": [
+        849822,
+        849827,
+        849832,
+        849838
+      ],
       "phase_game_pk_counts": {
-        "REGULAR_SEASON": 368
+        "MISSING_AUTHORITY": 4,
+        "POSTSEASON": 2,
+        "REGULAR_SEASON": 400
       },
-      "rows": 6039
+      "rows": 6669
     }
   },
   "union": {
-    "authority_violations": [],
-    "distinct_game_pks": 394,
+    "authority_violations": [
+      {
+        "game_pk": 849819,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849819"
+      },
+      {
+        "game_pk": 849822,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      },
+      {
+        "game_pk": 849826,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849826"
+      },
+      {
+        "game_pk": 849827,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      },
+      {
+        "game_pk": 849833,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849833"
+      },
+      {
+        "game_pk": 849838,
+        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      }
+    ],
+    "distinct_game_pks": 450,
     "phase_game_pk_counts": {
-      "REGULAR_SEASON": 394
+      "POSTSEASON": 2,
+      "REGULAR_SEASON": 441
     }
   }
 }

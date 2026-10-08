@@ -61,6 +61,21 @@ def canonical_sha256(rows: Iterable[Mapping[str, Any]]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+def regular_metric_rows(metric_rows: list[dict[str, Any]], phase_by_game: dict[int, str], authority_failures: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Keep only rows with explicitly established regular-season authority."""
+    failures = {int(item["game_pk"]): str(item.get("reason") or "AUTHORITY_UNAVAILABLE") for item in authority_failures}
+    kept: list[dict[str, Any]] = []
+    withheld: list[dict[str, Any]] = []
+    for row in metric_rows:
+        game_pk = int(row["game_id"])
+        phase = phase_by_game.get(game_pk)
+        if phase == "REGULAR_SEASON":
+            kept.append(row)
+        else:
+            withheld.append({"game_pk": game_pk, "reason": failures.get(game_pk, f"NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:{phase or 'MISSING'}")})
+    return kept, withheld
+
+
 def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
@@ -218,9 +233,7 @@ def build(output_dir: Path) -> dict[str, Any]:
                   WHERE json_extract(p.prediction_payload_json,'$.evidence_mode')='PROSPECTIVE'
                   ORDER BY p.slate_date,p.game_id,p.player_id""",
     )
-    retained_regular_metric_rows = [
-        row for row in metric_rows if phase_by_game[int(row["game_id"])] == "REGULAR_SEASON"
-    ]
+    retained_regular_metric_rows, withheld_metric_rows = regular_metric_rows(metric_rows, phase_by_game, violations)
     market_metric_rows = dict_rows(
         connection,
         "SELECT canonical_identity,market_payload_json,market_payload_sha256 FROM hits05_full_board_market_observations ORDER BY observation_identity",
@@ -260,6 +273,7 @@ def build(output_dir: Path) -> dict[str, Any]:
             "authority_violations": violations,
         },
         "sources": source_summary,
+        "regular_metrics": {"retained_rows": len(retained_regular_metric_rows), "withheld_unsupported_authority_rows": withheld_metric_rows},
         "reports": {
             "file_count": len(report_inventory),
             "file_manifest_sha256": canonical_sha256(report_inventory),

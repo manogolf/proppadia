@@ -1,10 +1,14 @@
 {
   "canonical_interpreter": "/Users/jerrystrain/Projects/proppadia/.venv/bin/python",
-  "executed": 40,
+  "executed": 41,
   "failed": 0,
-  "intended": 40,
-  "passed": 40,
+  "intended": 41,
+  "passed": 41,
   "results": [
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_totals_phase_gating_v1.TotalsPhaseGatingV1Tests.test_aggregate_status_requires_every_check",
+      "status": "PASSED"
+    },
     {
       "scenario": "backend.mlb.tests.test_mlb_2026_totals_phase_gating_v1.TotalsPhaseGatingV1Tests.test_all_supported_postseason_rounds_are_transient_labels",
       "status": "PASSED"

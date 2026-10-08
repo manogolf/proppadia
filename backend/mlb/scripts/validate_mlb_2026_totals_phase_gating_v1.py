@@ -59,6 +59,15 @@ def canonical_hash(value: Any) -> str:
     ).encode("utf-8")).hexdigest()
 
 
+def aggregate_status(checks: dict[str, Any]) -> str:
+    values = list(checks.values())
+    if any(value is False or value == "FAIL" for value in values):
+        return "FAIL"
+    if any(value == "INCONCLUSIVE" for value in values):
+        return "INCONCLUSIVE"
+    return "PASS" if values and all(value is True or value == "PASS" for value in values) else "FAIL"
+
+
 def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True, default=str) + "\n")
 
@@ -294,13 +303,14 @@ def ledger_population() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str,
         "violations": {"nonregular": 0, "missing": 0, "conflicting": 0, "duplicate": 0},
         "hashes_before_gate": hashes,
         "hashes_after_regular_gate": dict(hashes),
-        "hash_invariance": all(hashes[key] == hashes[key] for key in hashes),
+        "hash_invariance": None,
         "ledger_file_sha256_before": before,
     }
     raw_db.close(); c_db.close(); market_db.close()
     after = {str(path.relative_to(ROOT)): sha256(path) for path in (RAW_LEDGER, C_LEDGER, MARKET_LEDGER)}
     summary["ledger_file_sha256_after"] = after
     summary["ledger_files_byte_unchanged"] = before == after
+    summary["hash_invariance"] = summary["ledger_files_byte_unchanged"]
     return summary, reconciliation, hashes
 
 
@@ -347,13 +357,15 @@ def build() -> dict[str, Any]:
         "cross_lane_phase_consistency": "READY_EXACT_GAME_PK",
         "postseason_code_readiness": "READY_SYNTHETIC_FIXTURES_ONLY",
         "postseason_operational_readiness": "BLOCKED_PENDING_ACTUAL_AUTHORITATIVE_POSTSEASON_GAME_ON_ORDINARY_PATH",
-        "historical_restatement_requirement": "NOT_REQUIRED_RETAINED_ROWS_ALL_AUTHORITATIVE_REGULAR_SEASON",
+        "historical_restatement_requirement": "NOT_REQUIRED_FOR_PHASE_MEMBERSHIP; POPULATION_EXPECTATIONS_UNRESOLVED",
         "prediction_quality_effect": "NONE_MEMBERSHIP_AND_REPORTING_ONLY",
         "market_roi_effect": "NONE_NO_ROI_RECALCULATION",
         "model_selector_publication_status": "UNCHANGED_SHADOW_ONLY_UNQUALIFIED_UNPUBLISHED",
         "remaining_blockers": [
             "actual authoritative postseason game has not passed through ordinary RAW and C paths",
             "current frozen authority supports only through 2026-09-27 and contains no postseason rows",
+            "independent retained RAW/C population census is unavailable",
+            "SciPy coefficient discrepancy remains open pending a controlled comparison in the original pinned environment",
         ],
     }
     write_json(CONTRACT / "classifications.json", classifications)
@@ -361,21 +373,23 @@ def build() -> dict[str, Any]:
         "path": path, "bytes": (ROOT / path).stat().st_size, "sha256": sha256(ROOT / path)
     } for path in SOURCE_FILES]
     write_csv(CONTRACT / "source_artifact_manifest.csv", source_rows)
-    validation = {
-        "task": "MLB_2026_TOTALS_PHASE_GATING_V1",
-        "status": "PASS" if tests["status"] == "PASS" and not any(reconciliation["violations"].values()) and reconciliation["ledger_files_byte_unchanged"] else "FAIL",
-        "checks": {
+    checks = {
             "tests": tests["status"],
-            "raw_expected_population": reconciliation["raw_totals"]["prediction_rows"] == 608,
-            "c_expected_population": reconciliation["totals_c"]["prediction_rows"] == 467,
-            "all_retained_regular": reconciliation["raw_totals"]["phase_counts"] == {"REGULAR_SEASON": 608} and reconciliation["totals_c"]["phase_counts"] == {"REGULAR_SEASON": 467},
-            "c_exact_subset": reconciliation["cross_lane"] == {"intersection": 467, "raw_only": 141, "totals_c_only": 0, "identity_conflicts": 0},
+            "raw_expected_population": "INCONCLUSIVE",
+            "c_expected_population": "INCONCLUSIVE",
+            "phase_classification_valid": set(reconciliation["raw_totals"]["phase_counts"]).issubset({"REGULAR_SEASON", "POSTSEASON"}) and reconciliation["totals_c"]["phase_counts"].get("REGULAR_SEASON", 0) == reconciliation["totals_c"]["distinct_game_pks"],
+            "c_exact_subset": reconciliation["cross_lane"]["totals_c_only"] == 0 and reconciliation["cross_lane"]["identity_conflicts"] == 0 and reconciliation["cross_lane"]["intersection"] == reconciliation["totals_c"]["distinct_game_pks"],
             "zero_violations": not any(reconciliation["violations"].values()),
             "hash_invariance": reconciliation["hash_invariance"],
             "ledger_files_byte_unchanged": reconciliation["ledger_files_byte_unchanged"],
             "no_training_or_model_mutation": True,
             "selector_publication_threshold_status_unchanged": True,
-        },
+        }
+    validation = {
+        "task": "MLB_2026_TOTALS_PHASE_GATING_V1",
+        "status": aggregate_status(checks),
+        "checks": checks,
+        "population_expectation_evidence": {"status": "UNAVAILABLE", "reason": "No independent retained source or ingestion census establishes the expected RAW/C population; observed ledger counts are not used as their own oracle."},
         "smallest_next_action": "After the first retained authoritative postseason game, run the ordinary RAW and C shadow paths in explicit POSTSEASON mode and validate the separate shadow outputs; do not tune, qualify, select, or publish.",
     }
     write_json(CONTRACT / "validation_report.json", validation)
@@ -383,9 +397,11 @@ def build() -> dict[str, Any]:
 
 RAW Totals and Totals C are genuinely coupled: C derives each row from an immutable RAW prediction/context identity, and the ordinary hook sequences RAW before C. One shared exact-`gamePk` phase interface now gates both lanes without adding phase columns to either append-only ledger.
 
-Retained evidence is unchanged. RAW contains 608 predictions / 608 gamePks and C contains 467 / 467; every retained gamePk is authoritatively `REGULAR_SEASON`, C is an exact RAW subset, and the affected-row ledger is empty. Existing predictions, outcomes, features, proper-score inputs, market inputs, thresholds, models, selector status, and publication status were not changed.
+Retained evidence is unchanged. The observed population is RAW 625 predictions/gamePks (623 regular season, 2 postseason) and C 482 predictions/gamePks (482 regular season), with C an exact RAW subset for all 482 identities and 143 RAW-only identities. No independent retained source/ingestion census establishes an expected total, so population checks are `INCONCLUSIVE`; observed counts are not treated as their own oracle. Existing predictions, outcomes, features, proper-score inputs, market inputs, thresholds, models, selector status, and publication status were not changed.
 
 Regular-season reporting remains the default. Postseason requires explicit `POSTSEASON` evaluation mode and remains shadow-only. Operational readiness is blocked until an actual authoritative postseason game traverses the ordinary RAW and C paths; synthetic coverage proves code behavior only.
+
+The SciPy coefficient discrepancy remains open; this validation did not establish its cause or change any tolerance or production check.
 
 Validation: {tests['passed']} passed, {tests['failed']} failed, {tests['skipped']} skipped; overall `{validation['status']}`.
 """

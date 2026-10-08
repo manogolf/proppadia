@@ -40,12 +40,12 @@
     "totals_c_regular_membership_sha256": "d7cff3fa2c3634e4c2948f11eba1c5dbd23bea37b1ab25480f53a1bf331d4223"
   },
   "ledger_file_sha256_after": {
-    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "7ade61e0a263066f59bc7d93a60c518299560ea6161f657aeff91a9d5a0b23c1",
+    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "9e8942f6cf296afb8c990fd4132a9f43861e7de97a6613251634bfbc7cfd49be",
     "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d966be9c4ffc726656498172aa971f0e86aba03d58c28df61176ead665eff426",
     "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "3bcc21bd7dc885ec78042b3daeabc6fb371cb2c4ab811752297575317bee027f"
   },
   "ledger_file_sha256_before": {
-    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "7ade61e0a263066f59bc7d93a60c518299560ea6161f657aeff91a9d5a0b23c1",
+    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "9e8942f6cf296afb8c990fd4132a9f43861e7de97a6613251634bfbc7cfd49be",
     "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d966be9c4ffc726656498172aa971f0e86aba03d58c28df61176ead665eff426",
     "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "3bcc21bd7dc885ec78042b3daeabc6fb371cb2c4ab811752297575317bee027f"
   },

@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from backend.mlb.hits05_full_board_shadow import ledger_v1 as ledger
+from backend.mlb.scripts.validate_mlb_2026_full_board_hits_phase_gating_v1 import regular_metric_rows
 from backend.mlb.hits05_full_board_shadow.phase_gating_v1 import (
     FullBoardHitsPhaseGateError,
     canonical_rows_sha256,
@@ -118,6 +119,18 @@ def row(game_pk: int = 1, slate_date: str = "2026-09-22", **changes: object) -> 
 
 
 class FullBoardHitsPhaseGatingV1Tests(unittest.TestCase):
+    def test_regular_metrics_fail_closed_for_missing_authority(self) -> None:
+        kept, withheld = regular_metric_rows(
+            [{"game_id": 10}, {"game_id": 11}, {"game_id": 12}],
+            {10: "REGULAR_SEASON", 11: "POSTSEASON"},
+            [{"game_pk": 12, "reason": "UNKNOWN_SOURCE_TYPE"}],
+        )
+        self.assertEqual([row["game_id"] for row in kept], [10])
+        self.assertEqual(withheld, [
+            {"game_pk": 11, "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"},
+            {"game_pk": 12, "reason": "UNKNOWN_SOURCE_TYPE"},
+        ])
+
     def test_all_supported_postseason_rounds_use_synthetic_fixtures(self) -> None:
         rounds = {
             "F": "WILD_CARD",

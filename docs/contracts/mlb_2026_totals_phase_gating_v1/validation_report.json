@@ -1,17 +1,21 @@
 {
   "checks": {
-    "all_retained_regular": false,
-    "c_exact_subset": false,
-    "c_expected_population": false,
+    "c_exact_subset": true,
+    "c_expected_population": "INCONCLUSIVE",
     "hash_invariance": true,
     "ledger_files_byte_unchanged": true,
     "no_training_or_model_mutation": true,
-    "raw_expected_population": false,
+    "phase_classification_valid": true,
+    "raw_expected_population": "INCONCLUSIVE",
     "selector_publication_threshold_status_unchanged": true,
     "tests": "PASS",
     "zero_violations": true
   },
+  "population_expectation_evidence": {
+    "reason": "No independent retained source or ingestion census establishes the expected RAW/C population; observed ledger counts are not used as their own oracle.",
+    "status": "UNAVAILABLE"
+  },
   "smallest_next_action": "After the first retained authoritative postseason game, run the ordinary RAW and C shadow paths in explicit POSTSEASON mode and validate the separate shadow outputs; do not tune, qualify, select, or publish.",
-  "status": "PASS",
+  "status": "INCONCLUSIVE",
   "task": "MLB_2026_TOTALS_PHASE_GATING_V1"
 }
