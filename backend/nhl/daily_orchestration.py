@@ -351,6 +351,7 @@ class DailyRunRecorder:
         ended = self.ended_at or _utc_now()
         return {
             "schema_version": RECEIPT_SCHEMA,
+            "fitted_model_identity_contract": "NHL_FITTED_MODEL_IDENTITY_V1",
             "parent_daily_run_id": self.run_id,
             "command": self.command,
             "resolved_phase": self.phase,

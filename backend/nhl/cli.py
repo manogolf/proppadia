@@ -71,6 +71,7 @@ from backend.nhl.prediction_lineage import (
     validate_prediction_output,
     validate_sog_prediction_artifacts,
 )
+from backend.nhl.model_identity import fitted_model_identity
 from backend.nhl.attachment_integrity import (
     AttachmentIntegrityError,
     audit_attachment_files,
@@ -1458,7 +1459,7 @@ def _run_independent_daily_lanes(
             saves_input_identity.update(artifact_identity(saves_input_csv))
             recorder.lane("saves").inputs.append(saves_input_identity)
             saves_pred_csv = prediction_run_dir / "saves_predictions.csv"
-            run([
+            saves_score_result = run([
                 PY, SCRIPTS_DIR / "score_nhl_saves_with_lineage.py",
                 "--model-dir", saves_model_dir,
                 "--csv", saves_input_csv,
@@ -1476,6 +1477,10 @@ def _run_independent_daily_lanes(
             )
             prediction_identities["saves"] = artifact_identity(saves_pred_csv)
             prediction_identities["saves"].update(saves_validation)
+            saves_evidence = _structured_child_summary(saves_score_result.stdout).get("fitted_model_evidence")
+            if not saves_evidence or saves_evidence.get("prediction_artifact_sha256") != prediction_identities["saves"]["sha256"]:
+                raise RuntimeError("SAVES_FITTED_MODEL_EVIDENCE_MISSING_OR_UNBOUND")
+            prediction_identities["saves"]["fitted_model_evidence"] = saves_evidence
             run([
                 PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
                 "--pred-csv", saves_pred_csv, "--project", "nhl",
@@ -1510,7 +1515,7 @@ def _run_independent_daily_lanes(
             points_input_identity.update(artifact_identity(points_input_csv))
             recorder.lane("points").inputs.append(points_input_identity)
             points_pred_csv = prediction_run_dir / "points_predictions.csv"
-            run([
+            points_score_result = run([
                 PY, SCRIPTS_DIR / "score_nhl_points_with_lineage.py",
                 "--features-csv", points_input_csv,
                 "--model-root", MODELS_DIR / "latest" / "points",
@@ -1525,6 +1530,10 @@ def _run_independent_daily_lanes(
             )
             prediction_identities["points"] = artifact_identity(points_pred_csv)
             prediction_identities["points"].update(points_validation)
+            points_evidence = _structured_child_summary(points_score_result.stdout).get("fitted_model_evidence")
+            if not points_evidence or points_evidence.get("prediction_artifact_sha256") != prediction_identities["points"]["sha256"]:
+                raise RuntimeError("POINTS_FITTED_MODEL_EVIDENCE_MISSING_OR_UNBOUND")
+            prediction_identities["points"]["fitted_model_evidence"] = points_evidence
             run([
                 PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
                 "--pred-csv", points_pred_csv, "--project", "nhl",
@@ -2249,6 +2258,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     prediction_run_dir = PROC_DIR / "daily_runs" / daily_run_id
     prediction_run_dir.mkdir(parents=True, exist_ok=True)
     calibrated_pred_path = prediction_run_dir / "sog_predictions_wide_calibrated.csv"
+    sog_calibration_artifact_path = prediction_run_dir / "sog_segmented_calibration_fit.json"
+    sog_segmented_calibration_applied = False
     unscored_pred_path = prediction_run_dir / "sog_predictions_unscored.csv"
     recorder.independent_context = {
         "db": db,
@@ -2386,6 +2397,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
             SCRIPTS_DIR / "calibrate_sog_segmented_recency.py",
             "--pred-csv", str(calibrated_pred_path),
             "--out-csv", str(calibrated_pred_path),
+            "--fitted-artifact-out", str(sog_calibration_artifact_path),
         ]
         _append_cli_arg(
             seg_cal_cmd,
@@ -2441,6 +2453,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
 
         try:
             run(seg_cal_cmd)
+            sog_segmented_calibration_applied = sog_calibration_artifact_path.is_file()
             print("✅ segmented SOG calibration applied.")
         except Exception as exc:
             if seg_cal_required:
@@ -2460,7 +2473,24 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     legacy_sog_identity = _require_current_prediction_artifact(
         calibrated_pred_path, slate=slate, expected_sha256=None)
     legacy_sog_identity.update(sog_scored_metadata)
+    sog_components = [("scorer", SCRIPTS_DIR / ("score_sog_poisson_baseline.py" if sog_scorer == "poisson_baseline" else "score_sog_denali_pairings_ordinal_lgbm.py"))]
+    if sog_scorer == "ordinal_lgbm":
+        sog_components.extend((f"ordinal_model:{path.relative_to(ordinal_root).as_posix()}", path)
+                              for path in sorted(ordinal_root.rglob("*")) if path.is_file())
+        sog_components.append(("ordinal_feature_metadata", ordinal_meta))
+    if sog_segmented_calibration_applied:
+        sog_components.extend([("segmented_calibration_code", SCRIPTS_DIR / "calibrate_sog_segmented_recency.py"),
+                               ("segmented_calibration_fitted_state", sog_calibration_artifact_path)])
+    sog_evidence = fitted_model_identity(
+        model_family=sog_model_family, model_version=sog_model_version,
+        components=sog_components, prediction_path=calibrated_pred_path,
+        scoring_run_id=daily_run_id,
+        scoring_configuration={"scorer": sog_scorer,
+                               "segmented_calibration_applied": sog_segmented_calibration_applied})
+    legacy_sog_identity["fitted_model_evidence"] = sog_evidence
     sog_outputs = [legacy_sog_identity]
+    if sog_segmented_calibration_applied:
+        sog_outputs.append(artifact_identity(sog_calibration_artifact_path))
     if unscored_pred_path.is_file() and sog_unscored_metadata is not None:
         unscored_identity = artifact_identity(unscored_pred_path)
         unscored_identity.update(sog_unscored_metadata)

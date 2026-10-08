@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import uuid
 from pathlib import Path
 
 from backend.nhl.prediction_lineage import bind_scorer_output_lineage
+from backend.nhl.model_identity import fitted_model_identity
 
 
 def bind_lineage(*, scoring_input: Path, unbound_output: Path, output: Path) -> None:
@@ -50,6 +52,20 @@ def main() -> None:
         subprocess.run(command, check=True)
         bind_lineage(
             scoring_input=Path(args.csv), unbound_output=unbound, output=output)
+        model_dir = Path(args.model_dir)
+        components = [
+            ("scorer", scorer),
+            ("model_index", model_dir / "MODEL_INDEX.json"),
+            ("fitted_model_and_calibration", model_dir / "MODEL_ARTIFACT.json"),
+            ("feature_metadata", Path(args.feature_json)),
+        ]
+        evidence = fitted_model_identity(
+            model_family="phoenix", model_version="phoenix_v2", components=components,
+            prediction_path=output, scoring_run_id=output.parent.name,
+            scoring_configuration={"feature_key": args.feature_key,
+                                   "lines": sorted(float(value) for value in args.line.split(",") if value.strip()),
+                                   "date_column": args.date_col, "no_monotonic": args.no_monotonic})
+        print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({"fitted_model_evidence": evidence}, sort_keys=True))
     finally:
         unbound.unlink(missing_ok=True)
 

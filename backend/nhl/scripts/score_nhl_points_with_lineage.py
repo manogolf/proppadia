@@ -4,12 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 import uuid
 from pathlib import Path
+import pandas as pd
 
 from backend.nhl.prediction_lineage import bind_scorer_output_lineage
+from backend.nhl.model_identity import fitted_model_identity
 
 
 def main() -> None:
@@ -34,6 +37,22 @@ def main() -> None:
         bind_scorer_output_lineage(
             scoring_input=Path(args.features_csv), unbound_output=unbound,
             output=output, output_cardinality="many_to_one")
+        scored = pd.read_csv(output)
+        lines = sorted({float(value) for value in scored.line}) if "line" in scored else []
+        if not lines:
+            lines = sorted(float(directory.name.replace("_", ".")) for directory in Path(args.model_root).iterdir()
+                           if directory.is_dir() and directory.name.replace("_", "").replace(".", "").isdigit())
+        components = [("scorer", scorer)]
+        for line in lines:
+            tag = f"{line:g}".replace(".", "_")
+            line_dir = Path(args.model_root) / tag
+            components.extend(((f"line_{tag}_fitted_model", line_dir / "lr.joblib"),
+                               (f"line_{tag}_feature_metadata", line_dir / "feature_metadata.json")))
+        evidence = fitted_model_identity(
+            model_family="phoenix", model_version="phoenix_v2", components=components,
+            prediction_path=output, scoring_run_id=output.parent.name,
+            scoring_configuration={"scored_lines": lines, "output_cardinality": "many_to_one"})
+        print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({"fitted_model_evidence": evidence}, sort_keys=True))
     finally:
         unbound.unlink(missing_ok=True)
 

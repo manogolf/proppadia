@@ -18,6 +18,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from backend.nhl.model_identity import validate_fitted_model_evidence
 
 ROOT = Path(__file__).resolve().parents[3]
 START_DATE = "2026-09-29"
@@ -249,6 +250,16 @@ def run_records() -> list[tuple[Path, dict[str, Any]]]:
     root = ROOT / "artifacts/operational/nhl/daily_runs"
     for receipt_path in sorted(root.glob("run_id=*/parent_receipt.json")):
         try:
+            manifest = receipt_path.parent / "SHA256SUMS"
+            expected = None
+            if manifest.is_file():
+                for line in manifest.read_text().splitlines():
+                    parts = line.split(None, 1)
+                    if len(parts) == 2 and parts[1].strip().lstrip("*") == "parent_receipt.json":
+                        expected = parts[0]
+                        break
+            if not expected or sha256(receipt_path) != expected:
+                continue
             receipt = json.loads(receipt_path.read_text())
             date = str(receipt.get("slate_date", ""))
             if date >= START_DATE and receipt.get("final_classification") == "READY":
@@ -332,6 +343,13 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
         if (declared_input_hash and input_hash != declared_input_hash) or (declared_pred_hash and pred_hash != declared_pred_hash):
             audit["hash_mismatches"] += 1
             continue
+        fitted_evidence = prediction_entry.get("fitted_model_evidence") or {}
+        evidence_bound = validate_fitted_model_evidence(
+            fitted_evidence, prediction_path=str(pred.relative_to(ROOT)), prediction_sha256=pred_hash)
+        if receipt.get("fitted_model_identity_contract") == "NHL_FITTED_MODEL_IDENTITY_V1" and not evidence_bound:
+            audit["invalid_new_model_identity"] = audit.get("invalid_new_model_identity", 0) + 1
+            continue
+        fitted_identity = fitted_evidence.get("fitted_model_identity_sha256") if evidence_bound else None
         d = pd.read_csv(inp)
         p = pd.read_csv(pred)
         if not {"game_id", "player_id"}.issubset(d.columns):
@@ -393,6 +411,8 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
                 "prediction_path": str(pred.relative_to(ROOT)), "prediction_sha256": pred_hash,
                 "prediction_ladder": row.get("prediction_ladder", "[]"),
                 "model_family_version": _model_identity(lane),
+                "fitted_model_identity_sha256": fitted_identity,
+                "fitted_model_evidence_bound": bool(evidence_bound),
                 "feature_values": {c: _featureval(c, row.get(c)) for c in cfg["feature_candidates"] if c in d.columns},
             }
             if candidate["team_id"] is None and "home_team_id" in row and "away_team_id" in row:
@@ -406,9 +426,17 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
 
 
 def _model_identity(lane: str) -> str:
-    if lane == "sog": return "poisson_baseline/baseline_v1 (historic fitted artifact hash not receipt-bound)"
-    if lane == "points": return "phoenix/phoenix_v2 (per-line logistic; historic fitted artifact hash not receipt-bound)"
-    return "phoenix_v2 goalie_saves (Poisson + eligible line calibration; historic fitted artifact hash not receipt-bound)"
+    if lane == "sog": return "poisson_baseline/baseline_v1"
+    if lane == "points": return "phoenix/phoenix_v2 (per-line logistic)"
+    return "phoenix_v2 goalie_saves (Poisson + eligible line calibration)"
+
+
+def comparability_status(prior: Any, current: Any) -> str:
+    prior = prior if isinstance(prior, str) and prior.strip() else None
+    current = current if isinstance(current, str) and current.strip() else None
+    if prior is None or current is None:
+        return "HISTORICAL_MODEL_IDENTITY_UNAVAILABLE"
+    return "PROVEN_SAME_FITTED_MODEL" if prior == current else "PROVEN_FITTED_MODEL_CHANGED"
 
 
 def _jsonval(v: Any) -> Any:
@@ -441,7 +469,7 @@ def main() -> int:
     if out.exists(): raise SystemExit(f"Refusing to overwrite existing pulse package: {out}")
     out.mkdir(parents=True, exist_ok=False)
     records = [(p, r) for p, r in run_records() if START_DATE <= str(r["slate_date"]) <= args.through_date]
-    audit = {"missing_artifacts": 0, "hash_mismatches": 0, "eligible_state_rows": 0}
+    audit = {"missing_artifacts": 0, "hash_mismatches": 0, "eligible_state_rows": 0, "invalid_new_model_identity": 0}
     states = {lane: collect_states(lane, records, audit) for lane in LANES}
     rolling_checks = independent_skater_window_checks(states, args.through_date)
     transitions: list[dict[str, Any]] = []
@@ -489,6 +517,9 @@ def main() -> int:
                     "feature_artifact_identity_current": nxt.get("feature_path"), "feature_artifact_sha256_current": nxt.get("feature_sha256"),
                     "prediction_artifact_identity_prior": cur.get("prediction_path"), "prediction_artifact_sha256_prior": cur.get("prediction_sha256"),
                     "prediction_artifact_identity_current": nxt.get("prediction_path"), "prediction_artifact_sha256_current": nxt.get("prediction_sha256"),
+                    "fitted_model_identity_prior": cur.get("fitted_model_identity_sha256"),
+                    "fitted_model_identity_current": nxt.get("fitted_model_identity_sha256"),
+                    "model_version_comparability_status": comparability_status(cur.get("fitted_model_identity_sha256"), nxt.get("fitted_model_identity_sha256")),
                     "feature_hash_receipt_bound_prior": cur.get("feature_hash_bound_by_receipt"), "feature_hash_receipt_bound_current": nxt.get("feature_hash_bound_by_receipt"),
                 }
                 transitions.append(rec); lane_transitions += 1
@@ -521,18 +552,33 @@ def main() -> int:
     trans_df.to_csv(out / "player_state_transitions.csv", index=False)
     pd.DataFrame(rolling_audits).to_csv(out / "rolling_state_audit.csv", index=False)
     pd.DataFrame(rolling_checks).to_csv(out / "independent_rolling_checks.csv", index=False)
+    comparability_by_lane = {}
+    for lane in LANES:
+        lane_transitions = trans_df[trans_df.lane == lane] if not trans_df.empty else trans_df
+        counts = lane_transitions.model_version_comparability_status.value_counts().to_dict() if "model_version_comparability_status" in lane_transitions else {}
+        eligible = len(lane_transitions)
+        same = int(counts.get("PROVEN_SAME_FITTED_MODEL", 0))
+        comparability_by_lane[lane] = {
+            "PROVEN_SAME_FITTED_MODEL": same,
+            "PROVEN_FITTED_MODEL_CHANGED": int(counts.get("PROVEN_FITTED_MODEL_CHANGED", 0)),
+            "HISTORICAL_MODEL_IDENTITY_UNAVAILABLE": int(counts.get("HISTORICAL_MODEL_IDENTITY_UNAVAILABLE", 0)),
+            "eligible_transitions": eligible,
+            "proven_same_fitted_model_percent": 100.0 * same / eligible if eligible else None,
+        }
     model_inventory = {
-        "sog": {"dynamic_player_performance": LANES["sog"]["model_state_features"], "dynamic_context_present_but_not_consumed_by_baseline": ["role_pp_share", "pairings", "team_context"], "static_descriptors": ["player_id"], "parameters": "Frozen Poisson baseline; historical fitted artifact bytes not receipt-bound."},
-        "points": {"dynamic_player_performance": [x for x in LANES["points"]["model_state_features"] if not x.startswith("team_") and x not in ["is_home"]], "dynamic_context": ["is_home", "team_d10_sf_per_game", "last10_team_sog_share", "team_num_event_shot_for_last10", "team_num_shotwasongoal_for_last10"], "static_descriptors": ["player_id"], "parameters": "Frozen per-line logistic Phoenix V2; historical fitted artifact bytes not receipt-bound."},
-        "saves": {"dynamic_player_performance": ["d5_saves_per60", "d10_saves_per60", "d5_shots_faced_per60", "season_save_pct", "rest_days", "b2b_flag"], "dynamic_context": ["is_home", "opponent_id"], "conditional_start_treatment": "start_prob is operational constant 1.0 conditional-start flag, not estimated probability; actual start is postgame outcome only.", "static_descriptors": ["player_id"], "parameters": "Frozen Phoenix V2 Poisson coefficients with eligible line calibration; historical fitted artifact bytes not receipt-bound."},
+        "sog": {"dynamic_player_performance": LANES["sog"]["model_state_features"], "dynamic_context_present_but_not_consumed_by_baseline": ["role_pp_share", "pairings", "team_context"], "static_descriptors": ["player_id"], "parameters": "Fitted identity is bound to prediction SHA in the scoring receipt."},
+        "points": {"dynamic_player_performance": [x for x in LANES["points"]["model_state_features"] if not x.startswith("team_") and x not in ["is_home"]], "dynamic_context": ["is_home", "team_d10_sf_per_game", "last10_team_sog_share", "team_num_event_shot_for_last10", "team_num_shotwasongoal_for_last10"], "static_descriptors": ["player_id"], "parameters": "Per-line fitted identity is bound to prediction SHA in the scoring receipt."},
+        "saves": {"dynamic_player_performance": ["d5_saves_per60", "d10_saves_per60", "d5_shots_faced_per60", "season_save_pct", "rest_days", "b2b_flag"], "dynamic_context": ["is_home", "opponent_id"], "conditional_start_treatment": "start_prob is operational constant 1.0 conditional-start flag, not estimated probability; actual start is postgame outcome only.", "static_descriptors": ["player_id"], "parameters": "Fitted model, calibration, feature metadata, and scoring configuration are bound to prediction SHA in receipt."},
     }
     summary = {
         "schema_version": "NHL_PLAYER_PERFORMANCE_PULSE_V1", "window_start": START_DATE, "through_date": args.through_date,
         "regular_season_only": True, "read_only": True, "does_not_retrain": True, "inventory": model_inventory,
         "availability": availability, "artifact_audit": audit, "transition_count": len(transitions),
+        "model_version_comparability_by_lane": comparability_by_lane,
+        "model_version_comparability": "RECEIPT_BOUND_FITTED_MODEL_IDENTITY",
         "feature_movement_summary": lane_summary,
         "independent_rolling_check_counts": pd.Series([r["status"] for r in rolling_checks], dtype="string").value_counts().to_dict(),
-        "limits": ["This attachment ends mid-sentence after section 6; omitted later requirements could not be applied.", "Historical model parameter hashes are not bound to these run receipts, so parameter stability is not inferred.", "SOG feature input hashes are not receipt-bound; its input is identified by the successful scoring command and retrospectively hashed.", "Independent rolling recomputation is limited to retained official regular-season outcome rows since 2026-09-29; unresolved differences may reflect shorter audit history versus production logs that include earlier games and, for some fields, preseason appearances. Goalie windows are not independently recomputed."],
+        "limits": ["Historical predictions without scoring-time fitted identities remain HISTORICAL_MODEL_IDENTITY_UNAVAILABLE; no fitted identity is reconstructed from the current model directory.", "SOG feature input hashes are not receipt-bound; its input is identified by the successful scoring command and retrospectively hashed.", "Independent rolling recomputation is limited to retained official regular-season outcome rows since 2026-09-29; unresolved differences may reflect shorter audit history versus production logs that include earlier games and, for some fields, preseason appearances. Goalie windows are not independently recomputed."],
     }
     write_json(out / "summary.json", summary, indent=2, sort_keys=True)
     return 0

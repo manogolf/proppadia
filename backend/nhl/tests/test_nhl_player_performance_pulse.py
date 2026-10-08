@@ -239,10 +239,25 @@ class PlayerPerformancePulseTests(unittest.TestCase):
         self.assertEqual(row.line, 1.5)
         self.assertAlmostEqual(row.signed_probability_change, .15)
         self.assertAlmostEqual(row.absolute_probability_change, .15)
-        self.assertEqual(row.model_version_comparability_status, "UNPROVEN_FITTED_ARTIFACT_HASH_NOT_BOUND_TO_HISTORICAL_RECEIPTS")
+        self.assertEqual(row.model_version_comparability_status, "HISTORICAL_MODEL_IDENTITY_UNAVAILABLE")
         self.assertNotIn(2.5, result.line.tolist())
         self.assertNotIn(3.5, result.line.tolist())
         self.assertNotIn(11, result[result.player_id == 10].player_id.tolist())
+
+    def test_prediction_transition_comparability_uses_bound_hashes(self):
+        base = self._transition(7, 11, 12, [{"line": 1.5, "prob_over": .2}], [{"line": 1.5, "prob_over": .3}])
+        base.update({"fitted_model_identity_prior": "model-a", "fitted_model_identity_current": "model-a",
+                     "model_version_comparability_status": "PROVEN_SAME_FITTED_MODEL"})
+        same = pulse.prediction_transitions(pd.DataFrame([base])).iloc[0]
+        self.assertEqual(same.model_version_comparability_status, "PROVEN_SAME_FITTED_MODEL")
+        self.assertEqual((same.fitted_model_identity_prior, same.fitted_model_identity_current), ("model-a", "model-a"))
+        base["fitted_model_identity_current"] = "model-b"
+        base["model_version_comparability_status"] = "PROVEN_FITTED_MODEL_CHANGED"
+        changed = pulse.prediction_transitions(pd.DataFrame([base])).iloc[0]
+        self.assertEqual(changed.model_version_comparability_status, "PROVEN_FITTED_MODEL_CHANGED")
+        self.assertEqual(pulse.descriptive_case(pd.Series({"model_version_comparability_status": changed.model_version_comparability_status}), .1),
+                         "FITTED_MODEL_CHANGED_EXCLUDED_FROM_RESPONSIVENESS")
+        self.assertNotIn("UNPROVEN", same.model_version_comparability_status)
 
     def test_prediction_transition_is_deterministic(self):
         transitions = pd.DataFrame([self._transition(10, 1, 2, [{"line": 1.5, "prob_over": .2}], [{"line": 1.5, "prob_over": .3}])])

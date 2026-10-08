@@ -325,6 +325,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     ap.add_argument("--decay-half-life-days", type=float, default=21.0)
     ap.add_argument("--asof-date", default="", help="Training as-of date YYYY-MM-DD (default auto).")
     ap.add_argument("--strict", action="store_true", help="Fail on missing bucket map / contract issues.")
+    ap.add_argument("--fitted-artifact-out", default="", help="Persist the exact fitted isotonic thresholds used.")
     return ap.parse_args(list(argv) if argv is not None else None)
 
 
@@ -417,6 +418,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         pred_df.to_csv(out_path, index=False)
 
+        if args.fitted_artifact_out:
+            def thresholds(model):
+                if model is None:
+                    return None
+                return {"x": np.asarray(model.X_thresholds_, dtype=float).tolist(),
+                        "y": np.asarray(model.y_thresholds_, dtype=float).tolist()}
+            fitted_state = {
+                "schema_version": "NHL_SOG_SEGMENTED_CALIBRATION_FIT_V1",
+                "line_models": {str(line): thresholds(model) for line, model in fit_pack.line_models.items()},
+                "segment_models": {f"{line:g}|{bucket}": thresholds(model)
+                                   for (line, bucket), model in fit_pack.seg_models.items()},
+                "fit_metadata": fit_pack.meta,
+                "apply_config": {"lines": lines, "blend_alpha": float(args.blend_alpha),
+                                 "segment_min_rows": max(1, int(args.segment_min_rows)),
+                                 "decay_half_life_days": float(args.decay_half_life_days),
+                                 "asof_date": asof.isoformat(), "model_family": args.model_family,
+                                 "model_version": args.model_version},
+            }
+            Path(args.fitted_artifact_out).write_text(
+                json.dumps(fitted_state, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n")
+
         summary = {
             "ok": True,
             "status": "pass",
@@ -436,6 +458,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             "decay_half_life_days": float(args.decay_half_life_days),
             "fit_meta": fit_pack.meta,
             "apply_stats": apply_stats,
+            "fitted_calibration_artifact": args.fitted_artifact_out or None,
         }
         print(json.dumps(summary, indent=2))
         return 0
