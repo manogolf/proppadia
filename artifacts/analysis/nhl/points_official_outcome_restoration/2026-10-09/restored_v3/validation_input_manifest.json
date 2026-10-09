@@ -1,0 +1,20 @@
+{
+  "canonical_season": 2025,
+  "combined_rows": 137725,
+  "feature_builder": "backend.nhl.scripts.build_nhl_points_architecture_bakeoff.build_frame",
+  "feature_semantics": "same bakeoff 120_DAY_LEGACY_BOUND; strict earlier-date player and team history; same-day excluded",
+  "frozen_prior_frame_sha256": "05ef1dc0a0e26fa96ea3c7218cebf8b8c77690fb83f7716f1cb220e565be8a68",
+  "history_contract": "120_DAY_LEGACY_BOUND",
+  "leakage_check": "PASS: build_frame uses game_date < target date",
+  "oot_rows": 47239,
+  "outcome_sha256": "1629ecf78c2c23f8ac269c1831c4b70cb3ed4fbdbcc6880b686f71c8d70abcbe",
+  "prior_train_rows": 90486,
+  "schema_version": "NHL_POINTS_2025_FROZEN_VALIDATION_INPUT_V1",
+  "second_season_validation_runner": "NOT_RUN: existing runner hard-codes canonical_season == 2024",
+  "skater_log_export_original_sha256": "6aff12de99760ba12170cc8dcf8a72c1a30c1c605b4e817e878a5ea274779804",
+  "skater_log_export_path": "skater_log_feature_source.csv.gz",
+  "skater_log_export_sha256": "1e9ba8d5704f9cc1959bdcc3092fca215ca6ab89e23aded12314c8859ac48c81",
+  "tuning_on_2025": false,
+  "unique_oot_player_games": 47239,
+  "validation_input_sha256": "45605af7f472481af4d5a33a103b679ab4284db5d043f82842757297a3534892"
+}

@@ -1,0 +1,38 @@
+{
+  "ambiguous_rows": 0,
+  "boxscore_rows_outside_log_population": 526,
+  "canonical_season": 2025,
+  "duplicate_rows": 0,
+  "exact_match_rate": 1.0,
+  "exact_matched_source_rows": 46713,
+  "game_total_checks": 2624,
+  "game_total_mismatches": 0,
+  "log_rows_absent_from_boxscore_player_lists": 8,
+  "log_rows_supplemented_by_official_pbp": 8,
+  "official_boxscore_player_game_rows": 47231,
+  "official_games_with_final_boxscore": 1312,
+  "official_schedule_games": 1312,
+  "regular_season_date_range": [
+    "2025-10-07",
+    "2026-04-16"
+  ],
+  "restored_assists_present": 47239,
+  "restored_both_present": 47239,
+  "restored_either_missing": 0,
+  "restored_goals_present": 47239,
+  "restored_official_player_game_rows": 47239,
+  "season_label": "2025-26",
+  "source_assists_present": 0,
+  "source_both_missing": 46713,
+  "source_both_present": 0,
+  "source_games": 1306,
+  "source_goals_present": 0,
+  "source_grain": "one row per player_id,game_id",
+  "source_primary_key": [
+    "player_id",
+    "game_id"
+  ],
+  "source_rows": 46713,
+  "source_table": "nhl.skater_game_logs_raw",
+  "unmatched_source_rows": 0
+}

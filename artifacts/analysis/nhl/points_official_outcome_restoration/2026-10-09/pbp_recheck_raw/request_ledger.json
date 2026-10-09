@@ -1,0 +1,82 @@
+[
+  {
+    "acquired_at_utc": "2026-10-09T17:01:08.289925+00:00",
+    "bytes": 146040,
+    "endpoint": "https://api-web.nhle.com/v1/gamecenter/2025020621/play-by-play",
+    "game_id": 2025020621,
+    "method": "GET",
+    "path": "game=2025020621.play-by-play.json",
+    "retry_policy": "up to 5 attempts; exponential backoff",
+    "sha256": "2b0611fa7c212040552c2d7caf3466664cf842f76e97a02ab0c7295014f177f2"
+  },
+  {
+    "acquired_at_utc": "2026-10-09T17:01:08.289925+00:00",
+    "bytes": 138094,
+    "endpoint": "https://api-web.nhle.com/v1/gamecenter/2025020642/play-by-play",
+    "game_id": 2025020642,
+    "method": "GET",
+    "path": "game=2025020642.play-by-play.json",
+    "retry_policy": "up to 5 attempts; exponential backoff",
+    "sha256": "7cf747bfd5591a49a59e05b5c90f43b263d47530c4ecc92745fe1f4d65a90d57"
+  },
+  {
+    "acquired_at_utc": "2026-10-09T17:01:08.289925+00:00",
+    "bytes": 126983,
+    "endpoint": "https://api-web.nhle.com/v1/gamecenter/2025020667/play-by-play",
+    "game_id": 2025020667,
+    "method": "GET",
+    "path": "game=2025020667.play-by-play.json",
+    "retry_policy": "up to 5 attempts; exponential backoff",
+    "sha256": "5e360a88bf19454a2c9fdaa073258da417babaaf6ffed055844c7178e4f767b9"
+  },
+  {
+    "acquired_at_utc": "2026-10-09T17:01:08.289925+00:00",
+    "bytes": 145907,
+    "endpoint": "https://api-web.nhle.com/v1/gamecenter/2025020982/play-by-play",
+    "game_id": 2025020982,
+    "method": "GET",
+    "path": "game=2025020982.play-by-play.json",
+    "retry_policy": "up to 5 attempts; exponential backoff",
+    "sha256": "70c04f7fe9bfdcaed89ee51c99c4396965330063c09083a8ee39f9e08b523bdb"
+  },
+  {
+    "acquired_at_utc": "2026-10-09T17:01:08.289925+00:00",
+    "bytes": 130170,
+    "endpoint": "https://api-web.nhle.com/v1/gamecenter/2025021041/play-by-play",
+    "game_id": 2025021041,
+    "method": "GET",
+    "path": "game=2025021041.play-by-play.json",
+    "retry_policy": "up to 5 attempts; exponential backoff",
+    "sha256": "7c3b3cb8d3109cc1e4f25e7b665aac01500111bd0ef80448d208d2f938700578"
+  },
+  {
+    "acquired_at_utc": "2026-10-09T17:01:08.289925+00:00",
+    "bytes": 136220,
+    "endpoint": "https://api-web.nhle.com/v1/gamecenter/2025021165/play-by-play",
+    "game_id": 2025021165,
+    "method": "GET",
+    "path": "game=2025021165.play-by-play.json",
+    "retry_policy": "up to 5 attempts; exponential backoff",
+    "sha256": "509c5da9807aa976d25b794eafe4de290bfaebaa53ac8c11b8af27c1aa99e96e"
+  },
+  {
+    "acquired_at_utc": "2026-10-09T17:01:08.289925+00:00",
+    "bytes": 125222,
+    "endpoint": "https://api-web.nhle.com/v1/gamecenter/2025021216/play-by-play",
+    "game_id": 2025021216,
+    "method": "GET",
+    "path": "game=2025021216.play-by-play.json",
+    "retry_policy": "up to 5 attempts; exponential backoff",
+    "sha256": "bad55f5023a33de59003d703a0a71a75134e12dfb4d28c3f22227ed118c3a51a"
+  },
+  {
+    "acquired_at_utc": "2026-10-09T17:01:08.289925+00:00",
+    "bytes": 120860,
+    "endpoint": "https://api-web.nhle.com/v1/gamecenter/2025021255/play-by-play",
+    "game_id": 2025021255,
+    "method": "GET",
+    "path": "game=2025021255.play-by-play.json",
+    "retry_policy": "up to 5 attempts; exponential backoff",
+    "sha256": "61f356cef99f8b2771b0c5efd2f9694cfe366a565deef96248b2607b237cddff"
+  }
+]
