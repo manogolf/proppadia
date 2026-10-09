@@ -1,0 +1,14 @@
+hypothesis,classification,evidence
+H1,SUPPORTED,Over calls 566 with accuracy 0.602; model exceeds always-Under by 0.073.
+H2,PARTIALLY_SUPPORTED,"Losing overs at 0 SOG=86, at 1 SOG=139."
+H3,INSUFFICIENT_EVIDENCE,Feature input hash is post hoc and exact selected exposure lineage is not receipt-bound; realized TOI is postgame diagnostic only.
+H4,INSUFFICIENT_EVIDENCE,Cannot fairly compare mechanism attribution without immutable feature input hash; counterfactuals remain postgame diagnostic.
+H5,PARTIALLY_SUPPORTED,"Overall AUC=0.691; all six daily AUC values exceed 0.5, with meaningful day-to-day spread."
+H6,INSUFFICIENT_EVIDENCE,No multi-observation player effects adjudicated as persistent with this short window.
+H7,NOT_SUPPORTED,Defensemen had lower realized Over prevalence but higher raw accuracy than forwards; no evidence that they are materially harder on this decision metric.
+H8,INSUFFICIENT_EVIDENCE,Rolling values available in date export but hash-unbound to prediction receipt.
+H9,NOT_SUPPORTED,Prior full-window analysis found no monotonic current-season games-prior improvement; fallback classes should be read descriptively.
+H10,INSUFFICIENT_EVIDENCE,C/G common-row point estimates are positive but intervals cross zero and no row-level causal component decomposition is retained.
+H11,INSUFFICIENT_EVIDENCE,Market disagreement is descriptive with exact attachment hash; repeated regime needs more settled rows.
+H12,INSUFFICIENT_EVIDENCE,Exposure attribution lacks immutable feature input binding.
+H13,INSUFFICIENT_EVIDENCE,Cannot distinguish shot-rate/mean from exposure error without receipt-bound feature inputs.

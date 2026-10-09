@@ -1,0 +1,17 @@
+{
+  "schema_version": "NHL_SOG_1_5_DEEP_RESEARCH_DIRECTION_V1",
+  "date_range": [
+    "2026-10-03",
+    "2026-10-08"
+  ],
+  "selected_direction": [
+    "E_KEEP_MODEL_AND_ACCUMULATE_MORE_SAMPLE"
+  ],
+  "reason": "The row census supports useful 1.5 ranking and meaningful over-call value, but production feature input hashes are not immutable receipt-bound and exact mechanism attribution is therefore insufficient. First strengthen input lineage and accumulate additional settled samples before choosing exposure or rate changes.",
+  "calibration_fitted": false,
+  "alternative_count_distribution_fitted": false,
+  "production_changed": false,
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "database_mutations": 0
+}

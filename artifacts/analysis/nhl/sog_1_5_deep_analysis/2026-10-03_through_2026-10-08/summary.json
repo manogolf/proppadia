@@ -1,0 +1,26 @@
+{
+  "population": 1917,
+  "settled": 1582,
+  "unresolved": 335,
+  "over_calls": 566,
+  "over_call_accuracy": 0.6024734982332155,
+  "under_calls": 1016,
+  "under_call_accuracy": 0.6830708661417323,
+  "always_under_accuracy": 0.5809102402022756,
+  "always_over_accuracy": 0.4190897597977244,
+  "metrics": {
+    "n": 1582,
+    "realized_overs": 663,
+    "realized_over_rate": 0.4190897597977244,
+    "accuracy": 0.6542351453855879,
+    "mean_p_over": 0.4294060280236398,
+    "mean_lambda": 1.552708197390002,
+    "mean_sog": 1.506953223767383,
+    "log_loss": 0.6277506735212095,
+    "brier": 0.21825744436687386,
+    "auc": 0.6912942292510877,
+    "average_precision": 0.6237350694429495,
+    "ap_lift_over_base": 1.4883090193947905
+  },
+  "feature_input_binding": "COMMAND_PATH_ONLY_POSTHOC_SHA_UNBOUND"
+}
