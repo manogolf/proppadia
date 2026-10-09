@@ -1,0 +1,31 @@
+{
+  "schema_version": "NHL_POINTS_HGB_OPERATIONAL_BRIDGE_INVENTORY_V1",
+  "model_id": "NHL_POINTS_COUNT_HGB_V1",
+  "primary_history_contract": "NHL_POINTS_COUNT_HGB_V1_HISTORY_120_DAY_VALIDATED",
+  "daily_input": "backend/nhl/data/processed/daily_runs/nhldaily_20261009T143542941259Z_fd9ee917/points_scoring_input.csv",
+  "daily_input_parent_run": "nhldaily_20261009T143542941259Z_fd9ee917",
+  "daily_input_cutoff_utc": "2026-10-09T14:38:27.903365Z",
+  "first_game_start_utc": "2026-10-09T23:00:00Z",
+  "pregame_time_gate": "PASS",
+  "daily_input_columns": 24,
+  "required_feature_count": 10,
+  "inventory": [
+    {"feature":"is_home","status":"AVAILABLE_BUT_DIFFERENT_SEMANTICS","daily_source":"points_scoring_input.csv:is_home","research_source":"canonical game spine joined to official player-game history","grain":"player-game","strict_prior":"not history derived","source_available_pregame":true,"note":"Identity/context available; verify canonical source equivalence before operational scoring."},
+    {"feature":"d10_sog_per60","status":"AVAILABLE_BUT_DIFFERENT_SEMANTICS","daily_source":"points_scoring_input.csv:d10_sog_per60","research_source":"skater log source; mean of per-game SOG/TOI rates over last 10 player games within 120 days","grain":"player-game","strict_prior":"game_date < target game_date; 120 days; last 10","source_available_pregame":true,"note":"Daily field exists; no retained lineage proves identical aggregation/null semantics."},
+    {"feature":"attempts_d10_per60","status":"AVAILABLE_BUT_DIFFERENT_SEMANTICS","daily_source":"points_scoring_input.csv:attempts_d10_per60","research_source":"skater log source; mean of per-game attempts/TOI rates over last 10 player games within 120 days","grain":"player-game","strict_prior":"game_date < target game_date; 120 days; last 10","source_available_pregame":true,"note":"Daily field exists; no retained lineage proves identical aggregation/null semantics."},
+    {"feature":"player_points_last10","status":"MISSING_SOURCE","daily_source":null,"research_source":"official canonical player-game outcomes (goals + assists)","grain":"player-game outcomes","strict_prior":"game_date < target game_date; 120 days; last 10","source_available_pregame":false,"note":"No retained 2026 official outcome history input was found for this run."},
+    {"feature":"current_season_points_prior","status":"MISSING_SOURCE","daily_source":null,"research_source":"official canonical player-game outcomes (goals + assists)","grain":"player-game outcomes","strict_prior":"same canonical season and earlier game_date","source_available_pregame":false,"note":"Requires official 2026 goals and assists through Oct. 8, absent from retained daily feature input and local recovery package."},
+    {"feature":"current_season_games_prior","status":"DERIVABLE_STRICT_PRIOR","daily_source":null,"research_source":"canonical game spine + exact player participation/outcome identities","grain":"player-game outcomes","strict_prior":"same canonical season and earlier game_date","source_available_pregame":false,"note":"Derivable only once authoritative prior player-game outcomes are supplied."},
+    {"feature":"mean_toi_last10","status":"MISSING_SOURCE","daily_source":null,"research_source":"skater game log feature source:toi_minutes","grain":"player-game logs","strict_prior":"game_date < target game_date; 120 days; last 10","source_available_pregame":false,"note":"Oct. 8 authoritative TOI history is not included in the retained daily Points input."},
+    {"feature":"mean_pp_toi_last10","status":"MISSING_SOURCE","daily_source":null,"research_source":"skater game log feature source:pp_toi_minutes","grain":"player-game logs","strict_prior":"game_date < target game_date; 120 days; last 10","source_available_pregame":false,"note":"Oct. 8 authoritative PP TOI history is not included in the retained daily Points input."},
+    {"feature":"team_d10_sf_per_game","status":"AVAILABLE_BUT_DIFFERENT_SEMANTICS","daily_source":"points_scoring_input.csv:team_d10_sf_per_game","research_source":"team/game aggregation of skater SOG, then mean of last 10 team games within 120 days","grain":"team-game history, emitted per player-game","strict_prior":"game_date < target game_date; 120 days; last 10 team games","source_available_pregame":true,"note":"Daily field exists; no retained lineage proves identical team/game aggregation."},
+    {"feature":"last10_team_sog_share","status":"AVAILABLE_BUT_DIFFERENT_SEMANTICS","daily_source":"points_scoring_input.csv:last10_team_sog_share","research_source":"player last-10 SOG sum divided by team last-10 SOG sum","grain":"player-game, team context","strict_prior":"player/team strict prior; 120 days; last 10","source_available_pregame":true,"note":"Daily field exists; no retained lineage proves exact 120-day membership and denominator behavior."}
+  ],
+  "counts": {"AVAILABLE_EXACT":0,"AVAILABLE_BUT_DIFFERENT_SEMANTICS":5,"DERIVABLE_STRICT_PRIOR":1,"MISSING_SOURCE":4,"NOT_SAFE_PREGAME":0},
+  "decision": "NO_PROSPECTIVE_CAPTURE: four required features lack local authoritative history and five available fields are not yet proven semantically identical.",
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "database_mutations": 0,
+  "phoenix_production_changed": false,
+  "hgb_promoted": false
+}
