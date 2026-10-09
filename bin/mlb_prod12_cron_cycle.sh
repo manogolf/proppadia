@@ -11,6 +11,8 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
 
 RUN_STARTED_AT_UTC="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+MLB_RUN_IDENTITY="${MLB_RUN_IDENTITY:-${MLB_PROD12_RUN_ID:-${RUN_ID:-local_daily_$(date -u +%Y%m%dT%H%M%SZ)}}}"
+export MLB_RUN_IDENTITY
 
 _emit_completion_summary_json() {
   local exit_code="${1:-1}"
@@ -25,7 +27,7 @@ _emit_completion_summary_json() {
   if [[ -f "${book_upload_path}" ]]; then
     book_upload_exists="true"
   fi
-  local run_id="${MLB_PROD12_RUN_ID:-${RUN_ID:-}}"
+  local run_id="${MLB_PROD12_RUN_ID:-${RUN_ID:-${MLB_RUN_IDENTITY:-}}}"
 
   printf '{\n'
   printf '  "status": "%s",\n' "${status}"

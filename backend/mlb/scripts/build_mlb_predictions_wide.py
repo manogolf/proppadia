@@ -66,6 +66,7 @@ from backend.mlb.shared.team_name_map import (
 from backend.mlb.shared.name_normalization import normalize_player_name_key
 from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
 from backend.mlb.shared import prospective_lineage as lineage
+from backend.mlb.shared.current_slate_source_provenance_v1 import retain_bytes, write_receipt
 from backend.shared.db.pg import pg_connect
 
 
@@ -1443,6 +1444,60 @@ def _write_odds_snapshot_json(*, out_path: Path, slate_date: str, events: Sequen
     }
 
 
+def _write_current_slate_provenance(*, slate_date: str, run_identity: str,
+                                    inputs: Dict[str, Any], counts: Dict[str, Any],
+                                    outputs: Optional[Dict[str, Any]] = None,
+                                    status: str) -> Dict[str, Any]:
+    payload = {
+        "schema_version": "MLB_CURRENT_SLATE_SOURCE_PROVENANCE_V1",
+        "consumer": "WIDE_PREDICTIONS",
+        "run_identity": run_identity,
+        "requested_slate_date": slate_date,
+        "inputs": inputs,
+        "counts": counts,
+        "outputs": outputs or {},
+        "processing_status": status,
+    }
+    return write_receipt(
+        REPO_ROOT / "artifacts/ops/mlb_current_slate_provenance" / slate_date
+        / f"wide__{re.sub(r'[^A-Za-z0-9_.-]+', '_', run_identity)}.json",
+        payload,
+    )
+
+
+def _retain_odds_provider_responses(*, slate_date: str, run_identity: str,
+                                   acquisition: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not acquisition:
+        return {"source_identity": "OddsAPI raw response unavailable", "responses": [],
+                "status": "MISSING_OR_INVALID"}
+    token = re.sub(r"[^A-Za-z0-9_.-]+", "_", run_identity)
+    source_dir = REPO_ROOT / "artifacts/ops/mlb_current_slate_sources" / slate_date / token
+    retained_responses = []
+    for index, response in enumerate(acquisition.get("responses", [])):
+        response_raw = bytes(response.get("raw_bytes") or b"")
+        suffix = hashlib.sha256(response_raw).hexdigest()
+        raw_path = source_dir / f"odds_provider_response_{index:03d}_{suffix}.bin"
+        retained = retain_bytes(raw_path, response_raw)
+        retained_responses.append({
+            **retained, "source_identity": response.get("source_identity"),
+            "http_status": response.get("http_status"), "event_id": response.get("event_id"),
+            "market_group": response.get("market_group"),
+            "request_parameters": response.get("request_parameters", {}),
+            "raw_event_count": response.get("raw_event_count"),
+            "slate_event_count": response.get("slate_event_count"),
+        })
+    count = acquisition.get("slate_event_count")
+    return {
+        "source_identity": acquisition.get("source_identity"),
+        "acquired_at_utc": acquisition.get("acquired_at_utc"),
+        "raw_event_count": acquisition.get("raw_event_count"),
+        "slate_event_count": count,
+        "service_event_count": acquisition.get("service_event_count"),
+        "responses": retained_responses,
+        "status": "VALID_EMPTY" if count == 0 else "VALID_NONEMPTY" if count is not None else "MISSING_OR_INVALID",
+    }
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     import argparse
 
@@ -1489,6 +1544,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--strict", action="store_true", help="Fail when any rows are skipped for resolution/prediction reasons.")
     ap.add_argument("--lineage-ledger", default=os.environ.get("MLB_PROSPECTIVE_LINEAGE_LEDGER", ""), help="Append-only prediction-time semantic-lineage CSV. A canonical default is used when omitted.")
     ap.add_argument("--lineage-run-tag", default=os.environ.get("MLB_RUN_TAG", ""), help="Immutable snapshot run tag; defaults to the prediction timestamp.")
+    ap.add_argument("--run-identity", default=os.environ.get("MLB_RUN_IDENTITY", ""), help="Natural wrapper run identity for source-provenance receipts.")
     ap.add_argument("--normal-decision-window", default=os.environ.get("MLB_NORMAL_DECISION_WINDOW", "true"))
     args = ap.parse_args(list(argv) if argv is not None else None)
 
@@ -1501,10 +1557,21 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     prop_filter = _parse_prop_types_csv(str(args.prop_types or ""))
     prediction_timestamp = lineage.utc_now()
     run_tag = _clean_str(args.lineage_run_tag) or datetime.fromisoformat(prediction_timestamp).strftime("local_daily_%Y%m%dT%H%M%SZ")
+    provenance_run_identity = _clean_str(args.run_identity) or run_tag
     lineage_ledger = Path(str(args.lineage_ledger)).expanduser() if _clean_str(args.lineage_ledger) else REPO_ROOT / "backend/mlb/exports/prospective_lineage" / str(slate_date) / "prediction_lineage_ledger.csv"
     optional_target_book_props = _parse_prop_types_csv(
         str(os.environ.get("MLB_PREDICT_TWO_SIDED_OPTIONAL_TARGET_BOOK_PROPS", "singles") or "")
     ) or set()
+    provenance_inputs: Dict[str, Any] = {
+        "schedule": {"source_identity": "StatsAPI schedule response",
+                     "path": None, "sha256": None, "acquired_at_utc": None,
+                     "status": "MISSING_OR_INVALID"},
+        "odds_events": {"source_identity": "OddsAPI event response consumed by wide builder",
+                        "path": None, "sha256": None, "acquired_at_utc": None,
+                        "status": "MISSING_OR_INVALID"},
+    }
+    provenance_counts: Dict[str, Any] = {}
+    provenance_written = False
 
     print(f"[mlb-wide-pred] slate_date (ET) = {slate_date}")
     print(f"[mlb-wide-pred] output = {out_csv}")
@@ -1555,6 +1622,30 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         by_team_ctx, by_pair_games, schedule_source, schedule_observed_at = _build_schedule_maps(
             str(slate_date), schedule_evidence_path
         )
+        schedule_rows = sum(len(games) for games in by_pair_games.values())
+        schedule_payload = json.loads(Path(schedule_source.path).read_text(encoding="utf-8"))
+        dates = schedule_payload.get("dates") if isinstance(schedule_payload, dict) else None
+        schedule_shape_valid = (
+            isinstance(dates, list)
+            and all(isinstance(day, dict) and isinstance(day.get("games", []), list) for day in dates)
+        )
+        raw_schedule_games = (sum(len(day.get("games") or []) for day in dates)
+                              if schedule_shape_valid else None)
+        provenance_inputs["schedule"] = {
+            "source_identity": f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={slate_date}",
+            "path": schedule_source.path, "sha256": schedule_source.sha256,
+            "acquired_at_utc": schedule_observed_at,
+            "status": ("INVALID_SHAPE" if raw_schedule_games is None else
+                       "VALID_EMPTY" if raw_schedule_games == 0 else "VALID_NONEMPTY"),
+        }
+        provenance_counts.update({"schedule_response_games": raw_schedule_games,
+                                  "schedule_games": schedule_rows,
+                                  "schedule_projection_rejected_games": (
+                                      max(0, raw_schedule_games - schedule_rows)
+                                      if raw_schedule_games is not None else None
+                                  ),
+                                  "schedule_team_contexts": len(by_team_ctx),
+                                  "schedule_pair_games": schedule_rows})
         print(f"[mlb-wide-pred] schedule contexts={len(by_team_ctx)} pair_games={len(by_pair_games)}")
 
         write_meta: Dict[str, Any] = {}
@@ -1562,15 +1653,59 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             if not odds_snapshot_in.exists():
                 raise FileNotFoundError(f"missing odds snapshot file: {odds_snapshot_in}")
             events = _load_events_from_snapshot_file(odds_snapshot_in)
+            odds_path = odds_snapshot_in.resolve()
+            odds_ts = ""
+            try:
+                odds_payload = json.loads(odds_path.read_text(encoding="utf-8"))
+                odds_ts = str(odds_payload.get("captured_at_utc") or "") if isinstance(odds_payload, dict) else ""
+            except Exception:
+                pass
+            provenance_inputs["odds_events"] = {
+                "source_identity": "provided OddsAPI event snapshot consumed by wide builder",
+                "path": str(odds_path), "sha256": lineage.hash_file(odds_path),
+                "acquired_at_utc": odds_ts,
+                "status": "VALID_EMPTY" if not events else "VALID_NONEMPTY",
+            }
             print(f"[mlb-wide-pred] loaded snapshot events={len(events)} from file")
         else:
-            events = market_odds_service._fetch_market_snapshot(game_date=str(slate_date))
+            try:
+                events = market_odds_service._fetch_market_snapshot(game_date=str(slate_date))
+            except Exception:
+                odds_acquisition = market_odds_service.get_market_snapshot_source_evidence(game_date=str(slate_date))
+                provenance_inputs["odds_provider_responses"] = _retain_odds_provider_responses(
+                    slate_date=str(slate_date), run_identity=provenance_run_identity, acquisition=odds_acquisition,
+                )
+                raise
+            odds_acquisition = market_odds_service.get_market_snapshot_source_evidence(game_date=str(slate_date))
+            provenance_inputs["odds_events"] = {
+                "source_identity": "OddsAPI event rows returned by market_odds_service to wide builder",
+                "path": None, "sha256": None, "acquired_at_utc": datetime.now(ZoneInfo("UTC")).isoformat(),
+                "status": "VALID_EMPTY" if not events else "VALID_NONEMPTY",
+            }
+            retained_responses = []
+            if odds_acquisition:
+                odds_response_receipt = _retain_odds_provider_responses(
+                    slate_date=str(slate_date), run_identity=provenance_run_identity, acquisition=odds_acquisition,
+                )
+                provenance_inputs["odds_provider_responses"] = {
+                    **odds_response_receipt,
+                }
+                provenance_counts.update({
+                    "odds_provider_response_count": len(odds_response_receipt["responses"]),
+                    "odds_provider_raw_event_count": odds_acquisition.get("raw_event_count"),
+                    "odds_provider_slate_event_count": odds_acquisition.get("slate_event_count"),
+                    "odds_service_event_count": len(events),
+                })
             print(f"[mlb-wide-pred] odds snapshot events={len(events)}")
         if odds_snapshot_out:
             write_meta = _write_odds_snapshot_json(out_path=odds_snapshot_out, slate_date=str(slate_date), events=events)
             print(f"[mlb-wide-pred] wrote odds snapshot latest={write_meta.get('canonical_path')}")
             print(f"[mlb-wide-pred] wrote odds snapshot tagged={write_meta.get('tagged_path')}")
             print(f"[mlb-wide-pred] odds snapshot tagged_count={write_meta.get('tagged_count')}")
+            provenance_inputs["odds_events"].update({
+                "path": str(Path(str(write_meta["tagged_path"])).resolve()),
+                "sha256": lineage.hash_file(Path(str(write_meta["tagged_path"]))),
+            })
             alias_paths = write_meta.get("alias_paths") or {}
             if alias_paths:
                 print(
@@ -1592,6 +1727,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         provider_snapshot_source = EvidenceSource(
             path=str(frozen_snapshot.resolve()), sha256=snapshot_sha
         )
+        provenance_inputs["odds_events"].update({
+            "path": str(frozen_snapshot.resolve()), "sha256": snapshot_sha,
+            "acquired_at_utc": snapshot_ts,
+            "event_rows_returned_to_builder": len(events),
+        })
         git_commit, git_dirty = lineage.git_identity(REPO_ROOT)
         from backend.mlb.shared.semantic_model_registry import effective_inference_config
         safe_config = effective_inference_config()
@@ -1612,6 +1752,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             two_sided_bookmaker=str(args.two_sided_bookmaker or ""),
             optional_target_book_props=optional_target_book_props,
         )
+        provenance_counts.update({"events_handed_to_flatten": len(events),
+                                  "offers_after_market_filtering": len(offers),
+                                  "flatten_filter_counts": flatten_counts})
         print(f"[mlb-wide-pred] offers_unique={len(offers)} flatten_counts={flatten_counts}")
 
         # The same immutable response used to resolve provider teams/start time
@@ -1640,6 +1783,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             min_outs_recorded=int(pitcher_min_starter_outs),
             require_probable_starter=bool(pitcher_require_probable_starter),
         )
+        provenance_counts.update({"offers_before_resolution": len(offers),
+                                  "offers_after_resolution_and_policy": len(resolved_offers),
+                                  "resolve_filter_counts": resolve_counts})
         if pitcher_policy_counts:
             for k, v in pitcher_policy_counts.items():
                 resolve_counts[k] = int(resolve_counts.get(k, 0)) + int(v)
@@ -1664,6 +1810,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             by_player_id=by_player_id,
             lineage_context=lineage_context,
         )
+        provenance_counts.update({"offers_handed_to_prediction": len(resolved_offers),
+                                  "prediction_rows": len(pred_rows),
+                                  "prediction_filter_counts": pred_counts})
         print(f"[mlb-wide-pred] predicted_rows={len(pred_rows)} pred_counts={pred_counts}")
         _write_feature_debug_exports(feature_rows, out_dir=feature_debug_out_dir)
         if feature_debug_out_dir and feature_rows:
@@ -1671,12 +1820,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         wide = _to_wide(pred_rows)
         if wide.empty:
+            _write_current_slate_provenance(
+                slate_date=str(slate_date), run_identity=provenance_run_identity, inputs=provenance_inputs,
+                counts={**provenance_counts, "wide_rows": 0}, status="VALID_EMPTY_PREDICTIONS",
+            )
+            provenance_written = True
             if pred_counts.get("skip_bvp_dependency_blocked",0) and not pred_counts.get("skip_predict_error",0):
                 print(f"BVP_DEPENDENT_WIDE_NO_WORK_CERTIFIED slate_date={slate_date} blocked_rows={pred_counts['skip_bvp_dependency_blocked']} market_snapshot_preserved=1",file=sys.stderr)
                 return 76
             print("[mlb-wide-pred] ERROR: no wide rows produced", file=sys.stderr)
             return 1
         if len(wide) < int(args.require_min_rows):
+            _write_current_slate_provenance(
+                slate_date=str(slate_date), run_identity=provenance_run_identity,
+                inputs=provenance_inputs, counts={**provenance_counts, "wide_rows": len(wide)},
+                status="BELOW_REQUIRED_MIN_ROWS",
+            )
+            provenance_written = True
             print(
                 f"[mlb-wide-pred] ERROR: produced {len(wide)} rows < require-min-rows={int(args.require_min_rows)}",
                 file=sys.stderr,
@@ -1685,6 +1845,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         skipped_total = sum(v for k, v in {**flatten_counts, **resolve_counts, **pred_counts}.items() if str(k).startswith("skip_"))
         if args.strict and skipped_total > 0:
+            _write_current_slate_provenance(
+                slate_date=str(slate_date), run_identity=provenance_run_identity,
+                inputs=provenance_inputs,
+                counts={**provenance_counts, "wide_rows": len(wide), "skipped_total": skipped_total},
+                status="STRICT_FILTER_FAILURE",
+            )
+            provenance_written = True
             print(f"[mlb-wide-pred] ERROR: strict mode and skipped_total={skipped_total}", file=sys.stderr)
             return 1
 
@@ -1698,6 +1865,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         if blocked:
             print(f"[mlb-wide-pred] prospective lineage exclusions={dict(pd.Series([x['lineage_status'] for x in blocked]).value_counts())}", file=sys.stderr)
         if not certified:
+            _write_current_slate_provenance(
+                slate_date=str(slate_date), run_identity=provenance_run_identity,
+                inputs=provenance_inputs,
+                counts={**provenance_counts, "wide_rows": len(wide),
+                        "lineage_certified_rows": 0, "lineage_blocked_rows": len(blocked)},
+                status="NO_LINEAGE_CERTIFIED_ROWS",
+            )
+            provenance_written = True
             print("[mlb-wide-pred] ERROR: no lineage-certified pregame rows", file=sys.stderr)
             late_slate, scheduled_games = _late_slate_all_games_started(
                 str(slate_date), by_pair_games, prediction_timestamp
@@ -1713,11 +1888,38 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 1
         out_csv.parent.mkdir(parents=True, exist_ok=True)
         wide.to_csv(out_csv, index=False)
+        _write_current_slate_provenance(
+            slate_date=str(slate_date), run_identity=provenance_run_identity, inputs=provenance_inputs,
+            counts={**provenance_counts, "wide_rows": len(wide)},
+            outputs={"wide_predictions": {"path": str(out_csv.resolve()),
+                                          "sha256": lineage.hash_file(out_csv), "rows": len(wide)}},
+            status="COMPLETE",
+        )
+        provenance_written = True
         prop_counts = wide["prop_type"].value_counts(dropna=False).sort_index().to_dict() if "prop_type" in wide.columns else {}
         print(f"[mlb-wide-pred] wrote {len(wide)} wide rows to {out_csv}")
         print(f"[mlb-wide-pred] prop_counts={prop_counts}")
         return 0
     except Exception as exc:
+        retained_schedule_path = locals().get("schedule_evidence_path")
+        if (isinstance(retained_schedule_path, Path) and retained_schedule_path.is_file()
+                and provenance_inputs.get("schedule", {}).get("status") == "MISSING_OR_INVALID"):
+            provenance_inputs["schedule"] = {
+                "source_identity": "StatsAPI schedule response retained before validation",
+                "path": str(retained_schedule_path.resolve()),
+                "sha256": lineage.hash_file(retained_schedule_path),
+                "acquired_at_utc": None,
+                "status": "RETAINED_BUT_INVALID",
+            }
+        if not provenance_written:
+            try:
+                _write_current_slate_provenance(
+                    slate_date=str(slate_date), run_identity=provenance_run_identity,
+                    inputs=provenance_inputs, counts=provenance_counts,
+                    status=f"FAILED_OR_INCOMPLETE:{type(exc).__name__}",
+                )
+            except Exception as receipt_error:
+                print(f"[mlb-wide-pred] provenance receipt failed: {type(receipt_error).__name__}: {receipt_error}", file=sys.stderr)
         print(f"[mlb-wide-pred] ERROR: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
 

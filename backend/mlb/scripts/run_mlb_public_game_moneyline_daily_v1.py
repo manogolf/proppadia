@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
+from urllib.error import HTTPError
 from urllib.request import urlopen
 
 from backend.mlb.public_game_predictions.durable_store_v1 import (
@@ -34,6 +35,7 @@ from backend.mlb.public_game_predictions.finality_v1 import (
     reconcile_schedule_by_game_pk,
 )
 from backend.mlb.public_game_predictions.state_v1 import OfficialFinalGame, reconstruct_state
+from backend.mlb.shared.current_slate_source_provenance_v1 import retain_bytes, write_receipt
 from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
 from backend.mlb.season_transition.phase_authority_snapshot_v1 import (
     ACTIVE_SELECTION_PATH,
@@ -49,6 +51,7 @@ DEFAULT_RETAINED_SOURCE_DIR = Path("artifacts/ops/mlb_public_game_moneyline_sour
 DEFAULT_RETAINED_HISTORY_DIR = Path("artifacts/ops/mlb_public_game_moneyline_history_schedules")
 DEFAULT_ATTEMPT_RECEIPT_DIR = Path("artifacts/ops/mlb_public_game_moneyline_attempts")
 _ATTEMPT_CONTEXT: dict[str, Any] = {}
+_CURRENT_SLATE_EVIDENCE: dict[str, Any] = {}
 
 
 def _schedule_query(start_date: str, end_date: str) -> dict[str, Any]:
@@ -62,8 +65,16 @@ def _schedule_query(start_date: str, end_date: str) -> dict[str, Any]:
 
 def _fetch_schedule(start_date: str, end_date: str) -> tuple[dict, bytes]:
     query=urlencode(_schedule_query(start_date,end_date))
-    with urlopen(f'{STATSAPI}?{query}',timeout=30) as response:  # nosec B310: fixed official MLB host
-        raw=response.read()
+    _CURRENT_SLATE_EVIDENCE["current_schedule_source_identity"] = f"{STATSAPI}?{query}"
+    try:
+        with urlopen(f'{STATSAPI}?{query}',timeout=30) as response:  # nosec B310: fixed official MLB host
+            raw=response.read()
+    except HTTPError as error:
+        _CURRENT_SLATE_EVIDENCE["unparsed_current_schedule_raw"] = error.read()
+        _CURRENT_SLATE_EVIDENCE["current_schedule_response_received_at_utc"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        raise
+    _CURRENT_SLATE_EVIDENCE["unparsed_current_schedule_raw"] = raw
+    _CURRENT_SLATE_EVIDENCE["current_schedule_response_received_at_utc"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     return json.loads(raw),raw
 
 
@@ -162,6 +173,45 @@ def _retain_history_schedule(
         "source_path": str(target),
         "source_sha256": digest,
     }
+
+
+def _retain_current_schedule(raw: bytes, *, run_identity: str, slate_date: str,
+                             source_identity: str, acquired_at_utc: str) -> dict[str, Any]:
+    token = re.sub(r"[^A-Za-z0-9_.-]+", "_", run_identity)
+    path = Path("artifacts/ops/mlb_current_slate_sources") / slate_date / token / "moneyline_schedule.json"
+    source = retain_bytes(path, raw)
+    return {**source, "source_identity": source_identity, "requested_slate_date": slate_date,
+            "acquired_at_utc": acquired_at_utc}
+
+
+def _write_current_slate_receipt(*, status: str, counts: dict[str, Any]) -> dict[str, Any]:
+    if not _CURRENT_SLATE_EVIDENCE:
+        return {}
+    evidence = _CURRENT_SLATE_EVIDENCE
+    safe_identity = re.sub(r"[^A-Za-z0-9_.-]+", "_", evidence["run_identity"]).strip("_.-")
+    payload = {
+        "schema_version": "MLB_CURRENT_SLATE_SOURCE_PROVENANCE_V1",
+        "consumer": "MONEYLINE",
+        "run_identity": evidence["run_identity"],
+        "requested_slate_date": evidence["requested_slate_date"],
+        "acquired_at_utc": evidence["acquired_at_utc"],
+        "current_schedule": evidence.get("current_schedule", {
+            "source_identity": "StatsAPI current-slate schedule request",
+            "path": None, "sha256": None, "status": "MISSING_OR_INVALID",
+        }),
+        "historical_authority_schedule": evidence.get("historical_authority_schedule"),
+        "historical_authority_decision_counts": evidence.get("historical_authority_decision_counts", {}),
+        "schedule_status": evidence["schedule_status"],
+        "counts": counts,
+        "prediction_status": status,
+        "moneyline_attempt_receipt_path": str(DEFAULT_ATTEMPT_RECEIPT_DIR / evidence["requested_slate_date"] / f"{safe_identity}.json"),
+    }
+    result = write_receipt(Path("artifacts/ops/mlb_current_slate_provenance") /
+                           evidence["requested_slate_date"] / f"moneyline__{safe_identity}.json", payload)
+    evidence["receipt"] = result
+    _ATTEMPT_CONTEXT["current_slate_source_provenance_path"] = result["path"]
+    _ATTEMPT_CONTEXT["current_slate_source_provenance_sha256"] = result["sha256"]
+    return result
 
 
 @dataclass(frozen=True)
@@ -362,6 +412,15 @@ def _execute() -> int:
         + f"_{os.getpid()}_{uuid.uuid4().hex[:8]}"
     )
     _ATTEMPT_CONTEXT.clear()
+    _CURRENT_SLATE_EVIDENCE.clear()
+    _CURRENT_SLATE_EVIDENCE.update({
+        "run_identity": run_identity, "requested_slate_date": args.mlb_date,
+        "acquired_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "schedule_status": "MISSING_OR_INVALID",
+        "current_schedule": {"source_identity": "StatsAPI current-slate schedule request",
+                             "path": None, "sha256": None, "status": "MISSING_OR_INVALID"},
+        "counts": {},
+    })
     _ATTEMPT_CONTEXT.update({
         "run_identity": run_identity,
         "mlb_date": args.mlb_date,
@@ -378,12 +437,38 @@ def _execute() -> int:
     if args.skip_if_designated_snapshot_exists and not args.write_durable:
         parser.error('--skip-if-designated-snapshot-exists requires --write-durable')
     if args.schedule_json:
-        schedule_raw=args.schedule_json.read_bytes();schedule=json.loads(schedule_raw)
+        schedule_source_identity = f"provided_file:{args.schedule_json}"
+        _CURRENT_SLATE_EVIDENCE["current_schedule_source_identity"] = schedule_source_identity
+        schedule_raw=args.schedule_json.read_bytes()
+        _CURRENT_SLATE_EVIDENCE["unparsed_current_schedule_raw"] = schedule_raw
+        _CURRENT_SLATE_EVIDENCE["current_schedule_response_received_at_utc"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        schedule=json.loads(schedule_raw)
     else:
         schedule,schedule_raw=_fetch_schedule(args.mlb_date,args.mlb_date)
+        schedule_source_identity = f"{STATSAPI}?{urlencode(_schedule_query(args.mlb_date,args.mlb_date))}"
+    schedule_acquired_at = str(_CURRENT_SLATE_EVIDENCE.pop(
+        "current_schedule_response_received_at_utc",
+        datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    ))
+    _CURRENT_SLATE_EVIDENCE.pop("unparsed_current_schedule_raw", None)
     schedule_hash=hashlib.sha256(schedule_raw).hexdigest()
     _ATTEMPT_CONTEXT["daily_schedule_sha256"] = schedule_hash
     games_discovered=sum(1 for _ in _games(schedule))
+    current_schedule = _retain_current_schedule(
+        schedule_raw, run_identity=run_identity, slate_date=args.mlb_date,
+        source_identity=schedule_source_identity, acquired_at_utc=schedule_acquired_at,
+    )
+    _CURRENT_SLATE_EVIDENCE.update({
+        "run_identity": run_identity, "requested_slate_date": args.mlb_date,
+        "acquired_at_utc": schedule_acquired_at, "current_schedule": current_schedule,
+        "schedule_status": (
+            "INVALID_SHAPE" if not isinstance(schedule, dict) or not isinstance(schedule.get("dates"), list)
+            else "VALID_EMPTY" if games_discovered == 0 else "VALID_NONEMPTY"
+        ),
+        "counts": {"schedule_games": games_discovered},
+    })
+    _ATTEMPT_CONTEXT["current_schedule_source_path"] = current_schedule["path"]
+    _ATTEMPT_CONTEXT["current_schedule_source_sha256"] = current_schedule["sha256"]
     inserted_finals=canonical_duplicates=0
     append_finals_after_phase_binding = False
     if args.finals_json:
@@ -394,6 +479,7 @@ def _execute() -> int:
         history_source=_retain_history_schedule(
             history_raw,retrieved_at_utc=retrieved,query=history_query,root=args.retained_history_dir,
         )
+        _CURRENT_SLATE_EVIDENCE["historical_authority_schedule"] = history_source
         collection=collect_official_finals(finals_payload,retained_source_dir=args.retained_source_dir)
         finals=list(collection.finals)
     elif args.write_durable:
@@ -403,6 +489,7 @@ def _execute() -> int:
         history_source=_retain_history_schedule(
             history_raw,retrieved_at_utc=retrieved,query=history_query,root=args.retained_history_dir,
         )
+        _CURRENT_SLATE_EVIDENCE["historical_authority_schedule"] = history_source
         collection=collect_official_finals(history,retained_source_dir=args.retained_source_dir)
         finals=list(collection.finals)
         append_finals_after_phase_binding = True
@@ -440,6 +527,11 @@ def _execute() -> int:
             base=base_authority,
         )
         phase_binding = phase_authority_binding(runtime_authority)
+        _CURRENT_SLATE_EVIDENCE["historical_authority_decision_counts"] = {
+            phase: sum(1 for decision in phase_binding["decisions"]
+                       if decision.get("normalized_phase") == phase)
+            for phase in ("REGULAR_SEASON", "POSTSEASON")
+        }
         metadata = runtime_authority.metadata
         _ATTEMPT_CONTEXT.update({
             "retained_schedule_source_path": history_source["source_path"],
@@ -497,6 +589,11 @@ def _execute() -> int:
                 'grading_rows_written':grading_rows_written,
                 'predictions_written':0,'outcomes_accessed':grading_rows_eligible,
                 'history_schedule_source':history_source,
+                'current_slate_source_provenance':_write_current_slate_receipt(
+                    status="SKIPPED_EXISTING_DESIGNATED_SNAPSHOT",
+                    counts={"schedule_games": games_discovered,
+                            "prediction_scoring": "NOT_RUN_SKIPPED_EXISTING_DESIGNATED_SNAPSHOT"},
+                ),
                 'history_selection_receipt':None if selection_receipt is None else {
                     'path':selection_receipt['path'],'sha256':selection_receipt['sha256']},
                 'playable_terminal_contract':FINALITY_CONTRACT_VERSION,
@@ -521,6 +618,21 @@ def _execute() -> int:
     )
     rows=_apply_dependency_blocks(rows,blocked_game_pks,block_all=block_all)
     admitted=[row for row in rows if row['admission_status']=='ADMITTED_SHADOW']
+    decision_counts: dict[str, int] = {}
+    for row in rows:
+        reason = str(row.get('failure_reason') or 'ADMITTED')
+        decision_counts[reason] = decision_counts.get(reason, 0) + 1
+    current_counts = {
+        "schedule_games": games_discovered, "scored_rows": len(rows),
+        "admitted_rows": len(admitted), "rejected_rows": len(rows) - len(admitted),
+        "decision_reasons": decision_counts,
+    }
+    provenance = _write_current_slate_receipt(
+        status=("VALID_EMPTY" if games_discovered == 0 else
+                "NO_ADMITTED_PREDICTIONS" if not admitted else "PREDICTIONS_ADMITTED"),
+        counts=current_counts,
+    )
+    _CURRENT_SLATE_EVIDENCE["counts"] = current_counts
     state_written=predictions_written=0
     if args.write_durable:
         _ATTEMPT_CONTEXT["stage"] = "MONEYLINE_PREDICTION_PERSISTENCE"
@@ -538,6 +650,7 @@ def _execute() -> int:
             'grading_rows_eligible':grading_rows_eligible,'grading_rows_written':grading_rows_written,
             'outcomes_accessed':grading_rows_eligible,
             'history_schedule_source':history_source,
+            'current_slate_source_provenance':provenance,
             'history_selection_receipt':None if selection_receipt is None else {
                 'path':selection_receipt['path'],'sha256':selection_receipt['sha256']},
             'playable_terminal_contract':FINALITY_CONTRACT_VERSION,
@@ -577,6 +690,25 @@ def main() -> int:
         elif "PERSISTENCE" in classification:
             classification = "MONEYLINE_PERSISTENCE_FAILURE"
         try:
+            unparsed_raw = _CURRENT_SLATE_EVIDENCE.pop("unparsed_current_schedule_raw", None)
+            if unparsed_raw is not None:
+                retained = _retain_current_schedule(
+                    unparsed_raw, run_identity=str(_CURRENT_SLATE_EVIDENCE["run_identity"]),
+                    slate_date=str(_CURRENT_SLATE_EVIDENCE["requested_slate_date"]),
+                    source_identity=str(_CURRENT_SLATE_EVIDENCE.get(
+                        "current_schedule_source_identity",
+                        "current-slate schedule source retained before JSON validation",
+                    )),
+                    acquired_at_utc=str(_CURRENT_SLATE_EVIDENCE.get("current_schedule_response_received_at_utc") or ""),
+                )
+                retained["status"] = "RETAINED_BUT_INVALID"
+                _CURRENT_SLATE_EVIDENCE["current_schedule"] = retained
+                _CURRENT_SLATE_EVIDENCE["schedule_status"] = "INVALID_SHAPE_OR_HTTP_RESPONSE"
+            if _CURRENT_SLATE_EVIDENCE and "receipt" not in _CURRENT_SLATE_EVIDENCE:
+                _write_current_slate_receipt(
+                    status="FAILED_OR_INCOMPLETE",
+                    counts=_CURRENT_SLATE_EVIDENCE.get("counts", {}),
+                )
             receipt = _write_attempt_receipt(classification=classification, error=error)
             if receipt:
                 print(f"MLB_MONEYLINE_ATTEMPT_RECEIPT={receipt['path']} sha256={receipt['sha256']}", file=sys.stderr)

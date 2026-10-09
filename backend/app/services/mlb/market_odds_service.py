@@ -68,6 +68,7 @@ PROP_TO_ODDS_MARKET_ALIASES = {
 }
 
 _snapshot_cache: Dict[str, Tuple[float, List[Dict[str, Any]]]] = {}
+_snapshot_source_evidence: Dict[str, Dict[str, Any]] = {}
 _API_KEY_RE = re.compile(r"(apiKey=)([^&\s]+)")
 
 
@@ -389,13 +390,24 @@ def _fetch_market_snapshot(*, game_date: str) -> List[Dict[str, Any]]:
 
     # Preferred one-call fetch for all events/markets on the sport endpoint.
     # If OddsAPI rejects market keys at this endpoint (422), fallback to per-event odds.
+    acquired_at_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    response_evidence: List[Dict[str, Any]] = []
     res = requests.get(ODDS_BASE, params=params, timeout=20)
+    response_evidence.append({"source_identity": "OddsAPI sport odds endpoint", "raw_bytes": bytes(getattr(res, "content", b"")),
+                              "http_status": int(res.status_code),
+                              "request_parameters": {k: v for k, v in params.items() if k != "apiKey"}})
+    _snapshot_source_evidence[cache_key] = {
+        "acquired_at_utc": acquired_at_utc, "source_identity": "OddsAPI sport odds endpoint",
+        "response_count": len(response_evidence), "raw_event_count": None,
+        "slate_event_count": None, "responses": response_evidence,
+    }
     if res.status_code == 422:
         rows = _fetch_event_level_market_snapshot(
             api_key=api_key,
             game_date=game_date,
             markets_csv=stable_markets,
             allow_422_skip=False,
+            response_evidence=response_evidence,
         )
         extra_markets = _experimental_market_keys()
         if extra_markets:
@@ -404,9 +416,19 @@ def _fetch_market_snapshot(*, game_date: str) -> List[Dict[str, Any]]:
                 game_date=game_date,
                 markets_csv=",".join(extra_markets),
                 allow_422_skip=True,
+                response_evidence=response_evidence,
             )
             rows = _merge_event_rows(base_rows=rows, extra_rows=extra_rows)
         _snapshot_cache[cache_key] = (now, rows)
+        event_response = next((item for item in response_evidence
+                               if item.get("source_identity") == "OddsAPI events endpoint"), {})
+        _snapshot_source_evidence[cache_key] = {
+            "acquired_at_utc": acquired_at_utc, "source_identity": "OddsAPI event-level fallback",
+            "response_count": len(response_evidence),
+            "raw_event_count": event_response.get("raw_event_count"),
+            "slate_event_count": event_response.get("slate_event_count"),
+            "service_event_count": len(rows), "responses": response_evidence,
+        }
         return rows
 
     res.raise_for_status()
@@ -421,10 +443,17 @@ def _fetch_market_snapshot(*, game_date: str) -> List[Dict[str, Any]]:
             game_date=game_date,
             markets_csv=",".join(extra_markets),
             allow_422_skip=True,
+            response_evidence=response_evidence,
         )
         rows = _merge_event_rows(base_rows=rows, extra_rows=extra_rows)
 
     _snapshot_cache[cache_key] = (now, rows)
+    _snapshot_source_evidence[cache_key] = {
+        "acquired_at_utc": acquired_at_utc, "source_identity": "OddsAPI sport odds endpoint",
+        "response_count": len(response_evidence), "raw_event_count": len(payload),
+        "slate_event_count": sum(1 for ev in payload if _event_date_et(ev) == game_date),
+        "service_event_count": len(rows), "responses": response_evidence,
+    }
     return rows
 
 
@@ -434,6 +463,7 @@ def _fetch_event_level_market_snapshot(
     game_date: str,
     markets_csv: str,
     allow_422_skip: bool,
+    response_evidence: Optional[List[Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     events_res = requests.get(
         EVENTS_BASE,
@@ -443,12 +473,19 @@ def _fetch_event_level_market_snapshot(
         },
         timeout=20,
     )
+    if response_evidence is not None:
+        response_evidence.append({"source_identity": "OddsAPI events endpoint", "raw_bytes": bytes(getattr(events_res, "content", b"")),
+                                  "http_status": int(events_res.status_code),
+                                  "request_parameters": {"dateFormat": "iso"}})
     events_res.raise_for_status()
     events_payload = events_res.json()
     if not isinstance(events_payload, list):
         raise RuntimeError("unexpected OddsAPI events payload shape")
 
     target_events = [ev for ev in events_payload if _event_date_et(ev) == game_date]
+    if response_evidence is not None:
+        response_evidence[-1].update({"raw_event_count": len(events_payload),
+                                      "slate_event_count": len(target_events)})
     if not target_events:
         return []
 
@@ -485,6 +522,12 @@ def _fetch_event_level_market_snapshot(
                 params=params,
                 timeout=20,
             )
+            if response_evidence is not None:
+                response_evidence.append({"source_identity": "OddsAPI event odds endpoint",
+                                          "event_id": str(event_id), "market_group": markets_group,
+                                          "raw_bytes": bytes(getattr(odds_res, "content", b"")),
+                                          "http_status": int(odds_res.status_code),
+                                          "request_parameters": {k: v for k, v in params.items() if k != "apiKey"}})
 
             # Some events may not expose props yet; optionally skip those gracefully.
             if odds_res.status_code == 422 and allow_422_skip:
@@ -502,6 +545,14 @@ def _fetch_event_level_market_snapshot(
             rows.append(merged_payload)
 
     return rows
+
+
+def get_market_snapshot_source_evidence(*, game_date: str) -> Optional[Dict[str, Any]]:
+    """Return the raw responses corresponding to the cached/current market snapshot."""
+    evidence = _snapshot_source_evidence.get(str(game_date))
+    if evidence is None:
+        return None
+    return {**evidence, "responses": [dict(item) for item in evidence.get("responses", [])]}
 
 
 def _extract_candidate_outcomes(

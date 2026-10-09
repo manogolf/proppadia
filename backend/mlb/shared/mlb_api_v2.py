@@ -76,10 +76,10 @@ def fetch_schedule_by_date_with_evidence(game_date: str, retain_path: Path) -> t
     """Perform the existing one schedule request and immutably retain its exact bytes."""
 
     url = f"https://statsapi.mlb.com/api/v1/schedule?sportId=1&date={game_date}"
-    observed_at_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     response = requests.get(url, timeout=15)
     response.raise_for_status()
     raw = response.content
+    observed_at_utc = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     digest = hashlib.sha256(raw).hexdigest()
     retain_path.parent.mkdir(parents=True, exist_ok=True)
     if retain_path.exists():

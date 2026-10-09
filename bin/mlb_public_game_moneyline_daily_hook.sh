@@ -3,17 +3,19 @@
 set -u
 
 slate_date="${1:-$(TZ=America/New_York date +%F)}"
+run_identity="${2:-${MLB_RUN_IDENTITY:-${MLB_PROD12_RUN_ID:-${RUN_ID:-${MLB_RUN_TAG:-local_daily_$(date -u +%Y%m%dT%H%M%SZ)}}}}}"
 model_version="MLB_GAME_PYTHAGOREAN_LOG5_V1"
 model_hash="804535afde26e09516571c7a105d8376c2607cb7abc572621e80d8a9a006acf6"
 result_path="artifacts/ops/mlb_public_game_moneyline_daily_${slate_date}_latest.json"
 attempt_result_path="${result_path%.json}_attempt_${$}.json"
 started_at="$(date -u +%FT%TZ)"
 
-echo "[${started_at}] START MLB moneyline shadow lifecycle slate_date=${slate_date} model_version=${model_version} model_hash=${model_hash}"
+echo "[${started_at}] START MLB moneyline shadow lifecycle slate_date=${slate_date} run_identity=${run_identity} model_version=${model_version} model_hash=${model_hash}"
 
 set +e
-.venv/bin/python -m backend.mlb.scripts.run_mlb_public_game_moneyline_daily_v1 \
+MLB_RUN_IDENTITY="${run_identity}" .venv/bin/python -m backend.mlb.scripts.run_mlb_public_game_moneyline_daily_v1 \
   --mlb-date "${slate_date}" \
+  --run-identity "${run_identity}" \
   --prediction-cutoff-utc auto \
   --write-durable \
   --skip-if-designated-snapshot-exists \
