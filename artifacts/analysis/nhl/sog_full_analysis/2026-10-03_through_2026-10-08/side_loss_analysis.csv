@@ -1,0 +1,7 @@
+line,selected_side,losses,near_misses_one_sog_or_less,large_misses_more_than_two_sog,mean_realized_margin_on_losses,median_realized_margin_on_losses
+1.5,OVER,225,139,0,-0.8822222222222222,-0.5
+1.5,UNDER,322,193,40,1.0559006211180124,0.5
+2.5,OVER,76,36,13,-1.1973684210526316,-1.5
+2.5,UNDER,250,157,29,1.076,0.5
+3.5,OVER,11,6,3,-1.2272727272727273,-0.5
+3.5,UNDER,131,84,23,1.1641221374045803,0.5

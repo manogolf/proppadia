@@ -1,0 +1,13 @@
+{
+  "classifications": [
+    "KEEP_BASELINE_AND_FOCUS_ON_CALIBRATION",
+    "LINE_SPECIFIC_RESEARCH_REQUIRED",
+    "MORE_PROSPECTIVE_SAMPLE_REQUIRED_BEFORE_ARCHITECTURE_CHANGE"
+  ],
+  "basis": {
+    "calibration": "Calibration slopes are below 1 for all lines; evaluate conservative probability recalibration without altering production in this analysis.",
+    "line_specific": "1.5 has the weakest accuracy, proper scores, and AUC and the largest lift over always-Under; isolate its ranking and base-rate behavior.",
+    "sample": "The exact all-arm common set gives C/G a roughly 0.7 point accuracy lead, but player-clustered intervals include zero. Continue prospective capture before architecture change."
+  },
+  "production_changed": false
+}

@@ -1,0 +1,11 @@
+hypothesis,classification,evidence
+H1,PARTIALLY_SUPPORTED,"All line AUCs exceed 0.69, while accuracy beats always-Under clearly only at 1.5; paired player-clustered intervals are in proper_scoring_metrics.csv."
+H2,SUPPORTED,"2.5 accuracy 79.4% vs 79.3% always-Under; 3.5 91.0% vs 90.8%, with only 154 and 25 Over decisions. Prevalence dominates high-line accuracy."
+H3,SUPPORTED,"1.5 is weakest: 65.4% accuracy, 0.628 log loss, 0.218 Brier and 0.691 AUC versus better proper scores/discrimination at 2.5 and 3.5. Cause remains unresolved."
+H4,PARTIALLY_SUPPORTED,"Exact common-row gains are modest; C/G/D improve accuracy by about 0.4-0.75 percentage points, while other arms are flat or worse. This is insufficient for replacement."
+H5,PARTIALLY_SUPPORTED,"C, D, and G disagreement-only net correct calls are +34, +19, and +32 respectively, but no short-window result establishes durable improvement."
+H6,NOT_SUPPORTED,"On pregame shadow snapshot strata, performance does not rise monotonically with current-season games prior; e.g. 2.5 accuracy is 85.5% at 0 games (n=76) versus 78.1% at 3-5 (n=567). Descriptive only; these are not the production fitted inputs."
+H7,INSUFFICIENT_EVIDENCE,Expected count MAE/RMSE and residual mean are in count_distribution_diagnostics.csv.
+H8,PARTIALLY_SUPPORTED,"Positive-lambda Pearson dispersion is 1.18; expected count 5+ is 69.2 versus 56 observed out of 1,582, a modest upper-tail excess with short-window uncertainty."
+H9,INSUFFICIENT_EVIDENCE,TOI/exposure provenance is not present in the exported prediction CSV.
+H10,PARTIALLY_SUPPORTED,"On 556/426/415 valid two-sided rows, no-vig market log loss is lower than production at 1.5/2.5/3.5, but model-market difference buckets are mixed and the matched slates are limited."
