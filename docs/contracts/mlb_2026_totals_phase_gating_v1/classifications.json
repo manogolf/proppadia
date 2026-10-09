@@ -9,8 +9,8 @@
   "raw_totals_regular_season_integrity": "READY",
   "remaining_blockers": [
     "actual authoritative postseason game has not passed through ordinary RAW and C paths",
-    "current frozen authority supports only through 2026-09-27 and contains no postseason rows",
-    "independent retained RAW/C population census is unavailable",
+    "two postseason RAW identities have no Totals-owned producer export or ingestion receipt, so the full RAW expected population remains inconclusive",
+    "the retained producer census establishes the regular RAW population and the exact C population, but cannot certify unrepresented RAW postseason intake",
     "SciPy coefficient discrepancy remains open pending a controlled comparison in the original pinned environment"
   ],
   "totals_c_regular_season_integrity": "READY"

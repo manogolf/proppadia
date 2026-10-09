@@ -39,13 +39,64 @@
     "totals_c_proper_score_inputs_sha256": "9d72495a6cdfe2d6a64db87126837b76a634444b6516ebbac1f78e31edbc5239",
     "totals_c_regular_membership_sha256": "d7cff3fa2c3634e4c2948f11eba1c5dbd23bea37b1ab25480f53a1bf331d4223"
   },
+  "independent_population_census": {
+    "c_expected_only_identities": [],
+    "c_expected_start_date": "2026-08-17",
+    "c_ledger_identity_count": 482,
+    "c_ledger_only_identities": [],
+    "c_population_status": "PASS",
+    "manifest_error_count": 0,
+    "manifest_errors": [],
+    "raw_duplicate_identity_rows": 0,
+    "raw_ledger_identity_count": 625,
+    "raw_ledger_only_identities": [
+      [
+        "2026-10-04",
+        849823
+      ],
+      [
+        "2026-10-04",
+        849825
+      ]
+    ],
+    "raw_phase_counts": {
+      "REGULAR_SEASON": 623
+    },
+    "raw_population_status": "INCONCLUSIVE",
+    "raw_producer_csv_count": 47,
+    "raw_producer_only_identities": [],
+    "raw_producer_rows": 623,
+    "raw_unexplained_ledger_identities": [
+      {
+        "authority_primary_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-04/20261004T153006154701Z_2026-08-05_2026-10-04_64a8ec297e9522f418e4405c2691007422d425ff5a00412cbb9c3a96a47c94e9.json",
+        "authority_primary_source_sha256": "64a8ec297e9522f418e4405c2691007422d425ff5a00412cbb9c3a96a47c94e9",
+        "game_date": "2026-10-04",
+        "game_pk": 849823,
+        "missing_evidence": "Totals-owned producer export or ingestion receipt for this exact identity",
+        "normalized_phase": "POSTSEASON",
+        "source_game_type": "D"
+      },
+      {
+        "authority_primary_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-04/20261004T153006154701Z_2026-08-05_2026-10-04_64a8ec297e9522f418e4405c2691007422d425ff5a00412cbb9c3a96a47c94e9.json",
+        "authority_primary_source_sha256": "64a8ec297e9522f418e4405c2691007422d425ff5a00412cbb9c3a96a47c94e9",
+        "game_date": "2026-10-04",
+        "game_pk": 849825,
+        "missing_evidence": "Totals-owned producer export or ingestion receipt for this exact identity",
+        "normalized_phase": "POSTSEASON",
+        "source_game_type": "D"
+      }
+    ],
+    "raw_unique_exact_identities": 623,
+    "source_root": "artifacts/analysis/model_development/mlb_totals_prospective_shadow_v1",
+    "verified_manifest_artifact_count": 991
+  },
   "ledger_file_sha256_after": {
-    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "9e8942f6cf296afb8c990fd4132a9f43861e7de97a6613251634bfbc7cfd49be",
+    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "fe6676e80d044c007ef852dbb07439417ced571279966407175a2d5ecaa8d1cb",
     "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d966be9c4ffc726656498172aa971f0e86aba03d58c28df61176ead665eff426",
     "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "3bcc21bd7dc885ec78042b3daeabc6fb371cb2c4ab811752297575317bee027f"
   },
   "ledger_file_sha256_before": {
-    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "9e8942f6cf296afb8c990fd4132a9f43861e7de97a6613251634bfbc7cfd49be",
+    "backend/mlb/exports/market_history/full_game_totals/full_game_totals_v1.sqlite3": "fe6676e80d044c007ef852dbb07439417ced571279966407175a2d5ecaa8d1cb",
     "backend/mlb/exports/model_v2/totals_c_shadow_v1/totals_c_shadow_v1.sqlite3": "d966be9c4ffc726656498172aa971f0e86aba03d58c28df61176ead665eff426",
     "backend/mlb/exports/model_v2/totals_shadow_v1/totals_shadow_v1.sqlite3": "3bcc21bd7dc885ec78042b3daeabc6fb371cb2c4ab811752297575317bee027f"
   },

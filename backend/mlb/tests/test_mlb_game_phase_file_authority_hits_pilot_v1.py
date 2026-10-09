@@ -230,7 +230,7 @@ class GamePhaseFileAuthorityHitsPilotTests(unittest.TestCase):
             GamePhaseAuthorityError,
             "GAME_PHASE_AUTHORITY_STALE",
         ):
-            self.authority.require_supported_window("2026-02-20", "2026-09-28")
+            self.authority.require_supported_window("2026-02-20", "2026-10-06")
         with self.assertRaisesRegex(
             GamePhaseAuthorityError,
             "GAME_PHASE_AUTHORITY_STALE",

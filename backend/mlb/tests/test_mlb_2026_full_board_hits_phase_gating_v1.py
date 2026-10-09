@@ -6,7 +6,10 @@ import unittest
 from pathlib import Path
 
 from backend.mlb.hits05_full_board_shadow import ledger_v1 as ledger
-from backend.mlb.scripts.validate_mlb_2026_full_board_hits_phase_gating_v1 import regular_metric_rows
+from backend.mlb.scripts.validate_mlb_2026_full_board_hits_phase_gating_v1 import (
+    regular_metric_rows,
+    retained_schedule_phase_supplements,
+)
 from backend.mlb.hits05_full_board_shadow.phase_gating_v1 import (
     FullBoardHitsPhaseGateError,
     canonical_rows_sha256,
@@ -20,6 +23,7 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     GamePhaseAuthorityError,
     GamePhaseAuthorityMetadata,
     GamePhaseAuthorityRecord,
+    HashedProposalAuthority,
 )
 
 
@@ -119,6 +123,20 @@ def row(game_pk: int = 1, slate_date: str = "2026-09-22", **changes: object) -> 
 
 
 class FullBoardHitsPhaseGatingV1Tests(unittest.TestCase):
+    def test_absent_hits_games_use_hash_verified_schedule_not_receipt_phase_claim(self) -> None:
+        game_pks = {849819, 849822, 849826, 849827, 849832, 849833, 849838}
+        authority = HashedProposalAuthority()
+        supplements, failures = retained_schedule_phase_supplements(game_pks, authority)
+        self.assertFalse(failures)
+        self.assertEqual(set(supplements), game_pks)
+        for game_pk, evidence in supplements.items():
+            self.assertEqual(evidence["game_pk"], game_pk)
+            self.assertEqual(evidence["source_season"], 2026)
+            self.assertEqual(evidence["source_game_type"], "D")
+            self.assertEqual(evidence["normalized_phase"], "POSTSEASON")
+            self.assertEqual(len(evidence["schedule_source_sha256"]), 64)
+            self.assertEqual(evidence["shared_authority_status"], "ABSENT_EXACT_GAME; scoped retained-source supplement")
+
     def test_regular_metrics_fail_closed_for_missing_authority(self) -> None:
         kept, withheld = regular_metric_rows(
             [{"game_id": 10}, {"game_id": 11}, {"game_id": 12}],

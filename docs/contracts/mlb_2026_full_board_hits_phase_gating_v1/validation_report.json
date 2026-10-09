@@ -2,19 +2,24 @@
   "checks": [
     {
       "check": "authority_population",
-      "status": "FAIL"
+      "phase_counts": {
+        "POSTSEASON": 15,
+        "PRESEASON": 489,
+        "REGULAR_SEASON": 2430
+      },
+      "status": "PASS"
     },
     {
       "check": "retained_union_authority",
-      "status": "FAIL"
+      "status": "PASS"
     },
     {
-      "check": "retained_union_all_regular",
-      "status": "FAIL"
+      "check": "retained_union_phase_classified",
+      "status": "PASS"
     },
     {
-      "check": "retained_metric_membership_hash_invariance",
-      "status": "FAIL"
+      "check": "regular_metric_gate_accounted",
+      "status": "PASS"
     },
     {
       "check": "ledger_read_only_unchanged",
@@ -31,7 +36,7 @@
     },
     {
       "check": "dependency_free_tests",
-      "status": "FAIL"
+      "status": "PASS"
     },
     {
       "check": "git_diff_check",
@@ -44,38 +49,110 @@
     },
     {
       "check": "postseason_operational_readiness_not_overclaimed",
-      "status": "FAIL"
+      "status": "PASS",
+      "status_detail": "BLOCKED_NO_ACTUAL_AUTHORITATIVE_POSTSEASON_GAME_OBSERVED_THROUGH_ORDINARY_PATH"
     }
   ],
   "contract": "MLB_2026_FULL_BOARD_HITS_PHASE_GATING_V1",
-  "retained_violations": [
+  "retained_violations": [],
+  "scoped_retained_schedule_supplements": [
     {
       "game_pk": 849819,
-      "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849819"
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-06",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
     },
     {
       "game_pk": 849822,
-      "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-07",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
     },
     {
       "game_pk": 849826,
-      "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849826"
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-06",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
     },
     {
       "game_pk": 849827,
-      "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-07",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
     },
     {
       "game_pk": 849832,
-      "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-08",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
     },
     {
       "game_pk": 849833,
-      "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849833"
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-07",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
     },
     {
       "game_pk": 849838,
-      "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-07",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
     }
   ],
   "source_files": [
@@ -89,5 +166,5 @@
     "backend/mlb/tests/test_mlb_2026_full_board_hits_phase_gating_v1.py",
     "backend/mlb/tests/test_hits05_full_board_shadow_v1.py"
   ],
-  "status": "FAIL"
+  "status": "PASS"
 }

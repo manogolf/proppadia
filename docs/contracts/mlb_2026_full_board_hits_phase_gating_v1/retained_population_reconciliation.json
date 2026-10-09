@@ -39,11 +39,11 @@
     "unknown_count": 0
   },
   "ledger": {
-    "bytes": 174276608,
+    "bytes": 174440448,
     "path": "backend/mlb/exports/model_v2/hits05_full_board_shadow_v1/hits05_full_board_shadow_v1.sqlite3",
     "read_mode": "sqlite_uri_mode_ro_immutable_1",
-    "sha256_after": "a7e176a80970298879527c07d04e2ace1ef764359c9b2e5e0bb291142b9e9f85",
-    "sha256_before": "a7e176a80970298879527c07d04e2ace1ef764359c9b2e5e0bb291142b9e9f85",
+    "sha256_after": "0dc0473859734378c3326d4632724352dc262f8e63425b5f86742b7211c1eb8a",
+    "sha256_before": "0dc0473859734378c3326d4632724352dc262f8e63425b5f86742b7211c1eb8a",
     "stat_unchanged_during_read": true
   },
   "regular_metrics": {
@@ -195,255 +195,291 @@
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       },
       {
         "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
+      },
+      {
+        "game_pk": 849832,
+        "reason": "NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:POSTSEASON"
       }
     ]
   },
@@ -471,24 +507,115 @@
     "progress_latest_path": "artifacts/analysis/mlb/hits05_full_board_shadow/progress_latest.json",
     "progress_latest_sha256": "5c63f760dd3fc5aafeff26f23d4d8872aab2164d4a9b4d93a18d0ac6a38faa26"
   },
+  "scoped_retained_schedule_supplements": [
+    {
+      "game_pk": 849819,
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-06",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
+    },
+    {
+      "game_pk": 849822,
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-07",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
+    },
+    {
+      "game_pk": 849826,
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-06",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
+    },
+    {
+      "game_pk": 849827,
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-07",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
+    },
+    {
+      "game_pk": 849832,
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-08",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
+    },
+    {
+      "game_pk": 849833,
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-07",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
+    },
+    {
+      "game_pk": 849838,
+      "normalized_phase": "POSTSEASON",
+      "official_date": "2026-10-07",
+      "postseason_round": "DIVISION_SERIES",
+      "receipt_path": "artifacts/ops/mlb_public_game_moneyline_attempts/2026-10-08/moneyline_20261008T233005119355Z_30449_82685602.json",
+      "receipt_run_identity": "moneyline_20261008T233005119355Z_30449_82685602",
+      "receipt_sha256": "5cb4f036ac3819cc7bd23d95347f15121cdaa0759493dd128aff5acb776ef947",
+      "schedule_source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-08/20261008T233006215806Z_2026-08-05_2026-10-08_1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7.json",
+      "schedule_source_sha256": "1cf2bff312e262b38900e89a1e899f379ac08822c3f35582f903f0aed214faf7",
+      "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+      "source_game_type": "D",
+      "source_season": 2026
+    }
+  ],
   "sources": {
     "eligibility": {
       "distinct_game_pks": 450,
-      "missing_or_conflicting_game_pks": [
-        849819,
-        849822,
-        849826,
-        849827,
-        849832,
-        849833,
-        849838
-      ],
+      "missing_or_conflicting_game_pks": [],
       "phase_game_pk_counts": {
-        "MISSING_AUTHORITY": 7,
-        "POSTSEASON": 2,
+        "POSTSEASON": 9,
         "REGULAR_SEASON": 441
       },
-      "rows": 20881
+      "rows": 20899
     },
     "grading": {
       "distinct_game_pks": 368,
@@ -508,18 +635,12 @@
     },
     "predictions": {
       "distinct_game_pks": 406,
-      "missing_or_conflicting_game_pks": [
-        849822,
-        849827,
-        849832,
-        849838
-      ],
+      "missing_or_conflicting_game_pks": [],
       "phase_game_pk_counts": {
-        "MISSING_AUTHORITY": 4,
-        "POSTSEASON": 2,
+        "POSTSEASON": 6,
         "REGULAR_SEASON": 400
       },
-      "rows": 6669
+      "rows": 6678
     },
     "prices": {
       "distinct_game_pks": 402,
@@ -532,54 +653,19 @@
     },
     "reports": {
       "distinct_game_pks": 406,
-      "missing_or_conflicting_game_pks": [
-        849822,
-        849827,
-        849832,
-        849838
-      ],
+      "missing_or_conflicting_game_pks": [],
       "phase_game_pk_counts": {
-        "MISSING_AUTHORITY": 4,
-        "POSTSEASON": 2,
+        "POSTSEASON": 6,
         "REGULAR_SEASON": 400
       },
-      "rows": 6669
+      "rows": 6678
     }
   },
   "union": {
-    "authority_violations": [
-      {
-        "game_pk": 849819,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849819"
-      },
-      {
-        "game_pk": 849822,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849822"
-      },
-      {
-        "game_pk": 849826,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849826"
-      },
-      {
-        "game_pk": 849827,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849827"
-      },
-      {
-        "game_pk": 849832,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849832"
-      },
-      {
-        "game_pk": 849833,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849833"
-      },
-      {
-        "game_pk": 849838,
-        "reason": "GamePhaseAuthorityError:GAME_PHASE_ABSENT:849838"
-      }
-    ],
+    "authority_violations": [],
     "distinct_game_pks": 450,
     "phase_game_pk_counts": {
-      "POSTSEASON": 2,
+      "POSTSEASON": 9,
       "REGULAR_SEASON": 441
     }
   }

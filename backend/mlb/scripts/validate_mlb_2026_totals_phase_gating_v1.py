@@ -47,6 +47,8 @@ SOURCE_FILES = (
     "backend/mlb/tests/test_totals_c_live_shadow_v1.py",
     "backend/mlb/scripts/validate_mlb_2026_totals_phase_gating_v1.py",
 )
+RAW_EXPORT_ROOT = ROOT / "artifacts/analysis/model_development/mlb_totals_prospective_shadow_v1"
+C_START_DATE = "2026-08-17"
 
 
 def sha256(path: Path) -> str:
@@ -82,6 +84,68 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str] | None =
 
 def ro(path: Path) -> sqlite3.Connection:
     return sqlite3.connect(f"file:{path.resolve()}?mode=ro&immutable=1", uri=True)
+
+
+def retained_raw_producer_census() -> dict[str, Any]:
+    """Build independent game identity expectations from retained RAW producer exports."""
+    # Use the producer's stable daily-output suffix.
+    files = sorted(path for path in RAW_EXPORT_ROOT.glob("*/*_totals_shadow_predictions.csv") if path.is_file())
+    identities: list[tuple[str, int]] = []
+    verified_manifest_files = 0
+    manifest_errors: list[str] = []
+    for csv_path in files:
+        manifest = csv_path.parent / "reproducibility_hashes.sha256"
+        if not manifest.is_file():
+            manifest_errors.append(f"{manifest.relative_to(ROOT)}:MISSING")
+            continue
+        entries: dict[str, str] = {}
+        for line in manifest.read_text(encoding="utf-8").splitlines():
+            parts = line.strip().split(None, 1)
+            if len(parts) == 2:
+                entries[parts[1].lstrip("* ")] = parts[0]
+        try:
+            relative = str(csv_path.relative_to(csv_path.parent))
+            expected = entries.get(relative)
+            if expected is None or hashlib.sha256(csv_path.read_bytes()).hexdigest() != expected:
+                manifest_errors.append(f"{csv_path.relative_to(ROOT)}:HASH_MISSING_OR_MISMATCH")
+                continue
+            # Verify every manifest-listed artifact in the producer package, not just the CSV.
+            package_ok = True
+            for rel, digest in entries.items():
+                artifact = csv_path.parent / rel
+                if not artifact.is_file() or hashlib.sha256(artifact.read_bytes()).hexdigest() != digest:
+                    manifest_errors.append(f"{artifact.relative_to(ROOT)}:HASH_MISSING_OR_MISMATCH")
+                    package_ok = False
+            if not package_ok:
+                continue
+            verified_manifest_files += len(entries)
+            with csv_path.open(newline="", encoding="utf-8") as handle:
+                for row in csv.DictReader(handle):
+                    identities.append((row["game_date"], int(row["game_pk"])))
+        except (OSError, KeyError, ValueError) as exc:
+            manifest_errors.append(f"{csv_path.relative_to(ROOT)}:{type(exc).__name__}:{exc}")
+    counts: dict[str, int] = {}
+    duplicates = len(identities) - len(set(identities))
+    authority = HashedProposalAuthority()
+    for date, game_pk in set(identities):
+        record = authority.lookup_exact(game_pk)
+        phase = str(record.season_phase)
+        counts[phase] = counts.get(phase, 0) + 1
+    c_expected = sorted(identity for identity in set(identities) if identity[0] >= C_START_DATE)
+    return {
+        "source_root": str(RAW_EXPORT_ROOT.relative_to(ROOT)),
+        "raw_producer_csv_count": len(files),
+        "raw_producer_rows": len(identities),
+        "raw_unique_exact_identities": len(set(identities)),
+        "raw_duplicate_identity_rows": duplicates,
+        "raw_phase_counts": counts,
+        "verified_manifest_artifact_count": verified_manifest_files,
+        "manifest_error_count": len(manifest_errors),
+        "manifest_errors": manifest_errors,
+        "identities": sorted(set(identities)),
+        "c_expected_start_date": C_START_DATE,
+        "c_expected_identities": c_expected,
+    }
 
 
 class _Raises(AbstractContextManager[None]):
@@ -227,6 +291,37 @@ def ledger_population() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str,
         })
 
     raw_games, c_games = set(raw_by_game), set(c_by_game)
+    census = retained_raw_producer_census()
+    raw_ledger_identities = {(str(row[1]), int(row[2])) for row in raw_predictions}
+    c_ledger_identities = {(str(row[1]), int(row[2])) for row in c_predictions}
+    raw_expected_identities = {(str(date), int(game_pk)) for date, game_pk in census["identities"]}
+    c_expected_identities = {(str(date), int(game_pk)) for date, game_pk in census["c_expected_identities"]}
+    census["raw_ledger_identity_count"] = len(raw_ledger_identities)
+    census["raw_ledger_only_identities"] = [list(item) for item in sorted(raw_ledger_identities - raw_expected_identities)]
+    census["raw_producer_only_identities"] = [list(item) for item in sorted(raw_expected_identities - raw_ledger_identities)]
+    census["c_ledger_identity_count"] = len(c_ledger_identities)
+    census["c_ledger_only_identities"] = [list(item) for item in sorted(c_ledger_identities - c_expected_identities)]
+    census["c_expected_only_identities"] = [list(item) for item in sorted(c_expected_identities - c_ledger_identities)]
+    census["raw_population_status"] = (
+        "PASS" if not census["manifest_error_count"] and not census["raw_duplicate_identity_rows"]
+        and raw_ledger_identities == raw_expected_identities else "INCONCLUSIVE"
+    )
+    census["c_population_status"] = (
+        "PASS" if not census["manifest_error_count"] and not census["raw_duplicate_identity_rows"]
+        and c_ledger_identities == c_expected_identities else "INCONCLUSIVE"
+    )
+    census["raw_unexplained_ledger_identities"] = []
+    for date, game_pk in census["raw_ledger_only_identities"]:
+        record = authority.lookup_exact(game_pk)
+        census["raw_unexplained_ledger_identities"].append({
+            "game_date": date,
+            "game_pk": game_pk,
+            "source_game_type": record.source_game_type,
+            "normalized_phase": record.season_phase,
+            "authority_primary_source_path": record.primary_source_path,
+            "authority_primary_source_sha256": record.primary_source_sha256,
+            "missing_evidence": "Totals-owned producer export or ingestion receipt for this exact identity",
+        })
     phase_counts_raw: dict[str, int] = {}
     for game_pk in raw_games:
         phase = str(authority.lookup_exact(game_pk).season_phase)
@@ -305,6 +400,7 @@ def ledger_population() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str,
         "hashes_after_regular_gate": dict(hashes),
         "hash_invariance": None,
         "ledger_file_sha256_before": before,
+        "independent_population_census": {key: value for key, value in census.items() if key not in {"identities", "c_expected_identities"}},
     }
     raw_db.close(); c_db.close(); market_db.close()
     after = {str(path.relative_to(ROOT)): sha256(path) for path in (RAW_LEDGER, C_LEDGER, MARKET_LEDGER)}
@@ -363,8 +459,8 @@ def build() -> dict[str, Any]:
         "model_selector_publication_status": "UNCHANGED_SHADOW_ONLY_UNQUALIFIED_UNPUBLISHED",
         "remaining_blockers": [
             "actual authoritative postseason game has not passed through ordinary RAW and C paths",
-            "current frozen authority supports only through 2026-09-27 and contains no postseason rows",
-            "independent retained RAW/C population census is unavailable",
+            "two postseason RAW identities have no Totals-owned producer export or ingestion receipt, so the full RAW expected population remains inconclusive",
+            "the retained producer census establishes the regular RAW population and the exact C population, but cannot certify unrepresented RAW postseason intake",
             "SciPy coefficient discrepancy remains open pending a controlled comparison in the original pinned environment",
         ],
     }
@@ -375,8 +471,8 @@ def build() -> dict[str, Any]:
     write_csv(CONTRACT / "source_artifact_manifest.csv", source_rows)
     checks = {
             "tests": tests["status"],
-            "raw_expected_population": "INCONCLUSIVE",
-            "c_expected_population": "INCONCLUSIVE",
+            "raw_expected_population": reconciliation["independent_population_census"]["raw_population_status"],
+            "c_expected_population": reconciliation["independent_population_census"]["c_population_status"],
             "phase_classification_valid": set(reconciliation["raw_totals"]["phase_counts"]).issubset({"REGULAR_SEASON", "POSTSEASON"}) and reconciliation["totals_c"]["phase_counts"].get("REGULAR_SEASON", 0) == reconciliation["totals_c"]["distinct_game_pks"],
             "c_exact_subset": reconciliation["cross_lane"]["totals_c_only"] == 0 and reconciliation["cross_lane"]["identity_conflicts"] == 0 and reconciliation["cross_lane"]["intersection"] == reconciliation["totals_c"]["distinct_game_pks"],
             "zero_violations": not any(reconciliation["violations"].values()),
@@ -389,15 +485,16 @@ def build() -> dict[str, Any]:
         "task": "MLB_2026_TOTALS_PHASE_GATING_V1",
         "status": aggregate_status(checks),
         "checks": checks,
-        "population_expectation_evidence": {"status": "UNAVAILABLE", "reason": "No independent retained source or ingestion census establishes the expected RAW/C population; observed ledger counts are not used as their own oracle."},
+        "population_expectation_evidence": reconciliation["independent_population_census"],
         "smallest_next_action": "After the first retained authoritative postseason game, run the ordinary RAW and C shadow paths in explicit POSTSEASON mode and validate the separate shadow outputs; do not tune, qualify, select, or publish.",
     }
     write_json(CONTRACT / "validation_report.json", validation)
+    census = reconciliation["independent_population_census"]
     readme = f"""# MLB 2026 Totals phase gating V1
 
 RAW Totals and Totals C are genuinely coupled: C derives each row from an immutable RAW prediction/context identity, and the ordinary hook sequences RAW before C. One shared exact-`gamePk` phase interface now gates both lanes without adding phase columns to either append-only ledger.
 
-Retained evidence is unchanged. The observed population is RAW 625 predictions/gamePks (623 regular season, 2 postseason) and C 482 predictions/gamePks (482 regular season), with C an exact RAW subset for all 482 identities and 143 RAW-only identities. No independent retained source/ingestion census establishes an expected total, so population checks are `INCONCLUSIVE`; observed counts are not treated as their own oracle. Existing predictions, outcomes, features, proper-score inputs, market inputs, thresholds, models, selector status, and publication status were not changed.
+Retained evidence is unchanged. The observed population is RAW 625 predictions/gamePks (623 regular season, 2 postseason) and C 482 predictions/gamePks (482 regular season), with C an exact RAW subset for all 482 identities and 143 RAW-only identities. Independently retained, hash-verified daily RAW producer CSVs establish 623 exact regular-season identities; the C launch floor (`{C_START_DATE}`) yields 482 expected identities, exactly matching C. The two extra RAW identities (849823 and 849825, postseason) lack a Totals-owned producer export or ingestion receipt, so the complete RAW expected population remains `INCONCLUSIVE`; the Moneyline schedule receipt is not treated as Totals ingestion evidence. Observed table counts are not used as their own oracle. The census verified {census['raw_producer_csv_count']} producer CSVs and {census['verified_manifest_artifact_count']} manifest-listed artifacts with {census['manifest_error_count']} manifest errors. Existing predictions, outcomes, features, proper-score inputs, market inputs, thresholds, models, selector status, and publication status were not changed.
 
 Regular-season reporting remains the default. Postseason requires explicit `POSTSEASON` evaluation mode and remains shadow-only. Operational readiness is blocked until an actual authoritative postseason game traverses the ordinary RAW and C paths; synthetic coverage proves code behavior only.
 

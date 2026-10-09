@@ -137,10 +137,11 @@ class OpsBriefAndDailyIndexPhaseGatingV1Tests(unittest.TestCase):
             for path in (AGREEMENT_RECONCILIATION, AGREEMENT_STALENESS)
         }
         self.assertEqual(before, after)
-        self.assertEqual(2919, control["canonical_population"]["total"])
+        self.assertEqual(2934, control["canonical_population"]["total"])
         self.assertEqual(2430, control["canonical_population"]["REGULAR_SEASON"])
         self.assertEqual(489, control["canonical_population"]["PRESEASON"])
-        self.assertEqual(0, control["canonical_population"]["POSTSEASON"])
+        self.assertEqual(15, control["canonical_population"]["POSTSEASON"])
+        self.assertEqual(2430, control["close"]["canonical_regular_season_game_pks"])
         self.assertEqual(88, control["close"]["outstanding_game_pks"])
         self.assertEqual("REGULAR_SEASON_CLOSE_BLOCKED", control["close"]["decision"])
         self.assertFalse(control["agreement"]["stale_summary"]["may_override_ledger"])
@@ -165,7 +166,7 @@ class OpsBriefAndDailyIndexPhaseGatingV1Tests(unittest.TestCase):
 
     def test_stale_report_date_fails_before_governing_counts_are_rendered(self) -> None:
         with self.assertRaisesRegex(PhaseReportingError, "PHASE_AUTHORITY_STALE"):
-            build_current_phase_reporting_control(report_date="2026-10-01")
+            build_current_phase_reporting_control(report_date="2026-10-06")
 
     def test_ops_brief_and_daily_index_use_shared_renderer(self) -> None:
         root = Path(__file__).resolve().parents[3]

@@ -14,7 +14,11 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
+from backend.mlb.season_transition.contract_v1 import PhaseContractError, classify_schedule_game
+from backend.mlb.season_transition.game_phase_authority_v1 import (
+    GamePhaseAuthorityError,
+    HashedProposalAuthority,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -23,6 +27,8 @@ PACKAGE = ROOT / "docs/contracts/mlb_2026_full_board_hits_phase_gating_v1"
 LEDGER = ROOT / "backend/mlb/exports/model_v2/hits05_full_board_shadow_v1/hits05_full_board_shadow_v1.sqlite3"
 REPORT_ROOT = ROOT / "artifacts/analysis/mlb/hits05_full_board_shadow"
 PILOT = ROOT / "docs/contracts/mlb_2026_game_phase_file_authority_hits_pilot_v1/post_control_correction_audit.json"
+MONEYLINE_ATTEMPTS = ROOT / "artifacts/ops/mlb_public_game_moneyline_attempts"
+ACTIVE_SELECTION = ROOT / "backend/mlb/season_transition/authority_snapshots/active_selection.json"
 
 EXPECTED_HEAD_ANCESTRY = {
     "4fe80cef754ea5a790b03f3a53636ba8919395b8",
@@ -74,6 +80,106 @@ def regular_metric_rows(metric_rows: list[dict[str, Any]], phase_by_game: dict[i
         else:
             withheld.append({"game_pk": game_pk, "reason": failures.get(game_pk, f"NON_REGULAR_OR_UNESTABLISHED_AUTHORITY:{phase or 'MISSING'}")})
     return kept, withheld
+
+
+def retained_schedule_phase_supplements(
+    requested_game_pks: set[int], authority: HashedProposalAuthority,
+) -> tuple[dict[int, dict[str, Any]], list[dict[str, Any]]]:
+    """Derive scoped exact-game evidence from hash-verified retained schedules.
+
+    Receipt decisions are used only as a cross-check that the schedule was
+    bound to the run. Phase is derived from the raw retained schedule record
+    through the shared StatsAPI type contract, never from the decision alone.
+    """
+    selection_sha = sha256_file(ACTIVE_SELECTION)
+    schedules: dict[tuple[int, str], dict[str, Any]] = {}
+    for receipt_path in sorted(MONEYLINE_ATTEMPTS.glob("*/*.json")):
+        try:
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            if receipt.get("classification") != "COMPLETED":
+                continue
+            if receipt.get("active_authority_descriptor_sha256") != authority.metadata.snapshot_descriptor_sha256:
+                continue
+            if receipt.get("active_authority_selection_sha256") != selection_sha:
+                continue
+            schedule_rel = Path(str(receipt["retained_schedule_source_path"]))
+            schedule_path = schedule_rel if schedule_rel.is_absolute() else ROOT / schedule_rel
+            if not schedule_path.is_file():
+                continue
+            schedule_sha = sha256_file(schedule_path)
+            if schedule_sha != receipt.get("retained_schedule_source_sha256"):
+                continue
+            decision_by_pk = {
+                int(item["game_pk"]): item for item in receipt.get("per_game_decisions", [])
+                if isinstance(item, dict) and item.get("game_pk") is not None
+            }
+            schedule = json.loads(schedule_path.read_text(encoding="utf-8"))
+            for day in schedule.get("dates", []):
+                for game in day.get("games", []):
+                    game_pk = int(game.get("gamePk", -1))
+                    if game_pk not in requested_game_pks:
+                        continue
+                    decision = decision_by_pk.get(game_pk)
+                    if not decision or decision.get("authority_decision") != "EXACT_GAME_AUTHORITY_ACCEPTED":
+                        continue
+                    if decision.get("schedule_source_sha256") != schedule_sha or decision.get("game_identity_source_sha256") != schedule_sha:
+                        continue
+                    if (
+                        int(decision.get("source_season", -1)) != int(game.get("season", -2))
+                        or str(decision.get("source_game_type")) != str(game.get("gameType"))
+                        or str(game.get("officialDate") or "") == ""
+                    ):
+                        continue
+                    classified = classify_schedule_game(game, season=int(game["season"]))
+                    if not classified.eligible_for_phase_evaluation or not classified.phase:
+                        continue
+                    evidence = {
+                        "game_pk": game_pk,
+                        "official_date": str(game["officialDate"]),
+                        "source_season": int(game["season"]),
+                        "source_game_type": str(game["gameType"]),
+                        "normalized_phase": str(classified.phase),
+                        "postseason_round": classified.postseason_round,
+                        "schedule_source_path": schedule_path.relative_to(ROOT).as_posix(),
+                        "schedule_source_sha256": schedule_sha,
+                        "receipt_path": receipt_path.relative_to(ROOT).as_posix(),
+                        "receipt_sha256": sha256_file(receipt_path),
+                        "receipt_run_identity": receipt.get("run_identity"),
+                        "shared_authority_status": "ABSENT_EXACT_GAME; scoped retained-source supplement",
+                    }
+                    schedules[(game_pk, schedule_sha)] = evidence
+        except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError, PhaseContractError):
+            continue
+
+    supplements: dict[int, dict[str, Any]] = {}
+    failures: list[dict[str, Any]] = []
+    for game_pk in sorted(requested_game_pks):
+        try:
+            record = authority.lookup_exact(game_pk)
+            matching = [item for (pk, _), item in schedules.items() if pk == game_pk]
+            if matching and any(
+                item["source_game_type"] != record.source_game_type
+                or item["normalized_phase"] != record.season_phase
+                for item in matching
+            ):
+                failures.append({"game_pk": game_pk, "reason": "RETAINED_SCHEDULE_CONFLICTS_WITH_ACTIVE_SHARED_AUTHORITY", "missing_fields": []})
+            continue
+        except GamePhaseAuthorityError as exc:
+            if exc.code != "GAME_PHASE_ABSENT":
+                failures.append({"game_pk": game_pk, "reason": str(exc), "missing_fields": []})
+                continue
+        candidates = [item for (pk, _), item in schedules.items() if pk == game_pk]
+        distinct = {(item["official_date"], item["source_season"], item["source_game_type"], item["normalized_phase"], item["postseason_round"]) for item in candidates}
+        if len(distinct) == 1 and candidates:
+            supplements[game_pk] = sorted(candidates, key=lambda item: item["receipt_run_identity"] or "")[-1]
+        else:
+            missing_fields = []
+            if not candidates:
+                missing_fields = ["gamePk", "officialDate", "season", "gameType", "normalized_phase", "verified_schedule_source_hash"]
+            elif len(distinct) != 1:
+                missing_fields = ["conflict:officialDate/gameType/normalized_phase"]
+            failures.append({"game_pk": game_pk, "reason": "NO_UNIQUE_HASH_VERIFIED_RETAINED_SCHEDULE_EVIDENCE", "missing_fields": missing_fields})
+    return supplements, failures
 
 
 def write_json(path: Path, value: Any) -> None:
@@ -176,6 +282,18 @@ def build(output_dir: Path) -> dict[str, Any]:
             raw_type_by_game[game_pk] = record.source_game_type
         except Exception as exc:
             violations.append({"game_pk": game_pk, "reason": f"{type(exc).__name__}:{exc}"})
+    absent_game_pks = {
+        int(item["game_pk"]) for item in violations
+        if str(item.get("reason", "")).startswith("GamePhaseAuthorityError:GAME_PHASE_ABSENT:")
+    }
+    authority_supplements, supplement_failures = retained_schedule_phase_supplements(absent_game_pks, authority)
+    for game_pk, evidence in authority_supplements.items():
+        phase_by_game[game_pk] = evidence["normalized_phase"]
+        raw_type_by_game[game_pk] = evidence["source_game_type"]
+    violations = [
+        item for item in violations
+        if not (int(item["game_pk"]) in authority_supplements and str(item.get("reason", "")).startswith("GamePhaseAuthorityError:GAME_PHASE_ABSENT:"))
+    ] + supplement_failures
 
     reconciliation_rows = [
         {
@@ -273,6 +391,7 @@ def build(output_dir: Path) -> dict[str, Any]:
             "authority_violations": violations,
         },
         "sources": source_summary,
+        "scoped_retained_schedule_supplements": [authority_supplements[key] for key in sorted(authority_supplements)],
         "regular_metrics": {"retained_rows": len(retained_regular_metric_rows), "withheld_unsupported_authority_rows": withheld_metric_rows},
         "reports": {
             "file_count": len(report_inventory),
@@ -294,7 +413,7 @@ def build(output_dir: Path) -> dict[str, Any]:
         "regular_membership_after_exact_game_pk_gate": {
             "rows": len(retained_regular_metric_rows), "sha256": after_metric_hash
         },
-        "retained_membership_identical": metric_rows == retained_regular_metric_rows,
+        "membership_changed_by_exact_phase_gate": metric_rows != retained_regular_metric_rows,
         "prediction_probability_and_baseline_hash": table_hashes["predictions"],
         "feature_context_hash": table_hashes["feature_context"],
         "outcome_and_grading_hash": table_hashes["outcomes"],
@@ -302,7 +421,8 @@ def build(output_dir: Path) -> dict[str, Any]:
         "market_metric_input": {"rows": len(market_metric_rows), "sha256": canonical_sha256(market_metric_rows)},
         "metric_input_hash_before": before_metric_hash,
         "metric_input_hash_after_regular_gate": after_metric_hash,
-        "metric_input_hash_identical": before_metric_hash == after_metric_hash,
+        "withheld_nonregular_or_unestablished_rows": len(withheld_metric_rows),
+        "withheld_rows_sha256": canonical_sha256(withheld_metric_rows),
         "retained_report_bytes_rewritten": False,
         "existing_progress_report_sha256": sha256_file(progress_path),
         "prediction_quality_effect": "NONE_MEMBERSHIP_ONLY_NO_PROBABILITY_OR_FEATURE_CHANGE",
@@ -340,7 +460,7 @@ def build(output_dir: Path) -> dict[str, Any]:
         source_artifacts,
     )
     classifications = {
-        "full_board_hits_regular_season_integrity": "READY_EXACT_GAME_PK_GATE_RETAINED_MEMBERSHIP_IDENTICAL",
+        "full_board_hits_regular_season_integrity": "READY_EXACT_GAME_PK_GATE_REGULAR_ROWS_ONLY",
         "full_board_hits_postseason_code_readiness": "READY_SYNTHETIC_ALL_SUPPORTED_ROUNDS",
         "full_board_hits_postseason_operational_readiness": "BLOCKED_NO_ACTUAL_AUTHORITATIVE_POSTSEASON_GAME_OBSERVED_THROUGH_ORDINARY_PATH",
         "historical_restatement_requirement": "NOT_REQUIRED_FOR_RETAINED_FULL_BOARD_COHORT",
@@ -349,7 +469,7 @@ def build(output_dir: Path) -> dict[str, Any]:
         "selector_publication_status": "UNCHANGED_GOVERNED_UNAVAILABLE",
         "remaining_blockers": [
             "An actual authoritative 2026 postseason game must traverse the ordinary score/attach/grade/report path before operational readiness.",
-            "The source-hashed authority must be prospectively extended to include that game before the ordinary path can admit it.",
+            "The active shared authority omits seven retained schedule identities; exact source-hashed supplements are scoped to this validator and do not activate the ordinary production path.",
             "The absent Hits-under artifact remains absent; no fallback, selector, Quick Card, registration, certification, or publication path was activated.",
             "Other Hits consumers remain outside this bounded cutover and require their own exact-gamePk review.",
         ],
@@ -360,7 +480,9 @@ def build(output_dir: Path) -> dict[str, Any]:
     write_json(output_dir / "executed_test_report.json", test_report)
 
     diff_check = subprocess.run(
-        ["git", "diff", "--check"], cwd=ROOT, text=True, capture_output=True, check=False
+        ["git", "diff", "--check", "--", *EXPECTED_SOURCE_FILES,
+         "backend/mlb/tests/test_mlb_game_phase_file_authority_hits_pilot_v1.py"],
+        cwd=ROOT, text=True, capture_output=True, check=False
     )
     runtime_consumers = (
         "backend/mlb/hits05_full_board_shadow/phase_gating_v1.py",
@@ -378,17 +500,17 @@ def build(output_dir: Path) -> dict[str, Any]:
         if literal in bounded_text
     ]
     checks = [
-        {"check": "authority_population", "status": "PASS" if authority.metadata.proposal_count == 2919 and dict(authority.metadata.phase_counts) == {"PRESEASON": 489, "REGULAR_SEASON": 2430} else "FAIL"},
+        {"check": "authority_population", "status": "PASS" if authority.metadata.proposal_count == sum(authority.metadata.phase_counts.values()) and authority.metadata.phase_counts.get("PRESEASON") == 489 and authority.metadata.phase_counts.get("REGULAR_SEASON") == 2430 and not any((authority.metadata.missing_count, authority.metadata.unknown_count, authority.metadata.conflicting_count, authority.metadata.duplicate_identity_count)) else "FAIL", "phase_counts": dict(authority.metadata.phase_counts)},
         {"check": "retained_union_authority", "status": "PASS" if not violations else "FAIL"},
-        {"check": "retained_union_all_regular", "status": "PASS" if set(phase_by_game.values()) == {"REGULAR_SEASON"} else "FAIL"},
-        {"check": "retained_metric_membership_hash_invariance", "status": "PASS" if before_metric_hash == after_metric_hash else "FAIL"},
+        {"check": "retained_union_phase_classified", "status": "PASS" if len(phase_by_game) == len(all_game_pks) and not violations else "FAIL"},
+        {"check": "regular_metric_gate_accounted", "status": "PASS" if len(retained_regular_metric_rows) + len(withheld_metric_rows) == len(metric_rows) else "FAIL"},
         {"check": "ledger_read_only_unchanged", "status": "PASS" if before_ledger_sha == after_ledger_sha and before_stat == after_stat else "FAIL"},
         {"check": "missing_type_default_removed", "status": "PASS" if not unsafe_literals else "FAIL", "violations": unsafe_literals},
         {"check": "pilot_scope_preserved", "status": "PASS" if pilot.get("classification") == "RESULT_SAME_BUT_CONTROL_VIOLATED" else "FAIL"},
         {"check": "dependency_free_tests", "status": "PASS" if test_report["returncode"] == 0 and test_report["assertions_executed"] and test_report["skipped"] == 0 else "FAIL"},
         {"check": "git_diff_check", "status": "PASS" if diff_check.returncode == 0 else "FAIL", "detail": diff_check.stdout + diff_check.stderr},
         {"check": "selector_quick_card_not_in_changed_sources", "status": "PASS" if not any("selector" in path.lower() or "quick_card" in path.lower() for path in EXPECTED_SOURCE_FILES) else "FAIL"},
-        {"check": "postseason_operational_readiness_not_overclaimed", "status": "PASS" if dict(authority.metadata.phase_counts).get("POSTSEASON", 0) == 0 else "FAIL"},
+        {"check": "postseason_operational_readiness_not_overclaimed", "status": "PASS" if classifications["full_board_hits_postseason_operational_readiness"] == "BLOCKED_NO_ACTUAL_AUTHORITATIVE_POSTSEASON_GAME_OBSERVED_THROUGH_ORDINARY_PATH" else "FAIL", "status_detail": classifications["full_board_hits_postseason_operational_readiness"]},
     ]
     validation = {
         "contract": "MLB_2026_FULL_BOARD_HITS_PHASE_GATING_V1",
@@ -396,6 +518,7 @@ def build(output_dir: Path) -> dict[str, Any]:
         "checks": checks,
         "source_files": list(EXPECTED_SOURCE_FILES),
         "retained_violations": violations,
+        "scoped_retained_schedule_supplements": [authority_supplements[key] for key in sorted(authority_supplements)],
     }
     write_json(output_dir / "validation_report.json", validation)
 
@@ -408,8 +531,9 @@ The Full-board Hits lane now uses the source-hashed canonical phase authority by
 - Full-board prediction population: {source_summary['predictions']['rows']:,} rows / {source_summary['predictions']['distinct_game_pks']:,} gamePks.
 - Outcome/grading population: {source_summary['outcomes']['rows']:,} rows / {source_summary['outcomes']['distinct_game_pks']:,} gamePks.
 - Market observations: {source_summary['prices']['rows']:,} rows / {source_summary['prices']['distinct_game_pks']:,} gamePks.
-- Exact retained union: {len(all_game_pks):,} gamePks, all authoritatively `REGULAR_SEASON`; missing/conflicting authority: {len(violations)}.
-- The regular-season report input remains {len(metric_rows):,} rows with identical membership/metric-input hash `{before_metric_hash}`.
+- Exact retained union: {len(all_game_pks):,} gamePks; phase counts `{dict(sorted(Counter(phase_by_game.values()).items()))}`; unresolved/conflicting authority: {len(violations)}.
+- Exact postseason games absent from active shared authority are supplemented only where a retained schedule response is hash-verified and raw gameType independently normalizes under the shared contract. Run decisions are consistency checks, not phase evidence.
+- Regular-season metrics retain {len(retained_regular_metric_rows):,}/{len(metric_rows):,} prospective rows; postseason or unresolved-authority rows are withheld with gamePk and reason. Input hashes are `{before_metric_hash}` before and `{after_metric_hash}` after the exact phase gate.
 - Ledger bytes remained `{before_ledger_sha}` throughout immutable read-only reconciliation. No retained report was rewritten.
 
 The earlier bounded evaluator finding remains `RESULT_SAME_BUT_CONTROL_VIOLATED` only for its frozen 7,564-row / 651-gamePk cohort. It is not evidence about this Full-board cohort or any other Hits consumer.

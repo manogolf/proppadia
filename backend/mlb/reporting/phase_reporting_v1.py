@@ -23,6 +23,7 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     GamePhaseAuthorityError,
     HashedProposalAuthority,
     REPO_ROOT,
+    load_v1_authority,
 )
 from backend.mlb.season_transition.regular_season_close_inventory_v1 import (
     CloseInventoryError,
@@ -232,7 +233,11 @@ def _agreement_control(authority: CanonicalGamePhaseAuthority) -> dict[str, Any]
 
 
 def _close_control(authority: HashedProposalAuthority) -> dict[str, Any]:
-    report = validate_close_inventory_package(authority=authority)
+    # The close inventory is pinned to approved V1 authority.  Operational
+    # reporting may use a later active snapshot, but it must not silently
+    # widen or replace the frozen close population.
+    close_authority = load_v1_authority()
+    report = validate_close_inventory_package(authority=close_authority)
     inventory_path = CLOSE_PACKAGE_PATH / INVENTORY_FILENAME
     try:
         rows = [
@@ -244,7 +249,7 @@ def _close_control(authority: HashedProposalAuthority) -> dict[str, Any]:
         raise PhaseReportingError("CLOSE_INVENTORY_MISSING_OR_MALFORMED") from exc
     partitioned = partition_exact_game_pk_rows(
         rows,
-        authority=authority,
+        authority=close_authority,
         game_pk_field="game_pk",
         scheduled_date_field="scheduled_start",
         identity_fields=("game_pk",),
@@ -257,6 +262,8 @@ def _close_control(authority: HashedProposalAuthority) -> dict[str, Any]:
     )
     return {
         "decision": report["decision"],
+        "authority_contract": "APPROVED_V1_CLOSE_AUTHORITY",
+        "authority_proposal_sha256": close_authority.metadata.proposal_sha256,
         "check_only": report["check_only"],
         "close_package_created": report["close_package_created"],
         "canonical_regular_season_game_pks": report["expected_count"],
