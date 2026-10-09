@@ -345,10 +345,10 @@ def test_main_reports_atomic_publication_counts_without_external_requests(monkey
     monkeypatch.setattr(runner, "_fetch_schedule", lambda *_args: responses.pop(0))
     monkeypatch.setattr(runner, "append_official_finals", lambda rows: 0)
     monkeypatch.setattr(runner, "load_official_finals_before", lambda *_args: [])
-    monkeypatch.setattr(runner, "fetch_ungraded_final_predictions", lambda *_args: [])
+    monkeypatch.setattr(runner, "fetch_ungraded_final_predictions", lambda *_args, **_kwargs: [])
     monkeypatch.setattr(runner, "append_state_snapshot", lambda _row: True)
     inserted = []
-    monkeypatch.setattr(runner, "append_prediction_rows", lambda rows: inserted.extend(rows) or len(rows))
+    monkeypatch.setattr(runner, "append_prediction_rows", lambda rows, **_kwargs: inserted.extend(rows) or len(rows))
     monkeypatch.setattr(runner, "designated_snapshot_exists", lambda *_args: False)
     output = tmp_path / "result.json"
     monkeypatch.setattr(sys, "argv", [
