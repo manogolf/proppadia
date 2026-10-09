@@ -1,0 +1,13 @@
+hypothesis,classification,evidence_summary
+H1,SUPPORTED,"Observed zero excess 26.4, cluster bootstrap 95% CI 10.3 to 43.1; exact-lambda simulation upper tail 0.0002."
+H2,PARTIALLY_SUPPORTED,Zero differences by five lambda quintiles; see lambda_band_distribution.csv.
+H3,PARTIALLY_SUPPORTED,Date-level excess counts; do not interpret small daily slates as independent.
+H4,NOT_SUPPORTED,Large-shortfall subset has 68 rows and 17 zeroes; it does not account for most of the 26.4 zero excess.
+H5,SUPPORTED,Normal-TOI subset n=261 has zero excess 13.0; exact-lambda simulation upper tail 0.0070.
+H6,NOT_SUPPORTED,Observed sub-2 count 225 vs expected 187.0; P0 and P1 discrepancies are +26.4 and +11.6.
+H7,SUPPORTED,Expected 2+ 379.0; observed 341; difference -38.0; cluster bootstrap 95% CI -61.6 to -14.6.
+H8,NOT_SUPPORTED,Observed population variance 2.860; heterogeneous-Poisson mixture variance 2.743; simulation upper tail 0.2514.
+H9,NOT_SUPPORTED,5+ bucket observed-minus-expected -13.0; upper-tail totals are descriptive.
+H10,NOT_SUPPORTED,Observed-minus-expected six-bucket shape; no replacement distribution fitted.
+H11,SUPPORTED,Six-bucket Pearson discrepancy 19.22; exact-lambda simulation upper tail 0.0018.
+H12,PARTIALLY_SUPPORTED,All settled 1.5 rows: expected zero 425.7; observed 440; player-cluster bootstrap excess-zero CI -18.5 to 46.9.
