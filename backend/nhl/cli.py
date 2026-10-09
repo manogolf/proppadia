@@ -72,6 +72,8 @@ from backend.nhl.prediction_lineage import (
     validate_sog_prediction_artifacts,
 )
 from backend.nhl.model_identity import fitted_model_identity
+from backend.nhl.sog_feature_input import begin_capture as begin_sog_feature_capture
+from backend.nhl.sog_feature_input import finalize_capture as finalize_sog_feature_capture
 from backend.nhl.points_hgb_shadow import capture_from_files as capture_points_hgb_shadow
 from backend.nhl.points_hgb_shadow import prepare_authoritative_inputs as prepare_points_hgb_inputs
 from backend.nhl.points_hgb_shadow import build_production_prediction_artifact
@@ -1217,7 +1219,8 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
               odds_observation_dir: Path | None = None,
               expected_odds_manifest_sha256: str | None = None,
               odds_phase: str | None = None,
-              odds_replayed: bool = False):
+              odds_replayed: bool = False,
+              feature_input_binding: dict[str, Any] | None = None):
     # Always regenerate (or overwrite) names for this slate and use the returned path
     names_csv = export_names_csv(slate)
 
@@ -1304,7 +1307,7 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
         package_report, _ = retain_sog_attachment_package(
             package_path=package_path, integrity=integrity,
             attachment_path=out_csv, unmatched_path=unmatched_csv,
-            names_path=names_csv,
+            names_path=names_csv, feature_input_binding=feature_input_binding,
         )
         # Keep a compatibility copy in the site directory while the receipt binds
         # the retained, create-only report package as the evidence authority.
@@ -1828,6 +1831,16 @@ def _run_independent_daily_lanes(
                         odds_result.manifest_sha256 if captured and odds_result else None),
                     "odds_phase": odds_phase,
                     "odds_replayed": bool(odds_result and odds_result.replayed),
+                    "feature_input_binding": {
+                        key: legacy_sog_prediction[key] for key in (
+                            "feature_input_path", "feature_input_sha256",
+                            "feature_input_manifest_sha256", "feature_contract",
+                            "feature_contract_version", "feature_cutoff_utc",
+                            "scorer_sha256", "fitted_model_identity_sha256",
+                            "prediction_artifact_sha256", "parent_daily_run_id",
+                            "canonical_game_set_hash")
+                        if key in legacy_sog_prediction
+                    },
                 })
             if attachment_lane == "saves_attachment":
                 kwargs.update({
@@ -2470,6 +2483,20 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         db, slate, sog_feat_path,
         require_pairings_coverage=(sog_scorer == "ordinal_lgbm"),
     )
+    sog_feature_capture = None
+    sog_feature_cutoff_utc = datetime.now(timezone.utc)
+    if sog_scorer == "poisson_baseline":
+        sog_feature_capture = begin_sog_feature_capture(
+            source_path=sog_feat_path,
+            root=ROOT / "artifacts" / "operational" / "nhl" / "sog_feature_inputs",
+            season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+            slate_date=slate,
+            run_id=daily_run_id,
+            canonical_game_ids=[int(game.game_id) for game in canonical_games],
+            canonical_game_starts_utc={int(game.game_id): str(game.start_time_utc)
+                                       for game in canonical_games},
+            cutoff_utc=sog_feature_cutoff_utc,
+        )
 
     # 4b) Saves / Points exporters are independent lane inputs.
     saves_export_ready = points_export_ready = False
@@ -2746,6 +2773,17 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         scoring_configuration={"scorer": sog_scorer,
                                "segmented_calibration_applied": sog_segmented_calibration_applied})
     legacy_sog_identity["fitted_model_evidence"] = sog_evidence
+    if sog_feature_capture is not None:
+        sog_feature_binding = finalize_sog_feature_capture(
+            sog_feature_capture,
+            scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py",
+            model_family=sog_model_family,
+            model_version=sog_model_version,
+            fitted_model_identity_sha256=str(sog_evidence["fitted_model_identity_sha256"]),
+            prediction_path=calibrated_pred_path,
+            python_executable=str(PY), names_path=names_path,
+        )
+        legacy_sog_identity.update(sog_feature_binding)
     sog_outputs = [legacy_sog_identity]
     if sog_segmented_calibration_applied:
         sog_outputs.append(artifact_identity(sog_calibration_artifact_path))

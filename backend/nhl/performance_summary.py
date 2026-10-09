@@ -434,6 +434,31 @@ def build_production_sog_reference(
     if (not prediction_path.is_file() or _sha(prediction_path) != prediction_sha
             or not output_identity or output_identity.get("sha256") != prediction_sha):
         raise ValueError("PRODUCTION_SOG_PREDICTION_ARTIFACT_BINDING_MISMATCH")
+    feature_binding: dict[str, Any] = {}
+    if lane.get("outputs") and output_identity.get("feature_input_sha256"):
+        feature_path = Path(str(output_identity.get("feature_input_path") or "")).resolve()
+        manifest_path = Path(str(output_identity.get("feature_input_manifest_path") or "")).resolve()
+        manifest_sha = str(output_identity.get("feature_input_manifest_sha256") or "")
+        if (not feature_path.is_file() or _sha(feature_path) != output_identity.get("feature_input_sha256")
+                or not manifest_path.is_file() or _sha(manifest_path) != manifest_sha):
+            raise ValueError("PRODUCTION_SOG_FEATURE_INPUT_ARTIFACT_BINDING_MISMATCH")
+        verify_package(manifest_path.parent)
+        feature_manifest = json.loads(manifest_path.read_text())
+        if (feature_manifest.get("contract") != "NHL_SOG_PRODUCTION_FEATURE_INPUT_V1"
+                or feature_manifest.get("parent_daily_run_id") != run_id
+                or feature_manifest.get("feature_input_sha256") != output_identity.get("feature_input_sha256")
+                or feature_manifest.get("prediction_artifact_sha256") != prediction_sha
+                or feature_manifest.get("fitted_model_identity_sha256") != evidence.get("fitted_model_identity_sha256")
+                or feature_manifest.get("canonical_game_set_hash") != receipt.get("canonical_game_set_hash")):
+            raise ValueError("PRODUCTION_SOG_FEATURE_PREDICTION_LINEAGE_MISMATCH")
+        feature_binding = {
+            "source_daily_run_id": run_id,
+            "feature_input_path": str(feature_path),
+            "feature_input_sha256": output_identity["feature_input_sha256"],
+            "feature_input_manifest_sha256": manifest_sha,
+            "feature_contract": feature_manifest["contract"],
+            "feature_cutoff_utc": feature_manifest["feature_cutoff_utc"],
+        }
     predictions = pd.read_csv(prediction_path)
     if predictions.duplicated(["game_id", "player_id"]).any():
         raise ValueError("PRODUCTION_SOG_DUPLICATE_PLAYER_GAME_IDENTITY")
@@ -492,6 +517,7 @@ def build_production_sog_reference(
         "model_version": "baseline_v1", "parent_daily_run_id": run_id,
         "fitted_model_identity_sha256": evidence.get("fitted_model_identity_sha256"),
         "prediction_artifact_sha256": prediction_sha,
+        **feature_binding,
         "scorer": expected_scorer_path, "scorer_sha256": scorer.get("sha256"),
         "canonical_game_ids": canonical_ids, "canonical_game_set_hash": game_hash,
         "downstream_export_reference": True,
@@ -583,6 +609,12 @@ def build_production_sog_reference(
         "sog_reference_scorer_sha256": str(scorer.get("sha256") or ""),
         "sog_reference_grade_rows_sha256": grade_csv_sha,
     }
+    if feature_binding:
+        provenance.update({
+            "sog_reference_feature_input_sha256": str(feature_binding["feature_input_sha256"]),
+            "sog_reference_feature_input_manifest_sha256": str(feature_binding["feature_input_manifest_sha256"]),
+            "sog_reference_source_daily_run_id": run_id,
+        })
     if unscored_sha:
         provenance["sog_reference_unscored_artifact_sha256"] = unscored_sha
     return display, provenance

@@ -220,6 +220,7 @@ def audit_sog_attachment(
 def retain_sog_attachment_package(
     *, package_path: Path, integrity: dict[str, Any], attachment_path: Path,
     unmatched_path: Path, names_path: Path | None = None,
+    feature_input_binding: dict[str, Any] | None = None,
 ) -> tuple[Path, Path]:
     """Create a run-scoped create-only package of SOG attachment evidence."""
     final = Path(package_path).resolve()
@@ -233,6 +234,8 @@ def retain_sog_attachment_package(
         shutil.copy2(attachment_path, attached)
         shutil.copy2(unmatched_path, unmatched)
         retained = dict(integrity)
+        if feature_input_binding:
+            retained["upstream_production_feature_input"] = dict(feature_input_binding)
         retained["attachment_path"] = str((final / attached.name))
         retained["attachment_sha256"] = sha256_file(attached)
         retained["unmatched_path"] = str((final / unmatched.name))
