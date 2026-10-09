@@ -92,6 +92,40 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
                          (2, 1, 1, 0, 1))
         self.assertFalse(row["pushes_applicable"])
 
+    def test_production_sog_reference_is_separate_and_market_bound(self):
+        reference = {
+            "model_identity": {"name": "sog_reference", "model_family": "poisson_baseline",
+                "model_version": "baseline_v1", "downstream_export_reference": True},
+            "overall": {"wins": 2, "losses": 1, "settled": 3, "unresolved": 1,
+                "pushes": 0, "pushes_applicable": False, "win_rate": 2 / 3},
+            "by_side": {"OVER": {"wins": 1, "losses": 0, "settled": 1, "unresolved": 0,
+                "pushes": 0, "pushes_applicable": False, "win_rate": 1.0},
+                "UNDER": {"wins": 1, "losses": 1, "settled": 2, "unresolved": 1,
+                "pushes": 0, "pushes_applicable": False, "win_rate": 0.5}},
+            "by_line": {"1.5": {"wins": 1, "losses": 0, "settled": 1, "unresolved": 0,
+                "pushes": 0, "pushes_applicable": False, "win_rate": 1.0}},
+            "probability_context": {"average_predicted_probability_overall": 0.7,
+                "average_predicted_probability_for_wins": 0.8,
+                "average_predicted_probability_for_losses": 0.4},
+            "market_coverage": {"status": "AVAILABLE", "reference_name": "sog_reference",
+                "prediction_artifact_sha256": "a" * 64, "matched": 2, "unmatched": 1,
+                "match_rate": 2 / 3, "prediction_rows": 3,
+                "odds_observation_sha": "b" * 64,
+                "population_binding": "EXACT_GAME_PLAYER_PROP_LINE_KEYS"},
+            "unscored": {"missing_prediction_identities": 1, "source_exclusions": 0,
+                "unscored_reason_counts": {"MISSING_PREDICTION:NO_PRODUCTION_SOG_ROW": 1}},
+        }
+        before = self.summary()
+        after = self.summary(production_sog_reference=reference)
+        self.assertEqual(after["models"]["sog"]["ARM_A"], before["models"]["sog"]["ARM_A"])
+        self.assertEqual(after["models"]["sog"]["reference"], reference)
+        coverage = after["models"]["sog"]["market_coverage"]
+        self.assertEqual(coverage["prediction_artifact_sha256"], reference["market_coverage"]["prediction_artifact_sha256"])
+        self.assertEqual(coverage["matched"], reference["market_coverage"]["matched"])
+        self.assertFalse(coverage["affects_grading_denominator"])
+        self.assertIn("Production/reference (8rain export): poisson_baseline / baseline_v1",
+                      render_markdown(after))
+
     def test_points_win_loss_push_unresolved(self):
         row = self.summary()["models"]["points"]["reference"]["overall"]
         self.assertEqual((row["wins"], row["losses"], row["pushes"], row["unresolved"]), (1, 1, 1, 1))

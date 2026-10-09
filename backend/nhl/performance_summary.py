@@ -14,6 +14,8 @@ import pandas as pd
 from backend.nhl.sog_attachment_integrity import verify_sog_integrity_package
 from backend.nhl.sog_coverage_annotations import validate_annotation
 from backend.nhl.daily_capture import verify_package
+from backend.nhl.daily_capture import canonical_game_set_hash
+from backend.nhl.sog_cold_start.core import grade_predictions as grade_sog_predictions
 
 
 SCHEMA_VERSION = "NHL_DAILY_PERFORMANCE_SUMMARY_V6"
@@ -379,6 +381,211 @@ def _verify_daily_receipt(receipt_path: Path, slate_date: str) -> tuple[dict[str
     if marker.get("final_classification") not in {"READY", "READY_WITH_BOUNDED_LANE_WARNING"}:
         raise ValueError("DAILY_RECEIPT_NOT_READY")
     return receipt, _sha(run_dir / "SHA256SUMS")
+
+
+def build_production_sog_reference(
+    *, slate_date: str, package: Path, daily_run_root: Path,
+    market_coverage: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Grade the immutable baseline SOG predictions for a reconciled slate."""
+    package = Path(package).resolve()
+    daily_run_root = Path(daily_run_root).resolve()
+    coverage = dict(market_coverage or {})
+    run_id = str(coverage.get("daily_run_id") or "")
+    if not run_id:
+        candidates = []
+        for receipt_path in daily_run_root.glob("run_id=*/parent_receipt.json"):
+            try:
+                receipt, receipt_manifest_sha = _verify_daily_receipt(receipt_path, slate_date)
+                candidates.append((str(receipt.get("ended_at_utc") or ""), receipt_path,
+                                  receipt, receipt_manifest_sha))
+            except (OSError, ValueError, KeyError, json.JSONDecodeError):
+                continue
+        if not candidates:
+            raise RuntimeError("PRODUCTION_SOG_DAILY_RECEIPT_NOT_FOUND")
+        _, receipt_path, receipt, receipt_manifest_sha = sorted(candidates, reverse=True)[0]
+        run_id = str(receipt.get("parent_daily_run_id") or "")
+    else:
+        receipt_path = daily_run_root / f"run_id={run_id}" / "parent_receipt.json"
+        receipt, receipt_manifest_sha = _verify_daily_receipt(receipt_path, slate_date)
+    if receipt.get("parent_daily_run_id") != run_id:
+        raise ValueError("PRODUCTION_SOG_PARENT_RUN_ID_MISMATCH")
+    lane = receipt.get("lanes", {}).get("legacy_sog", {})
+    if lane.get("status") != "COMPLETE":
+        raise ValueError("PRODUCTION_SOG_LANE_NOT_COMPLETE")
+    evidence_items = [item for item in lane.get("outputs", [])
+                      if item.get("fitted_model_evidence")]
+    if len(evidence_items) != 1:
+        raise ValueError("PRODUCTION_SOG_FITTED_EVIDENCE_CARDINALITY")
+    evidence = evidence_items[0]["fitted_model_evidence"]
+    if (evidence.get("model_family") != "poisson_baseline"
+            or evidence.get("model_version") != "baseline_v1"
+            or evidence.get("scoring_run_id") != run_id):
+        raise ValueError("PRODUCTION_SOG_MODEL_IDENTITY_MISMATCH")
+    scorer = next((item for item in evidence.get("component_artifacts", [])
+                   if item.get("role") == "scorer"), None)
+    expected_scorer_path = "backend/nhl/scripts/score_sog_poisson_baseline.py"
+    if not scorer or scorer.get("canonical_artifact_path") != expected_scorer_path:
+        raise ValueError("PRODUCTION_SOG_SCORER_IDENTITY_MISMATCH")
+    prediction_path = Path(str(evidence.get("prediction_artifact_path", ""))).resolve()
+    prediction_sha = str(evidence.get("prediction_artifact_sha256") or "")
+    output_identity = next((item for item in lane.get("outputs", [])
+                            if item.get("path") == str(prediction_path)), None)
+    if (not prediction_path.is_file() or _sha(prediction_path) != prediction_sha
+            or not output_identity or output_identity.get("sha256") != prediction_sha):
+        raise ValueError("PRODUCTION_SOG_PREDICTION_ARTIFACT_BINDING_MISMATCH")
+    predictions = pd.read_csv(prediction_path)
+    if predictions.duplicated(["game_id", "player_id"]).any():
+        raise ValueError("PRODUCTION_SOG_DUPLICATE_PLAYER_GAME_IDENTITY")
+    canonical_ids = sorted(map(int, receipt.get("canonical_game_ids", [])))
+    game_hash = canonical_game_set_hash(canonical_ids)
+    if (game_hash != receipt.get("canonical_game_set_hash")
+            or sorted(map(int, predictions.game_id.unique())) != canonical_ids
+            or output_identity.get("canonical_game_set_hash") != game_hash):
+        raise ValueError("PRODUCTION_SOG_CANONICAL_GAME_SET_MISMATCH")
+    if len(predictions) != int(output_identity.get("natural_identity_count", len(predictions))):
+        raise ValueError("PRODUCTION_SOG_PREDICTION_ROW_COUNT_MISMATCH")
+
+    outcomes_path = package / "canonical_skater_outcomes.csv"
+    outcomes = pd.read_csv(outcomes_path)
+    required_outcomes = {"canonical_season", "slate_date", "game_id", "player_id", "official_final",
+                         "official_sog", "participation_state", "outcome_source",
+                         "outcome_source_timestamp_utc"}
+    if not required_outcomes.issubset(outcomes.columns):
+        raise ValueError("PRODUCTION_SOG_OFFICIAL_OUTCOME_SCHEMA_MISSING")
+    if not outcomes.slate_date.astype(str).eq(slate_date).all():
+        raise ValueError("PRODUCTION_SOG_OUTCOME_SLATE_MISMATCH")
+    outcomes = outcomes.rename(columns={"participation_state": "participation_status"})
+    outcomes["participation_status"] = outcomes.participation_status.replace({"PARTICIPATED": "APPEARED"})
+    outcomes["canonical_season"] = pd.to_numeric(outcomes.canonical_season, errors="raise").astype(int)
+
+    line_probabilities = ((1.5, "p_over_1_5"), (2.5, "p_over_2_5"), (3.5, "p_over_3_5"))
+    long_rows = []
+    for line, probability_column in line_probabilities:
+        if probability_column not in predictions:
+            raise ValueError("PRODUCTION_SOG_THRESHOLD_PROBABILITY_MISSING")
+        rows = predictions[["game_id", "player_id", "expected_sog", probability_column]].copy()
+        rows = rows.rename(columns={probability_column: "p_over"})
+        rows["p_over"] = pd.to_numeric(rows.p_over, errors="coerce")
+        if rows.p_over.isna().any() or (~rows.p_over.between(0, 1)).any():
+            raise ValueError("PRODUCTION_SOG_INVALID_THRESHOLD_PROBABILITY")
+        rows["p_under"] = 1.0 - rows.p_over
+        rows["line"] = line
+        rows["canonical_season"] = int(receipt.get("canonical_season"))
+        rows["slate_date"] = slate_date
+        rows["selected_side"] = rows.p_over.ge(0.5).map({True: "OVER", False: "UNDER"})
+        long_rows.append(rows)
+    graded = grade_sog_predictions(
+        pd.concat(long_rows, ignore_index=True), outcomes,
+        grading_timestamp_utc=datetime.now(timezone.utc).isoformat())
+    display = _grouped_props(graded, lane="sog")
+    total = display["overall"]
+    if total["settled"] != total["wins"] + total["losses"] + total["pushes"]:
+        raise ValueError("PRODUCTION_SOG_OVERALL_SETTLEMENT_TOTAL_MISMATCH")
+    for key in ("wins", "losses", "settled", "unresolved"):
+        if sum(values[key] for values in display["by_line"].values()) != total[key]:
+            raise ValueError(f"PRODUCTION_SOG_LINE_TOTAL_MISMATCH:{key}")
+        if sum(values[key] for values in display["by_side"].values()) != total[key]:
+            raise ValueError(f"PRODUCTION_SOG_SIDE_TOTAL_MISMATCH:{key}")
+    display["model_identity"] = {
+        "name": "sog_reference", "model_family": "poisson_baseline",
+        "model_version": "baseline_v1", "parent_daily_run_id": run_id,
+        "fitted_model_identity_sha256": evidence.get("fitted_model_identity_sha256"),
+        "prediction_artifact_sha256": prediction_sha,
+        "scorer": expected_scorer_path, "scorer_sha256": scorer.get("sha256"),
+        "canonical_game_ids": canonical_ids, "canonical_game_set_hash": game_hash,
+        "downstream_export_reference": True,
+        "downstream_export": "bin/nhl_ops.sh eight-rain-export --latest-refresh",
+        "side_selection": "OVER when p_over >= 0.5; otherwise UNDER",
+    }
+
+    prediction_keys = set(map(tuple, predictions[["game_id", "player_id"]].astype("int64").to_numpy()))
+    outcome_keys = set(map(tuple, outcomes[["game_id", "player_id"]].astype("int64").to_numpy()))
+    missing_prediction_keys = outcome_keys - prediction_keys
+    prediction_without_outcome_keys = prediction_keys - outcome_keys
+    missing_predictions_path = package / "graded_sog_missing_predictions.csv"
+    missing_predictions_sha = None
+    if missing_predictions_path.is_file():
+        missing_predictions_sha = _sha(missing_predictions_path)
+        missing_predictions = pd.read_csv(missing_predictions_path)
+        if not {"game_id", "player_id", "reason"}.issubset(missing_predictions.columns):
+            raise ValueError("PRODUCTION_SOG_MISSING_PREDICTIONS_SCHEMA_MISSING")
+        package_missing_keys = set(map(tuple, missing_predictions[["game_id", "player_id"]]
+                                       .astype("int64").to_numpy()))
+        if package_missing_keys != missing_prediction_keys:
+            raise ValueError("PRODUCTION_SOG_MISSING_PREDICTIONS_IDENTITY_MISMATCH")
+    elif missing_prediction_keys:
+        raise ValueError("PRODUCTION_SOG_MISSING_PREDICTIONS_ARTIFACT_MISSING")
+    unscored_item = next((item for item in lane.get("outputs", [])
+                          if str(item.get("path", "")).endswith("sog_predictions_unscored.csv")), None)
+    unscored_rows = pd.DataFrame()
+    unscored_sha = None
+    if unscored_item:
+        unscored_path = Path(str(unscored_item["path"])).resolve()
+        unscored_sha = _sha(unscored_path)
+        if unscored_sha != unscored_item.get("sha256"):
+            raise ValueError("PRODUCTION_SOG_UNSCORED_ARTIFACT_HASH_MISMATCH")
+        unscored_rows = pd.read_csv(unscored_path)
+    reason_counts = ({str(key): int(value) for key, value in
+                      unscored_rows.reason.fillna("UNSPECIFIED").value_counts().items()}
+                     if "reason" in unscored_rows else {})
+    if missing_prediction_keys:
+        for reason, count in missing_predictions.reason.fillna("UNSPECIFIED").value_counts().items():
+            key = f"MISSING_PREDICTION:{reason}"
+            reason_counts[key] = reason_counts.get(key, 0) + int(count)
+    source_exclusion_keys = (set(map(tuple, unscored_rows[["game_id", "player_id"]]
+                                     .drop_duplicates().astype("int64").to_numpy()))
+                             if {"game_id", "player_id"}.issubset(unscored_rows.columns)
+                             else set())
+    unscored_union = missing_prediction_keys | source_exclusion_keys
+    display["unscored"] = {
+        "missing_prediction_identities": len(missing_prediction_keys),
+        "source_exclusions": len(source_exclusion_keys),
+        "unscored_identities": len(unscored_union),
+        "predictions_without_official_outcome_identities": len(prediction_without_outcome_keys),
+        "unscored_reason_counts": reason_counts,
+        "source_exclusion_reason_counts": ({str(key): int(value) for key, value in
+            unscored_rows.reason.fillna("UNSPECIFIED").value_counts().items()}
+            if "reason" in unscored_rows else {}),
+        "source_unscored_artifact_sha256": unscored_sha,
+        "canonical_missing_predictions_sha256": missing_predictions_sha,
+    }
+    display["prediction_rows"] = int(len(graded))
+    display["prediction_artifact_sha256"] = prediction_sha
+    if coverage.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
+        if (coverage.get("prediction_artifact_sha256") != prediction_sha
+                or coverage.get("daily_run_id") != run_id):
+            raise ValueError("PRODUCTION_SOG_MARKET_COVERAGE_REFERENCE_MISMATCH")
+        bound_coverage = dict(coverage)
+        bound_coverage.update({"reference_name": "sog_reference",
+            "model_family": "poisson_baseline", "model_version": "baseline_v1",
+            "prediction_rows": int(coverage.get("prediction_rows", len(graded))),
+            "prediction_artifact_sha256": prediction_sha,
+            "odds_observation_sha": coverage.get("odds_observation_manifest_sha256"),
+            "population_binding": coverage.get("population_binding"),
+            "affects_grading_denominator": False})
+    else:
+        bound_coverage = {"status": coverage.get("status", "UNAVAILABLE_FROM_RETAINED_BOUND_EVIDENCE"),
+            "reference_name": "sog_reference", "model_family": "poisson_baseline",
+            "model_version": "baseline_v1", "prediction_rows": int(len(graded)),
+            "matched": None, "unmatched": None, "match_rate": None,
+            "prediction_artifact_sha256": prediction_sha,
+            "odds_observation_sha": None, "population_binding": None,
+            "affects_grading_denominator": False}
+    display["market_coverage"] = bound_coverage
+    stable_grade = graded.drop(columns=["grading_timestamp_utc"], errors="ignore")
+    grade_csv_sha = hashlib.sha256(
+        stable_grade.to_csv(index=False, lineterminator="\n").encode()).hexdigest()
+    provenance = {
+        "sog_reference_prediction_artifact_sha256": prediction_sha,
+        "sog_reference_daily_receipt_manifest_sha256": receipt_manifest_sha,
+        "sog_reference_fitted_model_identity_sha256": str(evidence.get("fitted_model_identity_sha256") or ""),
+        "sog_reference_scorer_sha256": str(scorer.get("sha256") or ""),
+        "sog_reference_grade_rows_sha256": grade_csv_sha,
+    }
+    if unscored_sha:
+        provenance["sog_reference_unscored_artifact_sha256"] = unscored_sha
+    return display, provenance
 
 
 def discover_daily_market_coverage(
@@ -752,6 +959,7 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
                      generated_at_utc: str | None = None,
                      challengers: dict[str, pd.DataFrame] | None = None,
                      market_coverage: dict[str, dict[str, Any]] | None = None,
+                     production_sog_reference: dict[str, Any] | None = None,
                      package: Path | None = None) -> dict[str, Any]:
     challengers = challengers or {}
     moneyline = grades.get("moneyline", pd.DataFrame())
@@ -786,6 +994,8 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
         "points": _model_groups(points, lane="points"),
         "saves": _model_groups(saves, lane="saves"),
     }
+    if production_sog_reference is not None:
+        models["sog"]["reference"] = dict(production_sog_reference)
     if "moneyline" in challengers and not challengers["moneyline"].empty:
         models["moneyline"]["challenger"] = _game_summary(
             challengers["moneyline"], lane="moneyline",
@@ -797,6 +1007,11 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
     if package is not None:
         models["sog"]["unscored"] = _unscored_sog(package)
     market_coverage = market_coverage or {}
+    if production_sog_reference is not None:
+        reference_coverage = production_sog_reference.get("market_coverage")
+        if reference_coverage is not None:
+            market_coverage = dict(market_coverage)
+            market_coverage["sog"] = dict(reference_coverage)
     for lane, frame in (("points", points), ("saves", saves), ("sog", sog)):
         models[lane]["market_coverage"] = dict(market_coverage.get(lane) or {
             "status": "UNAVAILABLE_FROM_RETAINED_BOUND_EVIDENCE",
@@ -884,8 +1099,23 @@ def render_markdown(summary: dict[str, Any]) -> str:
     def prop_section(title: str, models: dict[str, Any]) -> list[str]:
         lines = [f"## {title}"]
         if title == "SOG":
+            reference = models.get("reference")
+            if isinstance(reference, dict) and "overall" in reference:
+                identity = reference.get("model_identity", {})
+                lines.append(
+                    "Production/reference (8rain export): "
+                    f"{identity.get('model_family', 'unknown')} / "
+                    f"{identity.get('model_version', 'unknown')} — "
+                    + prop_body(reference, title)[0])
+                lines.extend(prop_body(reference, title)[1:])
+                probability = reference.get("probability_context", {})
+                if probability:
+                    lines.append("Reference probability context: " + "; ".join(
+                        f"{key.removeprefix('average_predicted_probability_')} "
+                        f"{rate(value)}" for key, value in probability.items()))
+                lines.append("Cold-start shadow arms:")
             for name, display in models.items():
-                if not isinstance(display, dict) or "overall" not in display:
+                if name == "reference" or not isinstance(display, dict) or "overall" not in display:
                     continue
                 lines.append(f"{name}: " + prop_body(display, title)[0])
                 lines.extend(prop_body(display, title)[1:])
@@ -1207,6 +1437,8 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
                             challengers: dict[str, pd.DataFrame] | None = None,
                             challenger_source_artifacts: dict[str, Path] | None = None,
                             market_coverage: dict[str, dict[str, Any]] | None = None,
+                            production_sog_reference: dict[str, Any] | None = None,
+                            production_sog_reference_sources: dict[str, str] | None = None,
                             output_root: Path | None = None) -> tuple[Path, Path, dict[str, Any]]:
     """Build/reuse a summary package from retained reconciliation grade rows."""
     package = Path(package).resolve()
@@ -1228,6 +1460,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         "phase_restatement_lineage_sha256": _sha(restatement / "lineage.json"),
         **{f"{key}_grade_sha256": _sha(path) for key, path in grade_paths.items() if path.is_file()},
     }
+    source_hashes.update(production_sog_reference_sources or {})
     for lane, coverage in (market_coverage or {}).items():
         if coverage.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
             source_hashes[f"{lane}_attachment_integrity_sha256"] = str(
@@ -1288,7 +1521,8 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         package_identity=str(source_summary.get("substantive_identity") or package.name),
         grades=grades, source_artifacts=source_hashes,
         generated_at_utc=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        challengers=challengers, market_coverage=market_coverage, package=package,
+        challengers=challengers, market_coverage=market_coverage,
+        production_sog_reference=production_sog_reference, package=package,
     )
     summary["official_outcomes_status"] = (
         "FINAL" if source_summary.get("status") == "COMPLETE"

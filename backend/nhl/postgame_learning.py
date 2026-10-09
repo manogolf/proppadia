@@ -16,6 +16,7 @@ import pandas as pd
 from backend.nhl.cross_market_shadow.core import grade_capture, verify_manifest
 from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluation_eligible
 from backend.nhl.performance_summary import (
+    build_production_sog_reference,
     discover_daily_market_coverage,
     generate_from_artifacts,
     select_authoritative_summary,
@@ -319,12 +320,23 @@ def ensure_prior_learning(
         integrity_archive_root=Path(market_integrity_archive_root or
             ROOT / "backend/nhl/exports/odds_history"),
     )
+    production_sog_reference = None
+    production_sog_reference_sources: dict[str, str] = {}
+    if "sog" in coverage:
+        production_sog_reference, production_sog_reference_sources = build_production_sog_reference(
+            slate_date=slate_date, package=package,
+            daily_run_root=Path(daily_run_root or os.environ.get(
+                "NHL_DAILY_RECEIPT_ROOT", ROOT / "artifacts/operational/nhl/daily_runs")),
+            market_coverage=coverage.get("sog"),
+        )
     performance_json, performance_md, performance = generate_from_artifacts(
         package=package, restatement=restatement,
         reconciliation_status="CREATED" if created else "REUSED_VALID_PACKAGE",
         challengers=challengers or None,
         challenger_source_artifacts=challenger_sources or None,
         market_coverage=coverage,
+        production_sog_reference=production_sog_reference,
+        production_sog_reference_sources=production_sog_reference_sources,
     )
     performance_json, performance = select_authoritative_summary(
         root=performance_json.parent.parent, expected=performance)
