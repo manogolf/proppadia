@@ -43,7 +43,9 @@ def test_grader_uses_official_goals_plus_assists_and_reports_metrics():
     assert report["n"] == 2
     assert report["mean_observed"] == 1
     assert report["crossing_count"] == 0
+    assert report["average_threshold_log_loss"] > 0
     assert set(report["thresholds"]) == {"prob_over_0_5", "prob_over_1_5", "prob_over_2_5"}
+    assert all("lift" in values for values in report["thresholds"].values())
 
 
 def test_grader_rejects_population_without_settled_participants():

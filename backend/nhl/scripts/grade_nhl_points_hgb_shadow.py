@@ -49,13 +49,20 @@ def grade(predictions: pd.DataFrame, outcomes: pd.DataFrame) -> dict:
            "mean_predicted": float(mu.mean()), "mean_observed": float(y.mean()),
            "count_nll": float(-poisson.logpmf(y, mu).mean()), "crossing_count": int(((df.prob_over_0_5 < df.prob_over_1_5) | (df.prob_over_1_5 < df.prob_over_2_5)).sum()),
            "thresholds": {}}
+    threshold_losses = []
     for line, col in zip((1, 2, 3), ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5")):
         target = (y >= line).astype(int)
         p = np.clip(graded[col].astype(float).to_numpy(), 1e-12, 1 - 1e-12)
-        out["thresholds"][col] = {"base_rate": float(target.mean()), "log_loss": float(log_loss(target, p, labels=[0, 1])),
+        threshold_log_loss = float(log_loss(target, p, labels=[0, 1]))
+        base_rate = float(target.mean())
+        average_precision = float(average_precision_score(target, p)) if target.sum() else None
+        threshold_losses.append(threshold_log_loss)
+        out["thresholds"][col] = {"base_rate": base_rate, "log_loss": threshold_log_loss,
             "brier": float(brier_score_loss(target, p)),
             "auc": float(roc_auc_score(target, p)) if len(np.unique(target)) == 2 else None,
-            "average_precision": float(average_precision_score(target, p)) if target.sum() else None}
+            "average_precision": average_precision,
+            "lift": average_precision / base_rate if average_precision is not None and base_rate > 0 else None}
+    out["average_threshold_log_loss"] = float(np.mean(threshold_losses))
     return out
 
 
