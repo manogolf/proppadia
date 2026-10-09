@@ -1,0 +1,8 @@
+evidence,status,detail
+exact runtime file bytes,PROBABLE_BUT_NOT_CERTIFIED,No pre-run feature SHA in historical receipt; surviving file SHA can be replay-validated.
+source-table as-of versions,UNAVAILABLE,No immutable table snapshots retained in audited packages.
+rolling-window contributing row IDs,RECONSTRUCTABLE,Can be recomputed from retained raw logs but not bound by original receipt; no DB read performed.
+roster observation state,AVAILABLE,Immutable roster observation package referenced by selected runs where captured.
+actual fitted-model/scorer identity,AVAILABLE,Prediction SHA and scorer source available; model family/version retained; identity completeness varies.
+prediction outputs,AVAILABLE,Selected prediction files retained and hashes checked.
+official outcomes,AVAILABLE,Oct. 3–8 reconciliation packages retained; Oct. 9 is pregame/outcome-incomplete.
