@@ -15,9 +15,9 @@
     "G": {"status": "PENDING", "evidence": "Next-day immutable artifact grading cannot run until official outcomes are final."},
     "H": {"status": "PASS", "evidence": "Feature, source manifest, HGB artifact, scorer, Phoenix control, parent run, cutoff, and canonical game-set hashes are bound in the immutable capture lineage; historical feature and score reproduction had 0 unexplained mismatches."},
     "I": {"status": "PASS", "evidence": "The incomplete early feature artifact was explicitly invalidated; the valid capture was regenerated from complete official history. No manual changes were made to the valid feature or prediction artifacts after capture."},
-    "J": {"status": "NOT_MET", "evidence": "The HGB exporter and scorer currently run as a research bridge; normal daily pipeline generation is not wired to reproduce the HGB artifact without research-only invocation."}
+    "J": {"status": "PASS", "evidence": "HGB_ROUTINE_DAILY_INTEGRATION_PASS: normal daily CLI calls backend.nhl.points_hgb_shadow.capture_from_files; bounded dry-run exercises that production helper, dedicated exporter, frozen scorer, immutable retention, and same-feature replay. Evidence: routine_daily_integration_evidence.json; deterministic replay pass; 0 coherence crossings."}
   },
-  "blockers": ["F: prospective official outcome reconciliation pending", "G: immutable prospective grading pending", "J: normal daily pipeline integration not complete"],
+  "blockers": ["F: prospective official outcome reconciliation pending", "G: immutable prospective grading pending"],
   "production_changes": "NONE",
   "phoenix_production_unchanged": true,
   "provider_calls": 0,

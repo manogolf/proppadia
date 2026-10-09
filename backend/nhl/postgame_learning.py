@@ -21,6 +21,7 @@ from backend.nhl.performance_summary import (
     generate_from_artifacts,
     select_authoritative_summary,
 )
+from backend.nhl.points_hgb_shadow import grade_prior_hgb_capture
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -341,6 +342,11 @@ def ensure_prior_learning(
     performance_json, performance = select_authoritative_summary(
         root=performance_json.parent.parent, expected=performance)
     performance_md = performance_json.parent / "performance_summary.md"
+    try:
+        hgb_grade = grade_prior_hgb_capture(slate_date=slate_date, reconciliation_package=package)
+    except Exception as error:
+        hgb_grade = {"status": "GRADE_FAILED_NONBLOCKING",
+                     "reason": f"{type(error).__name__}:{error}"}
     return {
         "prior_slate_date": slate_date, "canonical_phase": (
             "REGULAR_SEASON" if games.game_type_code.astype(int).eq(2).all() else "MIXED_OR_NON_REGULAR"),
@@ -352,6 +358,7 @@ def ensure_prior_learning(
         "performance_summary_md": str(performance_md),
         "performance_summary_identity": performance.get("summary_identity"),
         "performance_summary_revision": performance.get("summary_revision"),
+        "points_hgb_shadow_grade": hgb_grade,
         "performance_summary_lineage_key": performance.get("revision_lineage_key"),
         "moneyline_grade_status": ("NOT_AVAILABLE" if ml.empty else "COMPLETE"
                                     if ml.grading_status.eq("REGULAR_SEASON_GRADED").all()

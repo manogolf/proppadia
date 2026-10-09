@@ -1,10 +1,18 @@
 import numpy as np
 import pandas as pd
 import pytest
+import hashlib
+import json
+import tempfile
+from pathlib import Path
 
 from backend.nhl.scripts.grade_nhl_points_hgb_shadow import grade
 from backend.nhl.scripts.score_nhl_points_hgb_shadow import FEATURES, score
 from backend.nhl.scripts.export_nhl_points_hgb_features import build_features, normalize_history, normalize_slate
+from backend.nhl.points_hgb_shadow import capture_from_files, grade_prior_hgb_capture
+from backend.nhl.daily_capture import verify_package
+from backend.nhl.daily_orchestration import DailyRunRecorder
+from backend.nhl.points_hgb_promotion import evaluate_promotion, selected_production_authority
 
 
 class FixedCountModel:
@@ -83,3 +91,79 @@ def test_operational_feature_builder_enforces_120_day_and_strict_prior_membershi
     assert features.attempts_d10_per60 == 12
     assert features.team_d10_sf_per_game == 5
     assert features.last10_team_sog_share == 0.6
+
+
+def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_path):
+    logs = pd.DataFrame([{"game_id":2026020001,"player_id":11,"team_id":1,"is_home":True,
+        "toi_minutes":20,"pp_toi_minutes":2,"shots_on_goal":4,"shot_attempts":8}])
+    outcomes = pd.DataFrame([{"canonical_season":2026,"game_date":"2026-10-08","game_id":2026020001,
+        "player_id":11,"team_id":1,"official_goals":1,"official_assists":0,"official_final":True}])
+    slate = pd.DataFrame([{"game_id":2026020066,"player_id":11,"game_date":"2026-10-09",
+        "game_start_utc":"2026-10-10T01:00:00Z","is_home":True,"home_team_id":1,"away_team_id":2}])
+    phoenix = pd.DataFrame([{"game_id":2026020066,"player_id":11,"line":line,"prob_over":prob}
+                            for line,prob in ((0.5,0.7),(1.5,0.4),(2.5,0.1))])
+    logs_path, outcomes_path, slate_path, phoenix_path = [tmp_path / n for n in
+        ("logs.csv","outcomes.csv","slate.csv","phoenix.csv")]
+    logs.to_csv(logs_path,index=False); outcomes.to_csv(outcomes_path,index=False)
+    slate.to_csv(slate_path,index=False); phoenix.to_csv(phoenix_path,index=False)
+    digest = hashlib.sha256(phoenix_path.read_bytes()).hexdigest()
+    result = capture_from_files(logs_path=logs_path,outcomes_paths=[outcomes_path],slate_path=slate_path,
+        phoenix_predictions_path=phoenix_path,phoenix_prediction_sha256=digest,
+        phoenix_model_identity_sha256="phoenix-model",phoenix_feature_contract_sha256="phoenix-contract",
+        phoenix_feature_cutoff_utc="2026-10-09T14:00:00Z",slate_date="2026-10-09",season=2026,
+        capture_phase="EARLY",parent_run_id="routine-test",feature_cutoff_utc="2026-10-09T15:00:00Z",
+        output_root=tmp_path/"operational")
+    capture = Path(result["capture_path"])
+    verify_package(capture)
+    receipt=json.loads((capture/"receipt.json").read_text())
+    assert receipt["status"] == "COMPLETE" and receipt["blocking"] is False
+    assert receipt["deterministic_replay"] == "DETERMINISTIC_REPLAY_PASS"
+    assert receipt["coherence_crossing_count"] == 0
+    assert receipt["phoenix_control"]["prediction_sha256"] == digest
+    assert (capture/"model_identity.json").is_file()
+    assert (capture/"feature_contract_identity.json").is_file()
+    reconciliation=tmp_path/"reconciliation"
+    reconciliation.mkdir()
+    pd.DataFrame([{"game_id":2026020066,"player_id":11,"official_points":1,
+        "official_final":True,"participation_state":"PARTICIPATED",
+        "slate_date":"2026-10-09"}]).to_csv(
+            reconciliation/"canonical_skater_outcomes.csv",index=False)
+    pd.DataFrame([{"game_id":2026020066,"game_type_code":2,"official_final":True}]).to_csv(
+        reconciliation/"canonical_game_outcomes.csv",index=False)
+    for name in ("graded_moneyline.csv","graded_puck_line.csv"):
+        pd.DataFrame([{"game_id":2026020066,"grading_status":"REGULAR_SEASON_GRADED"}]).to_csv(
+            reconciliation/name,index=False)
+    (reconciliation/"summary.json").write_text(json.dumps({"status":"COMPLETE","slate_date":"2026-10-09"}))
+    (reconciliation/"RUN_COMPLETE.json").write_text(json.dumps({"status":"COMPLETE"}))
+    files=sorted(x for x in reconciliation.iterdir() if x.is_file())
+    (reconciliation/"SHA256SUMS").write_text("".join(
+        f"{hashlib.sha256(x.read_bytes()).hexdigest()}  {x.name}\n" for x in files))
+    grade_result=grade_prior_hgb_capture(slate_date="2026-10-09",reconciliation_package=reconciliation,
+                                         shadow_root=tmp_path/"operational")
+    assert grade_result["status"] == "COMPLETE"
+    assert grade_result["hgb_metrics"]["participated_graded_count"] == 1
+    assert grade_result["phoenix_same_capture_threshold_metrics"]["prob_over_0_5"]["n"] == 1
+
+
+def test_points_hgb_daily_lane_is_nonblocking_and_authority_defaults_to_phoenix(tmp_path):
+    recorder = DailyRunRecorder(run_id="test",command=[],phase="EARLY")
+    lane=recorder.lane("points_hgb_shadow")
+    assert lane.blocking is False
+    authority=selected_production_authority()
+    assert authority["production_authority"] == "phoenix_v2"
+    gate=tmp_path/"gates.json"
+    gate.write_text(json.dumps({"gates":{k:{"status":"PASS"} for k in "ABCDEFGHIJ"}}))
+    result=evaluate_promotion(gate_path=gate,integration_evidence_path=tmp_path/"missing.json",
+                              shadow_root=tmp_path/"no_grades")
+    assert result["classification"] == "NOT_READY_FOR_HGB_PRODUCTION_PROMOTION"
+
+
+def test_hgb_shadow_failure_does_not_block_phoenix_points_lane():
+    recorder = DailyRunRecorder(run_id="test",command=[],phase="EARLY")
+    recorder.finish_lane("points",status="COMPLETE")
+    recorder.start_lane("points_hgb_shadow")
+    recorder.fail_lane("points_hgb_shadow",RuntimeError("fixture failure"),blocking=False)
+    assert recorder.lane("points").status == "COMPLETE"
+    assert recorder.lane("points_hgb_shadow").status == "FAILED_NONBLOCKING"
+    assert recorder.lane("points_hgb_shadow").blocking is False
+    assert recorder.classification() == "READY_WITH_BOUNDED_LANE_WARNING"

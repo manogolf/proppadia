@@ -149,17 +149,20 @@ class NHLPostgameLearningTest(unittest.TestCase):
             (package / "SHA256SUMS").write_text("".join(
                 f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in files
             ))
-            result = ensure_prior_learning(
-                "2026-09-29", reconciliation_root=root,
-                cross_market_root=Path(tmp) / "cross_market", create_if_missing=False,
-            )
+            with patch("backend.nhl.postgame_learning.discover_daily_market_coverage", return_value={}):
+                result = ensure_prior_learning(
+                    "2026-09-29", reconciliation_root=root,
+                    cross_market_root=Path(tmp) / "cross_market", create_if_missing=False,
+                    daily_run_root=Path(tmp) / "daily_runs",
+                )
             self.assertEqual(result["reconciliation_status"], "REUSED_VALID_PACKAGE")
             self.assertTrue(Path(result["phase_restatement"]).is_dir())
             self.assertEqual(pd.read_csv(Path(result["phase_restatement"]) / "graded_moneyline.csv").grading_status.iloc[0], "REGULAR_SEASON_GRADED")
-            result2 = ensure_prior_learning(
-                "2026-09-29", reconciliation_root=root,
-                cross_market_root=Path(tmp) / "cross_market", create_if_missing=False,
-            )
+            with patch("backend.nhl.postgame_learning.discover_daily_market_coverage", return_value={}):
+                result2 = ensure_prior_learning(
+                    "2026-09-29", reconciliation_root=root,
+                    cross_market_root=Path(tmp) / "cross_market", create_if_missing=False,
+                )
             self.assertEqual(result2["phase_restatement"], result["phase_restatement"])
 
 

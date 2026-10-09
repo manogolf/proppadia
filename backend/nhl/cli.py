@@ -72,6 +72,9 @@ from backend.nhl.prediction_lineage import (
     validate_sog_prediction_artifacts,
 )
 from backend.nhl.model_identity import fitted_model_identity
+from backend.nhl.points_hgb_shadow import capture_from_files as capture_points_hgb_shadow
+from backend.nhl.points_hgb_shadow import prepare_authoritative_inputs as prepare_points_hgb_inputs
+from backend.nhl.points_hgb_promotion import AUTHORITY_PATH, selected_production_authority
 from backend.nhl.attachment_integrity import (
     AttachmentIntegrityError,
     audit_attachment_files,
@@ -1501,6 +1504,14 @@ def _run_independent_daily_lanes(
         recorder.start_lane("points")
         _ACTIVE_DAILY_LANE = "points"
         try:
+            authority = selected_production_authority()
+            if authority["production_authority"] != "phoenix_v2":
+                raise RuntimeError("POINTS_AUTHORITY_SWITCH_REQUIRES_EXPLICIT_CUTOVER_IMPLEMENTATION")
+            recorder.lane("points").inputs.append({"authority_path": str(AUTHORITY_PATH.resolve()),
+                "authority_sha256": sha256_file(AUTHORITY_PATH),
+                "production_authority": authority["production_authority"],
+                "shadow_authorities": authority["shadow_authorities"],
+                "authority_version": authority["authority_version"]})
             points_source_csv = EXPORTS_DIR / "train_nhl_points_v2.csv"
             recorder.lane("points").inputs.append(artifact_identity(points_source_csv))
             points_cutoff = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -1759,6 +1770,60 @@ def _run_independent_daily_lanes(
                 reason=redact_sensitive_text(f"{type(error).__name__}:{error}"))
         except Exception as error:
             recorder.fail_lane(attachment_lane, error, blocking=False)
+
+    # HGB is a separate first-class Points shadow. Its failures never block the
+    # Phoenix lane or its market attachment, and it does not depend on odds.
+    if (recorder.lane("points").status == "COMPLETE"
+            and prediction_identities.get("points")):
+        recorder.start_lane("points_hgb_shadow", inputs=[prediction_identities["points"]])
+        _ACTIVE_DAILY_LANE = "points_hgb_shadow"
+        try:
+            phoenix_identity = prediction_identities["points"]
+            phoenix_evidence = phoenix_identity["fitted_model_evidence"]
+            phoenix_config = phoenix_evidence.get("scoring_configuration", {})
+            cutoff = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            with tempfile.TemporaryDirectory(prefix="nhl_points_hgb_daily_") as temporary:
+                logs_path, outcomes_paths, slate_path, source_summary = prepare_points_hgb_inputs(
+                    db_url=db, canonical_games=list(canonical_games), slate_date=slate,
+                    phoenix_predictions=Path(phoenix_identity["path"]), asof_utc=cutoff,
+                    work_dir=Path(temporary))
+                result = capture_points_hgb_shadow(
+                    logs_path=logs_path, outcomes_paths=outcomes_paths, slate_path=slate_path,
+                    phoenix_predictions_path=Path(phoenix_identity["path"]),
+                    phoenix_prediction_sha256=phoenix_identity["sha256"],
+                    phoenix_model_identity_sha256=str(phoenix_evidence.get("fitted_model_identity_sha256") or ""),
+                    phoenix_feature_contract_sha256=str(phoenix_config.get("feature_contract_sha256") or ""),
+                    phoenix_feature_cutoff_utc=str(phoenix_identity.get("feature_input_cutoff_utc") or ""),
+                    slate_date=slate, season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+                    capture_phase=odds_phase, parent_run_id=daily_run_id,
+                    feature_cutoff_utc=cutoff,
+                    output_root=ROOT / "artifacts/operational/nhl/points_hgb_shadow",
+                    excluded_started_game_ids=source_summary["excluded_started_game_ids"],
+                )
+            result["source_summary"] = source_summary
+            recorder.finish_lane(
+                "points_hgb_shadow", status="COMPLETE", reason="DETERMINISTIC_REPLAY_PASS",
+                outputs=[result],
+            )
+        except Exception as error:
+            message = redact_sensitive_text(f"{type(error).__name__}:{error}")
+            if "ALREADY_STARTED" in message:
+                status = "PREREQUISITES_UNAVAILABLE"
+            elif "COHERENCE" in message:
+                status = "COHERENCE_FAILED"
+            elif "IDENTITY" in message or "MISMATCH" in message or "DUPLICATE" in message:
+                status = "IDENTITY_VALIDATION_FAILED"
+            elif "FEATURE" in message or "HISTORY" in message:
+                status = "FEATURE_EXPORT_FAILED"
+            else:
+                status = "SCORING_FAILED"
+            recorder.finish_lane("points_hgb_shadow", status=status, reason=message)
+    else:
+        recorder.finish_lane(
+            "points_hgb_shadow", status="PREREQUISITES_UNAVAILABLE",
+            reason="PHOENIX_SAME_RUN_CONTROL_UNAVAILABLE",
+        )
+    _ACTIVE_DAILY_LANE = "research_integrity"
 
     recorder.start_lane("research_integrity")
     _ACTIVE_DAILY_LANE = "research_integrity"
@@ -2248,6 +2313,13 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         recorder.finish_lane(
             "cold_start_sog_reference", status="NOT_INVOKED_EXTERNAL_OWNER",
             reason="PREDICTION_ONLY_OBSERVER_OWNS_COLD_START_SOG")
+        recorder.finish_lane(
+            "points_hgb_shadow",
+            status="PREREQUISITES_READY" if points_export_ready else "PREREQUISITES_UNAVAILABLE",
+            reason="MORNING_ONLY_SCORING_NOT_RUN" if points_export_ready else "POINTS_FEATURE_EXPORT_UNAVAILABLE",
+            outputs=([artifact_identity(EXPORTS_DIR / "train_nhl_points_v2.csv")]
+                     if points_export_ready else []),
+        )
         recorder.finish_lane("odds", status="SKIPPED_MORNING_ONLY")
         for lane_name in ("sog_attachment", "points_attachment", "saves_attachment"):
             recorder.finish_lane(lane_name, status="SKIPPED_MORNING_ONLY")

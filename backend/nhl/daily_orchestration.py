@@ -37,6 +37,7 @@ LANE_NAMES = (
     "roster",
     "legacy_sog",
     "points",
+    "points_hgb_shadow",
     "saves",
     "cold_start_sog_reference",
     "odds",
