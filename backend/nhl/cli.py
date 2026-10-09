@@ -74,7 +74,11 @@ from backend.nhl.prediction_lineage import (
 from backend.nhl.model_identity import fitted_model_identity
 from backend.nhl.points_hgb_shadow import capture_from_files as capture_points_hgb_shadow
 from backend.nhl.points_hgb_shadow import prepare_authoritative_inputs as prepare_points_hgb_inputs
-from backend.nhl.points_hgb_promotion import AUTHORITY_PATH, selected_production_authority
+from backend.nhl.points_hgb_shadow import build_production_prediction_artifact
+from backend.nhl.points_hgb_promotion import (
+    AUTHORITY_PATH, HGB_AUTHORITY, PHOENIX_AUTHORITY,
+    assert_hgb_promotion_ready, selected_production_authority,
+)
 from backend.nhl.attachment_integrity import (
     AttachmentIntegrityError,
     audit_attachment_files,
@@ -1403,6 +1407,45 @@ def build_points(slate: str, *, odds_json: Path | None = None,
     run(args)
 
 
+def _score_phoenix_points_artifact(*, recorder, prediction_run_dir: Path,
+                                   canonical_games, slate: str,
+                                   daily_run_id: str, cutoff: str,
+                                   output_path: Path) -> dict[str, Any]:
+    """Score the existing Phoenix model, returning its bound artifact identity."""
+    points_source_csv = EXPORTS_DIR / "train_nhl_points_v2.csv"
+    recorder.lane("points").inputs.append(artifact_identity(points_source_csv))
+    points_input_csv = prediction_run_dir / "points_scoring_input.csv"
+    points_input_identity = prepare_scoring_input(
+        source_path=points_source_csv, output_path=points_input_csv,
+        canonical_games=canonical_games, slate=slate,
+        parent_daily_run_id=daily_run_id,
+        feature_input_cutoff_utc=cutoff,
+        expected_game_set_hash=recorder.canonical_game_set_hash,
+    )
+    points_input_identity.update(artifact_identity(points_input_csv))
+    recorder.lane("points").inputs.append(points_input_identity)
+    score_result = run([
+        PY, SCRIPTS_DIR / "score_nhl_points_with_lineage.py",
+        "--features-csv", points_input_csv,
+        "--model-root", MODELS_DIR / "latest" / "points",
+        "--out", output_path,
+    ])
+    validation = validate_prediction_output(
+        path=output_path, lane="points", canonical_games=canonical_games,
+        slate=slate, parent_daily_run_id=daily_run_id,
+        feature_input_cutoff_utc=cutoff,
+        expected_game_set_hash=recorder.canonical_game_set_hash,
+        expected_lines=POINTS_LINES,
+    )
+    identity = artifact_identity(output_path)
+    identity.update(validation)
+    evidence = _structured_child_summary(score_result.stdout).get("fitted_model_evidence")
+    if not evidence or evidence.get("prediction_artifact_sha256") != identity["sha256"]:
+        raise RuntimeError("POINTS_FITTED_MODEL_EVIDENCE_MISSING_OR_UNBOUND")
+    identity["fitted_model_evidence"] = evidence
+    return identity
+
+
 def _reference_cold_start_sog(recorder: DailyRunRecorder, slate: str) -> None:
     root = ROOT / "artifacts" / "operational" / "nhl" / "sog_prediction_only"
     season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
@@ -1500,66 +1543,195 @@ def _run_independent_daily_lanes(
         recorder.finish_lane(
             "saves", status="FAILED_NONBLOCKING", reason="SAVES_FEATURE_EXPORT_FAILED")
 
-    if points_export_ready:
+    authority = selected_production_authority()
+    production_authority = str(authority["production_authority"])
+    hgb_capture_result: dict[str, Any] | None = None
+    phoenix_shadow_identity: dict[str, Any] | None = None
+    phoenix_shadow_error: str | None = None
+    if points_export_ready or production_authority == HGB_AUTHORITY:
         recorder.start_lane("points")
         _ACTIVE_DAILY_LANE = "points"
+        if production_authority == HGB_AUTHORITY:
+            # HGB is an explicitly selected production lane. A missing HGB
+            # prerequisite must fail this lane instead of falling back.
+            recorder.lane("points").blocking = True
         try:
-            authority = selected_production_authority()
-            if authority["production_authority"] != "phoenix_v2":
-                raise RuntimeError("POINTS_AUTHORITY_SWITCH_REQUIRES_EXPLICIT_CUTOVER_IMPLEMENTATION")
             recorder.lane("points").inputs.append({"authority_path": str(AUTHORITY_PATH.resolve()),
                 "authority_sha256": sha256_file(AUTHORITY_PATH),
-                "production_authority": authority["production_authority"],
-                "shadow_authorities": authority["shadow_authorities"],
+                "production_authority": production_authority,
+                "shadow_authorities": authority.get("shadow_authorities", []),
                 "authority_version": authority["authority_version"]})
-            points_source_csv = EXPORTS_DIR / "train_nhl_points_v2.csv"
-            recorder.lane("points").inputs.append(artifact_identity(points_source_csv))
+            if production_authority == HGB_AUTHORITY:
+                promotion = assert_hgb_promotion_ready()
+                recorder.lane("points").inputs.append({"promotion_evaluator": promotion["classification"],
+                    "promotion_gate_statuses": promotion["gates"]})
+
             points_cutoff = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-            points_input_csv = prediction_run_dir / "points_scoring_input.csv"
-            points_input_identity = prepare_scoring_input(
-                source_path=points_source_csv, output_path=points_input_csv,
-                canonical_games=canonical_games, slate=slate,
-                parent_daily_run_id=daily_run_id,
-                feature_input_cutoff_utc=points_cutoff,
-                expected_game_set_hash=recorder.canonical_game_set_hash,
-            )
-            points_input_identity.update(artifact_identity(points_input_csv))
-            recorder.lane("points").inputs.append(points_input_identity)
-            points_pred_csv = prediction_run_dir / "points_predictions.csv"
-            points_score_result = run([
-                PY, SCRIPTS_DIR / "score_nhl_points_with_lineage.py",
-                "--features-csv", points_input_csv,
-                "--model-root", MODELS_DIR / "latest" / "points",
-                "--out", points_pred_csv,
-            ])
-            points_validation = validate_prediction_output(
-                path=points_pred_csv, lane="points", canonical_games=canonical_games,
-                slate=slate, parent_daily_run_id=daily_run_id,
-                feature_input_cutoff_utc=points_cutoff,
-                expected_game_set_hash=recorder.canonical_game_set_hash,
-                expected_lines=POINTS_LINES,
-            )
-            prediction_identities["points"] = artifact_identity(points_pred_csv)
-            prediction_identities["points"].update(points_validation)
-            points_evidence = _structured_child_summary(points_score_result.stdout).get("fitted_model_evidence")
-            if not points_evidence or points_evidence.get("prediction_artifact_sha256") != prediction_identities["points"]["sha256"]:
-                raise RuntimeError("POINTS_FITTED_MODEL_EVIDENCE_MISSING_OR_UNBOUND")
-            prediction_identities["points"]["fitted_model_evidence"] = points_evidence
-            run([
-                PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
-                "--pred-csv", points_pred_csv, "--project", "nhl",
-                "--prop", "player_points", "--model-family", "phoenix",
-                "--model-version", "phoenix_v2", "--feature-hash", "phoenix_v2",
-                "--expected-sha256", prediction_identities["points"]["sha256"],
-            ])
+            phoenix_pred_path = prediction_run_dir / (
+                "points_predictions.csv" if production_authority == PHOENIX_AUTHORITY
+                else "points_phoenix_shadow_predictions.csv")
+            if points_export_ready:
+                try:
+                    phoenix_shadow_identity = _score_phoenix_points_artifact(
+                        recorder=recorder, prediction_run_dir=prediction_run_dir,
+                        canonical_games=canonical_games, slate=slate,
+                        daily_run_id=daily_run_id, cutoff=points_cutoff,
+                        output_path=phoenix_pred_path,
+                    )
+                except Exception as phoenix_error:
+                    if production_authority == PHOENIX_AUTHORITY:
+                        raise
+                    phoenix_shadow_error = f"{type(phoenix_error).__name__}:{phoenix_error}"
+                if production_authority == PHOENIX_AUTHORITY:
+                    if phoenix_shadow_identity is None:
+                        raise RuntimeError("PHOENIX_PRODUCTION_SCORING_UNAVAILABLE")
+                    prediction_identities["points"] = phoenix_shadow_identity
+                    run([
+                        PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
+                        "--pred-csv", phoenix_pred_path, "--project", "nhl",
+                        "--prop", "player_points", "--model-family", "phoenix",
+                        "--model-version", "phoenix_v2", "--feature-hash", "phoenix_v2",
+                        "--expected-sha256", phoenix_shadow_identity["sha256"],
+                    ])
+            elif production_authority == PHOENIX_AUTHORITY:
+                raise RuntimeError("POINTS_FEATURE_EXPORT_FAILED")
+            else:
+                raise RuntimeError("UNSUPPORTED_POINTS_PRODUCTION_AUTHORITY")
+
+            if production_authority == HGB_AUTHORITY:
+                # Phoenix is only a same-run shadow in this state. If its
+                # scorer failed, continue with canonical roster identities.
+                if phoenix_shadow_identity is None and phoenix_shadow_error is None:
+                    phoenix_shadow_error = "PHOENIX_SHADOW_SCORING_UNAVAILABLE"
+                try:
+                    temporary = tempfile.TemporaryDirectory(prefix="nhl_points_hgb_daily_")
+                    logs_path, outcomes_paths, slate_path, source_summary = prepare_points_hgb_inputs(
+                        db_url=db, canonical_games=list(canonical_games), slate_date=slate,
+                        phoenix_predictions=(Path(phoenix_shadow_identity["path"])
+                                             if phoenix_shadow_identity else None),
+                        asof_utc=points_cutoff, work_dir=Path(temporary.name))
+                    hgb_capture_result = capture_points_hgb_shadow(
+                        logs_path=logs_path, outcomes_paths=outcomes_paths, slate_path=slate_path,
+                        phoenix_predictions_path=(Path(phoenix_shadow_identity["path"])
+                                                  if phoenix_shadow_identity else None),
+                        phoenix_prediction_sha256=(phoenix_shadow_identity["sha256"]
+                                                   if phoenix_shadow_identity else None),
+                        phoenix_model_identity_sha256=(phoenix_shadow_identity["fitted_model_evidence"]["fitted_model_identity_sha256"]
+                                                       if phoenix_shadow_identity else None),
+                        phoenix_feature_contract_sha256=(phoenix_shadow_identity["fitted_model_evidence"].get("scoring_configuration", {}).get("feature_contract_sha256")
+                                                         if phoenix_shadow_identity else None),
+                        phoenix_feature_cutoff_utc=(phoenix_shadow_identity.get("feature_input_cutoff_utc")
+                                                    if phoenix_shadow_identity else None),
+                        slate_date=slate, season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+                        capture_phase=odds_phase, parent_run_id=daily_run_id,
+                        feature_cutoff_utc=points_cutoff,
+                        output_root=ROOT / "artifacts/operational/nhl/points_hgb_shadow",
+                        excluded_started_game_ids=source_summary["excluded_started_game_ids"],
+                    )
+                    hgb_capture_result["source_summary"] = source_summary
+                except Exception as shadow_error:
+                    # Reaching this branch means the HGB production prerequisites
+                    # failed; it remains a visible blocking Points failure.
+                    raise RuntimeError(f"HGB_PRODUCTION_FEATURE_OR_SCORING_FAILED:{shadow_error}") from shadow_error
+                finally:
+                    temporary.cleanup()
+
+                points_pred_csv = prediction_run_dir / "points_predictions.csv"
+                production_identity = build_production_prediction_artifact(
+                    capture_path=Path(hgb_capture_result["capture_path"]),
+                    output_path=points_pred_csv, canonical_games=list(canonical_games),
+                    slate_date=slate, parent_run_id=daily_run_id,
+                    feature_cutoff_utc=points_cutoff,
+                    canonical_game_set_sha256=recorder.canonical_game_set_hash,
+                )
+                production_validation = validate_prediction_output(
+                    path=points_pred_csv, lane="points", canonical_games=canonical_games,
+                    slate=slate, parent_daily_run_id=daily_run_id,
+                    feature_input_cutoff_utc=points_cutoff,
+                    expected_game_set_hash=recorder.canonical_game_set_hash,
+                    expected_lines=POINTS_LINES,
+                )
+                production_identity.update(production_validation)
+                model_identity = hgb_capture_result["model_identity"]
+                production_identity["model_family"] = "hist_gradient_boosting"
+                production_identity["model_version"] = HGB_AUTHORITY
+                production_identity["production_authority"] = HGB_AUTHORITY
+                production_identity.update({
+                    "hgb_capture_path": hgb_capture_result["capture_path"],
+                    "hgb_capture_timestamp_utc": hgb_capture_result["capture_timestamp_utc"],
+                    "hgb_feature_artifact_sha256": hgb_capture_result["feature_sha256"],
+                    "hgb_model_artifact_sha256": model_identity["model_artifact_sha256"],
+                    "feature_contract": model_identity["feature_contract"],
+                    "feature_contract_sha256": model_identity["feature_contract_sha256"],
+                    "history_contract": model_identity["history_contract"],
+                    "history_contract_identity_sha256": model_identity["history_contract_identity_sha256"],
+                })
+                production_identity["phoenix_shadow"] = ({"status": "COMPLETE",
+                    "model": "PHOENIX_POINTS_INCUMBENT_SHADOW",
+                    "model_family": "phoenix", "model_version": PHOENIX_AUTHORITY,
+                    "feature_contract": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2",
+                    "path": phoenix_shadow_identity["path"],
+                    "sha256": phoenix_shadow_identity["sha256"],
+                    "fitted_model_identity_sha256": phoenix_shadow_identity["fitted_model_evidence"]["fitted_model_identity_sha256"],
+                    "feature_contract_sha256": phoenix_shadow_identity["fitted_model_evidence"].get("scoring_configuration", {}).get("feature_contract_sha256")}
+                    if phoenix_shadow_identity else {"status": "FAILED_NONBLOCKING",
+                        "model": "PHOENIX_POINTS_INCUMBENT_SHADOW",
+                        "model_family": "phoenix", "model_version": PHOENIX_AUTHORITY,
+                        "feature_contract": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2",
+                        "reason": phoenix_shadow_error})
+                production_identity["fitted_model_evidence"] = {
+                    "model_family": "hist_gradient_boosting",
+                    "model_version": HGB_AUTHORITY,
+                    "fitted_model_identity_sha256": model_identity["model_identity_sha256"],
+                    "prediction_artifact_path": str(points_pred_csv.resolve()),
+                    "prediction_artifact_sha256": production_identity["sha256"],
+                    "scoring_run_id": daily_run_id,
+                    "component_artifacts": [
+                        {"canonical_artifact_path": "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/nhl_points_count_hgb_v1.joblib",
+                         "role": "frozen_fitted_model", "sha256": model_identity["model_artifact_sha256"]},
+                        {"canonical_artifact_path": "backend/nhl/scripts/score_nhl_points_hgb_shadow.py",
+                         "role": "scorer", "sha256": model_identity["scorer_sha256"]},
+                        {"canonical_artifact_path": "backend/nhl/scripts/export_nhl_points_hgb_features.py",
+                         "role": "feature_exporter", "sha256": sha256_file(ROOT / "backend/nhl/scripts/export_nhl_points_hgb_features.py")},
+                    ],
+                    "scoring_configuration": {
+                        "feature_contract": model_identity["feature_contract"],
+                        "feature_contract_sha256": model_identity["feature_contract_sha256"],
+                        "feature_columns": model_identity["feature_columns"],
+                        "history_contract": model_identity["history_contract"],
+                        "history_contract_identity_sha256": model_identity["history_contract_identity_sha256"],
+                        "probability_construction": "POISSON_SURVIVAL_FROM_FROZEN_HGB_EXPECTED_COUNT",
+                        "calibration": "NONE", "pava": False, "class_weighting": False,
+                        "scored_lines": list(POINTS_LINES),
+                    },
+                    "source_hgb_capture_prediction_sha256": production_identity["source_hgb_capture_prediction_sha256"],
+                }
+                prediction_identities["points"] = production_identity
+                run([
+                    PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
+                    "--pred-csv", points_pred_csv, "--project", "nhl",
+                    "--prop", "player_points", "--model-family", "hist_gradient_boosting",
+                    "--model-version", HGB_AUTHORITY,
+                    "--feature-hash", f"{HGB_AUTHORITY}:{model_identity['model_identity_sha256']}",
+                    "--model-params-json", json.dumps({
+                        "fitted_model_identity_sha256": model_identity["model_identity_sha256"],
+                        "model_artifact_sha256": model_identity["model_artifact_sha256"],
+                        "feature_contract_sha256": model_identity["feature_contract_sha256"],
+                        "history_contract": model_identity["history_contract"],
+                    }),
+                    "--expected-sha256", production_identity["sha256"],
+                ])
             recorder.finish_lane(
                 "points", outputs=[prediction_identities["points"]],
                 database_rows_written=True)
         except Exception as error:
-            recorder.fail_lane("points", error, blocking=False)
+            recorder.fail_lane("points", error,
+                               blocking=True if production_authority == HGB_AUTHORITY else False)
     else:
         recorder.finish_lane(
-            "points", status="FAILED_NONBLOCKING", reason="POINTS_FEATURE_EXPORT_FAILED")
+            "points", status="FAILED_BLOCKING" if production_authority == HGB_AUTHORITY else "FAILED_NONBLOCKING",
+            reason="POINTS_FEATURE_EXPORT_FAILED",
+        )
 
     _reference_cold_start_sog(recorder, slate)
 
@@ -1774,6 +1946,20 @@ def _run_independent_daily_lanes(
     # HGB is a separate first-class Points shadow. Its failures never block the
     # Phoenix lane or its market attachment, and it does not depend on odds.
     if (recorder.lane("points").status == "COMPLETE"
+            and prediction_identities.get("points")
+            and production_authority == HGB_AUTHORITY):
+        recorder.start_lane("points_hgb_shadow", inputs=[prediction_identities["points"]])
+        _ACTIVE_DAILY_LANE = "points_hgb_shadow"
+        recorder.finish_lane(
+            "points_hgb_shadow", status="COMPLETE",
+            reason="HGB_PRODUCTION_PHOENIX_INCUMBENT_SHADOW",
+            outputs=[hgb_capture_result or {},
+                     {"shadow_role": "PHOENIX_POINTS_INCUMBENT_SHADOW",
+                      **(phoenix_shadow_identity or {}),
+                      "status": "COMPLETE" if phoenix_shadow_identity else "FAILED_NONBLOCKING",
+                      "reason": phoenix_shadow_error}],
+        )
+    elif (recorder.lane("points").status == "COMPLETE"
             and prediction_identities.get("points")):
         recorder.start_lane("points_hgb_shadow", inputs=[prediction_identities["points"]])
         _ACTIVE_DAILY_LANE = "points_hgb_shadow"

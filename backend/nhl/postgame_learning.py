@@ -21,7 +21,10 @@ from backend.nhl.performance_summary import (
     generate_from_artifacts,
     select_authoritative_summary,
 )
-from backend.nhl.points_hgb_shadow import grade_prior_hgb_capture
+from backend.nhl.points_hgb_shadow import (
+    discover_daily_points_authority,
+    grade_prior_hgb_capture,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -330,6 +333,27 @@ def ensure_prior_learning(
                 "NHL_DAILY_RECEIPT_ROOT", ROOT / "artifacts/operational/nhl/daily_runs")),
             market_coverage=coverage.get("sog"),
         )
+    daily_run_root = Path(daily_run_root or os.environ.get(
+        "NHL_DAILY_RECEIPT_ROOT", ROOT / "artifacts/operational/nhl/daily_runs"))
+    try:
+        hgb_grade = grade_prior_hgb_capture(
+            slate_date=slate_date, reconciliation_package=package,
+            daily_run_root=daily_run_root)
+    except Exception as error:
+        hgb_grade = {"status": "GRADE_FAILED_NONBLOCKING",
+                     "reason": f"{type(error).__name__}:{error}"}
+    points_authority_context = discover_daily_points_authority(
+        slate_date=slate_date, daily_run_root=daily_run_root)
+    if points_authority_context and hgb_grade.get("status") == "COMPLETE":
+        points_authority_context["hgb_evaluation"] = {
+            "role": hgb_grade.get("evaluation_role", "SHADOW"),
+            "grade_path": hgb_grade.get("grade_path"),
+            "grade_sha256": hgb_grade.get("grade_sha256"),
+            "metrics": hgb_grade.get("hgb_metrics"),
+            "phoenix_same_capture_threshold_metrics": hgb_grade.get(
+                "phoenix_same_capture_threshold_metrics"),
+            "comparison_type": hgb_grade.get("comparison_type"),
+        }
     performance_json, performance_md, performance = generate_from_artifacts(
         package=package, restatement=restatement,
         reconciliation_status="CREATED" if created else "REUSED_VALID_PACKAGE",
@@ -338,15 +362,11 @@ def ensure_prior_learning(
         market_coverage=coverage,
         production_sog_reference=production_sog_reference,
         production_sog_reference_sources=production_sog_reference_sources,
+        points_authority_context=points_authority_context,
     )
     performance_json, performance = select_authoritative_summary(
         root=performance_json.parent.parent, expected=performance)
     performance_md = performance_json.parent / "performance_summary.md"
-    try:
-        hgb_grade = grade_prior_hgb_capture(slate_date=slate_date, reconciliation_package=package)
-    except Exception as error:
-        hgb_grade = {"status": "GRADE_FAILED_NONBLOCKING",
-                     "reason": f"{type(error).__name__}:{error}"}
     return {
         "prior_slate_date": slate_date, "canonical_phase": (
             "REGULAR_SEASON" if games.game_type_code.astype(int).eq(2).all() else "MIXED_OR_NON_REGULAR"),

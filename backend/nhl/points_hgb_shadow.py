@@ -26,6 +26,7 @@ CONTRACT = scorer.CONTRACT_PATH
 MODEL = scorer.MODEL_PATH
 FEATURE_CONTRACT = "NHL_POINTS_LEADER_CORE_FEATURES_V1"
 HISTORY_CONTRACT = "120_DAY_LEGACY_BOUND"
+HGB_AUTHORITY_LOCAL = "NHL_POINTS_COUNT_HGB_V1"
 FEATURES = tuple(scorer.FEATURES)
 
 
@@ -34,7 +35,7 @@ def sha(path: Path) -> str:
 
 
 def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
-                                slate_date: str, phoenix_predictions: Path,
+                                slate_date: str, phoenix_predictions: Path | None,
                                 asof_utc: str, work_dir: Path) -> tuple[Path, list[Path], Path, dict[str, Any]]:
     """Build the HGB exporter inputs from official reconciliation and read-only logs."""
     from backend.nhl.postgame_learning import verify_reconciliation_package
@@ -104,13 +105,19 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
     logs_path = work_dir / "official_skater_logs.csv"
     logs.to_csv(logs_path, index=False)
 
-    phoenix = pd.read_csv(phoenix_predictions)
     game_frame = pd.DataFrame([{"game_id": int(g.game_id), "game_date": slate_date,
         "game_start_utc": g.start_time_utc, "home_team_id": int(g.home_team_id),
         "away_team_id": int(g.away_team_id)} for g in canonical_games])
     roster = pd.DataFrame(roster_rows, columns=roster_columns)
-    phoenix_identities = phoenix[["game_id", "player_id"]].drop_duplicates()
-    slate = phoenix_identities.merge(roster, on=["game_id", "player_id"], how="left", validate="one_to_one")
+    if phoenix_predictions is not None and Path(phoenix_predictions).is_file():
+        phoenix = pd.read_csv(phoenix_predictions)
+        slate_identities = phoenix[["game_id", "player_id"]].drop_duplicates()
+    else:
+        # Production HGB can score from the canonical roster even if the
+        # incumbent shadow scorer is unavailable. The shadow failure is
+        # recorded independently by the caller.
+        slate_identities = roster[["game_id", "player_id"]].drop_duplicates()
+    slate = slate_identities.merge(roster, on=["game_id", "player_id"], how="left", validate="one_to_one")
     slate = slate.merge(game_frame, on="game_id", how="left", validate="many_to_one")
     eligible = pd.to_datetime(slate.game_start_utc, utc=True).gt(pd.Timestamp(asof_utc))
     started_games = sorted(map(int, slate.loc[~eligible, "game_id"].unique()))
@@ -132,14 +139,17 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
 
 def capture_from_files(
     *, logs_path: Path, outcomes_paths: list[Path], slate_path: Path,
-    phoenix_predictions_path: Path, phoenix_prediction_sha256: str,
-    phoenix_model_identity_sha256: str, phoenix_feature_contract_sha256: str,
-    phoenix_feature_cutoff_utc: str, slate_date: str, season: int,
+    phoenix_predictions_path: Path | None, phoenix_prediction_sha256: str | None,
+    phoenix_model_identity_sha256: str | None, phoenix_feature_contract_sha256: str | None,
+    phoenix_feature_cutoff_utc: str | None, slate_date: str, season: int,
     capture_phase: str, parent_run_id: str, feature_cutoff_utc: str,
     output_root: Path, excluded_started_game_ids: list[int] | None = None,
 ) -> dict[str, Any]:
     """Exercise exporter and scorer as production does, then retain a sealed capture."""
-    if sha(phoenix_predictions_path) != phoenix_prediction_sha256:
+    phoenix_available = (phoenix_predictions_path is not None
+                         and Path(phoenix_predictions_path).is_file()
+                         and phoenix_prediction_sha256 is not None)
+    if phoenix_available and sha(phoenix_predictions_path) != phoenix_prediction_sha256:
         raise ValueError("PHOENIX_CONTROL_HASH_MISMATCH")
     contract = json.loads(CONTRACT.read_text())
     if contract.get("research_model_id") != "NHL_POINTS_COUNT_HGB_V1":
@@ -181,14 +191,15 @@ def capture_from_files(
             raise ValueError("HGB_STRICT_PRIOR_CUTOFF_MISMATCH")
         if manifest.get("same_day_history_rows") != 0 or manifest.get("history_rows_after_cutoff") != 0:
             raise ValueError("HGB_HISTORY_LEAKAGE")
-        phoenix = pd.read_csv(phoenix_predictions_path)
         keycols = ["game_id", "player_id"]
         if features.duplicated(keycols).any():
             raise ValueError("HGB_IDENTITY_VALIDATION_FAILED:DUPLICATE")
         hgb_keys = set(map(tuple, features[keycols].astype("int64").to_numpy()))
-        phoenix_keys = set(map(tuple, phoenix[keycols].drop_duplicates().astype("int64").to_numpy()))
-        if not hgb_keys.issubset(phoenix_keys):
-            raise ValueError("HGB_PHOENIX_IDENTITY_SET_MISMATCH")
+        phoenix = pd.read_csv(phoenix_predictions_path) if phoenix_available else pd.DataFrame()
+        if phoenix_available:
+            phoenix_keys = set(map(tuple, phoenix[keycols].drop_duplicates().astype("int64").to_numpy()))
+            if not hgb_keys.issubset(phoenix_keys):
+                raise ValueError("HGB_PHOENIX_IDENTITY_SET_MISMATCH")
         game_hash = canonical_game_set_hash(features.game_id.unique())
         if game_hash != manifest.get("canonical_game_set_hash"):
             raise ValueError("HGB_CANONICAL_GAME_SET_MISMATCH")
@@ -209,7 +220,8 @@ def capture_from_files(
         phoenix_out = capture / "phoenix_control_predictions.csv"
         shutil.copyfile(source_features, feature_out)
         first.to_csv(prediction_out, index=False, float_format="%.17g")
-        shutil.copyfile(phoenix_predictions_path, phoenix_out)
+        if phoenix_available:
+            shutil.copyfile(phoenix_predictions_path, phoenix_out)
         # Deterministic replay uses only the retained feature artifact and fitted model.
         replay = scorer.score(pd.read_csv(feature_out), fitted)
         with tempfile.TemporaryDirectory(prefix="nhl_points_hgb_replay_") as replay_dir:
@@ -226,6 +238,7 @@ def capture_from_files(
             "scaler_identity": {"type":"sklearn.preprocessing.StandardScaler", "joblib_hash":scaler_sha},
             "hgb_artifact_identity": contract.get("fitted_artifact_sha256"),
             "scorer_sha256": sha(ROOT / "backend/nhl/scripts/score_nhl_points_hgb_shadow.py"),
+            "feature_exporter_sha256": sha(ROOT / "backend/nhl/scripts/export_nhl_points_hgb_features.py"),
             "model_contract_sha256": sha(CONTRACT),
             "feature_contract": FEATURE_CONTRACT,
             "feature_contract_sha256": sha(ROOT / "artifacts/analysis/nhl/points_hgb_operational_bridge/2026-10-09/operational_feature_contract_v2.json"),
@@ -236,6 +249,13 @@ def capture_from_files(
             "poisson_threshold_derivation": contract["thresholds"],
             "poisson_threshold_derivation_identity": hashlib.sha256(json.dumps(contract["thresholds"], sort_keys=True).encode()).hexdigest(),
         }
+        phoenix_control = ({"status": "BOUND", "parent_run_id": parent_run_id,
+                "prediction_sha256": phoenix_prediction_sha256,
+                "fitted_model_identity_sha256": phoenix_model_identity_sha256,
+                "feature_contract_sha256": phoenix_feature_contract_sha256,
+                "prediction_row_count": int(len(phoenix)), "feature_cutoff_utc": phoenix_feature_cutoff_utc,
+                "prediction_path": "phoenix_control_predictions.csv", "file_sha256": sha(phoenix_out)}
+            if phoenix_available else {"status": "UNAVAILABLE_PHOENIX_SHADOW_FAILED"})
         body = {
             "schema_version": "NHL_POINTS_HGB_ROUTINE_SHADOW_CAPTURE_V1",
             "status": "COMPLETE", "research_model_id": contract["research_model_id"],
@@ -251,12 +271,7 @@ def capture_from_files(
             "prediction_count": int(len(first)), "coherence_crossing_count": crossings,
             "deterministic_replay": "DETERMINISTIC_REPLAY_PASS", "replay_prediction_sha256": replay_sha,
             "model_identity": identity,
-            "phoenix_control": {"parent_run_id": parent_run_id,
-                "prediction_sha256": phoenix_prediction_sha256,
-                "fitted_model_identity_sha256": phoenix_model_identity_sha256,
-                "feature_contract_sha256": phoenix_feature_contract_sha256,
-                "prediction_row_count": int(len(phoenix)), "feature_cutoff_utc": phoenix_feature_cutoff_utc,
-                "prediction_path": "phoenix_control_predictions.csv", "file_sha256": sha(phoenix_out)},
+            "phoenix_control": phoenix_control,
         }
         (capture / "model_identity.json").write_text(json.dumps(identity, indent=2, sort_keys=True) + "\n")
         contract_identity = {
@@ -272,8 +287,10 @@ def capture_from_files(
         marker = {"status": "COMPLETE", "parent_run_id": parent_run_id,
                   "prediction_sha256": body["prediction_sha256"]}
         (capture / "RUN_COMPLETE.json").write_text(json.dumps(marker, indent=2, sort_keys=True) + "\n")
-        names = ("features.csv", "predictions.csv", "phoenix_control_predictions.csv",
-                 "model_identity.json", "feature_contract_identity.json", "receipt.json", "RUN_COMPLETE.json")
+        names = ["features.csv", "predictions.csv", "model_identity.json",
+                 "feature_contract_identity.json", "receipt.json", "RUN_COMPLETE.json"]
+        if phoenix_available:
+            names.append("phoenix_control_predictions.csv")
         (capture / "SHA256SUMS").write_text("".join(f"{sha(capture / name)}  {name}\n" for name in names))
         body["capture_path"] = str(capture)
         body["manifest_sha256"] = sha(capture / "SHA256SUMS")
@@ -283,8 +300,145 @@ def capture_from_files(
         return body
 
 
+def build_production_prediction_artifact(*, capture_path: Path, output_path: Path,
+                                         canonical_games: list[Any], slate_date: str,
+                                         parent_run_id: str, feature_cutoff_utc: str,
+                                         canonical_game_set_sha256: str) -> dict[str, Any]:
+    """Bind retained HGB probabilities to the normal Points line-grain contract."""
+    from backend.nhl.prediction_lineage import build_canonical_game_map
+
+    capture_path = Path(capture_path)
+    capture_receipt = json.loads((capture_path / "receipt.json").read_text())
+    verify_features = pd.read_csv(capture_path / "features.csv")
+    predictions = pd.read_csv(capture_path / "predictions.csv")
+    key = ["game_id", "player_id"]
+    if verify_features.duplicated(key).any() or predictions.duplicated(key).any():
+        raise ValueError("HGB_PRODUCTION_IDENTITY_DUPLICATE")
+    features = verify_features.merge(predictions, on=key, how="outer", validate="one_to_one",
+                                     suffixes=("", "_prediction"), indicator=True)
+    if not features._merge.eq("both").all():
+        raise ValueError("HGB_PRODUCTION_FEATURE_PREDICTION_IDENTITY_MISMATCH")
+    canonical = build_canonical_game_map(canonical_games, slate=slate_date,
+                                         expected_game_set_hash=canonical_game_set_sha256)
+    if set(features.game_id.astype(int)) != set(canonical):
+        raise ValueError("HGB_PRODUCTION_PARTIAL_CANONICAL_SLATE")
+    starts = pd.to_datetime(features.game_start_utc, utc=True, errors="coerce")
+    cutoff = pd.Timestamp(feature_cutoff_utc)
+    cutoff = cutoff.tz_localize("UTC") if cutoff.tzinfo is None else cutoff.tz_convert("UTC")
+    if starts.isna().any() or not (starts > cutoff).all():
+        raise ValueError("HGB_PRODUCTION_NOT_STRICTLY_PREGAME")
+    if not features.game_date.astype(str).eq(slate_date).all():
+        raise ValueError("HGB_PRODUCTION_SLATE_DATE_MISMATCH")
+    rows = []
+    for row in features.itertuples(index=False):
+        game_id, player_id = int(row.game_id), int(row.player_id)
+        game = canonical[game_id]
+        for line, probability in ((0.5, row.prob_over_0_5),
+                                  (1.5, row.prob_over_1_5),
+                                  (2.5, row.prob_over_2_5)):
+            rows.append({
+                "game_id": game_id, "player_id": player_id, "line": line,
+                "prob_over": float(probability), "expected_points": float(row.expected_points),
+                "game_date": slate_date, "game_start_utc": game.game_start_utc,
+                "home_team_id": game.home_team_id, "away_team_id": game.away_team_id,
+                "parent_daily_run_id": parent_run_id,
+                "feature_input_cutoff_utc": cutoff.isoformat().replace("+00:00", "Z"),
+                "canonical_game_set_hash": canonical_game_set_sha256,
+            })
+    output = pd.DataFrame(rows)
+    if output.empty or output.duplicated(["game_date", "game_id", "player_id", "line"]).any():
+        raise ValueError("HGB_PRODUCTION_NATURAL_IDENTITY_INVALID")
+    if set(output.line.astype(float)) != {0.5, 1.5, 2.5}:
+        raise ValueError("HGB_PRODUCTION_LINE_SET_INVALID")
+    for _, ladder in output.groupby(["game_id", "player_id"], sort=False):
+        ladder = ladder.sort_values("line")
+        values = ladder.prob_over.astype(float).to_numpy()
+        if len(values) != 3 or not (values[0] >= values[1] >= values[2]):
+            raise ValueError("HGB_PRODUCTION_COHERENCE_FAILED")
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output.to_csv(output_path, index=False, float_format="%.17g")
+    return {
+        "path": str(output_path.resolve()), "sha256": sha(output_path),
+        "bytes": output_path.stat().st_size, "row_count": len(output),
+        "identity_count": int(output[key].drop_duplicates().shape[0]),
+        "canonical_game_count": len(canonical),
+        "canonical_game_set_hash": canonical_game_set_sha256,
+        "parent_daily_run_id": parent_run_id,
+        "feature_input_cutoff_utc": cutoff.isoformat().replace("+00:00", "Z"),
+        "source_hgb_capture_path": str(capture_path.resolve()),
+        "source_hgb_capture_prediction_sha256": capture_receipt["prediction_sha256"],
+        "coherence_crossing_count": 0,
+        "validated_prediction_identity": True,
+    }
+
+
+def discover_daily_points_authority(*, slate_date: str,
+                                    daily_run_root: Path | None = None) -> dict[str, Any] | None:
+    """Read the exact production/shadow Points identities from a daily receipt."""
+    from backend.nhl.daily_capture import verify_package
+
+    root = Path(daily_run_root or ROOT / "artifacts/operational/nhl/daily_runs")
+    matches = []
+    for receipt_path in root.glob("run_id=*/parent_receipt.json"):
+        try:
+            receipt = json.loads(receipt_path.read_text())
+            if receipt.get("slate_date") != slate_date:
+                continue
+            verify_package(receipt_path.parent)
+            points_lane = (receipt.get("lanes") or {}).get("points") or {}
+            if points_lane.get("status") != "COMPLETE":
+                continue
+            selection = next((item for item in points_lane.get("inputs", [])
+                              if item.get("production_authority")), {})
+            production = str(selection.get("production_authority") or "phoenix_v2")
+            identity = next((item for item in points_lane.get("outputs", [])
+                             if str(item.get("path", "")).endswith("points_predictions.csv")), None)
+            if not identity or not Path(identity.get("path", "")).is_file():
+                continue
+            if sha(Path(identity["path"])) != identity.get("sha256"):
+                continue
+            evidence = identity.get("fitted_model_evidence") or {}
+            if evidence.get("prediction_artifact_sha256") != identity.get("sha256"):
+                continue
+            shadow = identity.get("phoenix_shadow")
+            if production == "phoenix_v2":
+                hgb_lane = (receipt.get("lanes") or {}).get("points_hgb_shadow") or {}
+                hgb_output = next((item for item in hgb_lane.get("outputs", [])
+                                  if item.get("capture_path")), None)
+                shadow = ({"status": "COMPLETE", "model": HGB_AUTHORITY_LOCAL,
+                           "capture_path": hgb_output.get("capture_path"),
+                           "prediction_sha256": hgb_output.get("prediction_sha256")}
+                          if hgb_output else {"status": hgb_lane.get("status", "UNAVAILABLE"),
+                                             "model": "NHL_POINTS_COUNT_HGB_V1"})
+            matches.append((str(receipt.get("ended_at_utc") or ""), {
+                "status": "BOUND", "parent_daily_run_id": receipt.get("parent_daily_run_id"),
+                "daily_receipt_path": str(receipt_path.resolve()),
+                "daily_receipt_manifest_sha256": sha(receipt_path.parent / "SHA256SUMS"),
+                "authority_version": selection.get("authority_version"),
+                "production": {"model": production,
+                    "model_family": evidence.get("model_family", identity.get("model_family")),
+                    "model_version": evidence.get("model_version", identity.get("model_version")),
+                    "prediction_path": str(Path(identity["path"]).resolve()),
+                    "prediction_sha256": identity["sha256"],
+                    "fitted_model_identity_sha256": evidence.get("fitted_model_identity_sha256"),
+                    "feature_contract_sha256": (evidence.get("scoring_configuration") or {}).get(
+                        "feature_contract_sha256"),
+                    "history_contract": (evidence.get("scoring_configuration") or {}).get(
+                        "history_contract"),
+                    "source_hgb_capture_path": identity.get("source_hgb_capture_path"),
+                    "source_hgb_capture_prediction_sha256": identity.get(
+                        "source_hgb_capture_prediction_sha256")},
+                "incumbent_shadow": shadow,
+            }))
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+    return max(matches, key=lambda item: item[0])[1] if matches else None
+
+
 def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
-                            shadow_root: Path | None = None) -> dict[str, Any]:
+                            shadow_root: Path | None = None,
+                            daily_run_root: Path | None = None) -> dict[str, Any]:
     """Grade the highest available pregame phase without rebuilding predictions."""
     from backend.nhl.daily_capture import verify_package
     from backend.nhl.scripts.grade_nhl_points_hgb_shadow import grade
@@ -313,53 +467,95 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
     if not candidates:
         return {"status": "NOT_AVAILABLE", "reason": "NO_VALID_IMMUTABLE_HGB_CAPTURE"}
     _, _, capture, receipt = max(candidates, key=lambda row: (row[0], row[1]))
+    daily_authority = discover_daily_points_authority(
+        slate_date=slate_date, daily_run_root=daily_run_root)
+    if (daily_authority and daily_authority.get("parent_daily_run_id")
+            != receipt.get("parent_run_id")):
+        daily_authority = None
     outcomes_path = Path(reconciliation_package) / "canonical_skater_outcomes.csv"
     verify_reconciliation_package(Path(reconciliation_package), slate_date)
     outcomes = pd.read_csv(outcomes_path)
     pred = pd.read_csv(capture / "predictions.csv")
+    production_prediction_sha256 = None
+    production_prediction_path = None
+    hgb_is_production = bool(daily_authority and
+                             daily_authority["production"].get("model") == "NHL_POINTS_COUNT_HGB_V1")
+    if hgb_is_production:
+        if (Path(daily_authority["production"].get("source_hgb_capture_path", "")).resolve()
+                != capture.resolve()
+                or daily_authority["production"].get("source_hgb_capture_prediction_sha256")
+                != receipt.get("prediction_sha256")):
+            raise RuntimeError("HGB_PRODUCTION_CAPTURE_AUTHORITY_MISMATCH")
+        production_prediction_path = Path(daily_authority["production"]["prediction_path"])
+        production_prediction_sha256 = daily_authority["production"]["prediction_sha256"]
+        if sha(production_prediction_path) != production_prediction_sha256:
+            raise RuntimeError("HGB_PRODUCTION_PREDICTION_HASH_MISMATCH")
+        production_rows = pd.read_csv(production_prediction_path)
+        required = {"game_id", "player_id", "line", "prob_over", "expected_points"}
+        if not required.issubset(production_rows.columns):
+            raise RuntimeError("HGB_PRODUCTION_PREDICTION_SCHEMA_MISSING")
+        if production_rows.duplicated(["game_id", "player_id", "line"]).any():
+            raise RuntimeError("HGB_PRODUCTION_PREDICTION_DUPLICATE_IDENTITY")
+        prod_wide = production_rows.pivot(index=["game_id", "player_id"],
+                                          columns="line", values="prob_over").reset_index()
+        means = production_rows.groupby(["game_id", "player_id"], as_index=False).expected_points.nunique()
+        if means.expected_points.gt(1).any():
+            raise RuntimeError("HGB_PRODUCTION_EXPECTED_COUNT_LINE_MISMATCH")
+        expected_count = production_rows.groupby(["game_id", "player_id"], as_index=False).expected_points.first()
+        pred = prod_wide.merge(expected_count, on=["game_id", "player_id"], validate="one_to_one")
+        pred = pred.rename(columns={0.5: "prob_over_0_5", 1.5: "prob_over_1_5", 2.5: "prob_over_2_5"})
+        expected_columns = {"prob_over_0_5", "prob_over_1_5", "prob_over_2_5"}
+        if not expected_columns.issubset(pred.columns):
+            raise RuntimeError("HGB_PRODUCTION_PREDICTION_LINE_SET_INVALID")
     game_ids = set(map(int, receipt["canonical_game_ids"]))
     outcomes = outcomes.loc[outcomes.game_id.astype(int).isin(game_ids)].copy()
     if outcomes.empty or not outcomes.get("official_final", pd.Series(True, index=outcomes.index)).astype(str).str.lower().isin({"true", "t", "1"}).all():
         return {"status": "OUTCOMES_NOT_FINAL", "capture_path": str(capture)}
     report = grade(pred, outcomes)
-    phoenix = pd.read_csv(capture / "phoenix_control_predictions.csv")
-    phoenix = phoenix.loc[phoenix.game_id.astype(int).isin(game_ids)]
-    phoenix_lines = phoenix.pivot(index=["game_id", "player_id"], columns="line", values="prob_over").reset_index()
-    phoenix_lines = phoenix_lines.rename(columns={0.5: "prob_over_0_5", 1.5: "prob_over_1_5", 2.5: "prob_over_2_5"})
-    scored_outcomes = outcomes.merge(phoenix_lines, on=["game_id", "player_id"], how="inner", validate="one_to_one")
     phoenix_thresholds = {}
-    y_source = (pd.to_numeric(scored_outcomes.official_points, errors="coerce")
-                if "official_points" in scored_outcomes else
-                pd.to_numeric(scored_outcomes.official_goals, errors="coerce") +
-                pd.to_numeric(scored_outcomes.official_assists, errors="coerce"))
-    final = scored_outcomes.official_final.astype(str).str.lower().isin({"true", "t", "1"}) if "official_final" in scored_outcomes else pd.Series(True,index=scored_outcomes.index)
-    participated = scored_outcomes.participation_state.eq("PARTICIPATED") if "participation_state" in scored_outcomes else pd.Series(True,index=scored_outcomes.index)
-    valid = final & participated & y_source.notna()
-    for threshold, col in zip((1, 2, 3), ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5")):
-        y = (y_source[valid].astype(int) >= threshold).astype(int).to_numpy()
-        p = np.clip(scored_outcomes.loc[valid, col].astype(float).to_numpy(), 1e-12, 1 - 1e-12)
-        phoenix_thresholds[col] = {"n": len(y), "log_loss": float(log_loss(y, p, labels=[0, 1])),
-            "brier": float(brier_score_loss(y, p)),
-            "auc": float(roc_auc_score(y, p)) if len(np.unique(y)) == 2 else None,
-            "average_precision": float(average_precision_score(y, p)) if y.sum() else None,
-            "base_rate": float(y.mean()) if len(y) else None}
+    if receipt.get("phoenix_control", {}).get("status") == "BOUND":
+        phoenix = pd.read_csv(capture / "phoenix_control_predictions.csv")
+        phoenix = phoenix.loc[phoenix.game_id.astype(int).isin(game_ids)]
+        phoenix_lines = phoenix.pivot(index=["game_id", "player_id"], columns="line", values="prob_over").reset_index()
+        phoenix_lines = phoenix_lines.rename(columns={0.5: "prob_over_0_5", 1.5: "prob_over_1_5", 2.5: "prob_over_2_5"})
+        scored_outcomes = outcomes.merge(phoenix_lines, on=["game_id", "player_id"], how="inner", validate="one_to_one")
+        y_source = (pd.to_numeric(scored_outcomes.official_points, errors="coerce")
+                    if "official_points" in scored_outcomes else
+                    pd.to_numeric(scored_outcomes.official_goals, errors="coerce") +
+                    pd.to_numeric(scored_outcomes.official_assists, errors="coerce"))
+        final = scored_outcomes.official_final.astype(str).str.lower().isin({"true", "t", "1"}) if "official_final" in scored_outcomes else pd.Series(True,index=scored_outcomes.index)
+        participated = scored_outcomes.participation_state.eq("PARTICIPATED") if "participation_state" in scored_outcomes else pd.Series(True,index=scored_outcomes.index)
+        valid = final & participated & y_source.notna()
+        for threshold, col in zip((1, 2, 3), ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5")):
+            y = (y_source[valid].astype(int) >= threshold).astype(int).to_numpy()
+            p = np.clip(scored_outcomes.loc[valid, col].astype(float).to_numpy(), 1e-12, 1 - 1e-12)
+            phoenix_thresholds[col] = {"n": len(y), "log_loss": float(log_loss(y, p, labels=[0, 1])),
+                "brier": float(brier_score_loss(y, p)),
+                "auc": float(roc_auc_score(y, p)) if len(np.unique(y)) == 2 else None,
+                "average_precision": float(average_precision_score(y, p)) if y.sum() else None,
+                "base_rate": float(y.mean()) if len(y) else None}
     outcome_sha = sha(outcomes_path)
     capture_manifest_sha = verify_package(capture)
     input_identity = hashlib.sha256(json.dumps({"capture_manifest_sha256":capture_manifest_sha,
-        "prediction_sha256":receipt["prediction_sha256"], "outcomes_sha256":outcome_sha,
+        "prediction_sha256":production_prediction_sha256 or receipt["prediction_sha256"],
+        "outcomes_sha256":outcome_sha,
         "game_ids":sorted(game_ids)}, sort_keys=True).encode()).hexdigest()
     grade_root = shadow_root / "grades" / f"season={season}" / f"slate_date={slate_date}" / f"capture={capture.name}" / f"grade={input_identity[:20]}"
     grade_root.mkdir(parents=True, exist_ok=False)
     result = {"schema_version":"NHL_POINTS_HGB_SHADOW_GRADE_V1", "status":"COMPLETE",
         "slate_date":slate_date, "capture_path":str(capture), "capture_manifest_sha256":capture_manifest_sha,
         "hgb_prediction_sha256":receipt["prediction_sha256"], "model_identity":receipt["model_identity"],
+        "evaluation_role":"PRODUCTION" if hgb_is_production else "SHADOW",
+        "production_authority_context":daily_authority,
+        "production_prediction_path":str(production_prediction_path.resolve()) if production_prediction_path else None,
+        "production_prediction_sha256":production_prediction_sha256,
         "feature_contract_identity":json.loads((capture/"feature_contract_identity.json").read_text()),
         "official_outcomes_status":"FINAL", "reconciliation_package":str(Path(reconciliation_package).resolve()),
         "reconciliation_manifest_sha256":verify_package(Path(reconciliation_package)),
         "official_outcome_path":str(outcomes_path), "official_outcome_sha256":outcome_sha,
         "official_outcome_identity":input_identity, "hgb_metrics":report,
         "phoenix_same_capture_threshold_metrics":phoenix_thresholds,
-        "phoenix_prediction_sha256":receipt["phoenix_control"]["prediction_sha256"],
+        "phoenix_prediction_sha256":receipt.get("phoenix_control", {}).get("prediction_sha256"),
         "comparison_type":"DESCRIPTIVE_SAME_CAPTURE_CONTROL", "promotion_decision_from_single_slate":False}
     (grade_root / "grade.json").write_text(json.dumps(result, indent=2, sort_keys=True)+"\n")
     (grade_root / "RUN_COMPLETE.json").write_text(json.dumps({"status":"COMPLETE",

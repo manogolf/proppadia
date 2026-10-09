@@ -187,11 +187,19 @@ def main() -> None:
     ap.add_argument("--model-family", default=None, help="Override nhl.predictions.model_family")
     ap.add_argument("--model-version", default=None, help="Override nhl.predictions.model_version")
     ap.add_argument("--feature-hash",  default=None, help="Override nhl.predictions.feature_hash")
+    ap.add_argument("--model-params-json", default="{}",
+                    help="JSON object retained in nhl.predictions.model_params")
     ap.add_argument(
         "--expected-sha256", default=None,
         help="Fail before connecting unless the prediction artifact has this exact hash")
 
     args = ap.parse_args()
+    try:
+        model_params = json.loads(args.model_params_json)
+    except json.JSONDecodeError as error:
+        raise SystemExit(f"Invalid --model-params-json: {error}") from None
+    if not isinstance(model_params, dict):
+        raise SystemExit("--model-params-json must be a JSON object")
 
     # Guardrail: SOG must be loaded by the Denali loader, not the generic loader.
     if args.prop == "shots_on_goal":
@@ -295,7 +303,7 @@ def main() -> None:
                             "line": float(ln),
                             "p_over": float(p),
                             "model_family": default_model_family,
-                            "model_params": {},  # jsonb NOT NULL
+                            "model_params": model_params,
                             "feature_hash": default_feature_hash,
                             "model_version": default_model_version,
                             **lineage_values(r),
@@ -324,7 +332,7 @@ def main() -> None:
                         "line": float(ln),
                         "p_over": float(p),
                         "model_family": default_model_family,
-                        "model_params": {},  # jsonb NOT NULL
+                        "model_params": model_params,
                         "feature_hash": default_feature_hash,
                         "model_version": default_model_version,
                         **lineage_values(r),

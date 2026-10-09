@@ -76,6 +76,18 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
         row = self.summary()["models"]["moneyline"]["reference"]
         self.assertEqual((row["correct"], row["incorrect"], row["unresolved"]), (1, 1, 1))
 
+    def test_points_authority_context_is_retained_in_summary(self):
+        context = {
+            "production": {"model": "NHL_POINTS_COUNT_HGB_V1", "prediction_sha256": "a" * 64},
+            "incumbent_shadow": {"model": "PHOENIX_POINTS_INCUMBENT_SHADOW",
+                                  "prediction_sha256": "b" * 64},
+        }
+        summary = self.summary(points_authority_context=context)
+        self.assertEqual(summary["models"]["points"]["authority_context"], context)
+        self.assertEqual(summary["source_artifacts"]["points_authority_context_sha256"],
+                         hashlib.sha256(json.dumps(context, sort_keys=True,
+                             separators=(",", ":")).encode()).hexdigest())
+
     def test_puck_line_correct_margin_class_counts(self):
         row = self.summary()["models"]["puck_line"]["reference"]
         self.assertEqual((row["correct_realized_margin_class"], row["incorrect"]), (1, 1))

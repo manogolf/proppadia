@@ -162,27 +162,39 @@ def test_same_identity_in_multiple_canonical_games_is_not_collapsed(tmp_path, ki
 def test_september24_fixture_points_and_saves_exact_populations(tmp_path):
     points_source = Path("backend/nhl/exports/train_nhl_points_v2.csv")
     saves_source = Path("backend/nhl/exports/train_goalie_saves_v2.csv")
+    points_frame, saves_frame = pd.read_csv(points_source), pd.read_csv(saves_source)
+    slate = str(saves_frame.game_date.iloc[0])
+    canonical_ids = sorted(set(points_frame.game_id.astype(int)) |
+                           set(saves_frame.game_id.astype(int)))
+    canonical = games(canonical_ids, slate=slate)
+    cutoff = f"{slate}T14:00:00Z"
     points_input_path = tmp_path / "run" / "points_input.csv"
     saves_input_path = tmp_path / "run" / "saves_input.csv"
     for source, output in ((points_source, points_input_path), (saves_source, saves_input_path)):
         prepare_scoring_input(
-            source_path=source, output_path=output, canonical_games=games(), slate=SLATE,
-            parent_daily_run_id=RUN_ID, feature_input_cutoff_utc=CUTOFF,
-            expected_game_set_hash=lineage_hash())
+            source_path=source, output_path=output, canonical_games=canonical, slate=slate,
+            parent_daily_run_id=RUN_ID, feature_input_cutoff_utc=cutoff,
+            expected_game_set_hash=lineage_hash(canonical_ids))
     points_input = pd.read_csv(points_input_path)
     saves_input = pd.read_csv(saves_input_path)
-    assert len(points_input) == 798
-    assert len(saves_input) == 76
+    assert len(points_input) == len(points_frame)
+    assert len(saves_input) == len(saves_frame)
 
     points_path, saves_path = tmp_path / "points.csv", tmp_path / "saves.csv"
     points_predictions(points_input).to_csv(points_path, index=False)
     saves_predictions(saves_input).to_csv(saves_path, index=False)
-    points_identity = validate(points_path, "points", games(), POINTS_LINES)
-    saves_identity = validate(saves_path, "saves", games(), SAVES_LINES)
-    assert points_identity["conditional_prediction_count"] == 2394
-    assert points_identity["natural_identity_count"] == 798
-    assert saves_identity["conditional_prediction_count"] == 988
-    assert saves_identity["natural_identity_count"] == 76
+    points_identity = validate_prediction_output(
+        path=points_path, lane="points", canonical_games=canonical, slate=slate,
+        parent_daily_run_id=RUN_ID, feature_input_cutoff_utc=cutoff,
+        expected_game_set_hash=lineage_hash(canonical_ids), expected_lines=POINTS_LINES)
+    saves_identity = validate_prediction_output(
+        path=saves_path, lane="saves", canonical_games=canonical, slate=slate,
+        parent_daily_run_id=RUN_ID, feature_input_cutoff_utc=cutoff,
+        expected_game_set_hash=lineage_hash(canonical_ids), expected_lines=SAVES_LINES)
+    assert points_identity["conditional_prediction_count"] == len(points_input) * len(POINTS_LINES)
+    assert points_identity["natural_identity_count"] == len(points_input)
+    assert saves_identity["conditional_prediction_count"] == len(saves_input) * len(SAVES_LINES)
+    assert saves_identity["natural_identity_count"] == len(saves_input)
 
 
 def test_saves_wide_and_13_line_expansion_preserve_lineage(tmp_path):
@@ -261,6 +273,8 @@ def test_saves_scorer_wide_output_preserves_lineage(tmp_path, monkeypatch):
     feature_json = tmp_path / "features.json"
     feature_json.write_text(json.dumps({"goalie_saves": ["x"]}))
     out = tmp_path / "saves_predictions.csv"
+    monkeypatch.setattr(score_nhl_saves_with_lineage, "fitted_model_identity",
+                        lambda **_kwargs: {"test_identity": True})
     monkeypatch.setattr(sys, "argv", [
         "score_nhl_saves_with_lineage.py", "--model-dir", str(model_dir), "--csv", str(input_path),
         "--feature-json", str(feature_json), "--feature-key", "goalie_saves",
@@ -341,6 +355,50 @@ def test_loader_hash_gate_runs_before_database_connection(tmp_path, monkeypatch)
     assert connected == []
 
 
+def test_generic_loader_retains_hgb_model_identity_without_phoenix_relabeling(tmp_path, monkeypatch):
+    prediction = tmp_path / "hgb_points.csv"
+    pd.DataFrame({
+        "player_id": [11, 11, 11], "game_id": [22, 22, 22],
+        "game_date": [SLATE] * 3, "team_id": [1] * 3,
+        "line": [.5, 1.5, 2.5], "prob_over": [.8, .5, .2],
+    }).to_csv(prediction, index=False)
+    model_params = {"fitted_model_identity_sha256": "a" * 64,
+                    "feature_contract_sha256": "b" * 64,
+                    "history_contract": "120_DAY_LEGACY_BOUND"}
+    executed = []
+
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def execute(self, query, params): executed.append((query, params))
+
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def cursor(self): return Cursor()
+        def commit(self): pass
+
+    monkeypatch.setattr(load_nhl_predictions_generic.psycopg, "connect",
+                        lambda *_args, **_kwargs: Connection())
+    monkeypatch.setattr(load_nhl_predictions_generic, "require_db_url", lambda: "offline")
+    monkeypatch.setattr(sys, "argv", [
+        "load_nhl_predictions_generic.py", "--pred-csv", str(prediction),
+        "--project", "nhl", "--prop", "player_points",
+        "--model-family", "hist_gradient_boosting",
+        "--model-version", "NHL_POINTS_COUNT_HGB_V1",
+        "--feature-hash", "NHL_POINTS_COUNT_HGB_V1:" + "c" * 64,
+        "--model-params-json", json.dumps(model_params),
+        "--expected-sha256", sha256_file(prediction),
+    ])
+    load_nhl_predictions_generic.main()
+    payload = json.loads(executed[-1][1][0])
+    assert len(payload) == 3
+    assert {row["model_family"] for row in payload} == {"hist_gradient_boosting"}
+    assert {row["model_version"] for row in payload} == {"NHL_POINTS_COUNT_HGB_V1"}
+    assert {row["feature_hash"] for row in payload} == {"NHL_POINTS_COUNT_HGB_V1:" + "c" * 64}
+    assert {row["model_params"]["fitted_model_identity_sha256"] for row in payload} == {"a" * 64}
+
+
 def _recorder(game_ids) -> DailyRunRecorder:
     value = DailyRunRecorder(
         run_id=RUN_ID, command=["python", "-m", "backend.nhl.cli", "daily"],
@@ -364,7 +422,8 @@ def test_parent_orchestration_uses_only_validated_run_local_artifacts(tmp_path):
     pd.DataFrame({"player_id": [80], "game_id": GAME_IDS[:1], "x": [1.0]}).to_csv(
         exports / "train_nhl_points_v2.csv", index=False)
     pd.DataFrame({
-        "player_id": [90], "game_id": GAME_IDS[:1], "game_date": [SLATE], "x": [1.0],
+        "player_id": [90], "game_id": GAME_IDS[:1], "game_date": [SLATE],
+        "start_prob": [1.0], "x": [1.0],
     }).to_csv(exports / "train_goalie_saves_v2.csv", index=False)
     child_commands = []
     attachments = {}
@@ -376,10 +435,22 @@ def test_parent_orchestration_uses_only_validated_run_local_artifacts(tmp_path):
         if "score_nhl_points_with_lineage.py" in script:
             source = pd.read_csv(values[values.index("--features-csv") + 1])
             points_predictions(source).to_csv(values[values.index("--out") + 1], index=False)
+            scored_path = Path(values[values.index("--out") + 1])
+            evidence = {"prediction_artifact_sha256": sha256_file(scored_path),
+                        "fitted_model_identity_sha256": "a" * 64,
+                        "scoring_configuration": {"feature_contract_sha256": "b" * 64}}
         elif "score_nhl_saves_with_lineage.py" in script:
             source = pd.read_csv(values[values.index("--csv") + 1])
             saves_predictions(source).to_csv(values[values.index("--out") + 1], index=False)
-        return subprocess.CompletedProcess(values, 0, "", "")
+            scored_path = Path(values[values.index("--out") + 1])
+            evidence = {"prediction_artifact_sha256": sha256_file(scored_path),
+                        "fitted_model_identity_sha256": "c" * 64,
+                        "scoring_configuration": {"feature_contract_sha256": "d" * 64}}
+        else:
+            evidence = None
+        stdout = ("NHL_CHILD_SUMMARY_JSON=" + json.dumps({"fitted_model_evidence": evidence}) + "\n"
+                  if evidence else "")
+        return subprocess.CompletedProcess(values, 0, stdout, "")
 
     def attachment(name):
         def build(_slate, **kwargs):
@@ -406,6 +477,7 @@ def test_parent_orchestration_uses_only_validated_run_local_artifacts(tmp_path):
             canonical_games=canonical, saves_export_ready=True,
             points_export_ready=True, legacy_sog_prediction=None)
 
+    assert value.lane("saves").status == "COMPLETE", value.lane("saves").reason
     run_dir = proc / "daily_runs" / RUN_ID
     loader_paths = [
         Path(command[command.index("--pred-csv") + 1])

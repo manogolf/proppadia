@@ -960,6 +960,7 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
                      challengers: dict[str, pd.DataFrame] | None = None,
                      market_coverage: dict[str, dict[str, Any]] | None = None,
                      production_sog_reference: dict[str, Any] | None = None,
+                     points_authority_context: dict[str, Any] | None = None,
                      package: Path | None = None) -> dict[str, Any]:
     challengers = challengers or {}
     moneyline = grades.get("moneyline", pd.DataFrame())
@@ -968,6 +969,10 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
     points = grades.get("points", pd.DataFrame())
     saves = grades.get("saves", pd.DataFrame())
     source_artifacts = dict(source_artifacts)
+    if points_authority_context:
+        source_artifacts["points_authority_context_sha256"] = hashlib.sha256(
+            json.dumps(points_authority_context, sort_keys=True,
+                       separators=(",", ":")).encode()).hexdigest()
     for lane, frame in (("moneyline", moneyline), ("puck_line", puck_line)):
         _assert_game_market_nonpushable(
             frame, market=lane, slate_date=slate_date,
@@ -1023,6 +1028,8 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
             models[lane]["arm_market_coverage"] = dict(
                 models[lane]["market_coverage"]["per_arm"])
     models["points"]["realized_points_definition"] = "official_goals + official_assists"
+    if points_authority_context:
+        models["points"]["authority_context"] = dict(points_authority_context)
     unresolved = {
         "moneyline": models["moneyline"]["reference"].get("unresolved", 0),
         "puck_line": models["puck_line"]["reference"].get("unresolved", 0),
@@ -1123,6 +1130,26 @@ def render_markdown(summary: dict[str, Any]) -> str:
         lines.extend(prop_body(models.get("reference", {}), title))
         if title == "Points":
             lines.append("Realized total: official goals + official assists.")
+            authority = models.get("authority_context")
+            if authority:
+                production = authority.get("production", {})
+                shadow = authority.get("incumbent_shadow", {})
+                lines.append(
+                    f"Production authority: {production.get('model', 'unknown')} "
+                    f"(prediction SHA {production.get('prediction_sha256', 'unavailable')}).")
+                lines.append(
+                    f"Incumbent shadow: {shadow.get('model', 'unknown')} "
+                    f"({shadow.get('status', 'unavailable')}; prediction SHA "
+                    f"{shadow.get('sha256') or shadow.get('prediction_sha256') or 'unavailable'}).")
+                evaluation = authority.get("hgb_evaluation", {})
+                if evaluation:
+                    metrics = evaluation.get("metrics", {})
+                    lines.append(
+                        f"HGB {evaluation.get('role', 'shadow').lower()} grade: "
+                        f"n={metrics.get('participated_graded_count', metrics.get('n', 0))}; "
+                        f"average threshold log loss="
+                        f"{metrics.get('average_threshold_log_loss', 'unavailable')}; "
+                        f"grade SHA={evaluation.get('grade_sha256', 'unavailable')}.")
         return lines
 
     models = summary["models"]
@@ -1439,6 +1466,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
                             market_coverage: dict[str, dict[str, Any]] | None = None,
                             production_sog_reference: dict[str, Any] | None = None,
                             production_sog_reference_sources: dict[str, str] | None = None,
+                            points_authority_context: dict[str, Any] | None = None,
                             output_root: Path | None = None) -> tuple[Path, Path, dict[str, Any]]:
     """Build/reuse a summary package from retained reconciliation grade rows."""
     package = Path(package).resolve()
@@ -1461,6 +1489,10 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         **{f"{key}_grade_sha256": _sha(path) for key, path in grade_paths.items() if path.is_file()},
     }
     source_hashes.update(production_sog_reference_sources or {})
+    if points_authority_context:
+        authority_sha = hashlib.sha256(json.dumps(
+            points_authority_context, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+        source_hashes["points_authority_context_sha256"] = authority_sha
     for lane, coverage in (market_coverage or {}).items():
         if coverage.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
             source_hashes[f"{lane}_attachment_integrity_sha256"] = str(
@@ -1522,7 +1554,8 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         grades=grades, source_artifacts=source_hashes,
         generated_at_utc=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         challengers=challengers, market_coverage=market_coverage,
-        production_sog_reference=production_sog_reference, package=package,
+        production_sog_reference=production_sog_reference,
+        points_authority_context=points_authority_context, package=package,
     )
     summary["official_outcomes_status"] = (
         "FINAL" if source_summary.get("status") == "COMPLETE"

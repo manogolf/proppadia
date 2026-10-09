@@ -11,6 +11,8 @@ GATE_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_operational_bridge/2026-10
 AUTHORITY_PATH = ROOT / "artifacts/operational/nhl/points_model_authority/authority_v1.json"
 INTEGRATION_EVIDENCE = ROOT / "artifacts/analysis/nhl/points_hgb_operational_bridge/2026-10-09/routine_daily_integration_evidence.json"
 VALID_AUTHORITY = {"phoenix_v2", "NHL_POINTS_COUNT_HGB_V1"}
+HGB_AUTHORITY = "NHL_POINTS_COUNT_HGB_V1"
+PHOENIX_AUTHORITY = "phoenix_v2"
 
 
 def sha(path: Path) -> str:
@@ -25,6 +27,31 @@ def selected_production_authority(path: Path = AUTHORITY_PATH) -> dict[str, Any]
     if selected not in VALID_AUTHORITY:
         raise ValueError("POINTS_AUTHORITY_UNKNOWN")
     return state
+
+
+def next_authority_state(state: dict[str, Any], selected: str) -> dict[str, Any]:
+    """Return an explicit next version without mutating the source state."""
+    if selected not in VALID_AUTHORITY:
+        raise ValueError("POINTS_AUTHORITY_UNKNOWN")
+    if state.get("schema_version") != "NHL_POINTS_MODEL_AUTHORITY_V1":
+        raise ValueError("POINTS_AUTHORITY_SCHEMA_INVALID")
+    updated = dict(state)
+    updated["authority_version"] = int(state.get("authority_version", 0)) + 1
+    updated["production_authority"] = selected
+    updated["shadow_authorities"] = [
+        PHOENIX_AUTHORITY if selected == HGB_AUTHORITY else HGB_AUTHORITY
+    ]
+    updated["production_changed"] = selected != state.get("production_authority")
+    return updated
+
+
+def assert_hgb_promotion_ready(*, evaluator=None) -> dict[str, Any]:
+    """Fail closed when HGB is selected before all operational gates are proven."""
+    if evaluator is None:
+        evaluator = evaluate_promotion()
+    if evaluator.get("classification") != "READY_FOR_HGB_PRODUCTION_PROMOTION":
+        raise RuntimeError("HGB_AUTHORITY_SELECTED_BEFORE_PROMOTION_GATES_PASS")
+    return evaluator
 
 
 def evaluate_promotion(*, gate_path: Path = GATE_PATH,

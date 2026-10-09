@@ -25,6 +25,8 @@ UTC = timezone.utc
 SLATE = "2026-09-24"
 GAME_IDS = list(range(2026010037, 2026010048))
 GAME_HASH = "92d828be583187109116de1eccda70c2bf8563288ec6ad39ce3976da43a9eec3"
+CANONICAL_GAME = SimpleNamespace(game_id=2026010037,
+    start_time_utc="2026-09-25T00:00:00Z", home_team_id=1, away_team_id=2)
 RETAINED_ROSTER = Path(
     "artifacts/operational/nhl/roster_observations/season=2026/"
     "slate_date=2026-09-24/observation=20260924T174037.492521Z_353e5992af746639"
@@ -50,9 +52,48 @@ def finish_unowned_lanes(value: DailyRunRecorder) -> None:
 
 def write_prediction(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        "player_id,game_id,game_date,p_over_0_5,p_over_18_5\n"
-        "1,2026010037,2026-09-24,0.5,0.5\n")
+    if "points" in path.name:
+        path.write_text(
+            "player_id,game_id,game_date,p_over_0_5\n"
+            "1,2026010037,2026-09-24,0.5\n")
+    else:
+        path.write_text(
+            "player_id,game_id,game_date,p_over_18_5\n"
+            "1,2026010037,2026-09-24,0.5\n")
+
+
+def write_market_attachment(path: Path, values: list[str]) -> None:
+    script = values[1] if len(values) > 1 else ""
+    pred_sha = (values[values.index("--expected-pred-sha256") + 1]
+                if "--expected-pred-sha256" in values else "")
+    odds_sha = (values[values.index("--expected-odds-manifest-sha256") + 1]
+                if "--expected-odds-manifest-sha256" in values else "")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if "points" in script:
+        path.write_text(
+            "game_date,game_id,player_id,line,prob_over,p_over,parent_daily_run_id,"
+            "prediction_artifact_sha256,odds_observation_manifest_sha256\n"
+            f"2026-09-24,2026010037,1,0.5,0.5,0.5,test-run,{pred_sha},{odds_sha}\n")
+    else:
+        path.write_text("player_id,game_date\n1,2026-09-24\n")
+
+
+def completed_scoring_child(values: list[str]) -> subprocess.CompletedProcess:
+    """Emit the scorer evidence now required by the daily Points lineage contract."""
+    script = values[1] if len(values) > 1 else ""
+    summary = ""
+    if ("score_nhl_points_with_lineage.py" in script
+            or "score_nhl_saves_with_lineage.py" in script):
+        output = Path(values[values.index("--out") + 1])
+        digest = sha256_file(output)
+        summary = "NHL_CHILD_SUMMARY_JSON=" + json.dumps({
+            "fitted_model_evidence": {
+                "prediction_artifact_sha256": digest,
+                "fitted_model_identity_sha256": "a" * 64,
+                "scoring_configuration": {"feature_contract_sha256": "b" * 64},
+            }
+        }) + "\n"
+    return subprocess.CompletedProcess(values, 0, summary, "")
 
 
 def fake_prepare_scoring_input(**kwargs):
@@ -76,6 +117,8 @@ def fake_attachment_audit(**kwargs):
         "schema_version": "NHL_ATTACHMENT_INTEGRITY_V1",
         "lane": kwargs["lane"],
         "status": "PASS",
+        "parent_daily_run_id": kwargs["expected_parent_daily_run_id"],
+        "slate_date": SLATE,
         "prediction_artifact_sha256": kwargs["expected_prediction_sha256"],
         "attachment_sha256": sha256_file(attachment),
         "odds_observation_manifest_sha256": kwargs["expected_odds_manifest_sha256"],
@@ -88,6 +131,30 @@ def fake_attachment_audit(**kwargs):
         },
         "checks": {"fixture": True},
     }
+
+
+def fake_market_builder(lane: str):
+    def build(_slate: str, **kwargs) -> None:
+        prefix = "points" if lane == "points" else "saves"
+        attached = cli.SITE_DIR / f"{prefix}_with_market.csv"
+        attached.parent.mkdir(parents=True, exist_ok=True)
+        odds_sha = kwargs.get("expected_odds_manifest_sha256") or ""
+        if lane == "points":
+            attached.write_text(
+                "game_date,game_id,player_id,line,p_over,parent_daily_run_id,"
+                "prediction_artifact_sha256,odds_observation_manifest_sha256\n"
+                f"{SLATE},2026010037,1,0.5,0.5,test-run,{kwargs['expected_pred_sha256']},{odds_sha}\n")
+        else:
+            attached.write_text(
+                "game_date,game_id,player_id,line,p_over,price_over,parent_daily_run_id,"
+                "prediction_artifact_sha256,odds_observation_manifest_sha256,attachment_status\n"
+                f"{SLATE},2026010037,1,18.5,0.5,,test-run,{kwargs['expected_pred_sha256']},{odds_sha},UNMATCHED\n")
+        (cli.SITE_DIR / f"unmatched_{prefix}.csv").write_text(
+            "game_date,game_id,player_id,line\n"
+            f"{SLATE},2026010037,1,{0.5 if lane == 'points' else 18.5}\n")
+        if lane == "saves":
+            (cli.SITE_DIR / "ambiguous_saves_alias_matches.csv").write_text("prediction_index\n")
+    return build
 
 
 def fake_odds_lineage(**kwargs):
@@ -287,11 +354,20 @@ def test_blocked_sog_continues_points_saves_odds_without_sog_consumers(tmp_path)
     odds_dir = tmp_path / "odds"
     odds_dir.mkdir()
     for name, body in (("raw_response.json", "[]\n"), ("events_response.json", "[]\n"),
-                       ("request_plan.json", "{}\n")):
+                           ("request_plan.json", "{}\n"),
+                           ("observation_summary.json", json.dumps({
+                               "observation_timestamp_utc": "2026-09-24T17:00:00Z",
+                               "invocation_id": "fixture-odds", "slate_date": SLATE,
+                               "parent_daily_run_id": "test-run",
+                               "canonical_game_set_hash": GAME_HASH}) + "\n")):
         (odds_dir / name).write_text(body)
+    odds_files = sorted(path for path in odds_dir.iterdir() if path.is_file())
+    (odds_dir / "SHA256SUMS").write_text("".join(
+        f"{sha256_file(path)}  {path.name}\n" for path in odds_files))
     odds = SimpleNamespace(
         classification="CAPTURED_VALID_EMPTY", observation_dir=odds_dir,
-        manifest_sha256="b" * 64,
+            manifest_sha256=sha256_file(odds_dir / "SHA256SUMS"),
+        replayed=False,
         summary={"network_attempt_count": 1, "credits_consumed": 0, "maximum_credits": 8})
 
     def fake_run(command, **_kwargs):
@@ -301,17 +377,18 @@ def test_blocked_sog_continues_points_saves_odds_without_sog_consumers(tmp_path)
             if "score_nhl_saves_with_lineage.py" in values[1] or "score_nhl_points_with_lineage.py" in values[1]:
                 write_prediction(out)
             elif "build_saves_with_market.py" in values[1] or "build_points_with_market.py" in values[1]:
-                out.parent.mkdir(parents=True, exist_ok=True)
-                out.write_text("player_id,game_date\n1,2026-09-24\n")
+                write_market_attachment(out, values)
                 unmatched = Path(values[values.index("--unmatched") + 1])
-                unmatched.write_text("player_id\n")
+                unmatched.write_text("game_date,game_id,player_id,line\n2026-09-24,2026010037,1,0.5\n")
                 if "--ambiguous" in values:
                     Path(values[values.index("--ambiguous") + 1]).write_text("prediction_index\n")
-        return subprocess.CompletedProcess(values, 0, "", "")
+        return completed_scoring_child(values)
 
     with patch.multiple(
         cli, PROC_DIR=proc, EXPORTS_DIR=exports, MODELS_DIR=models, SITE_DIR=site,
         EXPORTS_ODDS_HISTORY_DIR=archive,
+        POINTS_ATTACHMENT_ROOT=tmp_path / "points_attachments",
+        SAVES_ATTACHMENT_ROOT=tmp_path / "saves_attachments",
     ), patch.object(cli, "run", side_effect=fake_run), patch.object(
         cli, "export_names_csv", return_value=names), patch.object(
         cli, "run_optional_odds_observation", return_value=odds), patch.object(
@@ -319,20 +396,22 @@ def test_blocked_sog_continues_points_saves_odds_without_sog_consumers(tmp_path)
         cli, "validate_prediction_output", side_effect=fake_validate_prediction_output), patch.object(
         cli, "validate_odds_observation", side_effect=fake_odds_lineage), patch.object(
         cli, "audit_attachment_files", side_effect=fake_attachment_audit), patch.object(
+        cli, "build_points", side_effect=fake_market_builder("points")), patch.object(
+        cli, "build_saves", side_effect=fake_market_builder("saves")), patch.object(
         cli, "refresh_sog_residual_dataset") as residual, patch.object(
         cli, "refresh_sog_reconcile_artifacts") as reconcile, patch.object(
         cli, "build_sog") as build_sog:
         cli._run_independent_daily_lanes(
             recorder=value, db="fixture", slate=SLATE, with_odds=True,
-            odds_phase="EARLY", daily_run_id="test-run", canonical_games=[],
+                odds_phase="EARLY", daily_run_id="test-run", canonical_games=[CANONICAL_GAME],
             saves_export_ready=True, points_export_ready=True,
             legacy_sog_prediction=None)
     assert value.lane("points").status == "COMPLETE"
     assert value.lane("saves").status == "COMPLETE"
     assert value.lane("odds").provider_requests == 1
     assert value.lane("sog_attachment").status == "SKIPPED_UPSTREAM_LANE_BLOCKED"
-    assert value.lane("points_attachment").status == "COMPLETE"
-    assert value.lane("saves_attachment").status == "COMPLETE"
+    assert value.lane("points_attachment").status == "COMPLETE", (value.lane("points_attachment").reason, value.lane("points_attachment").error_message)
+    assert value.lane("saves_attachment").status == "COMPLETE", (value.lane("saves_attachment").reason, value.lane("saves_attachment").error_message)
     assert value.classification() == "READY_WITH_BOUNDED_LANE_WARNING"
     prediction_paths = {
         Path(output["path"])
@@ -393,27 +472,31 @@ def test_prediction_lane_failure_does_not_suppress_other_lane_or_odds(tmp_path, 
             if "score_" in script:
                 write_prediction(out)
             elif "build_" in script:
-                out.write_text("player_id,game_date\n1,2026-09-24\n")
-                Path(values[values.index("--unmatched") + 1]).write_text("player_id\n")
+                write_market_attachment(out, values)
+                Path(values[values.index("--unmatched") + 1]).write_text("game_date,game_id,player_id,line\n2026-09-24,2026010037,1,0.5\n")
                 if "--ambiguous" in values:
                     Path(values[values.index("--ambiguous") + 1]).write_text("prediction_index\n")
-        return subprocess.CompletedProcess(values, 0, "", "")
+        return completed_scoring_child(values)
 
     def no_odds(**_kwargs):
         odds_called.append(True)
         return None
 
     with patch.multiple(cli, PROC_DIR=proc, EXPORTS_DIR=exports, MODELS_DIR=models, SITE_DIR=site,
-                        EXPORTS_ODDS_HISTORY_DIR=tmp_path / "archive"), patch.object(
+                        EXPORTS_ODDS_HISTORY_DIR=tmp_path / "archive",
+                        POINTS_ATTACHMENT_ROOT=tmp_path / "points_attachments",
+                        SAVES_ATTACHMENT_ROOT=tmp_path / "saves_attachments"), patch.object(
         cli, "run", side_effect=fake_run), patch.object(
         cli, "export_names_csv", return_value=names), patch.object(
         cli, "run_optional_odds_observation", side_effect=no_odds), patch.object(
         cli, "prepare_scoring_input", side_effect=fake_prepare_scoring_input), patch.object(
         cli, "validate_prediction_output", side_effect=fake_validate_prediction_output), patch.object(
-        cli, "audit_attachment_files", side_effect=fake_attachment_audit):
+        cli, "audit_attachment_files", side_effect=fake_attachment_audit), patch.object(
+        cli, "build_points", side_effect=fake_market_builder("points")), patch.object(
+        cli, "build_saves", side_effect=fake_market_builder("saves")):
         cli._run_independent_daily_lanes(
             recorder=value, db="fixture", slate=SLATE, with_odds=False,
-            odds_phase="EARLY", daily_run_id="test-run", canonical_games=[],
+            odds_phase="EARLY", daily_run_id="test-run", canonical_games=[CANONICAL_GAME],
             saves_export_ready=True, points_export_ready=True, legacy_sog_prediction=None)
     other = "saves" if failed_lane == "points" else "points"
     assert value.lane(failed_lane).status == "FAILED_NONBLOCKING"
@@ -443,32 +526,35 @@ def test_odds_failure_is_warning_and_preserves_current_predictions(tmp_path):
             if "score_" in script:
                 write_prediction(out)
             elif "build_" in script:
-                out.parent.mkdir(parents=True, exist_ok=True)
-                out.write_text("player_id,game_date\n1,2026-09-24\n")
-                Path(values[values.index("--unmatched") + 1]).write_text("player_id\n")
+                write_market_attachment(out, values)
+                Path(values[values.index("--unmatched") + 1]).write_text("game_date,game_id,player_id,line\n2026-09-24,2026010037,1,0.5\n")
                 if "--ambiguous" in values:
                     Path(values[values.index("--ambiguous") + 1]).write_text("prediction_index\n")
-        return subprocess.CompletedProcess(values, 0, "", "")
+        return completed_scoring_child(values)
 
     with patch.multiple(
         cli, PROC_DIR=proc, EXPORTS_DIR=exports, MODELS_DIR=models, SITE_DIR=site,
         EXPORTS_ODDS_HISTORY_DIR=tmp_path / "archive",
+        POINTS_ATTACHMENT_ROOT=tmp_path / "points_attachments",
+        SAVES_ATTACHMENT_ROOT=tmp_path / "saves_attachments",
     ), patch.object(cli, "run", side_effect=fake_run), patch.object(
         cli, "export_names_csv", return_value=names), patch.object(
         cli, "run_optional_odds_observation", side_effect=RuntimeError("provider failed")), patch.object(
         cli, "prepare_scoring_input", side_effect=fake_prepare_scoring_input), patch.object(
         cli, "validate_prediction_output", side_effect=fake_validate_prediction_output), patch.object(
-        cli, "audit_attachment_files", side_effect=fake_attachment_audit):
+        cli, "audit_attachment_files", side_effect=fake_attachment_audit), patch.object(
+        cli, "build_points", side_effect=fake_market_builder("points")), patch.object(
+        cli, "build_saves", side_effect=fake_market_builder("saves")):
         cli._run_independent_daily_lanes(
             recorder=value, db="fixture", slate=SLATE, with_odds=True,
-            odds_phase="EARLY", daily_run_id="test-run", canonical_games=[],
+            odds_phase="EARLY", daily_run_id="test-run", canonical_games=[CANONICAL_GAME],
             saves_export_ready=True, points_export_ready=True,
             legacy_sog_prediction=None)
     assert value.lane("odds").status == "FAILED_NONBLOCKING"
     assert value.lane("points").status == "COMPLETE"
     assert value.lane("saves").status == "COMPLETE"
-    assert value.lane("points_attachment").status == "COMPLETE"
-    assert value.lane("saves_attachment").status == "COMPLETE"
+    assert value.lane("points_attachment").status == "COMPLETE", (value.lane("points_attachment").reason, value.lane("points_attachment").error_message)
+    assert value.lane("saves_attachment").status == "COMPLETE", (value.lane("saves_attachment").reason, value.lane("saves_attachment").error_message)
     assert value.classification() == "READY_WITH_BOUNDED_LANE_WARNING"
 
 

@@ -5,14 +5,22 @@ import hashlib
 import json
 import tempfile
 from pathlib import Path
+from types import SimpleNamespace
 
 from backend.nhl.scripts.grade_nhl_points_hgb_shadow import grade
 from backend.nhl.scripts.score_nhl_points_hgb_shadow import FEATURES, score
 from backend.nhl.scripts.export_nhl_points_hgb_features import build_features, normalize_history, normalize_slate
-from backend.nhl.points_hgb_shadow import capture_from_files, grade_prior_hgb_capture
+from backend.nhl.points_hgb_shadow import (
+    build_production_prediction_artifact, capture_from_files,
+    discover_daily_points_authority, grade_prior_hgb_capture,
+)
 from backend.nhl.daily_capture import verify_package
+from backend.nhl.attachment_integrity import prediction_rows
 from backend.nhl.daily_orchestration import DailyRunRecorder
-from backend.nhl.points_hgb_promotion import evaluate_promotion, selected_production_authority
+from backend.nhl.points_hgb_promotion import (
+    assert_hgb_promotion_ready, evaluate_promotion, next_authority_state,
+    selected_production_authority,
+)
 
 
 class FixedCountModel:
@@ -124,6 +132,22 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
     assert receipt["phoenix_control"]["prediction_sha256"] == digest
     assert (capture/"model_identity.json").is_file()
     assert (capture/"feature_contract_identity.json").is_file()
+    production_csv = tmp_path / "points_predictions.csv"
+    production_identity = build_production_prediction_artifact(
+        capture_path=capture, output_path=production_csv,
+        canonical_games=[SimpleNamespace(game_id=2026020066,
+            start_time_utc="2026-10-10T01:00:00Z", home_team_id=1, away_team_id=2)],
+        slate_date="2026-10-09", parent_run_id="routine-test",
+        feature_cutoff_utc="2026-10-09T15:00:00Z",
+        canonical_game_set_sha256=receipt["canonical_game_set_hash"],
+    )
+    production_rows = pd.read_csv(production_csv)
+    assert set(production_rows.line) == {0.5, 1.5, 2.5}
+    assert production_identity["row_count"] == 3
+    assert production_rows.groupby(["game_id", "player_id"]).size().eq(3).all()
+    market_keys = prediction_rows(production_csv, lane="points")
+    assert set(market_keys.line.astype(float)) == {0.5, 1.5, 2.5}
+    assert len(market_keys) == production_identity["row_count"]
     reconciliation=tmp_path/"reconciliation"
     reconciliation.mkdir()
     pd.DataFrame([{"game_id":2026020066,"player_id":11,"official_points":1,
@@ -140,9 +164,46 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
     files=sorted(x for x in reconciliation.iterdir() if x.is_file())
     (reconciliation/"SHA256SUMS").write_text("".join(
         f"{hashlib.sha256(x.read_bytes()).hexdigest()}  {x.name}\n" for x in files))
+    # Simulate the daily receipt for an HGB-authoritative run. The real
+    # authority remains Phoenix; all paths are isolated under this fixture.
+    daily_root = tmp_path / "daily_runs"
+    receipt_dir = daily_root / "run_id=routine-test"
+    receipt_dir.mkdir(parents=True)
+    prod_evidence = {"model_family":"hist_gradient_boosting",
+        "model_version":"NHL_POINTS_COUNT_HGB_V1",
+        "fitted_model_identity_sha256":receipt["model_identity"]["model_identity_sha256"],
+        "prediction_artifact_path":str(production_csv.resolve()),
+        "prediction_artifact_sha256":production_identity["sha256"],
+        "scoring_configuration":{"feature_contract_sha256":receipt["model_identity"]["feature_contract_sha256"],
+            "history_contract":receipt["model_identity"]["history_contract"]}}
+    production_identity.update({"production_authority":"NHL_POINTS_COUNT_HGB_V1",
+        "source_hgb_capture_path":str(capture.resolve()),
+        "source_hgb_capture_prediction_sha256":receipt["prediction_sha256"],
+        "phoenix_shadow": {"status":"COMPLETE",
+            "model":"PHOENIX_POINTS_INCUMBENT_SHADOW", "model_family":"phoenix",
+            "model_version":"phoenix_v2", "feature_contract":"POINTS_PLAYER_HISTORY_CROSS_SEASON_V2",
+            "path":str((capture/"phoenix_control_predictions.csv").resolve()),
+            "sha256":receipt["phoenix_control"]["prediction_sha256"]},
+        "fitted_model_evidence":prod_evidence})
+    daily_receipt = {"slate_date":"2026-10-09","parent_daily_run_id":"routine-test",
+        "ended_at_utc":"2026-10-09T15:05:00Z","lanes":{"points":{
+            "status":"COMPLETE","inputs":[{"production_authority":"NHL_POINTS_COUNT_HGB_V1",
+                "authority_version":2}],"outputs":[production_identity]}}}
+    (receipt_dir/"parent_receipt.json").write_text(json.dumps(daily_receipt))
+    (receipt_dir/"RUN_COMPLETE.json").write_text(json.dumps({"status":"COMPLETE"}))
+    manifest_files=sorted(x for x in receipt_dir.iterdir() if x.is_file())
+    (receipt_dir/"SHA256SUMS").write_text("".join(
+        f"{hashlib.sha256(x.read_bytes()).hexdigest()}  {x.name}\n" for x in manifest_files))
+    authority_context=discover_daily_points_authority(slate_date="2026-10-09",daily_run_root=daily_root)
+    assert authority_context["production"]["model"] == "NHL_POINTS_COUNT_HGB_V1"
+    assert authority_context["production"]["prediction_sha256"] == production_identity["sha256"]
+    assert authority_context["incumbent_shadow"]["model"] == "PHOENIX_POINTS_INCUMBENT_SHADOW"
+    assert authority_context["incumbent_shadow"]["sha256"] == receipt["phoenix_control"]["prediction_sha256"]
     grade_result=grade_prior_hgb_capture(slate_date="2026-10-09",reconciliation_package=reconciliation,
-                                         shadow_root=tmp_path/"operational")
+        shadow_root=tmp_path/"operational",daily_run_root=daily_root)
     assert grade_result["status"] == "COMPLETE"
+    assert grade_result["evaluation_role"] == "PRODUCTION"
+    assert grade_result["production_prediction_sha256"] == production_identity["sha256"]
     assert grade_result["hgb_metrics"]["participated_graded_count"] == 1
     assert grade_result["phoenix_same_capture_threshold_metrics"]["prob_over_0_5"]["n"] == 1
 
@@ -158,6 +219,28 @@ def test_points_hgb_daily_lane_is_nonblocking_and_authority_defaults_to_phoenix(
     result=evaluate_promotion(gate_path=gate,integration_evidence_path=tmp_path/"missing.json",
                               shadow_root=tmp_path/"no_grades")
     assert result["classification"] == "NOT_READY_FOR_HGB_PRODUCTION_PROMOTION"
+
+
+def test_points_authority_config_switch_is_versioned_reversible_and_nonmutating():
+    original = selected_production_authority()
+    hgb = next_authority_state(original, "NHL_POINTS_COUNT_HGB_V1")
+    phoenix = next_authority_state(hgb, "phoenix_v2")
+    assert original["production_authority"] == "phoenix_v2"
+    assert hgb["production_authority"] == "NHL_POINTS_COUNT_HGB_V1"
+    assert hgb["shadow_authorities"] == ["phoenix_v2"]
+    assert hgb["authority_version"] == original["authority_version"] + 1
+    assert phoenix["production_authority"] == "phoenix_v2"
+    assert phoenix["shadow_authorities"] == ["NHL_POINTS_COUNT_HGB_V1"]
+    assert phoenix["authority_version"] == hgb["authority_version"] + 1
+    assert selected_production_authority()["production_authority"] == "phoenix_v2"
+
+
+def test_hgb_authority_fails_closed_until_all_promotion_gates_pass():
+    with pytest.raises(RuntimeError, match="BEFORE_PROMOTION_GATES_PASS"):
+        assert_hgb_promotion_ready(evaluator={
+            "classification": "NOT_READY_FOR_HGB_PRODUCTION_PROMOTION",
+            "gates": {"F": {"status": "PENDING"}, "G": {"status": "PENDING"}},
+        })
 
 
 def test_hgb_shadow_failure_does_not_block_phoenix_points_lane():
