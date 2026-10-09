@@ -1,0 +1,143 @@
+{
+  "decision": "I_MORE_SAMPLE_REQUIRED",
+  "forward_testable_pregame_regime_identified": false,
+  "summary": {
+    "window_start": "2026-10-03",
+    "window_end": "2026-10-08",
+    "production_model": "poisson_baseline/baseline_v1",
+    "population": {
+      "settled_over_calls": 566,
+      "OVER_WIN_2_SOG": 142,
+      "OVER_WIN_3PLUS_SOG": 199,
+      "OVER_LOSS_1_SOG": 139,
+      "OVER_LOSS_0_SOG": 86,
+      "unusual_settled": 0
+    },
+    "zero_sog_rate_over_calls": 0.1519434628975265,
+    "zero_sog_rate_player_cluster_bootstrap_95ci": [
+      0.12164332519593987,
+      0.18294849023090587
+    ],
+    "one_sog_rate_over_calls": 0.24558303886925795,
+    "zero_vs_one_mean_lambda_difference": -0.05152558433246934,
+    "zero_vs_one_lambda_cluster_bootstrap_95ci": [
+      -0.19729208514411978,
+      0.08637263775338037
+    ],
+    "mean_lambda_zero": 2.190031931823948,
+    "mean_lambda_one": 2.2415575161564174,
+    "mean_lambda_wins": 2.5062272846707785,
+    "normal_toi_zero_count_within_1_5min": 40,
+    "normal_toi_zero_share": 0.46511627906976744,
+    "poisson_expected_zero_count_over_calls": 59.61416566964767,
+    "observed_zero_count_over_calls": 86,
+    "observed_minus_expected_zero_count": 26.38583433035233,
+    "expected_zero_rate_over_calls": 0.10532538104178034,
+    "observed_zero_rate_over_calls": 0.1519434628975265,
+    "shadow_aggregate": [
+      {
+        "arm": "A_PRIOR_SEASON_CARRY_FORWARD",
+        "rows_available": 540,
+        "zero_sog_n": 78,
+        "zero_still_over": 49,
+        "zero_changed_to_under": 29,
+        "zero_flipped_correctly": 29,
+        "one_sog_n": 130,
+        "one_changed_to_under_incorrect": 43,
+        "production_winning_over_n": 332,
+        "production_wins_flipped_to_under_incorrectly": 44
+      },
+      {
+        "arm": "B_PRIOR_SEASON_RECENCY_WEIGHTED",
+        "rows_available": 540,
+        "zero_sog_n": 78,
+        "zero_still_over": 47,
+        "zero_changed_to_under": 31,
+        "zero_flipped_correctly": 31,
+        "one_sog_n": 130,
+        "one_changed_to_under_incorrect": 52,
+        "production_winning_over_n": 332,
+        "production_wins_flipped_to_under_incorrectly": 65
+      },
+      {
+        "arm": "C_MULTISEASON_SHRUNK_PLAYER",
+        "rows_available": 540,
+        "zero_sog_n": 78,
+        "zero_still_over": 45,
+        "zero_changed_to_under": 33,
+        "zero_flipped_correctly": 33,
+        "one_sog_n": 130,
+        "one_changed_to_under_incorrect": 47,
+        "production_winning_over_n": 332,
+        "production_wins_flipped_to_under_incorrectly": 49
+      },
+      {
+        "arm": "D_PLAYER_ROLE_HIERARCHICAL",
+        "rows_available": 566,
+        "zero_sog_n": 86,
+        "zero_still_over": 57,
+        "zero_changed_to_under": 29,
+        "zero_flipped_correctly": 29,
+        "one_sog_n": 139,
+        "one_changed_to_under_incorrect": 45,
+        "production_winning_over_n": 341,
+        "production_wins_flipped_to_under_incorrectly": 47
+      },
+      {
+        "arm": "F_CURRENT_PRESEASON_UPDATE",
+        "rows_available": 558,
+        "zero_sog_n": 85,
+        "zero_still_over": 72,
+        "zero_changed_to_under": 13,
+        "zero_flipped_correctly": 13,
+        "one_sog_n": 137,
+        "one_changed_to_under_incorrect": 40,
+        "production_winning_over_n": 336,
+        "production_wins_flipped_to_under_incorrectly": 29
+      },
+      {
+        "arm": "G_COLD_START_TO_CURRENT_SEASON_BLEND",
+        "rows_available": 566,
+        "zero_sog_n": 86,
+        "zero_still_over": 57,
+        "zero_changed_to_under": 29,
+        "zero_flipped_correctly": 29,
+        "one_sog_n": 139,
+        "one_changed_to_under_incorrect": 39,
+        "production_winning_over_n": 341,
+        "production_wins_flipped_to_under_incorrectly": 48
+      }
+    ],
+    "matched_zero_cases": 86,
+    "unmatched_zero_cases": 0,
+    "matched_control_counts": {
+      "OVER_WIN_2_SOG": 48,
+      "OVER_WIN_3PLUS_SOG": 38
+    },
+    "official_pp_toi": "UNAVAILABLE_IN_RETAINED_CANONICAL_SKATER_OUTCOMES",
+    "production_changed": false,
+    "calibration_fitted": false,
+    "distribution_changed": false,
+    "provider_calls": 0,
+    "paid_credits": 0,
+    "database_mutations": 0,
+    "zero_rates": {
+      "all_settled_1_5": {
+        "n": 1582,
+        "zero_count": 440,
+        "zero_rate": 0.2781289506953224
+      },
+      "production_over": {
+        "n": 566,
+        "zero_count": 86,
+        "zero_rate": 0.1519434628975265
+      },
+      "production_under": {
+        "n": 1016,
+        "zero_count": 354,
+        "zero_rate": 0.3484251968503937
+      }
+    }
+  },
+  "rationale": "The analysis is descriptive with 86 zero-SOG outcomes. A large portion occur with near-expected TOI; observed zero mass is compared with Poisson implication, but no simple pregame signature is validated. Continue prospective monitoring; do not filter production."
+}

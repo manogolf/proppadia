@@ -1,0 +1,13 @@
+hypothesis,classification,evidence_summary
+H1,PARTIALLY_SUPPORTED,Zero group lambda vs successful Over; pregame selected rate differences and matched controls in four_group_comparison.csv.
+H2,PARTIALLY_SUPPORTED,"TOI residual, major shortfall shares and clustered interval in toi_shortfall_analysis.csv."
+H3,PARTIALLY_SUPPORTED,40 of 86 zero-SOG losses had actual TOI within 1.5 min.
+H4,PARTIALLY_SUPPORTED,Compare short-vs-long rate shapes by group; exploratory thresholds are empirical quartiles.
+H5,NOT_SUPPORTED,Compare recent TOI shape distributions; small group caution.
+H6,PARTIALLY_SUPPORTED,Repeated-player table requires >1 occurrence; one/two cases are not player-defect evidence.
+H7,PARTIALLY_SUPPORTED,Position rates are descriptive and sample-limited; no independent role causal evidence.
+H8,PARTIALLY_SUPPORTED,Actual team shot context is postgame diagnostic; team/game cells are small.
+H9,INSUFFICIENT_EVIDENCE,Market match coverage is bounded; compare market group rate and uncertainty.
+H10,NOT_SUPPORTED,C/G zero fixes are counted alongside harmful flips among production Over wins; no promotion inference.
+H11,PARTIALLY_SUPPORTED,Observed zero frequency compared with sum exp(-lambda); no replacement distribution fit.
+H12,SUPPORTED,Compare absolute pregame lambda difference and other feature profiles; uncertainty included.
