@@ -1,0 +1,27 @@
+{
+  "exact_matches": 106,
+  "feature_cells_compared": 120,
+  "feature_count": 10,
+  "maximum_absolute_feature_difference": 3.552713678800501e-15,
+  "maximum_prediction_differences": {
+    "expected_points": 0.0,
+    "prob_over_0_5": 0.0,
+    "prob_over_1_5": 0.0,
+    "prob_over_2_5": 0.0
+  },
+  "mismatch_causes": [],
+  "mismatches": 0,
+  "rows_tested": 12,
+  "sample_period_counts": {
+    "late_season": 4,
+    "midseason": 4,
+    "opening_14d": 4
+  },
+  "sample_positions": {
+    "D": 6,
+    "F": 6
+  },
+  "status": "HGB_OPERATIONAL_FEATURE_REPRODUCTION_PASS",
+  "strict_prior_leakage_count": 0,
+  "tolerance_matches": 14
+}
