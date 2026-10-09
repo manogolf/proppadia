@@ -4,7 +4,7 @@
 
 - Current Slate: `2026-10-08`
 - Completed Slate: `2026-10-07`
-- Generated (UTC): `2026-10-08T21:04:14+00:00`
+- Generated (UTC): `2026-10-08T23:54:13+00:00`
 - System Ready? `FAIL`
 - Safe to Begin? `NO`
 - Reason: One or more BLOCKER issues mean data cannot be trusted.
@@ -20,7 +20,7 @@
 ## Moneyline Run-Bound Authority (Separate from Static Index Horizon)
 
 - Latest retained Moneyline run evidence: `VERIFIED_SOURCE_BOUND`
-- Run: `moneyline_20261008T200005977454Z_19754_e0b9e032`; completed `2026-10-08T20:05:21.909016Z`
+- Run: `moneyline_20261008T233005119355Z_30449_82685602`; completed `2026-10-08T23:35:09.862210Z`
 - Source-bound decisions: `749`; phase counts `{"POSTSEASON": 24, "REGULAR_SEASON": 725}`
 - Evidence reason when unavailable: `none`
 - This verifies only this completed Moneyline run; it does not extend the static shared index horizon or establish cross-lane/global phase authority. Unknown, conflicting, or unverified games remain fail-closed.
