@@ -1,0 +1,15 @@
+{
+  "evaluation_season": 2025,
+  "training_seasons": [
+    2023,
+    2024
+  ],
+  "training_rows": 90486,
+  "evaluation_rows": 47239,
+  "evaluation_games": 1312,
+  "evaluation_start": "2025-10-07",
+  "evaluation_end": "2026-04-16",
+  "history_contract": "120_DAY_LEGACY_BOUND",
+  "coherence_crossings": 0,
+  "training_contains_evaluation_season": false
+}

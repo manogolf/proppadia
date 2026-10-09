@@ -1,0 +1,2 @@
+comparison,player_clusters,point_estimate,bootstrap_replicates,ci_2_5,ci_97_5,replicates_favoring_hgb
+HGB_POISSON minus POISSON_TOI_OFFSET,940,-0.008454359597637389,500,-0.009849003389765907,-0.007143524753036468,1.0

@@ -1,0 +1,50 @@
+{
+  "schema_version": "NHL_POINTS_RESEARCH_SHADOW_CONTRACT_V1",
+  "research_model_id": "NHL_POINTS_COUNT_HGB_V1",
+  "authority": "AUTHORITATIVE_RESEARCH_MODEL_SELECTED",
+  "training_seasons": [
+    2023,
+    2024
+  ],
+  "training_rows": 90486,
+  "evaluation_season_confirmation": 2025,
+  "training_source_frame_sha256": "45605af7f472481af4d5a33a103b679ab4284db5d043f82842757297a3534892",
+  "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V1",
+  "feature_columns": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "history_contract": "120_DAY_LEGACY_BOUND",
+  "history_semantics": "strict prior game_date; same-day excluded; 120-day bound; last 10 player games",
+  "target": "official goals + official assists",
+  "distribution": "Poisson observation distribution",
+  "thresholds": {
+    "over_0_5": "P(X >= 1)",
+    "over_1_5": "P(X >= 2)",
+    "over_2_5": "P(X >= 3)"
+  },
+  "hyperparameters": {
+    "loss": "poisson",
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "l2_regularization": 1.0,
+    "early_stopping": false,
+    "random_state": 42
+  },
+  "fitted_artifact": "nhl_points_count_hgb_v1.joblib",
+  "fitted_artifact_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+  "scorer": "backend/nhl/scripts/build_nhl_points_leader_validation.py",
+  "scorer_sha256": "e02a99decb1d90d7092190a115a079c712f8c1ef40daba8bb5d52653ac49f9e5",
+  "prospective_only": true,
+  "production_replacement": false,
+  "initial_shadow_prediction": "NOT_GENERATED: retained daily input lacks frozen CORE feature columns and pregame binding for this contract",
+  "model_identity_sha256": "a53f43d5caea9a64ee8e6d48daf8072e0332b629998242639b2ba15be743e5c2"
+}

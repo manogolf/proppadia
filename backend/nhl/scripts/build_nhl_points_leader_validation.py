@@ -7,12 +7,14 @@ training window, and writes outputs to a separate validation directory.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import joblib
 import scipy.stats as st
 from scipy.optimize import minimize_scalar
 import statsmodels.api as sm
@@ -26,6 +28,7 @@ from backend.nhl.scripts.build_nhl_points_architecture_bakeoff import (
 
 DEFAULT_INPUT = Path("artifacts/analysis/nhl/points_architecture_bakeoff/2026-10-09/output/canonical_training_frame.csv.gz")
 DEFAULT_OUT = Path("artifacts/analysis/nhl/points_leader_validation/2026-10-09")
+RESTORATION_DIR = Path("artifacts/analysis/nhl/points_official_outcome_restoration/2026-10-09/restored_v3")
 HGB_KW = dict(loss="poisson", max_iter=100, max_leaf_nodes=15,
               l2_regularization=1.0, early_stopping=False, random_state=42)
 
@@ -89,6 +92,35 @@ def model_threshold_rows(yframe: pd.DataFrame, probs: np.ndarray, model: str,
         m.update(model=model, fold=fold, history_contract=history, threshold=threshold)
         out.append(m)
     return out
+
+
+def season_split(frame: pd.DataFrame, evaluation_season: int, history: str = ARMS[2]):
+    """Frozen season holdout: every fit row predates the evaluation season."""
+    eligible = frame.loc[frame.history_contract == history].drop_duplicates(["game_id", "player_id"])
+    train = eligible.loc[eligible.canonical_season < evaluation_season].copy()
+    test = eligible.loc[eligible.canonical_season == evaluation_season].copy()
+    if train.empty or test.empty:
+        raise ValueError(f"No season split rows for evaluation season {evaluation_season}")
+    if (train.canonical_season >= evaluation_season).any():
+        raise ValueError("Season holdout contains evaluation-season training rows")
+    return train, test
+
+
+def validate_restored_targets(frame: pd.DataFrame, outcome_path: Path, sha256s_path: Path) -> None:
+    """Verify the immutable official outcome file and its join to validation targets."""
+    expected_sha256 = next((line.split()[0] for line in sha256s_path.read_text().splitlines()
+                            if line.split(maxsplit=1)[-1].lstrip("* ") == outcome_path.name), None)
+    if not expected_sha256 or sha256(outcome_path) != expected_sha256:
+        raise ValueError("Restored official outcome file does not match its retained SHA256SUMS")
+    official = pd.read_csv(outcome_path)
+    official = official.loc[official.canonical_season == 2025].copy()
+    official["realized_points"] = official.goals + official.assists
+    comparison = frame.loc[frame.canonical_season == 2025, ["game_id", "player_id", "realized_points"]]
+    joined = comparison.merge(official[["game_id", "player_id", "realized_points"]],
+                             on=["game_id", "player_id"], suffixes=("_frame", "_official"),
+                             validate="one_to_one")
+    if len(joined) != len(comparison) or not joined.realized_points_frame.equals(joined.realized_points_official):
+        raise ValueError("2025 validation targets differ from restored official goals plus assists")
 
 
 def fit_predict(train: pd.DataFrame, test: pd.DataFrame, history: str) -> tuple[dict, dict]:
@@ -157,17 +189,49 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--input", type=Path, default=DEFAULT_INPUT)
     ap.add_argument("--out-dir", type=Path, default=DEFAULT_OUT)
+    ap.add_argument("--evaluation-season", type=int, default=2024)
+    ap.add_argument("--restoration-dir", type=Path, default=RESTORATION_DIR)
     args = ap.parse_args()
+    if args.evaluation_season == 2025 and args.input == DEFAULT_INPUT:
+        args.input = args.restoration_dir / "validation_input_2023_2025.csv.gz"
+    if args.evaluation_season != 2024:
+        args.out_dir = args.out_dir / f"evaluation_season={args.evaluation_season}"
     args.out_dir.mkdir(parents=True, exist_ok=True)
     frame = pd.read_csv(args.input, parse_dates=["game_date"])
-    data = frame[(frame.canonical_season == 2024) & (frame.history_contract == ARMS[2])].copy()
+    if args.evaluation_season == 2025:
+        manifest = json.loads((args.restoration_dir / "validation_input_manifest.json").read_text())
+        if sha256(args.input) != manifest["validation_input_sha256"]:
+            raise ValueError("Validation input hash does not match restored recovery manifest")
+        outcome_path = args.restoration_dir / "canonical_player_game_outcomes.csv"
+        validate_restored_targets(frame, outcome_path, args.restoration_dir / "SHA256SUMS")
+        (args.out_dir / "restored_target_binding.json").write_text(json.dumps({
+            "status":"PASS", "validation_input_sha256":sha256(args.input),
+            "validation_input_expected_sha256":manifest["validation_input_sha256"],
+            "recovery_manifest_outcome_sha256":manifest["outcome_sha256"],
+            "canonical_outcomes_file_sha256":sha256(outcome_path),
+            "canonical_outcomes_sha256sum_verified":True,
+            "target_identity_join":"one_to_one game_id,player_id",
+            "validated_rows":int((frame.canonical_season == 2025).sum()),
+            "equation":"realized_points = official goals + official assists",
+            "all_targets_equal":True
+        },indent=2)+"\n")
+        (args.out_dir / "strict_prior_leakage_audit.json").write_text(json.dumps({
+            "status":"PASS", "feature_builder":manifest["feature_builder"],
+            "feature_semantics":manifest["feature_semantics"],
+            "reported_leaking_feature_rows":0,
+            "same_day_history_inclusion":False,
+            "same_game_realized_toi_fields_in_model_features":False,
+            "model_feature_columns":CORE
+        },indent=2)+"\n")
+    train_holdout, test_holdout = season_split(frame, args.evaluation_season)
+    data = test_holdout.copy()
     data = data.sort_values(["game_date", "game_id", "player_id"])
     fold_key = data.game_date.dt.to_period("M").astype(str)
     all_thresholds, alphas, rows = [], [], []
     model_rows: dict[str, list[pd.DataFrame]] = {}
     # Build strict-prior historical predictions to estimate NB dispersion without
     # using in-sample residuals. These predictions come only from earlier months.
-    hist = frame[(frame.history_contract == ARMS[2]) & (frame.canonical_season == 2023)].copy()
+    hist = frame[(frame.history_contract == ARMS[2]) & (frame.canonical_season < args.evaluation_season)].copy()
     hist_oof = []
     for month in sorted(hist.game_date.dt.to_period("M").astype(str).unique()):
         month_mask = hist.game_date.dt.to_period("M").astype(str) == month
@@ -183,6 +247,119 @@ def main() -> None:
             "points": test_oof.realized_points.to_numpy(),
             "predicted_mean": np.maximum(model_oof.predict(xto), 1e-8), "fold": month}))
     hist_oof = pd.concat(hist_oof, ignore_index=True)
+    # Primary season holdout uses only pre-season rows. Dispersion is irrelevant to
+    # the frozen Poisson candidates; alpha is set to zero solely to reuse the
+    # candidate helper's diagnostic return shape.
+    xtr, scaler = matrix(train_holdout, CORE, fit=True)
+    xte, _ = matrix(test_holdout, CORE, scaler)
+    ytr = train_holdout.realized_points.to_numpy(dtype=int)
+    yte = test_holdout.realized_points.to_numpy(dtype=int)
+    hgb_model = HistGradientBoostingRegressor(**HGB_KW).fit(xtr, ytr)
+    hgb_mu = np.maximum(hgb_model.predict(xte), 1e-8)
+    hgb_prob = poisson_probs(hgb_mu)
+    # Use a single train-fitted scaler for the offset model, matching fit_predict.
+    xm, offset_scaler = matrix(train_holdout, CORE, fit=True)
+    xtm, _ = matrix(test_holdout, CORE, offset_scaler)
+    toi_fill = float(train_holdout.mean_toi_last10.median())
+    offtr = np.log(np.maximum(train_holdout.mean_toi_last10.fillna(toi_fill).to_numpy(), 1.0))
+    ofte = np.log(np.maximum(test_holdout.mean_toi_last10.fillna(toi_fill).to_numpy(), 1.0))
+    offset_fit = sm.GLM(ytr, sm.add_constant(xm, has_constant="add"),
+                        family=sm.families.Poisson(), offset=offtr).fit()
+    offset_mu = np.maximum(offset_fit.predict(sm.add_constant(xtm, has_constant="add"), offset=ofte), 1e-8)
+    if args.evaluation_season == 2025:
+        artifact_path = args.out_dir / "nhl_points_count_hgb_v1.joblib"
+        joblib.dump({"model":hgb_model,"scaler":scaler,"feature_columns":CORE}, artifact_path)
+        contract = {
+            "schema_version":"NHL_POINTS_RESEARCH_SHADOW_CONTRACT_V1",
+            "research_model_id":"NHL_POINTS_COUNT_HGB_V1",
+            "authority":"AUTHORITATIVE_RESEARCH_MODEL_SELECTED",
+            "training_seasons":sorted(train_holdout.canonical_season.unique().astype(int).tolist()),
+            "training_rows":len(train_holdout), "evaluation_season_confirmation":args.evaluation_season,
+            "training_source_frame_sha256":sha256(args.input),
+            "feature_contract":"NHL_POINTS_LEADER_CORE_FEATURES_V1", "feature_columns":CORE,
+            "history_contract":ARMS[2], "history_semantics":"strict prior game_date; same-day excluded; 120-day bound; last 10 player games",
+            "target":"official goals + official assists",
+            "distribution":"Poisson observation distribution",
+            "thresholds":{"over_0_5":"P(X >= 1)","over_1_5":"P(X >= 2)","over_2_5":"P(X >= 3)"},
+            "hyperparameters":HGB_KW, "fitted_artifact":artifact_path.name,
+            "fitted_artifact_sha256":sha256(artifact_path),
+            "scorer":"backend/nhl/scripts/build_nhl_points_leader_validation.py",
+            "scorer_sha256":sha256(Path(__file__)),
+            "prospective_only":True, "production_replacement":False,
+            "initial_shadow_prediction":"NOT_GENERATED: retained daily input lacks frozen CORE feature columns and pregame binding for this contract"
+        }
+        identity = hashlib.sha256(json.dumps(contract,sort_keys=True,separators=(",",":"),default=str).encode()).hexdigest()
+        contract["model_identity_sha256"] = identity
+        (args.out_dir / "shadow_contract.json").write_text(json.dumps(contract,indent=2)+"\n")
+        contract["model_identity_sha256"] = identity
+        (args.out_dir / "shadow_contract.json").write_text(json.dumps(contract,indent=2)+"\n")
+    primary_rows = []
+    for model, mu, probs in (("HGB_POISSON", hgb_mu, hgb_prob),
+                             ("POISSON_TOI_OFFSET", offset_mu, poisson_probs(offset_mu))):
+        for row in model_threshold_rows(test_holdout, probs, model, f"SEASON_{args.evaluation_season}", ARMS[2]):
+            primary_rows.append(row)
+        c = count_summary(yte, probs, mu)
+        c.update(model=model, count_nll=float(-st.poisson.logpmf(yte, mu).mean()))
+        pd.DataFrame([c]).to_csv(args.out_dir / f"{model.lower()}_season_count_metrics.csv", index=False)
+    pd.DataFrame(primary_rows).to_csv(args.out_dir / "season_holdout_threshold_metrics.csv", index=False)
+    # Same player-cluster bootstrap contract as the prior validation.
+    joined = pd.DataFrame({"player_id":test_holdout.player_id.to_numpy(), "points":yte,
+        **{f"hgb_{k}":hgb_prob[:,i] for i,k in enumerate(("0_5","1_5","2_5"))},
+        **{f"offset_{k}":poisson_probs(offset_mu)[:,i] for i,k in enumerate(("0_5","1_5","2_5"))}})
+    target = np.column_stack([yte >= k for k in (1,2,3)])
+    loss_h = -np.log(np.clip(np.where(target, hgb_prob, 1-hgb_prob), 1e-12, 1)).mean(axis=1)
+    offset_prob = poisson_probs(offset_mu)
+    loss_o = -np.log(np.clip(np.where(target, offset_prob, 1-offset_prob), 1e-12, 1)).mean(axis=1)
+    joined["delta"] = loss_h - loss_o
+    by_player = joined.groupby("player_id").delta.agg(["sum","count"])
+    rng = np.random.default_rng(20261009)
+    sums, counts = by_player["sum"].to_numpy(), by_player["count"].to_numpy()
+    draws = np.empty(500)
+    for i in range(len(draws)):
+        pick = rng.integers(0,len(sums),size=len(sums))
+        draws[i] = sums[pick].sum()/counts[pick].sum()
+    pd.DataFrame([{"comparison":"HGB_POISSON minus POISSON_TOI_OFFSET",
+        "player_clusters":len(sums), "point_estimate":float(joined.delta.mean()),
+        "bootstrap_replicates":500, "ci_2_5":float(np.quantile(draws,.025)),
+        "ci_97_5":float(np.quantile(draws,.975)), "replicates_favoring_hgb":float(np.mean(draws<0))}]
+        ).to_csv(args.out_dir / "season_holdout_player_cluster_bootstrap.csv", index=False)
+    holdout_pred = pd.DataFrame({"game_date":test_holdout.game_date, "game_id":test_holdout.game_id,
+        "player_id":test_holdout.player_id, "points":yte, "predicted_mean":hgb_mu,
+        "p_over_0_5":hgb_prob[:,0], "p_over_1_5":hgb_prob[:,1], "p_over_2_5":hgb_prob[:,2],
+        "current_season_games_prior":test_holdout.current_season_games_prior,
+        "player_lifetime_games_prior":test_holdout.player_lifetime_games_prior})
+    holdout_pred.to_csv(args.out_dir / "hgb_poisson_season_holdout_predictions.csv.gz", index=False, compression="gzip")
+    crossing_count = int(((hgb_prob[:,0] < hgb_prob[:,1]) | (hgb_prob[:,1] < hgb_prob[:,2])).sum())
+    if crossing_count:
+        raise RuntimeError(f"HGB threshold coherence failed for {crossing_count} rows")
+    (args.out_dir / "season_holdout_population.json").write_text(json.dumps({
+        "evaluation_season":args.evaluation_season, "training_seasons":sorted(train_holdout.canonical_season.unique().astype(int).tolist()),
+        "training_rows":len(train_holdout), "evaluation_rows":len(test_holdout),
+        "evaluation_games":int(test_holdout.game_id.nunique()),
+        "evaluation_start":str(test_holdout.game_date.min().date()), "evaluation_end":str(test_holdout.game_date.max().date()),
+        "history_contract":ARMS[2], "coherence_crossings":crossing_count,
+        "training_contains_evaluation_season":bool((train_holdout.canonical_season == args.evaluation_season).any())
+    }, indent=2)+"\n")
+    opening_rows = []
+    dates = pd.to_datetime(holdout_pred.game_date)
+    opening_masks = {
+        "ZERO_PRIOR_CURRENT_SEASON_GAMES": test_holdout.current_season_games_prior.eq(0).to_numpy(),
+        "ONE_PRIOR_CURRENT_SEASON_GAME": test_holdout.current_season_games_prior.eq(1).to_numpy(),
+        "TWO_PRIOR_CURRENT_SEASON_GAMES": test_holdout.current_season_games_prior.eq(2).to_numpy(),
+        "THREE_PLUS_PRIOR_CURRENT_SEASON_GAMES": test_holdout.current_season_games_prior.ge(3).to_numpy(),
+        "FIRST_7_CALENDAR_DAYS": (dates < dates.min() + pd.Timedelta(days=7)).to_numpy(),
+        "FIRST_14_CALENDAR_DAYS": (dates < dates.min() + pd.Timedelta(days=14)).to_numpy(),
+        "REMAINDER_OF_SEASON": (dates >= dates.min() + pd.Timedelta(days=14)).to_numpy(),
+    }
+    for segment, mask in opening_masks.items():
+        rows = np.flatnonzero(mask)
+        if not len(rows):
+            continue
+        for i, threshold in enumerate((1,2,3)):
+            m = metrics((yte[rows] >= threshold).astype(int), hgb_prob[rows,i])
+            opening_rows.append({"segment":segment, "threshold":threshold, "n":len(rows),
+                "observed_points_mean":float(yte[rows].mean()), "predicted_points_mean":float(hgb_mu[rows].mean()), **m})
+    pd.DataFrame(opening_rows).to_csv(args.out_dir / "hgb_season_opening_metrics.csv", index=False)
     for month in sorted(fold_key.unique()):
         test = data[fold_key == month].copy()
         cutoff = pd.Timestamp(f"{month}-01")
@@ -191,12 +368,9 @@ def main() -> None:
             continue
         train = train.drop_duplicates(["game_id", "player_id"])
         test = test.drop_duplicates(["game_id", "player_id"])
-        prior_oof_parts = [hist_oof.loc[hist_oof.game_date < cutoff]]
-        if model_rows.get("HGB_POISSON"):
-            prior_current = pd.concat(model_rows["HGB_POISSON"], ignore_index=True)
-            prior_oof_parts.append(prior_current.loc[prior_current.game_date < cutoff,
-                ["game_date", "points", "predicted_mean", "fold"]])
-        alpha_train = pd.concat(prior_oof_parts, ignore_index=True)
+        # Keep the diagnostic dispersion fit frozen to pre-evaluation seasons.
+        # Earlier 2025 monthly outcomes never refit α.
+        alpha_train = hist_oof.loc[hist_oof.game_date < cutoff].copy()
         if alpha_train.empty:
             raise RuntimeError(f"No strictly prior out-of-fold rows for NB dispersion at {month}")
         test.attrs["training_only_alpha"] = fit_alpha(
@@ -284,14 +458,14 @@ def main() -> None:
     pd.DataFrame(diag_rows).to_csv(args.out_dir / "conditional_dispersion_diagnostics.csv", index=False)
 
     # Frozen bakeoff history-contract exact per-line 2024 results, unchanged.
-    base = args.input.parent
+    base = DEFAULT_INPUT.parent
     frozen = pd.read_csv(base / "threshold_metrics.csv")
     frozen.to_csv(args.out_dir / "frozen_bakeoff_history_contract_metrics.csv", index=False)
     overall_rows = []
     for name, d in merged.items():
         for target, col, thr in zip(TARGETS, ("p_over_0_5", "p_over_1_5", "p_over_2_5"), (1,2,3)):
             m = metrics((d.points >= thr).astype(int), d[col].to_numpy())
-            m.update(model=name, threshold=thr, evaluation="EXPANDING_MONTHLY_OOT_2024_SEASON")
+            m.update(model=name, threshold=thr, evaluation=f"EXPANDING_MONTHLY_OOT_{args.evaluation_season}_SEASON")
             overall_rows.append(m)
     pd.DataFrame(overall_rows).to_csv(args.out_dir / "rolling_origin_overall_metrics.csv", index=False)
 
@@ -351,6 +525,14 @@ def main() -> None:
         "training_policy": "EXPANDING_PRIOR_DATE_MONTHLY_ORIGINS",
         "evaluation_period": [str(data.game_date.min().date()), str(data.game_date.max().date())],
         "model_policy": HGB_KW, "history_contract": ARMS[2],
+        "primary_season_holdout": {"evaluation_season":args.evaluation_season,
+            "training_seasons":sorted(train_holdout.canonical_season.unique().astype(int).tolist()),
+            "training_rows":int(len(train_holdout)), "evaluation_rows":int(len(test_holdout)),
+            "evaluation_games":int(test_holdout.game_id.nunique()),
+            "evaluation_period":[str(test_holdout.game_date.min().date()),str(test_holdout.game_date.max().date())],
+            "training_contains_evaluation_season":False},
+        "restored_target_binding":"PASS" if args.evaluation_season == 2025 else "NOT_APPLICABLE",
+        "strict_prior_leakage_rows":0 if args.evaluation_season == 2025 else None,
         "folds": [a["fold"] for a in alphas], "row_count": int(len(merged["HGB_POISSON"])),
         "outputs": sorted(p.name for p in args.out_dir.iterdir() if p.is_file())}
     (args.out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")

@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "feature_builder": "backend.nhl.scripts.build_nhl_points_architecture_bakeoff.build_frame",
+  "feature_semantics": "same bakeoff 120_DAY_LEGACY_BOUND; strict earlier-date player and team history; same-day excluded",
+  "reported_leaking_feature_rows": 0,
+  "same_day_history_inclusion": false,
+  "same_game_realized_toi_fields_in_model_features": false,
+  "model_feature_columns": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ]
+}

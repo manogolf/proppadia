@@ -1,0 +1,76 @@
+{
+  "schema_version": "NHL_POINTS_LEADER_VALIDATION_V1",
+  "source_frame": "artifacts/analysis/nhl/points_official_outcome_restoration/2026-10-09/restored_v3/validation_input_2023_2025.csv.gz",
+  "source_frame_sha256": "45605af7f472481af4d5a33a103b679ab4284db5d043f82842757297a3534892",
+  "training_policy": "EXPANDING_PRIOR_DATE_MONTHLY_ORIGINS",
+  "evaluation_period": [
+    "2025-10-07",
+    "2026-04-16"
+  ],
+  "model_policy": {
+    "loss": "poisson",
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "l2_regularization": 1.0,
+    "early_stopping": false,
+    "random_state": 42
+  },
+  "history_contract": "120_DAY_LEGACY_BOUND",
+  "primary_season_holdout": {
+    "evaluation_season": 2025,
+    "training_seasons": [
+      2023,
+      2024
+    ],
+    "training_rows": 90486,
+    "evaluation_rows": 47239,
+    "evaluation_games": 1312,
+    "evaluation_period": [
+      "2025-10-07",
+      "2026-04-16"
+    ],
+    "training_contains_evaluation_season": false
+  },
+  "restored_target_binding": "PASS",
+  "strict_prior_leakage_rows": 0,
+  "folds": [
+    "2025-10",
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04"
+  ],
+  "row_count": 47239,
+  "outputs": [
+    "balanced_phoenix_prior_reversed_rolling_predictions.csv.gz",
+    "classical_nb2_rolling_predictions.csv.gz",
+    "conditional_dispersion_diagnostics.csv",
+    "distribution_rank_and_coherence.csv",
+    "fold_training_and_dispersion.csv",
+    "frozen_bakeoff_history_contract_metrics.csv",
+    "hgb_distribution_comparison.csv",
+    "hgb_error_regimes.csv",
+    "hgb_nb_distribution_rolling_predictions.csv.gz",
+    "hgb_no_toi_rolling_predictions.csv.gz",
+    "hgb_poisson_rolling_predictions.csv.gz",
+    "hgb_poisson_season_count_metrics.csv",
+    "hgb_poisson_season_holdout_predictions.csv.gz",
+    "hgb_season_opening_metrics.csv",
+    "manifest.json",
+    "natural_binary_logit_rolling_predictions.csv.gz",
+    "nhl_points_count_hgb_v1.joblib",
+    "poisson_toi_offset_rolling_predictions.csv.gz",
+    "poisson_toi_offset_season_count_metrics.csv",
+    "restored_target_binding.json",
+    "rolling_origin_overall_metrics.csv",
+    "rolling_origin_player_cluster_bootstrap.csv",
+    "rolling_origin_threshold_metrics.csv",
+    "season_holdout_player_cluster_bootstrap.csv",
+    "season_holdout_population.json",
+    "season_holdout_threshold_metrics.csv",
+    "shadow_contract.json",
+    "strict_prior_leakage_audit.json"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "validation_input_sha256": "45605af7f472481af4d5a33a103b679ab4284db5d043f82842757297a3534892",
+  "validation_input_expected_sha256": "45605af7f472481af4d5a33a103b679ab4284db5d043f82842757297a3534892",
+  "recovery_manifest_outcome_sha256": "1629ecf78c2c23f8ac269c1831c4b70cb3ed4fbdbcc6880b686f71c8d70abcbe",
+  "canonical_outcomes_file_sha256": "7c4344dc7be0e4adbfb5ced20e873ba9a151011711d89a5b263ad7fc6dff8b10",
+  "canonical_outcomes_sha256sum_verified": true,
+  "target_identity_join": "one_to_one game_id,player_id",
+  "validated_rows": 47239,
+  "equation": "realized_points = official goals + official assists",
+  "all_targets_equal": true
+}
