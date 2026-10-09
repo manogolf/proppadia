@@ -17,9 +17,11 @@ import types
 import unittest
 from contextlib import AbstractContextManager
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Mapping
 
-from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
+from backend.mlb.season_transition.game_phase_authority_v1 import GamePhaseAuthorityError, HashedProposalAuthority
+from backend.mlb.season_transition.contract_v1 import classify_schedule_game
+from backend.mlb.totals_predictions.live_context_bridge_v1 import load_retained_schedule_projection
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -49,6 +51,8 @@ SOURCE_FILES = (
 )
 RAW_EXPORT_ROOT = ROOT / "artifacts/analysis/model_development/mlb_totals_prospective_shadow_v1"
 C_START_DATE = "2026-08-17"
+INGESTION_RECEIPT_NAME = "totals_raw_ingestion_receipt.json"
+INGESTION_RECEIPT_GLOB = "totals_raw_ingestion_receipt*.json"
 
 
 def sha256(path: Path) -> str:
@@ -70,6 +74,20 @@ def aggregate_status(checks: dict[str, Any]) -> str:
     return "PASS" if values and all(value is True or value == "PASS" for value in values) else "FAIL"
 
 
+def expected_population_status(
+    observed: set[tuple[str, int]],
+    expected: set[tuple[str, int]],
+    *,
+    evidence_errors: list[str],
+    duplicate_rows: int = 0,
+) -> str:
+    if evidence_errors:
+        return "INCONCLUSIVE"
+    if duplicate_rows:
+        return "FAIL"
+    return "PASS" if observed == expected else "INCONCLUSIVE"
+
+
 def write_json(path: Path, value: Any) -> None:
     path.write_text(json.dumps(value, indent=2, sort_keys=True, default=str) + "\n")
 
@@ -86,11 +104,124 @@ def ro(path: Path) -> sqlite3.Connection:
     return sqlite3.connect(f"file:{path.resolve()}?mode=ro&immutable=1", uri=True)
 
 
-def retained_raw_producer_census() -> dict[str, Any]:
+def validate_ingestion_receipt(
+    receipt_path: Path,
+    *,
+    root: Path = ROOT,
+    expected_prediction_hashes: Mapping[tuple[str, int], str] | None = None,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Validate a separately retained Totals append receipt and its source artifacts."""
+    errors: list[str] = []
+    root = root.resolve()
+    receipt_path = receipt_path.resolve()
+    try:
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        if receipt.get("schema_version") != "MLB_TOTALS_RAW_INGESTION_RECEIPT_V1":
+            return [], [f"{receipt_path.relative_to(root)}:SCHEMA_VERSION_INVALID"]
+        manifest_path = receipt_path.parent / "reproducibility_hashes.sha256"
+        manifest_entries = {}
+        for line in manifest_path.read_text(encoding="utf-8").splitlines():
+            parts = line.strip().split(None, 1)
+            if len(parts) == 2:
+                manifest_entries[parts[1].lstrip("* ")] = parts[0]
+        receipt_hash = hashlib.sha256(receipt_path.read_bytes()).hexdigest()
+        if manifest_entries.get(receipt_path.name) != receipt_hash:
+            errors.append(f"{receipt_path.relative_to(root)}:RECEIPT_MANIFEST_HASH_MISSING_OR_MISMATCH")
+        schedule_path = Path(str(receipt["schedule_source_path"]))
+        schedule_path = schedule_path if schedule_path.is_absolute() else root / schedule_path
+        schedule_digest = hashlib.sha256(schedule_path.read_bytes()).hexdigest() if schedule_path.is_file() else None
+        if schedule_digest != receipt.get("schedule_source_sha256"):
+            errors.append(f"{receipt_path.relative_to(root)}:SCHEDULE_SOURCE_HASH_MISSING_OR_MISMATCH")
+            schedule_payload = {}
+        else:
+            schedule_payload, _, _, projection_digest = load_retained_schedule_projection(
+                schedule_path, str(schedule_digest), observed_at_utc="2000-01-01T00:00:00Z"
+            )
+            if projection_digest != receipt.get("schedule_projection_sha256"):
+                errors.append(f"{receipt_path.relative_to(root)}:SCHEDULE_PROJECTION_HASH_MISMATCH")
+        schedule_games: dict[int, list[dict[str, Any]]] = {}
+        for day in schedule_payload.get("dates", []):
+            for game in day.get("games", []):
+                if game.get("gamePk") is not None:
+                    schedule_games.setdefault(int(game["gamePk"]), []).append(game)
+        entries = receipt.get("entries")
+        if not isinstance(entries, list) or not entries:
+            errors.append(f"{receipt_path.relative_to(root)}:ENTRIES_MISSING_OR_EMPTY")
+            entries = []
+        validated: list[dict[str, Any]] = []
+        seen: set[tuple[str, int]] = set()
+        for item in entries:
+            if not isinstance(item, dict):
+                errors.append(f"{receipt_path.relative_to(root)}:ENTRY_NOT_OBJECT")
+                continue
+            date, game_pk = str(item.get("game_date") or ""), int(item.get("game_pk", -1))
+            identity = (date, game_pk)
+            if date != str(receipt.get("game_date") or ""):
+                errors.append(f"{receipt_path.relative_to(root)}:RECEIPT_DATE_MISMATCH:{game_pk}")
+            if (item.get("schedule_source_path") != receipt.get("schedule_source_path")
+                    or item.get("schedule_source_sha256") != receipt.get("schedule_source_sha256")
+                    or item.get("schedule_projection_sha256") != receipt.get("schedule_projection_sha256")):
+                errors.append(f"{receipt_path.relative_to(root)}:ENTRY_SCHEDULE_BINDING_MISMATCH:{game_pk}")
+            if item.get("canonical_identity", "").split("|")[:2] != [date, str(game_pk)]:
+                errors.append(f"{receipt_path.relative_to(root)}:CANONICAL_IDENTITY_MISMATCH:{game_pk}")
+            if identity in seen:
+                errors.append(f"{receipt_path.relative_to(root)}:DUPLICATE_IDENTITY:{identity}")
+                continue
+            seen.add(identity)
+            raw_schedule_games = schedule_games.get(game_pk, [])
+            if len(raw_schedule_games) != 1:
+                errors.append(f"{receipt_path.relative_to(root)}:SCHEDULE_GAME_NOT_UNIQUE:{game_pk}")
+                continue
+            raw_game = raw_schedule_games[0]
+            if (str(raw_game.get("officialDate") or "") != date
+                    or int(raw_game.get("season", -1)) != int(item.get("source_season", -2))
+                    or str(raw_game.get("gameType") or "") != str(item.get("source_game_type") or "")):
+                errors.append(f"{receipt_path.relative_to(root)}:SCHEDULE_IDENTITY_MISMATCH:{game_pk}")
+            else:
+                classification = classify_schedule_game(raw_game, season=int(raw_game["season"]))
+                if (classification.phase != item.get("normalized_phase")
+                        or classification.postseason_round != item.get("postseason_round")):
+                    errors.append(f"{receipt_path.relative_to(root)}:SCHEDULE_PHASE_MISMATCH:{game_pk}")
+            market_rel, market_sha, event_id = item.get("market_source_path"), item.get("market_source_sha256"), item.get("market_source_event_id")
+            if market_sha:
+                market_path = Path(str(market_rel))
+                market_path = market_path if market_path.is_absolute() else root / market_path
+                if not market_path.is_file() or hashlib.sha256(market_path.read_bytes()).hexdigest() != market_sha:
+                    errors.append(f"{receipt_path.relative_to(root)}:MARKET_SOURCE_HASH_MISSING_OR_MISMATCH:{game_pk}")
+                elif not event_id:
+                    errors.append(f"{receipt_path.relative_to(root)}:MARKET_EVENT_ID_MISSING:{game_pk}")
+                else:
+                    market_payload = json.loads(market_path.read_text(encoding="utf-8"))
+                    market_events = market_payload if isinstance(market_payload, list) else market_payload.get("events", [])
+                    event_matches = [event for event in market_events if str(event.get("id")) == str(event_id)]
+                    away = raw_game.get("teams", {}).get("away", {}).get("team", {}).get("name")
+                    home = raw_game.get("teams", {}).get("home", {}).get("team", {}).get("name")
+                    if (len(event_matches) != 1 or event_matches[0].get("away_team") != away
+                            or event_matches[0].get("home_team") != home):
+                        errors.append(f"{receipt_path.relative_to(root)}:MARKET_EVENT_GAME_BINDING_MISMATCH:{game_pk}")
+            elif event_id or market_rel:
+                errors.append(f"{receipt_path.relative_to(root)}:PARTIAL_MARKET_PROVENANCE:{game_pk}")
+            if expected_prediction_hashes is not None:
+                observed_payload_hash = expected_prediction_hashes.get(identity)
+                if observed_payload_hash != item.get("prediction_payload_sha256"):
+                    errors.append(f"{receipt_path.relative_to(root)}:LEDGER_INGESTION_HASH_MISMATCH:{game_pk}")
+            if not item.get("prediction_payload_sha256") or not item.get("context_payload_sha256"):
+                errors.append(f"{receipt_path.relative_to(root)}:INGESTION_HASH_MISSING:{game_pk}")
+            validated.append(item)
+        return (validated if not errors else []), errors
+    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        return [], [f"{receipt_path.relative_to(root)}:{type(exc).__name__}:{exc}"]
+
+
+def retained_raw_producer_census(
+    expected_prediction_hashes: Mapping[tuple[str, int], str] | None = None,
+) -> dict[str, Any]:
     """Build independent game identity expectations from retained RAW producer exports."""
     # Use the producer's stable daily-output suffix.
     files = sorted(path for path in RAW_EXPORT_ROOT.glob("*/*_totals_shadow_predictions.csv") if path.is_file())
     identities: list[tuple[str, int]] = []
+    phase_by_identity: dict[tuple[str, int], str] = {}
+    producer_row_count = 0
     verified_manifest_files = 0
     manifest_errors: list[str] = []
     for csv_path in files:
@@ -122,27 +253,64 @@ def retained_raw_producer_census() -> dict[str, Any]:
             with csv_path.open(newline="", encoding="utf-8") as handle:
                 for row in csv.DictReader(handle):
                     identities.append((row["game_date"], int(row["game_pk"])))
+                    producer_row_count += 1
         except (OSError, KeyError, ValueError) as exc:
             manifest_errors.append(f"{csv_path.relative_to(ROOT)}:{type(exc).__name__}:{exc}")
     counts: dict[str, int] = {}
     duplicates = len(identities) - len(set(identities))
     authority = HashedProposalAuthority()
+    receipt_entries: list[dict[str, Any]] = []
+    receipt_paths = sorted(path for path in RAW_EXPORT_ROOT.glob(f"*/{INGESTION_RECEIPT_GLOB}") if path.is_file())
+    valid_receipt_count = 0
+    for receipt_path in receipt_paths:
+        entries, receipt_errors = validate_ingestion_receipt(
+            receipt_path, expected_prediction_hashes=expected_prediction_hashes
+        )
+        manifest_errors.extend(receipt_errors)
+        if receipt_errors:
+            continue
+        valid_receipt_count += 1
+        receipt_entries.extend(entries)
+        for item in entries:
+            identity = (str(item["game_date"]), int(item["game_pk"]))
+            phase = str(item["normalized_phase"])
+            if identity in phase_by_identity and phase_by_identity[identity] != phase:
+                manifest_errors.append(f"{receipt_path.relative_to(ROOT)}:PHASE_CONFLICT:{identity}")
+            phase_by_identity[identity] = phase
+            identities.append(identity)
+    authority = HashedProposalAuthority()
     for date, game_pk in set(identities):
-        record = authority.lookup_exact(game_pk)
+        identity = (date, game_pk)
+        try:
+            record = authority.lookup_exact(game_pk)
+        except GamePhaseAuthorityError as exc:
+            if identity not in phase_by_identity:
+                manifest_errors.append(f"PHASE_AUTHORITY_UNAVAILABLE:{identity}:{exc}")
+            continue
         phase = str(record.season_phase)
-        counts[phase] = counts.get(phase, 0) + 1
-    c_expected = sorted(identity for identity in set(identities) if identity[0] >= C_START_DATE)
+        if identity in phase_by_identity and phase_by_identity[identity] != phase:
+            manifest_errors.append(f"ACTIVE_AUTHORITY_PHASE_CONFLICT:{identity}")
+        phase_by_identity.setdefault(identity, phase)
+    for identity in set(identities):
+        phase = phase_by_identity.get(identity)
+        if phase:
+            counts[phase] = counts.get(phase, 0) + 1
+    identities = sorted(set(identities))
+    c_expected = sorted(identity for identity in identities if identity[0] >= C_START_DATE and phase_by_identity.get(identity) == "REGULAR_SEASON")
     return {
         "source_root": str(RAW_EXPORT_ROOT.relative_to(ROOT)),
         "raw_producer_csv_count": len(files),
-        "raw_producer_rows": len(identities),
+        "raw_producer_rows": producer_row_count,
         "raw_unique_exact_identities": len(set(identities)),
         "raw_duplicate_identity_rows": duplicates,
         "raw_phase_counts": counts,
         "verified_manifest_artifact_count": verified_manifest_files,
         "manifest_error_count": len(manifest_errors),
         "manifest_errors": manifest_errors,
-        "identities": sorted(set(identities)),
+        "ingestion_receipt_count": len(receipt_paths),
+        "valid_ingestion_receipt_count": valid_receipt_count,
+        "receipt_entry_count": len(receipt_entries),
+        "identities": identities,
         "c_expected_start_date": C_START_DATE,
         "c_expected_identities": c_expected,
     }
@@ -291,7 +459,8 @@ def ledger_population() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str,
         })
 
     raw_games, c_games = set(raw_by_game), set(c_by_game)
-    census = retained_raw_producer_census()
+    prediction_hashes = {(str(row[1]), int(row[2])): str(row[4]) for row in raw_predictions}
+    census = retained_raw_producer_census(expected_prediction_hashes=prediction_hashes)
     raw_ledger_identities = {(str(row[1]), int(row[2])) for row in raw_predictions}
     c_ledger_identities = {(str(row[1]), int(row[2])) for row in c_predictions}
     raw_expected_identities = {(str(date), int(game_pk)) for date, game_pk in census["identities"]}
@@ -302,17 +471,42 @@ def ledger_population() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str,
     census["c_ledger_identity_count"] = len(c_ledger_identities)
     census["c_ledger_only_identities"] = [list(item) for item in sorted(c_ledger_identities - c_expected_identities)]
     census["c_expected_only_identities"] = [list(item) for item in sorted(c_expected_identities - c_ledger_identities)]
-    census["raw_population_status"] = (
-        "PASS" if not census["manifest_error_count"] and not census["raw_duplicate_identity_rows"]
-        and raw_ledger_identities == raw_expected_identities else "INCONCLUSIVE"
+    census["raw_population_status"] = expected_population_status(
+        raw_ledger_identities, raw_expected_identities,
+        evidence_errors=census["manifest_errors"], duplicate_rows=census["raw_duplicate_identity_rows"],
     )
-    census["c_population_status"] = (
-        "PASS" if not census["manifest_error_count"] and not census["raw_duplicate_identity_rows"]
-        and c_ledger_identities == c_expected_identities else "INCONCLUSIVE"
+    census["c_population_status"] = expected_population_status(
+        c_ledger_identities, c_expected_identities,
+        evidence_errors=census["manifest_errors"], duplicate_rows=census["raw_duplicate_identity_rows"],
     )
     census["raw_unexplained_ledger_identities"] = []
+    census["existing_ledger_source_claims_not_used_as_population_evidence"] = []
     for date, game_pk in census["raw_ledger_only_identities"]:
         record = authority.lookup_exact(game_pk)
+        raw_row = raw_by_game[game_pk]
+        payload = json.loads(raw_row[3])
+        schedule_dir = ROOT / "backend/mlb/exports/provider_event_game_bindings/schedule_sources" / date
+        schedule_matches = []
+        for schedule_path in schedule_dir.glob("*.json"):
+            if hashlib.sha256(schedule_path.read_bytes()).hexdigest() != payload.get("schedule_source_sha256"):
+                continue
+            schedule_json = json.loads(schedule_path.read_text(encoding="utf-8"))
+            if any(int(game.get("gamePk", -1)) == game_pk for day in schedule_json.get("dates", []) for game in day.get("games", [])):
+                schedule_matches.append(str(schedule_path.relative_to(ROOT)))
+        market_value_path = Path(str(payload.get("market_source_path") or ""))
+        market_path = market_value_path if market_value_path.is_absolute() else ROOT / market_value_path
+        market_file_hash_matches = (
+            bool(payload.get("market_source_sha256")) and market_path.is_file()
+            and hashlib.sha256(market_path.read_bytes()).hexdigest() == payload.get("market_source_sha256")
+        )
+        event_ids = []
+        if market_file_hash_matches:
+            market_json = json.loads(market_path.read_text(encoding="utf-8"))
+            market_events = market_json if isinstance(market_json, list) else market_json.get("events", [])
+            for event in market_events:
+                if (event.get("away_team") == payload.get("away_team")
+                        and event.get("home_team") == payload.get("home_team")):
+                    event_ids.append(str(event.get("id")))
         census["raw_unexplained_ledger_identities"].append({
             "game_date": date,
             "game_pk": game_pk,
@@ -321,6 +515,20 @@ def ledger_population() -> tuple[dict[str, Any], list[dict[str, Any]], dict[str,
             "authority_primary_source_path": record.primary_source_path,
             "authority_primary_source_sha256": record.primary_source_sha256,
             "missing_evidence": "Totals-owned producer export or ingestion receipt for this exact identity",
+        })
+        census["existing_ledger_source_claims_not_used_as_population_evidence"].append({
+            "game_date": date,
+            "game_pk": game_pk,
+            "ledger_prediction_payload_sha256": str(raw_row[4]),
+            "ledger_schedule_source_sha256": payload.get("schedule_source_sha256"),
+            "retained_schedule_hash_matches_with_game_identity": schedule_matches,
+            "ledger_market_source_path": payload.get("market_source_path"),
+            "ledger_market_source_sha256": payload.get("market_source_sha256"),
+            "market_file_hash_matches": market_file_hash_matches,
+            "team_matched_market_event_ids": sorted(event_ids),
+            "market_event_id_in_immutable_ledger_payload": payload.get("market_source_event_id"),
+            "totals_owned_ingestion_receipt": "NOT_FOUND",
+            "counted_as_independent_expected_identity": False,
         })
     phase_counts_raw: dict[str, int] = {}
     for game_pk in raw_games:
@@ -486,7 +694,7 @@ def build() -> dict[str, Any]:
         "status": aggregate_status(checks),
         "checks": checks,
         "population_expectation_evidence": reconciliation["independent_population_census"],
-        "smallest_next_action": "After the first retained authoritative postseason game, run the ordinary RAW and C shadow paths in explicit POSTSEASON mode and validate the separate shadow outputs; do not tune, qualify, select, or publish.",
+        "smallest_next_action": "For the next naturally admitted RAW game, retain the new source-hashed ingestion receipt; rerun the local census only after an independently retained producer artifact or receipt exists for the two historical postseason identities. Do not reconstruct or backfill them.",
     }
     write_json(CONTRACT / "validation_report.json", validation)
     census = reconciliation["independent_population_census"]
@@ -494,7 +702,7 @@ def build() -> dict[str, Any]:
 
 RAW Totals and Totals C are genuinely coupled: C derives each row from an immutable RAW prediction/context identity, and the ordinary hook sequences RAW before C. One shared exact-`gamePk` phase interface now gates both lanes without adding phase columns to either append-only ledger.
 
-Retained evidence is unchanged. The observed population is RAW 625 predictions/gamePks (623 regular season, 2 postseason) and C 482 predictions/gamePks (482 regular season), with C an exact RAW subset for all 482 identities and 143 RAW-only identities. Independently retained, hash-verified daily RAW producer CSVs establish 623 exact regular-season identities; the C launch floor (`{C_START_DATE}`) yields 482 expected identities, exactly matching C. The two extra RAW identities (849823 and 849825, postseason) lack a Totals-owned producer export or ingestion receipt, so the complete RAW expected population remains `INCONCLUSIVE`; the Moneyline schedule receipt is not treated as Totals ingestion evidence. Observed table counts are not used as their own oracle. The census verified {census['raw_producer_csv_count']} producer CSVs and {census['verified_manifest_artifact_count']} manifest-listed artifacts with {census['manifest_error_count']} manifest errors. Existing predictions, outcomes, features, proper-score inputs, market inputs, thresholds, models, selector status, and publication status were not changed.
+Retained evidence is unchanged. The observed population is RAW 625 predictions/gamePks (623 regular season, 2 postseason) and C 482 predictions/gamePks (482 regular season), with C an exact RAW subset for all 482 identities and 143 RAW-only identities. Independently retained, hash-verified daily RAW producer CSVs establish 623 exact regular-season identities; the C launch floor (`{C_START_DATE}`) yields 482 expected identities, exactly matching C. The two extra RAW identities (849823 and 849825, postseason) have matching schedule and market source-file hashes claimed by the ledger payload, and their teams match provider event IDs in retained market files. However, no Totals-owned ingestion receipt binds each exact identity to those events and the ingestion payload hash; those source components are diagnostic only and are not used as an expected-population oracle. The complete RAW expected population remains `INCONCLUSIVE`. No old rows were reconstructed or backfilled. Each future newly appended prediction now writes an immutable `totals_raw_ingestion_receipt__*.json` containing exact phase, schedule/projection hashes, market event/source hashes when available, and prediction/context payload hashes. The sibling reproducibility manifest hashes the receipt; the census verifies it and the referenced source artifacts before counting identities. The census verified {census['raw_producer_csv_count']} producer CSVs and {census['verified_manifest_artifact_count']} manifest-listed artifacts with {census['manifest_error_count']} manifest errors. Existing predictions, outcomes, features, proper-score inputs, market inputs, thresholds, models, selector status, and publication status were not changed.
 
 Regular-season reporting remains the default. Postseason requires explicit `POSTSEASON` evaluation mode and remains shadow-only. Operational readiness is blocked until an actual authoritative postseason game traverses the ordinary RAW and C paths; synthetic coverage proves code behavior only.
 

@@ -17,6 +17,45 @@
     "c_ledger_identity_count": 482,
     "c_ledger_only_identities": [],
     "c_population_status": "PASS",
+    "existing_ledger_source_claims_not_used_as_population_evidence": [
+      {
+        "counted_as_independent_expected_identity": false,
+        "game_date": "2026-10-04",
+        "game_pk": 849823,
+        "ledger_market_source_path": "backend/mlb/exports/odds_history/2026-10-04/odds_mlb_full_game_totals__full_game_totals_20261004T201054Z.json",
+        "ledger_market_source_sha256": "3a26aa15e74ee39d27ae87d1bde596c3aec58ca0f34044087d73ee30586c4fb4",
+        "ledger_prediction_payload_sha256": "e773ab62bbafd0275d4e67be4b34307f532d2765d7b30f45b95e988dd4ecb94e",
+        "ledger_schedule_source_sha256": "ef0df609ea0bd5f3183f39cd46c798583b04508f61f1678b567e911940fcc6d0",
+        "market_event_id_in_immutable_ledger_payload": null,
+        "market_file_hash_matches": true,
+        "retained_schedule_hash_matches_with_game_identity": [
+          "backend/mlb/exports/provider_event_game_bindings/schedule_sources/2026-10-04/statsapi_hydrated__pinnacle__local_daily_20261004T200004Z__2026-10-04.json"
+        ],
+        "team_matched_market_event_ids": [
+          "583202487b52f61769b2404a64e01c77"
+        ],
+        "totals_owned_ingestion_receipt": "NOT_FOUND"
+      },
+      {
+        "counted_as_independent_expected_identity": false,
+        "game_date": "2026-10-04",
+        "game_pk": 849825,
+        "ledger_market_source_path": "backend/mlb/exports/odds_history/2026-10-04/odds_mlb_pinnacle_main_markets__local_daily_20261004T180417Z.json",
+        "ledger_market_source_sha256": "194ca122524abcdfb9aa0d6365c8ed20314c023a4c9b95200e6a39b7ab93ed26",
+        "ledger_prediction_payload_sha256": "5e0ed7a2b95bee98688ff65bbe66279ac074876539cb37fd6dcb2a12e4edd537",
+        "ledger_schedule_source_sha256": "30c65a0199401e5168812a1704ffde4577773e4fa5377c2bc4ebafe66e595b78",
+        "market_event_id_in_immutable_ledger_payload": null,
+        "market_file_hash_matches": true,
+        "retained_schedule_hash_matches_with_game_identity": [
+          "backend/mlb/exports/provider_event_game_bindings/schedule_sources/2026-10-04/statsapi_hydrated__pinnacle__local_daily_20261004T180417Z__2026-10-04.json"
+        ],
+        "team_matched_market_event_ids": [
+          "6da40e91a31110e51e84ba5671996deb"
+        ],
+        "totals_owned_ingestion_receipt": "NOT_FOUND"
+      }
+    ],
+    "ingestion_receipt_count": 0,
     "manifest_error_count": 0,
     "manifest_errors": [],
     "raw_duplicate_identity_rows": 0,
@@ -59,10 +98,12 @@
       }
     ],
     "raw_unique_exact_identities": 623,
+    "receipt_entry_count": 0,
     "source_root": "artifacts/analysis/model_development/mlb_totals_prospective_shadow_v1",
+    "valid_ingestion_receipt_count": 0,
     "verified_manifest_artifact_count": 991
   },
-  "smallest_next_action": "After the first retained authoritative postseason game, run the ordinary RAW and C shadow paths in explicit POSTSEASON mode and validate the separate shadow outputs; do not tune, qualify, select, or publish.",
+  "smallest_next_action": "For the next naturally admitted RAW game, retain the new source-hashed ingestion receipt; rerun the local census only after an independently retained producer artifact or receipt exists for the two historical postseason identities. Do not reconstruct or backfill them.",
   "status": "INCONCLUSIVE",
   "task": "MLB_2026_TOTALS_PHASE_GATING_V1"
 }

@@ -176,6 +176,7 @@ def normalize_schedule(
             venue = game.get("venue") or {}
             rows.append({
                 "game_pk": game_pk, "game_date": game.get("officialDate", day.get("date")),
+                "source_season": int(game.get("season", game.get("seasonDisplay", game.get("officialDate", day.get("date"))[:4]))),
                 "source_game_type": source_game_type,
                 "scheduled_start_utc": game["gameDate"], "game_number": int(game.get("gameNumber", 1)),
                 "doubleheader_state": game.get("doubleHeader", "N"),

@@ -1,9 +1,9 @@
 {
   "canonical_interpreter": "/Users/jerrystrain/Projects/proppadia/.venv/bin/python",
-  "executed": 41,
+  "executed": 43,
   "failed": 0,
-  "intended": 41,
-  "passed": 41,
+  "intended": 43,
+  "passed": 43,
   "results": [
     {
       "scenario": "backend.mlb.tests.test_mlb_2026_totals_phase_gating_v1.TotalsPhaseGatingV1Tests.test_aggregate_status_requires_every_check",
@@ -27,6 +27,10 @@
     },
     {
       "scenario": "backend.mlb.tests.test_mlb_2026_totals_phase_gating_v1.TotalsPhaseGatingV1Tests.test_hash_invariance_and_repeated_execution",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_totals_phase_gating_v1.TotalsPhaseGatingV1Tests.test_missing_mismatched_and_tampered_ingestion_receipts_fail_closed",
       "status": "PASSED"
     },
     {
@@ -83,6 +87,10 @@
     },
     {
       "scenario": "backend.mlb.tests.test_mlb_2026_totals_phase_gating_v1.TotalsPhaseGatingV1Tests.test_stale_authority_fails_closed",
+      "status": "PASSED"
+    },
+    {
+      "scenario": "backend.mlb.tests.test_mlb_2026_totals_phase_gating_v1.TotalsPhaseGatingV1Tests.test_totals_ingestion_receipt_binds_identity_sources_and_payload_hash",
       "status": "PASSED"
     },
     {

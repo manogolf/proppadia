@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 from backend.mlb.scripts import grade_mlb_totals_prospective_shadow_v1 as raw_grade
@@ -33,7 +35,11 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
 )
 from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 from backend.mlb.season_transition.phase_authority_snapshot_v1 import REPO_ROOT
-from backend.mlb.scripts.validate_mlb_2026_totals_phase_gating_v1 import aggregate_status
+from backend.mlb.scripts.validate_mlb_2026_totals_phase_gating_v1 import (
+    aggregate_status,
+    expected_population_status,
+    validate_ingestion_receipt,
+)
 
 
 def metadata(**changes: int | str) -> GamePhaseAuthorityMetadata:
@@ -136,6 +142,117 @@ class TotalsPhaseGatingV1Tests(unittest.TestCase):
         self.assertEqual(aggregate_status({"one": True, "two": False}), "FAIL")
         self.assertEqual(aggregate_status({"one": True, "two": "INCONCLUSIVE"}), "INCONCLUSIVE")
         self.assertEqual(aggregate_status({"one": True, "two": "PASS"}), "PASS")
+
+    def _write_synthetic_ingestion_receipt(self, root: Path) -> tuple[Path, dict[str, Any]]:
+        from backend.mlb.scripts.run_mlb_totals_prospective_shadow_v1 import (
+            _write_ingestion_receipt,
+            _write_reproducibility_manifest,
+        )
+        from backend.mlb.totals_predictions.live_context_bridge_v1 import load_retained_schedule_projection
+
+        package = root / "2026-10-09"
+        package.mkdir(parents=True)
+        schedule = {
+            "dates": [{"date": "2026-10-09", "games": [{
+                "gamePk": 999001, "season": "2026", "gameType": "D",
+                "officialDate": "2026-10-09", "gameDate": "2026-10-09T22:00:00Z",
+                "seriesDescription": "NL Division Series",
+                "teams": {"away": {"team": {"name": "Away"}}, "home": {"team": {"name": "Home"}}},
+            }]}],
+        }
+        schedule_path = root / "schedule.json"
+        schedule_path.write_text(json.dumps(schedule))
+        schedule_hash = hashlib.sha256(schedule_path.read_bytes()).hexdigest()
+        _, _, _, projection_hash = load_retained_schedule_projection(
+            schedule_path, schedule_hash, observed_at_utc="2000-01-01T00:00:00Z"
+        )
+        market_path = root / "market.json"
+        market_path.write_text(json.dumps([{"id": "event-999001", "away_team": "Away", "home_team": "Home",
+                                           "commence_time": "2026-10-09T22:00:00Z"}]))
+        market_hash = hashlib.sha256(market_path.read_bytes()).hexdigest()
+        entry = {
+                "canonical_identity": "2026-10-09|999001|DIRECT_NEGATIVE_BINOMIAL|DAILY_DESIGNATED_PREGAME",
+                "game_date": "2026-10-09", "game_pk": 999001, "source_season": 2026,
+                "source_game_type": "D", "normalized_phase": "POSTSEASON", "postseason_round": "DIVISION_SERIES",
+                "schedule_source_path": "schedule.json", "schedule_source_sha256": schedule_hash,
+                "schedule_projection_sha256": projection_hash, "market_source_event_id": "event-999001",
+                "market_source_path": "market.json", "market_source_sha256": market_hash,
+                "market_source_run_tag": "synthetic", "market_status": "TOTAL_MARKET_CERTIFIED_PAIRED",
+                "prediction_payload_sha256": "d" * 64, "context_payload_sha256": "e" * 64,
+        }
+        receipt_path = _write_ingestion_receipt(
+            package,
+            game_date="2026-10-09",
+            evaluation_phase="POSTSEASON",
+            schedule_source_path="schedule.json",
+            schedule_source_sha256=schedule_hash,
+            schedule_projection_sha256=projection_hash,
+            phase_authority_proposal_sha256="f" * 64,
+            entries=[entry],
+        )
+        assert receipt_path is not None
+        _write_reproducibility_manifest(package)
+        return receipt_path, json.loads(receipt_path.read_text())
+
+    def test_totals_ingestion_receipt_binds_identity_sources_and_payload_hash(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="totals_ingestion_receipt_") as directory:
+            root = Path(directory)
+            receipt_path, _ = self._write_synthetic_ingestion_receipt(root)
+            entries, errors = validate_ingestion_receipt(
+                receipt_path, root=root, expected_prediction_hashes={("2026-10-09", 999001): "d" * 64}
+            )
+            self.assertEqual([], errors)
+            self.assertEqual([999001], [item["game_pk"] for item in entries])
+            self.assertEqual("PASS", expected_population_status(
+                {("2026-10-09", 999001)}, {("2026-10-09", 999001)}, evidence_errors=errors,
+            ))
+
+    def test_missing_mismatched_and_tampered_ingestion_receipts_fail_closed(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="totals_ingestion_receipt_") as directory:
+            root = Path(directory)
+            missing_path = root / "totals_raw_ingestion_receipt.json"
+            entries, errors = validate_ingestion_receipt(missing_path, root=root)
+            self.assertEqual([], entries)
+            self.assertTrue(errors)
+            self.assertEqual("INCONCLUSIVE", expected_population_status(
+                {("2026-10-09", 999001)}, set(), evidence_errors=errors,
+            ))
+
+        with tempfile.TemporaryDirectory(prefix="totals_ingestion_receipt_") as directory:
+            root = Path(directory)
+            receipt_path, receipt = self._write_synthetic_ingestion_receipt(root)
+            entries, errors = validate_ingestion_receipt(
+                receipt_path, root=root, expected_prediction_hashes={("2026-10-09", 999001): "c" * 64}
+            )
+            self.assertEqual([], entries)
+            self.assertTrue(any("LEDGER_INGESTION_HASH_MISMATCH" in item for item in errors))
+            self.assertEqual("INCONCLUSIVE", expected_population_status(
+                {("2026-10-09", 999001)}, {("2026-10-09", 999001)}, evidence_errors=errors,
+            ))
+
+        with tempfile.TemporaryDirectory(prefix="totals_ingestion_receipt_") as directory:
+            root = Path(directory)
+            receipt_path, receipt = self._write_synthetic_ingestion_receipt(root)
+            market = root / "market.json"
+            market.write_text(market.read_text() + " ")
+            entries, errors = validate_ingestion_receipt(receipt_path, root=root)
+            self.assertEqual([], entries)
+            self.assertTrue(any("MARKET_SOURCE_HASH_MISSING_OR_MISMATCH" in item for item in errors))
+            self.assertEqual("INCONCLUSIVE", expected_population_status(
+                {("2026-10-09", 999001)}, {("2026-10-09", 999001)}, evidence_errors=errors,
+            ))
+
+        with tempfile.TemporaryDirectory(prefix="totals_ingestion_receipt_") as directory:
+            root = Path(directory)
+            receipt_path, receipt = self._write_synthetic_ingestion_receipt(root)
+            receipt["entries"][0]["game_pk"] = 999002
+            receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+            entries, errors = validate_ingestion_receipt(receipt_path, root=root)
+            self.assertEqual([], entries)
+            self.assertTrue(any("RECEIPT_MANIFEST_HASH_MISSING_OR_MISMATCH" in item for item in errors))
+            self.assertEqual("INCONCLUSIVE", expected_population_status(
+                {("2026-10-09", 999001)}, {("2026-10-09", 999001)}, evidence_errors=errors,
+            ))
 
     def test_retained_october_6_schedule_authorizes_exact_division_series_games(self) -> None:
         source = REPO_ROOT / (

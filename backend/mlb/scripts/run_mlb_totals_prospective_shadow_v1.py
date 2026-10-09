@@ -45,6 +45,49 @@ def dynamic_environment(history: dict[str, Any], game_date: str) -> dict[str, An
     payload["state_hash"] = canonical_hash(payload); return payload
 
 
+def _write_ingestion_receipt(
+    output_dir: Path,
+    *,
+    game_date: str,
+    evaluation_phase: str,
+    schedule_source_path: str,
+    schedule_source_sha256: str,
+    schedule_projection_sha256: str,
+    phase_authority_proposal_sha256: str,
+    entries: list[dict[str, Any]],
+) -> Path | None:
+    if not entries:
+        return None
+    receipt_name = (
+        "totals_raw_ingestion_receipt__"
+        f"{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')}_{schedule_source_sha256[:12]}.json"
+    )
+    receipt_path = output_dir / receipt_name
+    receipt = {
+        "schema_version": "MLB_TOTALS_RAW_INGESTION_RECEIPT_V1",
+        "created_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "game_date": game_date,
+        "evaluation_phase": evaluation_phase,
+        "schedule_source_path": schedule_source_path,
+        "schedule_source_sha256": schedule_source_sha256,
+        "schedule_projection_sha256": schedule_projection_sha256,
+        "phase_authority_proposal_sha256": phase_authority_proposal_sha256,
+        "entries": entries,
+    }
+    receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+    return receipt_path
+
+
+def _write_reproducibility_manifest(output_dir: Path) -> Path:
+    manifest_path = output_dir / "reproducibility_hashes.sha256"
+    manifest_path.write_text("".join(
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n"
+        for path in sorted(output_dir.iterdir())
+        if path.is_file() and path != manifest_path
+    ))
+    return manifest_path
+
+
 def _team(value: str) -> str:
     return " ".join(str(value).lower().replace(".", "").split())
 
@@ -89,7 +132,8 @@ def market_inventory(game_date: str) -> tuple[list[dict[str, Any]], list[dict[st
                         "provider": bookmaker.get("title"), "provider_key": bookmaker.get("key"), "total_line": line,
                         "over_price": by_name.get("over", {}).get("price"), "under_price": by_name.get("under", {}).get("price"),
                         "snapshot_timestamp_utc": market.get("last_update") or captured, "source_run_tag": path.stem,
-                        "source_path": file_row["source_path"], "source_sha256": file_row["source_sha256"]})
+                        "source_path": file_row["source_path"], "source_sha256": file_row["source_sha256"],
+                        "source_event_id": event.get("id")})
         files.append(file_row)
     return candidates, files
 
@@ -98,7 +142,7 @@ def attach_market(context: dict[str, Any], candidates: list[dict[str, Any]]) -> 
     exact = [row for row in candidates if _team(row["away_team"]) == _team(context["away_team_name"]) and _team(row["home_team"]) == _team(context["home_team_name"])]
     if not exact:
         return {"market_status": "TOTAL_MARKET_UNAVAILABLE", "sportsbook_provider": None, "total_line": None, "over_price": None, "under_price": None,
-                "market_snapshot_timestamp_utc": None, "market_lead_time_minutes": None, "market_source_run_tag": None, "market_source_path": None, "market_source_sha256": None}
+        "market_snapshot_timestamp_utc": None, "market_lead_time_minutes": None, "market_source_run_tag": None, "market_source_path": None, "market_source_sha256": None, "market_source_event_id": None}
     exact.sort(key=lambda row: row.get("snapshot_timestamp_utc") or ""); row = exact[-1]
     if not row.get("snapshot_timestamp_utc"):
         status = "TOTAL_MARKET_TIMING_UNRESOLVED"
@@ -114,7 +158,8 @@ def attach_market(context: dict[str, Any], candidates: list[dict[str, Any]]) -> 
         if lead <= 0: status = "TOTAL_MARKET_TIMING_UNRESOLVED"
     return {"market_status": status, "sportsbook_provider": row.get("provider"), "total_line": row.get("total_line"), "over_price": row.get("over_price"),
         "under_price": row.get("under_price"), "market_snapshot_timestamp_utc": row.get("snapshot_timestamp_utc"), "market_lead_time_minutes": lead,
-        "market_source_run_tag": row.get("source_run_tag"), "market_source_path": row.get("source_path"), "market_source_sha256": row.get("source_sha256")}
+        "market_source_run_tag": row.get("source_run_tag"), "market_source_path": row.get("source_path"), "market_source_sha256": row.get("source_sha256"),
+        "market_source_event_id": row.get("source_event_id")}
 
 
 def probability_fields(expected_total: float, alpha: float, line: float | None) -> dict[str, Any]:
@@ -176,6 +221,7 @@ def run(
     )
     connection = connect_ledger(ledger_path); before = counts(connection)
     markets, market_files = market_inventory(game_date); existing = {row["game_pk"]: row for row in rows_for_date(connection, game_date)}; attempts = []
+    ingestion_receipt_entries: list[dict[str, Any]] = []
     decision_by_game = {decision.game_pk: decision for decision in phase_partitions.decisions}
     for excluded in phase_partitions.excluded_preseason + phase_partitions.excluded_special:
         game_pk = int(excluded["game_pk"])
@@ -250,6 +296,26 @@ def run(
             "schedule_projection_sha256": schedule_projection_hash,
             "official_schedule_observed_at_utc": observed, "grading_status": "UNGRADED_OUTCOME_SEPARATE_LEDGER"}
         action, context_action = append_prediction_with_context(connection, row, feature_state)
+        if action == "APPENDED_NEW":
+            ingestion_receipt_entries.append({
+                "canonical_identity": identity,
+                "game_date": game_date,
+                "game_pk": int(context["game_pk"]),
+                "source_season": int(schedule_row["source_season"]),
+                "source_game_type": phase_decision.source_game_type,
+                "normalized_phase": phase_decision.normalized_phase,
+                "postseason_round": phase_decision.postseason_round,
+                "schedule_source_path": row["schedule_source_path"],
+                "schedule_source_sha256": row["schedule_source_sha256"],
+                "schedule_projection_sha256": row["schedule_projection_sha256"],
+                "market_source_event_id": row.get("market_source_event_id"),
+                "market_source_path": row.get("market_source_path"),
+                "market_source_sha256": row.get("market_source_sha256"),
+                "market_source_run_tag": row.get("market_source_run_tag"),
+                "market_status": row.get("market_status"),
+                "prediction_payload_sha256": payload_hash(row),
+                "context_payload_sha256": row["feature_state_hash"],
+            })
         attempts.append({"canonical_identity": identity, "ledger_action": action, "context_action": context_action, "game_pk": context["game_pk"],
             "source_game_type": phase_decision.source_game_type, "normalized_phase": phase_decision.normalized_phase,
             "postseason_round": phase_decision.postseason_round})
@@ -259,7 +325,19 @@ def run(
         unique_identity_fields=("game_pk",),
     )
     rows = list(ledger_partitions.selected(evaluation_phase))
+    ingestion_receipt_path = _write_ingestion_receipt(
+        output_dir,
+        game_date=game_date,
+        evaluation_phase=evaluation_phase,
+        schedule_source_path=source_path,
+        schedule_source_sha256=schedule_hash,
+        schedule_projection_sha256=schedule_projection_hash,
+        phase_authority_proposal_sha256=phase_authority.metadata.proposal_sha256,
+        entries=ingestion_receipt_entries,
+    )
     if not rows:
+        if ingestion_receipt_path is not None:
+            _write_reproducibility_manifest(output_dir)
         return {
             "declaration": f"TOTALS_NO_{evaluation_phase}_TARGETS",
             "status": "NO_EVALUATION_TARGETS",
@@ -275,6 +353,7 @@ def run(
             "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
             "attempts": attempts,
             "outcomes_accessed": 0,
+            "ingestion_receipt_path": str(ingestion_receipt_path) if ingestion_receipt_path else None,
         }
     contexts = contexts_for_date(connection, game_date); after = counts(connection)
 
@@ -288,7 +367,7 @@ def run(
         park = context.get("park_state", {}); item.update({f"park_{key}": value for key, value in park.items() if not isinstance(value, dict)})
         flat.append(item)
     pd.DataFrame(flat).to_csv(output_dir/f"{snapshot_slug}_totals_shadow_predictions.csv", index=False)
-    market_columns = ["game_pk","away_team","home_team","market_status","sportsbook_provider","total_line","over_price","under_price","market_snapshot_timestamp_utc","market_lead_time_minutes","market_source_run_tag","market_source_path","market_source_sha256","p_over_market_line","p_under_market_line","push_probability_at_market_line","model_minus_market_total"]
+    market_columns = ["game_pk","away_team","home_team","market_status","sportsbook_provider","total_line","over_price","under_price","market_snapshot_timestamp_utc","market_lead_time_minutes","market_source_run_tag","market_source_path","market_source_sha256","market_source_event_id","p_over_market_line","p_under_market_line","push_probability_at_market_line","model_minus_market_total"]
     pd.DataFrame([{key: row.get(key) for key in market_columns} for row in rows]).to_csv(output_dir/f"{snapshot_slug}_total_market_attachment.csv", index=False)
     validation = [
         ("canonical_unique", after["duplicate_prediction_identities"] == 0, after["duplicate_prediction_identities"]),
@@ -317,7 +396,7 @@ def run(
     market_count = sum(row.get("market_status") == "TOTAL_MARKET_CERTIFIED_PAIRED" for row in rows); declaration = "TOTALS_PROSPECTIVE_SHADOW_INITIALIZED" if market_count == len(rows) else "TOTALS_PROSPECTIVE_SHADOW_INITIALIZED_MARKET_COVERAGE_PARTIAL"
     values = [row["expected_total"] for row in rows]
     (output_dir/"concise_mlb_totals_prospective_shadow_v1.md").write_text(f"# MLB Totals Prospective Shadow v1\n\n`{declaration}`\n\n- Snapshot date / admitted games: {game_date} / {len(rows)}\n- Context complete: {sum(row['context_quality_state']=='TOTALS_CONTEXT_COMPLETE' for row in rows)}/{len(rows)}\n- Certified paired markets: {market_count}/{len(rows)}\n- Expected-total range: {min(values):.3f}–{max(values):.3f}\n- Ledger before/after: {before} / {after}\n- Outcomes accessed during prediction: 0\n- Public/deployment status: unchanged; shadow only\n")
-    hash_path=output_dir/"reproducibility_hashes.sha256";hash_path.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in sorted(output_dir.iterdir()) if path != hash_path))
+    _write_reproducibility_manifest(output_dir)
     return {"declaration":declaration,"rows":len(rows),
         "new_rows":sum(x["ledger_action"]=="APPENDED_NEW" and x.get("normalized_phase")==evaluation_phase for x in attempts),
         "collection_new_rows":sum(x["ledger_action"]=="APPENDED_NEW" for x in attempts),
@@ -326,7 +405,8 @@ def run(
         "phase_partition_counts": phase_partitions.counts(),
         "ledger_phase_partition_counts": ledger_partitions.counts(),
         "phase_authority_proposal_sha256": phase_authority.metadata.proposal_sha256,
-        "certified_markets":market_count,"expected_total_min":min(values),"expected_total_max":max(values),"ledger_before":before,"ledger_after":after,"attempts":attempts,"outcomes_accessed":0}
+        "certified_markets":market_count,"expected_total_min":min(values),"expected_total_max":max(values),"ledger_before":before,"ledger_after":after,"attempts":attempts,"outcomes_accessed":0,
+        "ingestion_receipt_path":str(ingestion_receipt_path) if ingestion_receipt_path else None}
 
 
 def main() -> None:
