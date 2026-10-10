@@ -303,7 +303,8 @@ class NHL8RainDirectExportTests(unittest.TestCase):
                     name: "https://app.8rainstation.com/public/api/catalog/" + endpoint
                     for name, endpoint in (
                         ("model_spec.json", "model-spec?league=nhl"),
-                        ("teams.json", "teams?league=nhl"), ("players.json", "players?league=nhl"),
+                        ("teams.json", "teams?league=nhl"),
+                        ("players.json", "players?league=nhl&limit=2000"),
                     )
                 }, "files": catalog_files,
             }
@@ -327,7 +328,7 @@ class NHL8RainDirectExportTests(unittest.TestCase):
             self.assertEqual(lineage["catalog_player_count"], 1)
             self.assertEqual(len(lineage["catalog_bundle_sha256"]), 64)
             self.assertEqual(lineage["catalog_source"]["players.json"],
-                             "https://app.8rainstation.com/public/api/catalog/players?league=nhl")
+                             "https://app.8rainstation.com/public/api/catalog/players?league=nhl&limit=2000")
             self.assertTrue(lineage["catalog_retrieved_at_utc"])
             self.assertFalse(lineage["challengers_included"])
             exported = pd.read_csv(csv_path)
