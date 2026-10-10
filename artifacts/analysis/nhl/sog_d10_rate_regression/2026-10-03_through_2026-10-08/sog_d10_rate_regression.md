@@ -10,7 +10,7 @@ Read-only DB reconstruction compared 1582 targets: exact matches 1582, mismatche
 
 ## High-tail result
 
-Top decile d10 mean 10.503; next-game realized rate 8.775; residual -1.728. d10 residual worsens from low to high deciles, but is not strictly monotonic. In high d10 rows, d20 MAE is 4.690 vs d10 MAE 4.938, and d5 MAE 5.189. The spread slope of next-game rate residual on d10−d20 is -0.673, player-cluster 95% CI [-0.925, -0.402].
+Top decile d10 mean 10.503; next-game realized rate 8.775; residual -1.728. d10 residual worsens from low to high deciles, but is not strictly monotonic. In high d10 rows, d20 MAE is 4.690 vs d10 MAE 4.938, and d5 MAE 5.189. The spread slope of next-game rate residual on d10−d20 is -0.673, player-cluster 95% CI [-0.947, -0.402].
 
 Stable-high rows (d10 top quintile with d5 and d20 within the data-derived tolerance) n=84, residual -1.482; disagreeing high-d10 rows n=233, residual -1.381. Top-2 concentration and one-game removal diagnostics are in their CSVs. Recency weighting, older five games, and d20 are descriptive only; no estimator is promoted.
 
