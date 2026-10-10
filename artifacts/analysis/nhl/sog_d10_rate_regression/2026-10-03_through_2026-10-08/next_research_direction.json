@@ -1,0 +1,15 @@
+{
+  "primary_mechanism": "HIGH_D10_RATE_REGRESSION_RELATIVE_TO_LONGER_RECENT_BASELINE",
+  "next_research_direction": "STUDY_D10_TO_D20_SHRINKAGE",
+  "production_changes": "NONE",
+  "model_changed": "NO",
+  "calibration_fitted": "NO",
+  "distribution_changed": "NO",
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "database_mutations": 0,
+  "limitations": [
+    "Feature artifact bytes reproduce d10 and lambda but historical receipt did not formally SHA-bind those runtime files.",
+    "C/G exact paired prediction rows unavailable."
+  ]
+}

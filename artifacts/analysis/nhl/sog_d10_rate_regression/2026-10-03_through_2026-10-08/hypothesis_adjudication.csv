@@ -1,0 +1,14 @@
+hypothesis,statement,classification
+H1,High d10 rate falls in next game,SUPPORTED
+H2,Regression rises with d10-d20,SUPPORTED
+H3,One or two extreme games drive high d10,PARTIALLY_SUPPORTED
+H4,Distributed stable high regresses less than spiky,NOT_SUPPORTED
+H5,d20 beats d10 in high tail,SUPPORTED
+H6,d5 confirms persistent high state,INSUFFICIENT_EVIDENCE
+H7,d5 mainly adds noise,PARTIALLY_SUPPORTED
+H8,Regression within player,SUPPORTED
+H9,TOI instability inflates high rate,INSUFFICIENT_EVIDENCE
+H10,Low TOI inflates high rates,INSUFFICIENT_EVIDENCE
+H11,Replicates Oct6-8,SUPPORTED
+H12,Market discounts d10 above longer run,PARTIALLY_SUPPORTED
+H13,Enough evidence to study robust/shrunk estimator,SUPPORTED
