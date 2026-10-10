@@ -1,0 +1,60 @@
+{
+  "common_line_row_count_per_model": 1836,
+  "comparison_is_pregame_only": true,
+  "database_mutations": 0,
+  "deterministic_replay": "PASS",
+  "duplicate_key_count": 0,
+  "feature_binding_sha256": "2fa5a6bc58fec1bce49ad2277810507622bab85178a87caa841e083d223120b0",
+  "first_capture_preserved": true,
+  "later_run_contract": {
+    "first_run_mutated_by_writer": false,
+    "new_parent_run_id_gets_separate_run_id_directory": true,
+    "site_data_convenience_outputs": false
+  },
+  "paid_credits": 0,
+  "parent_run_id": "nhldaily_20261010T130435319261Z_0338aad7",
+  "player_game_count": 612,
+  "production_side_threshold": "P(Over) >= 0.5 selects OVER; otherwise UNDER, matching capture writer",
+  "provider_calls": 0,
+  "slate_date": "2026-10-10",
+  "source_hashes_after": {
+    "feature_input": "2fa5a6bc58fec1bce49ad2277810507622bab85178a87caa841e083d223120b0",
+    "models": {
+      "NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1": {
+        "RUN_COMPLETE.json": "16f811f5635d84555cbc20b32778fa0396f18688ff9c73ad553c8a449ec84e02",
+        "SHA256SUMS": "87fb84f22170d440f915a68ea9e4525a0e59cb3a48ebc3f6b062861c7005be13",
+        "manifest.json": "4912ca9c9ce57b723cb31d4fb01402465bfa824b44faf15a84a6bfce017e7d6b",
+        "predictions.csv": "2e16250a5ffea73b99c7705b4f918a8f2efb91233e0bbbcaae640d4357c3a42a",
+        "production_control.csv": "d62e9db472a071b611188a852fe349f18ff84ebfc7ec4cec1d954bc95bcfdff2"
+      },
+      "NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1": {
+        "RUN_COMPLETE.json": "16f811f5635d84555cbc20b32778fa0396f18688ff9c73ad553c8a449ec84e02",
+        "SHA256SUMS": "c62c41dd53c97aa0036f5ed65a78014156e06b9d96540e0aef794894da122fe8",
+        "manifest.json": "2fcef5400472a383838525c7515eeacf7077595b4e86c2331d90d523ba3016df",
+        "predictions.csv": "27807287596afdca3f75da97d98ab4379047c49d0032b00069389b15bf338a26",
+        "production_control.csv": "d62e9db472a071b611188a852fe349f18ff84ebfc7ec4cec1d954bc95bcfdff2"
+      }
+    },
+    "production_prediction": "cd85dcea5cda915a6dc5a458be8ccab7370e74bf1dd871473b5a3839b50d0d58"
+  },
+  "source_hashes_before": {
+    "feature_input": "2fa5a6bc58fec1bce49ad2277810507622bab85178a87caa841e083d223120b0",
+    "models": {
+      "NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1": {
+        "RUN_COMPLETE.json": "16f811f5635d84555cbc20b32778fa0396f18688ff9c73ad553c8a449ec84e02",
+        "SHA256SUMS": "87fb84f22170d440f915a68ea9e4525a0e59cb3a48ebc3f6b062861c7005be13",
+        "manifest.json": "4912ca9c9ce57b723cb31d4fb01402465bfa824b44faf15a84a6bfce017e7d6b",
+        "predictions.csv": "2e16250a5ffea73b99c7705b4f918a8f2efb91233e0bbbcaae640d4357c3a42a",
+        "production_control.csv": "d62e9db472a071b611188a852fe349f18ff84ebfc7ec4cec1d954bc95bcfdff2"
+      },
+      "NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1": {
+        "RUN_COMPLETE.json": "16f811f5635d84555cbc20b32778fa0396f18688ff9c73ad553c8a449ec84e02",
+        "SHA256SUMS": "c62c41dd53c97aa0036f5ed65a78014156e06b9d96540e0aef794894da122fe8",
+        "manifest.json": "2fcef5400472a383838525c7515eeacf7077595b4e86c2331d90d523ba3016df",
+        "predictions.csv": "27807287596afdca3f75da97d98ab4379047c49d0032b00069389b15bf338a26",
+        "production_control.csv": "d62e9db472a071b611188a852fe349f18ff84ebfc7ec4cec1d954bc95bcfdff2"
+      }
+    },
+    "production_prediction": "cd85dcea5cda915a6dc5a458be8ccab7370e74bf1dd871473b5a3839b50d0d58"
+  }
+}
