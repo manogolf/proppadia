@@ -1,0 +1,14 @@
+hypothesis,statement,classification
+H1,d10 responds faster than d20 to sustained rate changes,SUPPORTED
+H2,d10 usefully tracks multi-game hot streaks,PARTIALLY_SUPPORTED
+H3,d10 remains elevated after realized rate begins cooling,SUPPORTED
+H4,d5-confirmed high d10 persists better than cooling high d10,NOT_SUPPORTED
+H5,d20 is a useful anchor during snapback,SUPPORTED
+H6,sharp d10 declines often coincide with extreme games exiting,PARTIALLY_SUPPORTED
+H7,one-game spikes generate more subsequent regression than persistent elevations,PARTIALLY_SUPPORTED
+H8,cold behavior is approximately symmetric with hot behavior,SUPPORTED
+H9,within-player temporary elevation predicts regression,SUPPORTED
+H10,persistence fraction is between 0 and 1,SUPPORTED
+H11,patterns replicate in Oct 6-8 validation,SUPPORTED
+H12,market differentiates continuing from cooling high states,PARTIALLY_SUPPORTED
+H13,adaptive shrinkage merits future study over fixed blend,INSUFFICIENT_EVIDENCE

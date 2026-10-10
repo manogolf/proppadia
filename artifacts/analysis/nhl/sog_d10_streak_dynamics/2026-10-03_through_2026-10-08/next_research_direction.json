@@ -1,0 +1,33 @@
+{
+  "analysis_window": [
+    "2026-10-03",
+    "2026-10-08"
+  ],
+  "central_classification": "D10_RESPONSIVE_WITH_D20_ANCHOR",
+  "secondary_classifications": [
+    "D10_RESPONSIVE_WITH_D20_ANCHOR"
+  ],
+  "next_research_direction": "STUDY_FIXED_D10_D20_BLEND",
+  "production_changes": "NONE",
+  "shrinkage_implemented": false,
+  "model_changed": false,
+  "calibration_fitted": false,
+  "distribution_changed": false,
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "database_mutations": 0,
+  "discovery_dates": [
+    "2026-10-03",
+    "2026-10-05"
+  ],
+  "validation_dates": [
+    "2026-10-06",
+    "2026-10-08"
+  ],
+  "limitations": [
+    "Oct. 9 qualifying FINAL slate unavailable in retained sources.",
+    "Target-opportunity sample does not contain every intervening NHL game for every player.",
+    "Hot/cold sequence labels are retrospective outcome diagnostics.",
+    "Exact paired C/G shadow predictions unavailable."
+  ]
+}
