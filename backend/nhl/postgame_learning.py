@@ -373,6 +373,7 @@ def ensure_prior_learning(
         production_sog_reference=production_sog_reference,
         production_sog_reference_sources=production_sog_reference_sources,
         points_authority_context=points_authority_context,
+        sog_fixed_blend_context=fixed_blend_grade,
     )
     performance_json, performance = select_authoritative_summary(
         root=performance_json.parent.parent, expected=performance)

@@ -993,6 +993,7 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
                      market_coverage: dict[str, dict[str, Any]] | None = None,
                      production_sog_reference: dict[str, Any] | None = None,
                      points_authority_context: dict[str, Any] | None = None,
+                     sog_fixed_blend_context: dict[str, Any] | None = None,
                      package: Path | None = None) -> dict[str, Any]:
     challengers = challengers or {}
     moneyline = grades.get("moneyline", pd.DataFrame())
@@ -1082,6 +1083,8 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
         "models": models,
         "unresolved_summary": unresolved,
         "source_artifacts": dict(sorted(source_artifacts.items())),
+        "sog_fixed_blend_prospective": dict(sog_fixed_blend_context or {
+            "status": "NO_IMMUTABLE_SHADOW_CAPTURE", "grades": []}),
     }
 
 
@@ -1215,6 +1218,17 @@ def render_markdown(summary: dict[str, Any]) -> str:
               *notes,
               "- Market match status does not determine whether a prediction is graded.",
               "- No selection policy or promotion rule was applied."]
+    fixed_blend = summary.get("sog_fixed_blend_prospective") or {}
+    lines += ["", "## SOG Fixed Blend Prospective Shadows",
+              f"Status: {fixed_blend.get('status', 'NO_IMMUTABLE_SHADOW_CAPTURE')}"]
+    for grade in fixed_blend.get("grades", []):
+        lines.append(
+            f"- {grade.get('model_identity')}: settled player-games "
+            f"{grade.get('settled_player_games', 0)}, paired rows {grade.get('paired_n', 0)}, "
+            f"count MAE difference vs d10 {grade.get('paired_count_mae_difference_vs_d10')}, "
+            f"1.5 Brier difference {grade.get('paired_brier_difference_1_5_vs_d10')}."
+        )
+    lines.append("These are research shadows; production SOG authority remains d10.")
     coverage_rows = []
     for lane in ("points", "saves", "sog"):
         context = models.get(lane, {}).get("market_coverage", {})
@@ -1499,6 +1513,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
                             production_sog_reference: dict[str, Any] | None = None,
                             production_sog_reference_sources: dict[str, str] | None = None,
                             points_authority_context: dict[str, Any] | None = None,
+                            sog_fixed_blend_context: dict[str, Any] | None = None,
                             output_root: Path | None = None) -> tuple[Path, Path, dict[str, Any]]:
     """Build/reuse a summary package from retained reconciliation grade rows."""
     package = Path(package).resolve()
@@ -1525,6 +1540,9 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         authority_sha = hashlib.sha256(json.dumps(
             points_authority_context, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
         source_hashes["points_authority_context_sha256"] = authority_sha
+    if sog_fixed_blend_context:
+        source_hashes["sog_fixed_blend_prospective_context_sha256"] = hashlib.sha256(
+            json.dumps(sog_fixed_blend_context, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     for lane, coverage in (market_coverage or {}).items():
         if coverage.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
             source_hashes[f"{lane}_attachment_integrity_sha256"] = str(
@@ -1588,6 +1606,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         challengers=challengers, market_coverage=market_coverage,
         production_sog_reference=production_sog_reference,
         points_authority_context=points_authority_context, package=package,
+        sog_fixed_blend_context=sog_fixed_blend_context,
     )
     summary["official_outcomes_status"] = (
         "FINAL" if source_summary.get("status") == "COMPLETE"
