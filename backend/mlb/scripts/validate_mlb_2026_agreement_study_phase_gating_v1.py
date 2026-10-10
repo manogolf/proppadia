@@ -26,6 +26,7 @@ TEST_MODULES = (
     "backend.mlb.tests.test_mlb_2026_agreement_study_phase_gating_v1",
     "backend.mlb.tests.test_mlb_market_strong_agreement_separation_prospective_v1",
     "backend.mlb.tests.test_mlb_market_strong_agreement_live_capture_v4",
+    "backend.mlb.tests.test_mlb_rolling_integrity_run_receipt",
     "backend.mlb.tests.test_mlb_market_strong_agreement_separation_feasibility_v2",
     "backend.mlb.tests.test_mlb_market_strong_agreement_separation_live_timing_v3",
     "backend.mlb.tests.test_validate_mlb_market_strong_agreement_separation_prospective_v1",
@@ -34,10 +35,12 @@ GOVERNED_SOURCE_FILES = (
     "backend/mlb/markets/agreement_phase_gating_v1.py",
     "backend/mlb/scripts/run_mlb_market_strong_agreement_separation_prospective_v1.py",
     "backend/mlb/scripts/capture_mlb_market_strong_agreement_live_v4.py",
+    "backend/mlb/scripts/write_mlb_rolling_integrity_receipt.py",
     "backend/mlb/scripts/validate_mlb_2026_agreement_study_phase_gating_v1.py",
     "backend/mlb/tests/test_mlb_2026_agreement_study_phase_gating_v1.py",
     "backend/mlb/tests/test_mlb_market_strong_agreement_separation_prospective_v1.py",
     "backend/mlb/tests/test_mlb_market_strong_agreement_live_capture_v4.py",
+    "backend/mlb/tests/test_mlb_rolling_integrity_run_receipt.py",
 )
 
 

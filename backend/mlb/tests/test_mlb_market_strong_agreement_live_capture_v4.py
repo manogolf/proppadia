@@ -104,6 +104,29 @@ class LiveCaptureV4Test(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_outside_frozen_regular_season_is_explicit_no_request_skip(self):
+        with patch.object(capture, "read_expected_rows", side_effect=AssertionError("lifecycle read")):
+            with patch.object(capture, "load_prediction_snapshot", side_effect=AssertionError("snapshot read")):
+                result = capture.run_live(
+                    "2026-10-10", "postseason-window", self.base / "unused.json",
+                )
+
+        self.assertEqual(result["status"], "SKIPPED_OUTSIDE_FROZEN_REGULAR_SEASON_HORIZON")
+        self.assertEqual(result["game_date"], "2026-10-10")
+        self.assertEqual(result["run_identity"], "postseason-window")
+        self.assertEqual(result["frozen_regular_season_end_date"], capture.END_DATE)
+        self.assertFalse(result["charged_request"])
+
+    def test_in_horizon_missing_prediction_snapshot_still_fails_closed(self):
+        with patch.object(capture, "read_expected_rows", return_value=1):
+            with patch.object(capture, "load_prediction_snapshot", side_effect=RuntimeError("missing snapshot")):
+                with self.assertRaisesRegex(RuntimeError, "missing snapshot"):
+                    capture.run_live("2026-09-12", "regular-window", self.base / "missing.json")
+
+    def test_malformed_date_still_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "invalid game date"):
+            capture.run_live("2026-10-99", "malformed-window", self.base / "unused.json")
+
     def execute(self, response, times=None, run="run-1"):
         calls = []
         values = iter(times or ["2026-09-10T12:30:20Z", "2026-09-10T12:30:21Z"])

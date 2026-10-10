@@ -114,7 +114,12 @@ class RollingIntegrityContinuationTests(unittest.TestCase):
         self.assertLess(captured_rc, containment)
         self.assertLess(containment, fail_exit)
         self.assertLess(fail_exit, dependent_chain)
-        self.assertIn("trap 'wrapper_rc=$?; release_launchagent_locks; write_launchagent_summary", text)
+        self.assertIn("trap 'wrapper_rc=$?; release_launchagent_locks;", text)
+        self.assertIn('write_launchagent_summary "$wrapper_rc"; exit "$wrapper_rc"\' EXIT', text)
+        self.assertIn("write_mlb_rolling_integrity_receipt", text)
+        self.assertIn('rolling_integrity_rc=$?', text)
+        self.assertIn('--exit-code "$rolling_integrity_rc"', text)
+        self.assertIn('--output "$MLB_ROLLING_CHECK_OUTPUT"', text)
 
 
 if __name__ == "__main__":

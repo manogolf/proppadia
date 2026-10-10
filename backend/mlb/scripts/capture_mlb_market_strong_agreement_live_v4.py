@@ -11,7 +11,7 @@ import re
 import sqlite3
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -740,8 +740,23 @@ def execute_capture(*, game_date: str, run_identity: str, mode: str, snapshot: P
 
 
 def run_live(game_date: str, run_identity: str, lifecycle_result: Path, **kwargs: Any) -> dict[str, Any]:
+    try:
+        parsed_game_date = date.fromisoformat(game_date)
+    except ValueError as exc:
+        raise ValueError("invalid game date; expected YYYY-MM-DD") from exc
+    if parsed_game_date.isoformat() != game_date:
+        raise ValueError("invalid game date; expected YYYY-MM-DD")
     if not START_DATE <= game_date <= END_DATE:
-        raise ValueError("game date outside frozen regular-season capture horizon")
+        return {
+            "status": "SKIPPED_OUTSIDE_FROZEN_REGULAR_SEASON_HORIZON",
+            "study_id": STUDY_ID,
+            "game_date": game_date,
+            "run_identity": run_identity,
+            "frozen_regular_season_start_date": START_DATE,
+            "frozen_regular_season_end_date": END_DATE,
+            "charged_request": False,
+            "reason": "POSTSEASON_OR_OTHER_DATE_OUTSIDE_FROZEN_REGULAR_SEASON_STUDY",
+        }
     if game_date < FIRST_ELIGIBLE_LIVE_DATE:
         return {"status": "SKIPPED_PRE_REQUEST_CLIENT_FAILURE_DATE",
                 "failure_classification": "PRE_REQUEST_CLIENT_FAILURE",
