@@ -34,7 +34,7 @@ def sha(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def validate_hgb_capture(capture: Path) -> dict[str, Any]:
+def validate_hgb_capture(capture: Path, *, daily_run_root: Path | None = None) -> dict[str, Any]:
     """Validate immutable HGB capture files and their receipt bindings."""
     from backend.nhl.daily_capture import verify_package
 
@@ -70,6 +70,25 @@ def validate_hgb_capture(capture: Path) -> dict[str, Any]:
         if (phoenix.get("parent_run_id") != expected_parent
                 or phoenix.get("prediction_sha256") != sha(capture / "phoenix_control_predictions.csv")):
             raise RuntimeError("HGB_CAPTURE_PHOENIX_CONTROL_BINDING_MISMATCH")
+    if daily_run_root is not None:
+        parent_dir = Path(daily_run_root) / f"run_id={expected_parent}"
+        verify_package(parent_dir)
+        parent = json.loads((parent_dir / "parent_receipt.json").read_text())
+        lane = (parent.get("lanes") or {}).get("points_hgb_shadow") or {}
+        retained = next((item for item in lane.get("outputs", [])
+                         if Path(str(item.get("capture_path", ""))).resolve() == capture.resolve()), None)
+        capture_manifest_sha = sha(capture / "SHA256SUMS")
+        if (parent.get("parent_daily_run_id") != expected_parent
+                or parent.get("slate_date") != expected_slate
+                or lane.get("status") != "COMPLETE"
+                or retained is None
+                or retained.get("manifest_sha256") != capture_manifest_sha
+                or retained.get("prediction_sha256") != receipt.get("prediction_sha256")
+                or retained.get("feature_sha256") != receipt.get("feature_sha256")
+                or retained.get("model_identity") != identity
+                or retained.get("deterministic_replay") != "DETERMINISTIC_REPLAY_PASS"
+                or retained.get("coherence_crossing_count") != 0):
+            raise RuntimeError("HGB_CAPTURE_PARENT_RECEIPT_BINDING_MISMATCH")
     return receipt
 
 
@@ -484,6 +503,7 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
     from backend.nhl.postgame_learning import verify_reconciliation_package
 
     shadow_root = Path(shadow_root or ROOT / "artifacts/operational/nhl/points_hgb_shadow")
+    daily_run_root = Path(daily_run_root or ROOT / "artifacts/operational/nhl/daily_runs")
     year, month = int(slate_date[:4]), int(slate_date[5:7])
     season = year if month >= 9 else year - 1
     root = shadow_root / f"season={season}" / f"slate_date={slate_date}"
@@ -492,7 +512,7 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
     for receipt_path in root.glob("run_id=*/phase=*/captured_at=*/receipt.json"):
         capture = receipt_path.parent
         try:
-            receipt = validate_hgb_capture(capture)
+            receipt = validate_hgb_capture(capture, daily_run_root=daily_run_root)
             if receipt.get("slate_date") != slate_date:
                 continue
             candidates.append((phase_order.get(str(receipt.get("capture_phase", "")).upper(), -1),

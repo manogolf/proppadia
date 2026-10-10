@@ -13,7 +13,7 @@
   "phoenix_control_prediction_sha256": "730cb908bac956b090683dce15d9e24631920231a3933c2101e60e7041396cf4",
   "prediction_sha256": "ced771f9db3f67a1cc09db17bc6b310dce17980b54e1dc6d0751cb086fe3763d",
   "production_orchestration_helper": "backend/nhl/points_hgb_shadow.py:capture_from_files",
-  "production_orchestration_helper_sha256": "b3e91c1247d37b3d4fa080cb67e70939a3f0a91a3159c4d308030be58cdf0e9e",
+  "production_orchestration_helper_sha256": "6bfca5d72b30e87917cd7bde564766f375a0e710df58fd3c66c3ea67236e6532",
   "proof_scope": "BOUNDED_DRY_RUN_SHARED_PRODUCTION_CAPTURE_HELPER",
   "provider_calls": 0,
   "schema_version": "NHL_POINTS_HGB_ROUTINE_DAILY_INTEGRATION_EVIDENCE_V1",

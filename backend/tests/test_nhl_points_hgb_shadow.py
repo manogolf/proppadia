@@ -192,7 +192,14 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
             "sha256":receipt["phoenix_control"]["prediction_sha256"]},
         "fitted_model_evidence":prod_evidence})
     daily_receipt = {"slate_date":"2026-10-09","parent_daily_run_id":"routine-test",
-        "ended_at_utc":"2026-10-09T15:05:00Z","lanes":{"points":{
+        "ended_at_utc":"2026-10-09T15:05:00Z","lanes":{"points_hgb_shadow":{
+            "status":"COMPLETE","outputs":[{"capture_path":str(capture.resolve()),
+                "manifest_sha256":hashlib.sha256((capture/"SHA256SUMS").read_bytes()).hexdigest(),
+                "prediction_sha256":receipt["prediction_sha256"],
+                "feature_sha256":receipt["feature_sha256"],
+                "model_identity":receipt["model_identity"],
+                "deterministic_replay":"DETERMINISTIC_REPLAY_PASS",
+                "coherence_crossing_count":0}]},"points":{
             "status":"COMPLETE","inputs":[{"production_authority":"NHL_POINTS_COUNT_HGB_V1",
                 "authority_version":2}],"outputs":[production_identity]}}}
     (receipt_dir/"parent_receipt.json").write_text(json.dumps(daily_receipt))
@@ -238,6 +245,26 @@ def test_capture_grading_validation_rejects_missing_or_rebound_immutable_evidenc
     source = Path(capture_result["capture_path"])
     assert validate_hgb_capture(source)["prediction_sha256"] == capture_result["prediction_sha256"]
 
+    daily_root = tmp_path / "daily_receipts"
+    daily_dir = daily_root / "run_id=validation-test"
+    daily_dir.mkdir(parents=True)
+    capture_receipt = json.loads((source / "receipt.json").read_text())
+    parent_receipt = {"slate_date":"2026-10-09","parent_daily_run_id":"validation-test",
+        "lanes":{"points_hgb_shadow":{"status":"COMPLETE","outputs":[{
+            "capture_path":str(source.resolve()),
+            "manifest_sha256":hashlib.sha256((source/"SHA256SUMS").read_bytes()).hexdigest(),
+            "prediction_sha256":capture_receipt["prediction_sha256"],
+            "feature_sha256":capture_receipt["feature_sha256"],
+            "model_identity":capture_receipt["model_identity"],
+            "deterministic_replay":"DETERMINISTIC_REPLAY_PASS",
+            "coherence_crossing_count":0}]}}}
+    (daily_dir / "parent_receipt.json").write_text(json.dumps(parent_receipt))
+    (daily_dir / "RUN_COMPLETE.json").write_text(json.dumps({"status":"COMPLETE"}))
+    daily_files = sorted(path for path in daily_dir.iterdir() if path.is_file())
+    (daily_dir / "SHA256SUMS").write_text("".join(
+        f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in daily_files))
+    assert validate_hgb_capture(source, daily_run_root=daily_root)["prediction_sha256"] == capture_result["prediction_sha256"]
+
     def copy_case(name):
         target = (tmp_path / name / "slate_date=2026-10-09" / "run_id=validation-test"
                   / "phase=EARLY" / source.name)
@@ -263,6 +290,20 @@ def test_capture_grading_validation_rejects_missing_or_rebound_immutable_evidenc
             handle.write(b"tamper")
         with pytest.raises(RuntimeError):
             validate_hgb_capture(changed)
+
+    substituted = copy_case("substituted_prediction")
+    with (substituted / "predictions.csv").open("ab") as handle:
+        handle.write(b"substitution")
+    reseal(substituted)
+    substituted_receipt_path = substituted / "receipt.json"
+    substituted_receipt = json.loads(substituted_receipt_path.read_text())
+    substituted_sha = hashlib.sha256((substituted / "predictions.csv").read_bytes()).hexdigest()
+    substituted_receipt.update({"prediction_sha256":substituted_sha,
+        "prediction_artifact_sha256":substituted_sha,"replay_prediction_sha256":substituted_sha})
+    substituted_receipt_path.write_text(json.dumps(substituted_receipt))
+    reseal(substituted)
+    with pytest.raises(RuntimeError, match="PARENT_RECEIPT_BINDING"):
+        validate_hgb_capture(substituted, daily_run_root=daily_root)
 
     wrong_identity = copy_case("wrong_identity")
     identity_path = wrong_identity / "model_identity.json"
