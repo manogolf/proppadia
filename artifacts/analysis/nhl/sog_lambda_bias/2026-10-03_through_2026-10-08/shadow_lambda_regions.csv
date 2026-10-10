@@ -1,0 +1,3 @@
+arm,status,reason
+C_MULTISEASON_SHRUNK_PLAYER,NOT_RECOMPUTED,Exact retained paired prediction rows unavailable in source bundle.
+G_COLD_START_TO_CURRENT_SEASON_BLEND,NOT_RECOMPUTED,Exact retained paired prediction rows unavailable in source bundle.

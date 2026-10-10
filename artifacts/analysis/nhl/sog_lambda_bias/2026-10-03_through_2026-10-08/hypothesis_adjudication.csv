@@ -1,0 +1,14 @@
+hypothesis,statement,classification
+H1,Global high bias,NOT_SUPPORTED
+H2,"Low/moderate centered, high overstatement",PARTIALLY_SUPPORTED
+H3,Over more negative than Under,SUPPORTED
+H4,Validation negative lambda trend,SUPPORTED
+H5,High rate associated more than TOI,SUPPORTED
+H6,High TOI dominant,NOT_SUPPORTED
+H7,Actual TOI removes most high-lambda bias,NOT_SUPPORTED
+H8,Rate error persists after actual TOI,SUPPORTED
+H9,Short-term spikes implicated,PARTIALLY_SUPPORTED
+H10,Specific fallback path responsible,INSUFFICIENT_EVIDENCE
+H11,Market closer in high lambda,SUPPORTED
+H12,C/G shrink advantage,INSUFFICIENT_EVIDENCE
+H13,Broad across players,PARTIALLY_SUPPORTED
