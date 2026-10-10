@@ -4,6 +4,7 @@ import pytest
 import hashlib
 import json
 import tempfile
+import shutil
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,7 +13,7 @@ from backend.nhl.scripts.score_nhl_points_hgb_shadow import FEATURES, score
 from backend.nhl.scripts.export_nhl_points_hgb_features import build_features, normalize_history, normalize_slate
 from backend.nhl.points_hgb_shadow import (
     build_production_prediction_artifact, capture_from_files,
-    discover_daily_points_authority, grade_prior_hgb_capture,
+    discover_daily_points_authority, grade_prior_hgb_capture, validate_hgb_capture,
 )
 from backend.nhl.daily_capture import verify_package
 from backend.nhl.attachment_integrity import prediction_rows
@@ -161,7 +162,12 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
             reconciliation/name,index=False)
     (reconciliation/"summary.json").write_text(json.dumps({"status":"COMPLETE","slate_date":"2026-10-09"}))
     (reconciliation/"RUN_COMPLETE.json").write_text(json.dumps({"status":"COMPLETE"}))
-    files=sorted(x for x in reconciliation.iterdir() if x.is_file())
+    # The reconciliation package convention intentionally leaves the
+    # completion marker outside SHA256SUMS. This reproduces the Oct. 9
+    # OBSERVATION_MANIFEST_FILE_SET_MISMATCH caused by using the HGB capture
+    # verifier for a different package type.
+    files=sorted(x for x in reconciliation.iterdir()
+                 if x.is_file() and x.name != "RUN_COMPLETE.json")
     (reconciliation/"SHA256SUMS").write_text("".join(
         f"{hashlib.sha256(x.read_bytes()).hexdigest()}  {x.name}\n" for x in files))
     # Simulate the daily receipt for an HGB-authoritative run. The real
@@ -206,14 +212,93 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
     assert grade_result["production_prediction_sha256"] == production_identity["sha256"]
     assert grade_result["hgb_metrics"]["participated_graded_count"] == 1
     assert grade_result["phoenix_same_capture_threshold_metrics"]["prob_over_0_5"]["n"] == 1
+    repeated_grade = grade_prior_hgb_capture(slate_date="2026-10-09",
+        reconciliation_package=reconciliation, shadow_root=tmp_path / "operational",
+        daily_run_root=daily_root)
+    assert repeated_grade["grade_path"] == grade_result["grade_path"]
 
 
-def test_points_hgb_daily_lane_is_nonblocking_and_authority_defaults_to_phoenix(tmp_path):
+def test_capture_grading_validation_rejects_missing_or_rebound_immutable_evidence(tmp_path):
+    # Build a small real capture through the frozen exporter/scorer path.
+    logs = pd.DataFrame([{"game_id":2026020001,"player_id":11,"team_id":1,"is_home":True,
+        "toi_minutes":20,"pp_toi_minutes":2,"shots_on_goal":4,"shot_attempts":8}])
+    outcomes = pd.DataFrame([{"canonical_season":2026,"game_date":"2026-10-08","game_id":2026020001,
+        "player_id":11,"team_id":1,"official_goals":1,"official_assists":0,"official_final":True}])
+    slate = pd.DataFrame([{"game_id":2026020066,"player_id":11,"game_date":"2026-10-09",
+        "game_start_utc":"2026-10-10T01:00:00Z","is_home":True,"home_team_id":1,"away_team_id":2}])
+    source_paths = [tmp_path / name for name in ("logs.csv", "outcomes.csv", "slate.csv")]
+    for frame, path in zip((logs, outcomes, slate), source_paths):
+        frame.to_csv(path, index=False)
+    capture_result = capture_from_files(logs_path=source_paths[0], outcomes_paths=[source_paths[1]],
+        slate_path=source_paths[2], phoenix_predictions_path=None, phoenix_prediction_sha256=None,
+        phoenix_model_identity_sha256=None, phoenix_feature_contract_sha256=None,
+        phoenix_feature_cutoff_utc=None, slate_date="2026-10-09", season=2026,
+        capture_phase="EARLY", parent_run_id="validation-test",
+        feature_cutoff_utc="2026-10-09T15:00:00Z", output_root=tmp_path / "captures")
+    source = Path(capture_result["capture_path"])
+    assert validate_hgb_capture(source)["prediction_sha256"] == capture_result["prediction_sha256"]
+
+    def copy_case(name):
+        target = (tmp_path / name / "slate_date=2026-10-09" / "run_id=validation-test"
+                  / "phase=EARLY" / source.name)
+        target.parent.mkdir(parents=True)
+        shutil.copytree(source, target)
+        return target
+
+    def reseal(target):
+        files = sorted(path for path in target.iterdir()
+                       if path.is_file() and path.name != "SHA256SUMS")
+        (target / "SHA256SUMS").write_text("".join(
+            f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in files))
+
+    missing = copy_case("missing_prediction")
+    (missing / "predictions.csv").unlink()
+    with pytest.raises(RuntimeError):
+        validate_hgb_capture(missing)
+
+    for name, filename in (("prediction_hash", "predictions.csv"),
+                           ("feature_hash", "features.csv")):
+        changed = copy_case(name)
+        with (changed / filename).open("ab") as handle:
+            handle.write(b"tamper")
+        with pytest.raises(RuntimeError):
+            validate_hgb_capture(changed)
+
+    wrong_identity = copy_case("wrong_identity")
+    identity_path = wrong_identity / "model_identity.json"
+    identity = json.loads(identity_path.read_text())
+    identity["research_model_id"] = "WRONG_MODEL"
+    identity_path.write_text(json.dumps(identity))
+    reseal(wrong_identity)
+    with pytest.raises(RuntimeError, match="MODEL_IDENTITY"):
+        validate_hgb_capture(wrong_identity)
+
+    for name, filename, field, value in (
+        ("wrong_parent", "receipt.json", "parent_run_id", "other-run"),
+        ("wrong_slate", "receipt.json", "slate_date", "2026-10-10"),
+    ):
+        changed = copy_case(name)
+        receipt_path = changed / filename
+        receipt = json.loads(receipt_path.read_text())
+        receipt[field] = value
+        receipt_path.write_text(json.dumps(receipt))
+        reseal(changed)
+        with pytest.raises(RuntimeError, match="MISMATCH"):
+            validate_hgb_capture(changed)
+
+    additive = copy_case("additive_metadata")
+    (additive / "benign_metadata.json").write_text("{}\n")
+    with pytest.raises(RuntimeError, match="FILE_SET_MISMATCH"):
+        validate_hgb_capture(additive)
+
+
+def test_points_hgb_daily_lane_is_nonblocking_and_authority_is_explicitly_promoted(tmp_path):
     recorder = DailyRunRecorder(run_id="test",command=[],phase="EARLY")
     lane=recorder.lane("points_hgb_shadow")
     assert lane.blocking is False
     authority=selected_production_authority()
-    assert authority["production_authority"] == "phoenix_v2"
+    assert authority["production_authority"] == "NHL_POINTS_COUNT_HGB_V1"
+    assert authority["shadow_authorities"] == ["phoenix_v2"]
     gate=tmp_path/"gates.json"
     gate.write_text(json.dumps({"gates":{k:{"status":"PASS"} for k in "ABCDEFGHIJ"}}))
     result=evaluate_promotion(gate_path=gate,integration_evidence_path=tmp_path/"missing.json",
@@ -223,16 +308,16 @@ def test_points_hgb_daily_lane_is_nonblocking_and_authority_defaults_to_phoenix(
 
 def test_points_authority_config_switch_is_versioned_reversible_and_nonmutating():
     original = selected_production_authority()
-    hgb = next_authority_state(original, "NHL_POINTS_COUNT_HGB_V1")
-    phoenix = next_authority_state(hgb, "phoenix_v2")
-    assert original["production_authority"] == "phoenix_v2"
+    phoenix = next_authority_state(original, "phoenix_v2")
+    hgb = next_authority_state(phoenix, "NHL_POINTS_COUNT_HGB_V1")
+    assert original["production_authority"] == "NHL_POINTS_COUNT_HGB_V1"
     assert hgb["production_authority"] == "NHL_POINTS_COUNT_HGB_V1"
     assert hgb["shadow_authorities"] == ["phoenix_v2"]
-    assert hgb["authority_version"] == original["authority_version"] + 1
     assert phoenix["production_authority"] == "phoenix_v2"
     assert phoenix["shadow_authorities"] == ["NHL_POINTS_COUNT_HGB_V1"]
-    assert phoenix["authority_version"] == hgb["authority_version"] + 1
-    assert selected_production_authority()["production_authority"] == "phoenix_v2"
+    assert phoenix["authority_version"] == original["authority_version"] + 1
+    assert hgb["authority_version"] == phoenix["authority_version"] + 1
+    assert selected_production_authority()["production_authority"] == "NHL_POINTS_COUNT_HGB_V1"
 
 
 def test_hgb_authority_fails_closed_until_all_promotion_gates_pass():

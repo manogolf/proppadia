@@ -34,6 +34,45 @@ def sha(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def validate_hgb_capture(capture: Path) -> dict[str, Any]:
+    """Validate immutable HGB capture files and their receipt bindings."""
+    from backend.nhl.daily_capture import verify_package
+
+    capture = Path(capture)
+    verify_package(capture)
+    receipt = json.loads((capture / "receipt.json").read_text())
+    marker = json.loads((capture / "RUN_COMPLETE.json").read_text())
+    identity = json.loads((capture / "model_identity.json").read_text())
+    feature_contract = json.loads((capture / "feature_contract_identity.json").read_text())
+    expected_parent = capture.parent.parent.name.removeprefix("run_id=")
+    expected_slate = capture.parent.parent.parent.name.removeprefix("slate_date=")
+    if receipt.get("status") != "COMPLETE" or marker.get("status") != "COMPLETE":
+        raise RuntimeError("HGB_CAPTURE_NOT_COMPLETE")
+    if (receipt.get("parent_run_id") != expected_parent
+            or marker.get("parent_run_id") != expected_parent):
+        raise RuntimeError("HGB_CAPTURE_PARENT_RUN_MISMATCH")
+    if receipt.get("slate_date") != expected_slate:
+        raise RuntimeError("HGB_CAPTURE_SLATE_DATE_MISMATCH")
+    if receipt.get("research_model_id") != HGB_AUTHORITY_LOCAL or identity.get("research_model_id") != HGB_AUTHORITY_LOCAL:
+        raise RuntimeError("HGB_CAPTURE_MODEL_IDENTITY_MISMATCH")
+    if receipt.get("model_identity") != identity:
+        raise RuntimeError("HGB_CAPTURE_MODEL_IDENTITY_BINDING_MISMATCH")
+    if receipt.get("feature_sha256") != sha(capture / "features.csv"):
+        raise RuntimeError("HGB_CAPTURE_FEATURE_HASH_MISMATCH")
+    if receipt.get("prediction_sha256") != sha(capture / "predictions.csv"):
+        raise RuntimeError("HGB_CAPTURE_PREDICTION_HASH_MISMATCH")
+    if feature_contract.get("feature_contract") != identity.get("feature_contract"):
+        raise RuntimeError("HGB_CAPTURE_FEATURE_CONTRACT_MISMATCH")
+    if feature_contract.get("research_history_contract") != identity.get("history_contract"):
+        raise RuntimeError("HGB_CAPTURE_HISTORY_CONTRACT_MISMATCH")
+    if receipt.get("phoenix_control", {}).get("status") == "BOUND":
+        phoenix = receipt["phoenix_control"]
+        if (phoenix.get("parent_run_id") != expected_parent
+                or phoenix.get("prediction_sha256") != sha(capture / "phoenix_control_predictions.csv")):
+            raise RuntimeError("HGB_CAPTURE_PHOENIX_CONTROL_BINDING_MISMATCH")
+    return receipt
+
+
 def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
                                 slate_date: str, phoenix_predictions: Path | None,
                                 asof_utc: str, work_dir: Path) -> tuple[Path, list[Path], Path, dict[str, Any]]:
@@ -453,11 +492,7 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
     for receipt_path in root.glob("run_id=*/phase=*/captured_at=*/receipt.json"):
         capture = receipt_path.parent
         try:
-            verify_package(capture)
-            receipt = json.loads(receipt_path.read_text())
-            marker = json.loads((capture / "RUN_COMPLETE.json").read_text())
-            if receipt.get("status") != "COMPLETE" or marker.get("status") != "COMPLETE":
-                continue
+            receipt = validate_hgb_capture(capture)
             if receipt.get("slate_date") != slate_date:
                 continue
             candidates.append((phase_order.get(str(receipt.get("capture_phase", "")).upper(), -1),
@@ -541,6 +576,20 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
         "outcomes_sha256":outcome_sha,
         "game_ids":sorted(game_ids)}, sort_keys=True).encode()).hexdigest()
     grade_root = shadow_root / "grades" / f"season={season}" / f"slate_date={slate_date}" / f"capture={capture.name}" / f"grade={input_identity[:20]}"
+    # A prior failed grade may have created its destination before finishing.
+    # Recover only a truly empty directory; populated packages remain create-only.
+    if grade_root.is_dir() and not any(grade_root.iterdir()):
+        grade_root.rmdir()
+    elif grade_root.is_dir():
+        verify_package(grade_root)
+        existing = json.loads((grade_root / "grade.json").read_text())
+        if (existing.get("status") != "COMPLETE"
+                or existing.get("official_outcome_identity") != input_identity
+                or existing.get("hgb_prediction_sha256") != receipt["prediction_sha256"]):
+            raise RuntimeError("HGB_GRADE_PACKAGE_IDENTITY_MISMATCH")
+        existing["grade_path"] = str(grade_root)
+        existing["grade_sha256"] = sha(grade_root / "grade.json")
+        return existing
     grade_root.mkdir(parents=True, exist_ok=False)
     result = {"schema_version":"NHL_POINTS_HGB_SHADOW_GRADE_V1", "status":"COMPLETE",
         "slate_date":slate_date, "capture_path":str(capture), "capture_manifest_sha256":capture_manifest_sha,
@@ -551,7 +600,11 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
         "production_prediction_sha256":production_prediction_sha256,
         "feature_contract_identity":json.loads((capture/"feature_contract_identity.json").read_text()),
         "official_outcomes_status":"FINAL", "reconciliation_package":str(Path(reconciliation_package).resolve()),
-        "reconciliation_manifest_sha256":verify_package(Path(reconciliation_package)),
+        # Reconciliation packages deliberately keep RUN_COMPLETE.json outside
+        # SHA256SUMS; validate them with their own contract, then bind the
+        # manifest bytes. The daily observation verifier requires exact file
+        # set equality and is only appropriate for HGB capture packages.
+        "reconciliation_manifest_sha256":sha(Path(reconciliation_package) / "SHA256SUMS"),
         "official_outcome_path":str(outcomes_path), "official_outcome_sha256":outcome_sha,
         "official_outcome_identity":input_identity, "hgb_metrics":report,
         "phoenix_same_capture_threshold_metrics":phoenix_thresholds,
