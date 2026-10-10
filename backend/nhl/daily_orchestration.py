@@ -167,6 +167,9 @@ class DailyRunRecorder:
         self.canonical_season: int | None = None
         self.canonical_game_ids: list[int] = []
         self.canonical_game_set_hash: str | None = None
+        self.eligible_pregame_game_ids: list[int] = []
+        self.started_excluded_game_ids: list[int] = []
+        self.feature_input_cutoff_utc: str | None = None
         self.roster_observation: dict[str, Any] | None = None
         self.odds_observation: dict[str, Any] | None = None
         self.prior_learning: dict[str, Any] | None = None
@@ -337,6 +340,13 @@ class DailyRunRecorder:
         self.canonical_game_ids = sorted({int(value) for value in game_ids})
         self.canonical_game_set_hash = game_set_hash
 
+    def set_pregame_eligibility(self, *, eligible_game_ids: Iterable[int],
+                                started_excluded_game_ids: Iterable[int],
+                                cutoff_utc: str) -> None:
+        self.eligible_pregame_game_ids = sorted(map(int, eligible_game_ids))
+        self.started_excluded_game_ids = sorted(map(int, started_excluded_game_ids))
+        self.feature_input_cutoff_utc = str(cutoff_utc)
+
     def classification(self) -> str:
         if any(lane.status == "FAILED_BLOCKING" for lane in self.lanes.values()):
             return "FAILED_BLOCKING"
@@ -365,7 +375,15 @@ class DailyRunRecorder:
             "slate_date": self.slate_date,
             "canonical_season": self.canonical_season,
             "canonical_game_ids": self.canonical_game_ids,
+            "canonical_game_count": len(self.canonical_game_ids),
             "canonical_game_set_hash": self.canonical_game_set_hash,
+            "eligible_pregame_game_ids": self.eligible_pregame_game_ids,
+            "eligible_pregame_game_count": len(self.eligible_pregame_game_ids),
+            "started_excluded_game_ids": self.started_excluded_game_ids,
+            "started_excluded_game_count": len(self.started_excluded_game_ids),
+            "started_exclusion_reason": (
+                "GAME_ALREADY_STARTED" if self.started_excluded_game_ids else None),
+            "feature_cutoff_utc": self.feature_input_cutoff_utc,
             "lanes": {name: asdict(self.lanes[name]) for name in LANE_NAMES},
             "roster_observation": self.roster_observation,
             "odds_observation": self.odds_observation,

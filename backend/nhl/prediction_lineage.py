@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 from zoneinfo import ZoneInfo
@@ -57,6 +57,24 @@ def _strict_integer_ids(series: pd.Series, *, label: str) -> pd.Series:
     return result
 
 
+def pregame_game_eligibility(canonical_games: Iterable[Any], cutoff_utc: str) -> dict[str, list[int]]:
+    """Partition the canonical slate without changing its identity."""
+    cutoff = datetime.fromisoformat(str(cutoff_utc).replace("Z", "+00:00"))
+    if cutoff.tzinfo is None:
+        raise RuntimeError("PREGAME_CUTOFF_MUST_BE_TIMEZONED")
+    cutoff = cutoff.astimezone(timezone.utc)
+    eligible, excluded = [], []
+    for game in canonical_games:
+        game_id = int(_field(game, "game_id"))
+        start_raw = str(_field(game, "start_time_utc") or "").strip()
+        start = datetime.fromisoformat(start_raw.replace("Z", "+00:00"))
+        if start.tzinfo is None:
+            raise RuntimeError(f"CANONICAL_GAME_START_NAIVE:{game_id}")
+        (eligible if start.astimezone(timezone.utc) > cutoff else excluded).append(game_id)
+    return {"eligible_pregame_game_ids": sorted(eligible),
+            "started_excluded_game_ids": sorted(excluded)}
+
+
 def build_canonical_game_map(
     canonical_games: Iterable[Any], *, slate: str,
     expected_game_set_hash: str | None = None,
@@ -104,6 +122,7 @@ def prepare_scoring_input(
     slate: str, parent_daily_run_id: str, feature_input_cutoff_utc: str,
     expected_game_set_hash: str, identity_column: str = "player_id",
     allow_partial_slate: bool = False,
+    eligible_game_ids: Iterable[int] | None = None,
     constant_feature_values: Mapping[str, float] | None = None,
 ) -> dict[str, Any]:
     """Validate a feature export and write a run-local, canonically joined input."""
@@ -116,17 +135,29 @@ def prepare_scoring_input(
     if frame.empty:
         raise RuntimeError("SCORING_INPUT_EMPTY")
 
+    canonical_games = tuple(canonical_games)
     canonical = build_canonical_game_map(
         canonical_games, slate=slate, expected_game_set_hash=expected_game_set_hash)
     frame[identity_column] = _strict_integer_ids(
         frame[identity_column], label="SCORING_INPUT_IDENTITY")
     frame["game_id"] = _strict_integer_ids(frame["game_id"], label="SCORING_INPUT_GAME_ID")
+    eligibility = pregame_game_eligibility(canonical_games, feature_input_cutoff_utc)
+    eligible = (set(map(int, eligible_game_ids)) if eligible_game_ids is not None
+                else set(eligibility["eligible_pregame_game_ids"]))
+    if not eligible.issubset(set(canonical)):
+        raise RuntimeError("SCORING_INPUT_ELIGIBLE_GAME_NONCANONICAL")
+    if eligible != set(eligibility["eligible_pregame_game_ids"]):
+        raise RuntimeError("SCORING_INPUT_ELIGIBILITY_CUTOFF_MISMATCH")
     observed_games = set(frame["game_id"].tolist())
     unknown = sorted(observed_games - set(canonical))
     if unknown:
         raise RuntimeError(f"SCORING_INPUT_NONCANONICAL_GAMES:{unknown}")
-    if not allow_partial_slate and observed_games != set(canonical):
-        missing_games = sorted(set(canonical) - observed_games)
+    frame = frame[frame.game_id.isin(eligible)].copy()
+    if frame.empty:
+        raise RuntimeError("SCORING_INPUT_NO_PREGAME_GAMES_REMAIN")
+    observed_games = set(frame["game_id"].tolist())
+    if not allow_partial_slate and observed_games != eligible:
+        missing_games = sorted(eligible - observed_games)
         raise RuntimeError(f"SCORING_INPUT_PARTIAL_SLATE:{missing_games}")
     if frame.duplicated([identity_column, "game_id"]).any():
         raise RuntimeError("SCORING_INPUT_DUPLICATE_IDENTITY")
@@ -173,6 +204,8 @@ def prepare_scoring_input(
         "identity_count": len(frame),
         "canonical_game_count": len(canonical),
         "canonical_game_set_hash": expected_game_set_hash,
+        "eligible_pregame_game_ids": sorted(eligible),
+        "started_excluded_game_ids": eligibility["started_excluded_game_ids"],
         "parent_daily_run_id": parent_daily_run_id,
         "feature_input_cutoff_utc": feature_input_cutoff_utc,
     }
@@ -256,6 +289,7 @@ def validate_prediction_output(
     *, path: Path, lane: str, canonical_games: Iterable[Any], slate: str,
     parent_daily_run_id: str, feature_input_cutoff_utc: str,
     expected_game_set_hash: str, expected_lines: Sequence[float],
+    eligible_game_ids: Iterable[int] | None = None,
 ) -> dict[str, Any]:
     """Validate a run-local scorer artifact before any DB or market consumer."""
     path = Path(path)
@@ -269,6 +303,7 @@ def validate_prediction_output(
     if missing:
         raise RuntimeError(f"PREDICTION_LINEAGE_COLUMNS_MISSING:{','.join(missing)}")
 
+    canonical_games = tuple(canonical_games)
     canonical = build_canonical_game_map(
         canonical_games, slate=slate, expected_game_set_hash=expected_game_set_hash)
     frame["player_id"] = _strict_integer_ids(frame["player_id"], label="PREDICTION_PLAYER_ID")
@@ -276,6 +311,12 @@ def validate_prediction_output(
     unknown = sorted(set(frame["game_id"]) - set(canonical))
     if unknown:
         raise RuntimeError(f"PREDICTION_NONCANONICAL_GAMES:{unknown}")
+    eligibility = pregame_game_eligibility(canonical_games, feature_input_cutoff_utc)
+    eligible = set(map(int, eligible_game_ids)) if eligible_game_ids is not None else set(eligibility["eligible_pregame_game_ids"])
+    if eligible != set(eligibility["eligible_pregame_game_ids"]):
+        raise RuntimeError("PREDICTION_ELIGIBILITY_CUTOFF_MISMATCH")
+    if not set(frame["game_id"]).issubset(eligible):
+        raise RuntimeError("PREDICTION_STARTED_GAME_INCLUDED")
     for column in LINEAGE_COLUMNS:
         values = frame[column].astype("string").str.strip()
         if values.isna().any() or (values == "").any():
@@ -333,8 +374,8 @@ def validate_prediction_output(
     expected_line_set = set(expected_lines)
     if any(len(lines) != len(expected_lines) or set(map(float, lines)) != expected_line_set for lines in groups):
         raise RuntimeError("PREDICTION_LINE_POPULATION_MISMATCH")
-    if set(expanded["game_id"]) != set(canonical):
-        raise RuntimeError("PREDICTION_PARTIAL_SLATE")
+    if not set(expanded["game_id"]).issubset(eligible):
+        raise RuntimeError("PREDICTION_STARTED_GAME_INCLUDED")
 
     return {
         "row_count": len(frame),
@@ -343,6 +384,8 @@ def validate_prediction_output(
         "line_count": len(expected_lines),
         "canonical_game_count": len(canonical),
         "canonical_game_set_hash": expected_game_set_hash,
+        "eligible_pregame_game_ids": sorted(eligible),
+        "started_excluded_game_ids": eligibility["started_excluded_game_ids"],
         "parent_daily_run_id": parent_daily_run_id,
         "feature_input_cutoff_utc": feature_input_cutoff_utc,
         "validated_prediction_identity": True,
@@ -352,7 +395,7 @@ def validate_prediction_output(
 def validate_sog_prediction_artifacts(
     *, scored_path: Path, unscored_path: Path | None, slate: str,
     parent_daily_run_id: str, canonical_game_ids: Iterable[int],
-    expected_game_set_hash: str,
+    expected_game_set_hash: str, eligible_game_ids: Iterable[int] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any] | None]:
     """Validate legacy SOG prediction-grain artifacts and summarize their rows.
 
@@ -382,6 +425,8 @@ def validate_sog_prediction_artifacts(
     scored["player_id"] = _strict_integer_ids(scored["player_id"], label="SOG_PLAYER_ID")
     if not set(scored["game_id"]).issubset(canonical):
         raise RuntimeError("SOG_NONCANONICAL_GAME_ID")
+    if eligible_game_ids is not None and not set(scored["game_id"]).issubset(set(map(int, eligible_game_ids))):
+        raise RuntimeError("SOG_STARTED_GAME_INCLUDED")
     if not scored["game_date"].astype(str).eq(str(slate)).all():
         raise RuntimeError("SOG_SLATE_DATE_MISMATCH")
     scored_identity = ["game_id", "player_id"]
@@ -431,6 +476,8 @@ def validate_sog_prediction_artifacts(
         unscored["player_id"], label="SOG_UNSCORED_PLAYER_ID")
     if not set(unscored["game_id"]).issubset(canonical):
         raise RuntimeError("SOG_UNSCORED_NONCANONICAL_GAME_ID")
+    if eligible_game_ids is not None and not set(unscored["game_id"]).issubset(set(map(int, eligible_game_ids))):
+        raise RuntimeError("SOG_UNSCORED_STARTED_GAME_INCLUDED")
     if not unscored["game_date"].astype(str).eq(str(slate)).all():
         raise RuntimeError("SOG_UNSCORED_SLATE_DATE_MISMATCH")
     unscored["line"] = pd.to_numeric(unscored["line"], errors="coerce")

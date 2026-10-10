@@ -142,6 +142,11 @@ def capture(*, feature_path: Path, production_path: Path, output_root: Path, run
     if cutoff.tzinfo is None:
         raise ValueError("FIXED_BLEND_PREGAME_CUTOFF_FAILED")
     result = []
+    canonical_ids = sorted(set(map(int, canonical_game_ids)))
+    eligible_ids = sorted(set(pd.to_numeric(features.game_id, errors="raise").astype(int)))
+    if not set(eligible_ids).issubset(set(canonical_ids)):
+        raise ValueError("FIXED_BLEND_NONCANONICAL_FEATURE_GAME")
+    excluded_ids = sorted(set(canonical_ids) - set(eligible_ids))
     control_parts = []
     control_source = features.merge(production[["game_id", "player_id", "expected_sog"]],
                                     on=["game_id", "player_id"], how="inner", validate="one_to_one")
@@ -174,8 +179,10 @@ def capture(*, feature_path: Path, production_path: Path, output_root: Path, run
             control_frame.to_csv(control_path, index=False, float_format="%.17g")
             metadata = {
                 "contract": CONTRACT, "season": season, "slate_date": slate_date,
-                "parent_daily_run_id": run_id, "canonical_game_ids": sorted(set(canonical_game_ids)),
+                "parent_daily_run_id": run_id, "canonical_game_ids": canonical_ids,
                 "canonical_game_set_hash": canonical_game_set_hash(canonical_game_ids),
+                "eligible_pregame_game_ids": eligible_ids,
+                "started_excluded_game_ids": excluded_ids,
                 "model_identity": model["identity"], "research_label": model["label"],
                 "research_priority": model["priority"], "weights": {"d10": model["d10_weight"], "d20": model["d20_weight"]},
                 "history_contract": "LATEST_AVAILABLE_10_OR_20_STRICT_PRIOR_PLAYER_GAMES_SUM_SOG_DIV_SUM_TOI_X60",

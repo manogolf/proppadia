@@ -47,11 +47,38 @@ class SogFeatureInputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = self._source(root)
-            with self.assertRaisesRegex(ValueError, "CUTOFF_NOT_PREGAME"):
+            with self.assertRaisesRegex(ValueError, "NO_PREGAME_GAMES_REMAIN"):
                 begin_capture(source_path=source, root=root / "retained", season=2026,
                     slate_date="2026-10-01", run_id="run-1", canonical_game_ids=[2026020001],
                     canonical_game_starts_utc={2026020001: "2026-10-02T02:00:00Z"},
                     cutoff_utc="2026-10-02T02:00:00Z")
+
+    def test_mixed_start_capture_keeps_canonical_identity_and_retains_only_eligible_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "mixed.csv"
+            ids = list(range(2026020001, 2026020015))
+            cutoff = "2026-10-02T02:00:00Z"
+            pd.DataFrame([
+                {"player_id": game_id, "game_id": game_id, "game_date": "2026-10-01",
+                 "shots_on_goal": None, "d10_sog_per60": 1.8}
+                for game_id in ids
+            ]).to_csv(source, index=False)
+            capture = begin_capture(
+                source_path=source, root=root / "retained", season=2026,
+                slate_date="2026-10-01", run_id="mixed-run",
+                canonical_game_ids=ids,
+                canonical_game_starts_utc={
+                    game_id: ("2026-10-02T01:00:00Z" if game_id == ids[0]
+                              else f"2026-10-02T{3 + index:02d}:00:00Z")
+                    for index, game_id in enumerate(ids)
+                }, cutoff_utc=cutoff,
+            )
+            self.assertEqual(capture["canonical_game_ids"], ids)
+            self.assertEqual(capture["eligible_pregame_game_ids"], ids[1:])
+            self.assertEqual(capture["started_excluded_game_ids"], [ids[0]])
+            retained = pd.read_csv(capture["staging_dir"] / "sog_features.csv")
+            self.assertEqual(retained.game_id.tolist(), ids[1:])
 
     def test_finalize_binds_prediction_and_replay(self):
         with tempfile.TemporaryDirectory() as tmp:

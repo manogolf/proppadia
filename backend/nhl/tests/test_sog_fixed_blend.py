@@ -71,6 +71,19 @@ class FixedBlendTests(unittest.TestCase):
                 self.assertTrue((path / "production_control.csv").is_file())
                 self.assertTrue(item["prediction_sha256"])
 
+    def test_mixed_slate_blends_score_only_filtered_eligible_features(self):
+        features, production = self.fixture()
+        eligible_features = features.copy()
+        eligible_features["game_id"] = 12
+        eligible_production = production.copy()
+        eligible_production["game_id"] = 12
+        results = build_predictions(
+            eligible_features, eligible_production, run_id="mixed-run",
+            slate_date="2026-10-10", season=2026, feature_sha256="fixture",
+            cutoff_utc="2026-10-10T12:00:00Z", canonical_game_ids=[11, 12])
+        for frame in results.values():
+            self.assertEqual(set(frame.game_id), {12})
+
     def test_official_outcome_grading_retains_unsettled_and_exact_lines(self):
         frame, prod = self.fixture()
         predictions = build_predictions(frame, prod, run_id="r", slate_date="2026-10-10", season=2026,

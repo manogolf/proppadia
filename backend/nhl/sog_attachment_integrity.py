@@ -193,7 +193,8 @@ def audit_sog_attachment(
         "prediction_model_identity_sha256": hashlib.sha256(json.dumps(
             model_identity_rows, sort_keys=True, separators=(",", ":")).encode()).hexdigest(),
         "canonical_game_set_hash": canonical_game_set_hash(
-            {key[1] for key in prediction_keys}),
+            canonical_game_starts_utc.keys() if canonical_game_starts_utc is not None
+            else {key[1] for key in prediction_keys}),
         "prediction_artifact_path": str(Path(prediction_path).resolve()),
         "prediction_artifact_sha256": sha256_file(Path(prediction_path)),
         "prediction_key_population_sha256": hashlib.sha256(
@@ -315,8 +316,8 @@ def verify_sog_integrity_package(report_path: Path, slate_date: str) -> tuple[di
         starts = {}
     pred_frame, _ = prediction_key_frame(prediction_path)
     pred_game_ids = {int(value) for value in pred_frame.game_id.unique()}
-    if starts and pred_game_ids != set(starts):
-        raise ValueError("SOG_ATTACHMENT_CANONICAL_GAME_IDENTITY_MISMATCH")
+    if starts and not pred_game_ids.issubset(set(starts)):
+        raise ValueError("SOG_ATTACHMENT_NONCANONICAL_GAME_IDENTITY")
     observed_at = datetime.fromisoformat(
         str(odds_summary.get("observation_timestamp_utc", "")).replace("Z", "+00:00"))
     if observed_at.tzinfo is None:

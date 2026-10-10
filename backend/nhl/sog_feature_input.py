@@ -34,30 +34,40 @@ def _utc(value: str | datetime) -> datetime:
 
 def begin_capture(*, source_path: Path, root: Path, season: int, slate_date: str,
                   run_id: str, canonical_game_ids: list[int], canonical_game_starts_utc: dict[int, str],
-                  cutoff_utc: str | datetime) -> dict[str, Any]:
-    """Copy and validate the exact scorer input into an unpublished run staging dir."""
+                  cutoff_utc: str | datetime,
+                  eligible_game_ids: list[int] | None = None) -> dict[str, Any]:
+    """Validate, eligibility-filter, and stage scorer input for an unpublished run."""
     source_path = Path(source_path).resolve()
     source_hash = sha256_file(source_path)
     cutoff = _utc(cutoff_utc)
     ids = sorted(map(int, canonical_game_ids))
     if not ids or set(ids) != set(map(int, canonical_game_starts_utc)):
         raise ValueError("SOG_FEATURE_CANONICAL_GAME_STARTS_MISMATCH")
-    starts = [_utc(canonical_game_starts_utc[gid]) for gid in ids]
-    if any(cutoff >= start for start in starts):
-        raise ValueError("SOG_FEATURE_CUTOFF_NOT_PREGAME_FOR_ALL_GAMES")
+    starts = {gid: _utc(canonical_game_starts_utc[gid]) for gid in ids}
+    eligible = sorted(gid for gid in ids if starts[gid] > cutoff)
+    excluded = sorted(set(ids) - set(eligible))
+    if eligible_game_ids is not None and sorted(map(int, eligible_game_ids)) != eligible:
+        raise ValueError("SOG_FEATURE_ELIGIBILITY_CUTOFF_MISMATCH")
+    if not eligible:
+        raise ValueError("SOG_FEATURE_NO_PREGAME_GAMES_REMAIN")
     frame = pd.read_csv(source_path)
     required = {"player_id", "game_id", "game_date", "shots_on_goal"}
     if not required.issubset(frame.columns):
         raise ValueError("SOG_FEATURE_REQUIRED_COLUMNS_MISSING")
     if frame.empty or frame.duplicated(["game_id", "player_id"]).any():
         raise ValueError("SOG_FEATURE_EMPTY_OR_DUPLICATE_PLAYER_GAME")
-    if sorted(pd.to_numeric(frame.game_id, errors="raise").astype(int).unique()) != ids:
-        raise ValueError("SOG_FEATURE_CANONICAL_GAME_SET_MISMATCH")
+    source_game_ids = sorted(pd.to_numeric(frame.game_id, errors="raise").astype(int).unique())
+    if source_game_ids not in (ids, eligible):
+        raise ValueError("SOG_FEATURE_CANONICAL_OR_ELIGIBLE_GAME_SET_MISMATCH")
+    if not frame.game_date.astype(str).eq(slate_date).all():
+        raise ValueError("SOG_FEATURE_SLATE_DATE_MISMATCH")
+    frame["game_id"] = pd.to_numeric(frame.game_id, errors="raise").astype(int)
+    frame = frame[frame.game_id.isin(eligible)].copy()
+    if frame.empty or sorted(frame.game_id.unique()) != eligible:
+        raise ValueError("SOG_FEATURE_ELIGIBLE_GAME_SET_MISMATCH")
     # The export carries the target column for legacy compatibility; it must be null pregame.
     if frame.shots_on_goal.notna().any():
         raise ValueError("SOG_FEATURE_TARGET_GAME_SOG_PRESENT")
-    if not frame.game_date.astype(str).eq(slate_date).all():
-        raise ValueError("SOG_FEATURE_SLATE_DATE_MISMATCH")
     final = Path(root) / f"season={season}" / f"slate_date={slate_date}" / f"run_id={run_id}"
     if final.exists():
         raise FileExistsError(f"SOG_FEATURE_PACKAGE_ALREADY_EXISTS:{final}")
@@ -65,21 +75,23 @@ def begin_capture(*, source_path: Path, root: Path, season: int, slate_date: str
     staging = final.with_name(f".{final.name}.incomplete")
     staging.mkdir(exist_ok=False)
     payload = staging / "sog_features.csv"
-    shutil.copyfile(source_path, payload)
-    if sha256_file(payload) != source_hash:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise ValueError("SOG_FEATURE_COPY_HASH_MISMATCH")
+    if source_game_ids == eligible:
+        shutil.copyfile(source_path, payload)
+    else:
+        frame.to_csv(payload, index=False)
+    retained_hash = sha256_file(payload)
     columns = list(frame.columns)
     schema = {"ordered_columns": columns, "dtypes": [str(frame[c].dtype) for c in columns]}
     schema_hash = hashlib.sha256(json.dumps(schema, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     return {"staging_dir": staging, "final_dir": final, "source_path": source_path,
             "source_sha256": source_hash, "retained_path": final / "sog_features.csv",
-            "retained_sha256": source_hash, "row_count": len(frame),
+            "retained_sha256": retained_hash, "row_count": len(frame),
             "unique_player_game_count": int(frame[["game_id", "player_id"]].drop_duplicates().shape[0]),
             "ordered_columns": columns, "schema_sha256": schema_hash,
             "cutoff_utc": cutoff.isoformat().replace("+00:00", "Z"),
             "slate_date": slate_date, "run_id": run_id, "season": int(season),
-            "canonical_game_ids": ids, "canonical_game_set_hash": canonical_game_set_hash(ids)}
+            "canonical_game_ids": ids, "canonical_game_set_hash": canonical_game_set_hash(ids),
+            "eligible_pregame_game_ids": eligible, "started_excluded_game_ids": excluded}
 
 
 def finalize_capture(capture: dict[str, Any], *, scorer_path: Path,
@@ -110,6 +122,8 @@ def finalize_capture(capture: dict[str, Any], *, scorer_path: Path,
         "slate_date": capture["slate_date"], "parent_daily_run_id": capture["run_id"],
         "canonical_game_ids": capture["canonical_game_ids"],
         "canonical_game_set_hash": capture["canonical_game_set_hash"],
+        "eligible_pregame_game_ids": capture["eligible_pregame_game_ids"],
+        "started_excluded_game_ids": capture["started_excluded_game_ids"],
         "feature_cutoff_utc": capture["cutoff_utc"],
         "source_feature_path": str(capture["source_path"]),
         "source_feature_sha256": capture["source_sha256"],
@@ -141,7 +155,8 @@ def finalize_capture(capture: dict[str, Any], *, scorer_path: Path,
     staging.replace(final)
     verify_package(final)
     return {"feature_input_path": str(final / "sog_features.csv"),
-            "feature_input_sha256": capture["source_sha256"],
+            "feature_input_sha256": capture["retained_sha256"],
+            "source_feature_sha256": capture["source_sha256"],
             "feature_input_manifest_path": str(final / "feature_input_manifest.json"),
             "feature_input_manifest_sha256": manifest_sha,
             "feature_contract": CONTRACT, "feature_contract_version": 1,
@@ -153,4 +168,6 @@ def finalize_capture(capture: dict[str, Any], *, scorer_path: Path,
             "fitted_model_identity_sha256": fitted_model_identity_sha256,
             "parent_daily_run_id": capture["run_id"],
             "canonical_game_set_hash": capture["canonical_game_set_hash"],
+            "eligible_pregame_game_ids": capture["eligible_pregame_game_ids"],
+            "started_excluded_game_ids": capture["started_excluded_game_ids"],
             "classification": "PROSPECTIVELY_BOUND_FEATURE_INPUT"}

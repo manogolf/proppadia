@@ -70,6 +70,7 @@ from backend.nhl.prediction_lineage import (
     prepare_scoring_input,
     validate_prediction_output,
     validate_sog_prediction_artifacts,
+    pregame_game_eligibility,
 )
 from backend.nhl.model_identity import fitted_model_identity
 from backend.nhl.sog_feature_input import begin_capture as begin_sog_feature_capture
@@ -1258,9 +1259,14 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
         raise AssertionError(f"[build-sog] expected artifact missing/empty: {unmatched_csv}")
 
     if parent_daily_run_id is not None:
+        canonical_games_for_sog = load_canonical_slate(
+            slate_date=slate,
+            raw_schedule_path=ROOT / "artifacts/operational/nhl/slates" / slate / "raw_schedule_response.json",
+            slate_health_path=ROOT / "artifacts/operational/nhl/slates" / slate / "slate_health.json",
+        )
+        canonical_game_ids = {int(game.game_id) for game in canonical_games_for_sog}
         odds_lineage = None
         if odds_json is not None and odds_observation_dir is not None and expected_odds_manifest_sha256:
-            predictions = pd.read_csv(pred_path)
             odds_lineage = validate_odds_observation(
                 observation_dir=Path(odds_observation_dir), odds_json=Path(odds_json),
                 expected_manifest_sha256=expected_odds_manifest_sha256,
@@ -1268,19 +1274,11 @@ def build_sog(slate: str, *, odds_json: Path | None = None,
                 expected_slate_date=slate,
                 expected_season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
                 expected_phase=odds_phase,
-                expected_game_set_hash=canonical_game_set_hash(
-                    pd.to_numeric(predictions["game_id"], errors="raise").astype(int)),
+                expected_game_set_hash=canonical_game_set_hash(canonical_game_ids),
                 replayed=odds_replayed,
             )
-        canonical_games_for_sog = load_canonical_slate(
-            slate_date=slate,
-            raw_schedule_path=ROOT / "artifacts/operational/nhl/slates" / slate / "raw_schedule_response.json",
-            slate_health_path=ROOT / "artifacts/operational/nhl/slates" / slate / "slate_health.json",
-        )
         pred_game_ids = set(pd.to_numeric(pd.read_csv(pred_path).game_id, errors="raise").astype(int))
-        canonical_game_ids = {int(game.game_id) for game in canonical_games_for_sog}
-        game_starts = ({int(game.game_id): game.start_time_utc for game in canonical_games_for_sog}
-                       if pred_game_ids == canonical_game_ids else None)
+        game_starts = {int(game.game_id): game.start_time_utc for game in canonical_games_for_sog}
         integrity = audit_sog_attachment(
             prediction_path=pred_path, attachment_path=out_csv,
             unmatched_path=unmatched_csv, slate_date=slate,
@@ -1486,6 +1484,17 @@ def _run_independent_daily_lanes(
     prediction_identities: dict[str, dict[str, Any]] = {}
     prediction_run_dir = PROC_DIR / "daily_runs" / daily_run_id
     prediction_run_dir.mkdir(parents=True, exist_ok=True)
+    no_pregame_games = not pregame_game_eligibility(
+        canonical_games, datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    )["eligible_pregame_game_ids"]
+    if no_pregame_games:
+        for lane_name in ("saves", "points", "points_hgb_shadow", "odds",
+                          "sog_attachment", "points_attachment", "saves_attachment",
+                          "research_integrity"):
+            recorder.finish_lane(lane_name, status="SKIPPED_NO_PREGAME_GAMES",
+                                 reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+        _reference_cold_start_sog(recorder, slate)
+        return
 
     if saves_export_ready:
         recorder.start_lane("saves")
@@ -1542,7 +1551,11 @@ def _run_independent_daily_lanes(
                 "saves", outputs=[prediction_identities["saves"]],
                 database_rows_written=True)
         except Exception as error:
-            recorder.fail_lane("saves", error, blocking=False)
+            if str(error) == "SCORING_INPUT_NO_PREGAME_GAMES_REMAIN":
+                recorder.finish_lane("saves", status="SKIPPED_NO_PREGAME_GAMES",
+                                     reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+            else:
+                recorder.fail_lane("saves", error, blocking=False)
     else:
         recorder.finish_lane(
             "saves", status="FAILED_NONBLOCKING", reason="SAVES_FEATURE_EXPORT_FAILED")
@@ -1729,8 +1742,15 @@ def _run_independent_daily_lanes(
                 "points", outputs=[prediction_identities["points"]],
                 database_rows_written=True)
         except Exception as error:
-            recorder.fail_lane("points", error,
-                               blocking=True if production_authority == HGB_AUTHORITY else False)
+            if (str(error) == "SCORING_INPUT_NO_PREGAME_GAMES_REMAIN"
+                    or "HGB_ALL_CANONICAL_GAMES_ALREADY_STARTED" in str(error)):
+                recorder.finish_lane("points", status="SKIPPED_NO_PREGAME_GAMES",
+                                     reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+                recorder.finish_lane("points_hgb_shadow", status="SKIPPED_NO_PREGAME_GAMES",
+                                     reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+            else:
+                recorder.fail_lane("points", error,
+                                   blocking=True if production_authority == HGB_AUTHORITY else False)
     else:
         recorder.finish_lane(
             "points", status="FAILED_BLOCKING" if production_authority == HGB_AUTHORITY else "FAILED_NONBLOCKING",
@@ -1739,43 +1759,51 @@ def _run_independent_daily_lanes(
 
     _reference_cold_start_sog(recorder, slate)
 
-    recorder.start_lane("odds", inputs=[{
-        "canonical_game_set_hash": recorder.canonical_game_set_hash,
-        "canonical_game_count": len(recorder.canonical_game_ids),
-        "authorized": bool(with_odds),
-    }])
-    _ACTIVE_DAILY_LANE = "odds"
     odds_result: OddsObservationResult | None = None
-    try:
-        odds_result = run_optional_odds_observation(
-            with_odds=with_odds, slate=slate,
-            season=infer_nhl_season_from_date_yyyy_mm_dd(slate), phase=odds_phase,
-            parent_daily_run_id=daily_run_id, canonical_games=canonical_games,
-            reuse_observation_dir=reuse_odds_observation)
-        if odds_result is None:
-            recorder.finish_lane("odds", status="SKIPPED_NOT_REQUESTED")
-        else:
-            summary = odds_result.summary
-            recorder.odds_observation = {
-                "path": str(odds_result.observation_dir.resolve()),
-                "manifest_sha256": odds_result.manifest_sha256,
-                "classification": odds_result.classification,
-                "request_plan_path": str((odds_result.observation_dir / "request_plan.json").resolve()),
-                "request_plan_sha256": sha256_file(odds_result.observation_dir / "request_plan.json"),
-                "network_attempt_count": int(summary.get("network_attempt_count", 0)),
-                "credits_consumed": summary.get("credits_consumed"),
-                "maximum_credits": summary.get("maximum_credits"),
-            }
-            odds_health = daily_health_for_odds(requested=with_odds, result=odds_result)
-            recorder.finish_lane(
-                "odds", status=("READY_WITH_ODDS_WARNING" if odds_health != "READY" else odds_result.classification),
-                reason=(odds_result.classification if odds_health != "READY" else None),
-                outputs=[recorder.odds_observation],
-                provider_requests=int(summary.get("network_attempt_count", 0)),
-                credits_consumed=summary.get("credits_consumed"),
-            )
-    except Exception as error:
-        recorder.fail_lane("odds", error, blocking=False)
+    odds_eligibility = pregame_game_eligibility(
+        canonical_games, datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+    if not odds_eligibility["eligible_pregame_game_ids"]:
+        recorder.finish_lane("odds", status="SKIPPED_NO_PREGAME_GAMES",
+                             reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+    else:
+        recorder.start_lane("odds", inputs=[{
+            "canonical_game_set_hash": recorder.canonical_game_set_hash,
+            "canonical_game_count": len(recorder.canonical_game_ids),
+            "authorized": bool(with_odds),
+            "eligible_pregame_game_ids": odds_eligibility["eligible_pregame_game_ids"],
+            "started_excluded_game_ids": odds_eligibility["started_excluded_game_ids"],
+        }])
+        _ACTIVE_DAILY_LANE = "odds"
+        try:
+            odds_result = run_optional_odds_observation(
+                with_odds=with_odds, slate=slate,
+                season=infer_nhl_season_from_date_yyyy_mm_dd(slate), phase=odds_phase,
+                parent_daily_run_id=daily_run_id, canonical_games=canonical_games,
+                reuse_observation_dir=reuse_odds_observation)
+            if odds_result is None:
+                recorder.finish_lane("odds", status="SKIPPED_NOT_REQUESTED")
+            else:
+                summary = odds_result.summary
+                recorder.odds_observation = {
+                    "path": str(odds_result.observation_dir.resolve()),
+                    "manifest_sha256": odds_result.manifest_sha256,
+                    "classification": odds_result.classification,
+                    "request_plan_path": str((odds_result.observation_dir / "request_plan.json").resolve()),
+                    "request_plan_sha256": sha256_file(odds_result.observation_dir / "request_plan.json"),
+                    "network_attempt_count": int(summary.get("network_attempt_count", 0)),
+                    "credits_consumed": summary.get("credits_consumed"),
+                    "maximum_credits": summary.get("maximum_credits"),
+                }
+                odds_health = daily_health_for_odds(requested=with_odds, result=odds_result)
+                recorder.finish_lane(
+                    "odds", status=("READY_WITH_ODDS_WARNING" if odds_health != "READY" else odds_result.classification),
+                    reason=(odds_result.classification if odds_health != "READY" else None),
+                    outputs=[recorder.odds_observation],
+                    provider_requests=int(summary.get("network_attempt_count", 0)),
+                    credits_consumed=summary.get("credits_consumed"),
+                )
+        except Exception as error:
+            recorder.fail_lane("odds", error, blocking=False)
 
     captured = bool(
         odds_result is not None and odds_result.classification.startswith("CAPTURED_"))
@@ -1959,7 +1987,10 @@ def _run_independent_daily_lanes(
 
     # HGB is a separate first-class Points shadow. Its failures never block the
     # Phoenix lane or its market attachment, and it does not depend on odds.
-    if (recorder.lane("points").status == "COMPLETE"
+    if recorder.lane("points").status == "SKIPPED_NO_PREGAME_GAMES":
+        recorder.finish_lane("points_hgb_shadow", status="SKIPPED_NO_PREGAME_GAMES",
+                             reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+    elif (recorder.lane("points").status == "COMPLETE"
             and prediction_identities.get("points")
             and production_authority == HGB_AUTHORITY):
         recorder.start_lane("points_hgb_shadow", inputs=[prediction_identities["points"]])
@@ -2007,7 +2038,11 @@ def _run_independent_daily_lanes(
             )
         except Exception as error:
             message = redact_sensitive_text(f"{type(error).__name__}:{error}")
-            if "ALREADY_STARTED" in message:
+            if "ALL_CANONICAL_GAMES_ALREADY_STARTED" in message:
+                recorder.finish_lane(
+                    "points_hgb_shadow", status="SKIPPED_NO_PREGAME_GAMES",
+                    reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+            elif "ALREADY_STARTED" in message:
                 status = "PREREQUISITES_UNAVAILABLE"
             elif "COHERENCE" in message:
                 status = "COHERENCE_FAILED"
@@ -2486,18 +2521,43 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     )
     sog_feature_capture = None
     sog_feature_cutoff_utc = datetime.now(timezone.utc)
+    sog_cutoff_text = sog_feature_cutoff_utc.isoformat().replace("+00:00", "Z")
+    sog_eligibility = pregame_game_eligibility(canonical_games, sog_cutoff_text)
+    recorder.set_pregame_eligibility(
+        eligible_game_ids=sog_eligibility["eligible_pregame_game_ids"],
+        started_excluded_game_ids=sog_eligibility["started_excluded_game_ids"],
+        cutoff_utc=sog_cutoff_text,
+    )
+    _ACTIVE_DAILY_LANE = "legacy_sog"
+    if not sog_eligibility["started_excluded_game_ids"]:
+        # Preserve the established all-pregame scorer input byte-for-byte.
+        sog_scoring_path = sog_feat_path
+    else:
+        sog_scoring_path = PROC_DIR / "daily_runs" / daily_run_id / "sog_features_eligible.csv"
+        sog_scoring_path.parent.mkdir(parents=True, exist_ok=True)
+        sog_features = pd.read_csv(sog_feat_path)
+        if "game_id" not in sog_features:
+            raise RuntimeError("SOG_FEATURE_GAME_ID_MISSING")
+        sog_features["game_id"] = pd.to_numeric(sog_features["game_id"], errors="raise").astype(int)
+        sog_features = sog_features[sog_features.game_id.isin(sog_eligibility["eligible_pregame_game_ids"])]
+        if not sog_features.empty:
+            sog_features.to_csv(sog_scoring_path, index=False)
     if sog_scorer == "poisson_baseline":
-        sog_feature_capture = begin_sog_feature_capture(
-            source_path=sog_feat_path,
-            root=ROOT / "artifacts" / "operational" / "nhl" / "sog_feature_inputs",
-            season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
-            slate_date=slate,
-            run_id=daily_run_id,
-            canonical_game_ids=[int(game.game_id) for game in canonical_games],
-            canonical_game_starts_utc={int(game.game_id): str(game.start_time_utc)
-                                       for game in canonical_games},
-            cutoff_utc=sog_feature_cutoff_utc,
-        )
+        if not sog_eligibility["eligible_pregame_game_ids"]:
+            sog_feature_capture = None
+        else:
+            sog_feature_capture = begin_sog_feature_capture(
+                source_path=sog_scoring_path,
+                root=ROOT / "artifacts" / "operational" / "nhl" / "sog_feature_inputs",
+                season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+                slate_date=slate,
+                run_id=daily_run_id,
+                canonical_game_ids=[int(game.game_id) for game in canonical_games],
+                canonical_game_starts_utc={int(game.game_id): str(game.start_time_utc)
+                                           for game in canonical_games},
+                cutoff_utc=sog_feature_cutoff_utc,
+                eligible_game_ids=sog_eligibility["eligible_pregame_game_ids"],
+            )
 
     # 4b) Saves / Points exporters are independent lane inputs.
     saves_export_ready = points_export_ready = False
@@ -2560,11 +2620,19 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "reuse_odds_observation": reuse_odds_observation,
     }
     _ACTIVE_DAILY_LANE = "legacy_sog"
+    if not sog_eligibility["eligible_pregame_game_ids"]:
+        recorder.finish_lane("legacy_sog", status="SKIPPED_NO_PREGAME_GAMES",
+                             reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+        recorder.finish_lane("sog_fixed_blend_shadows", status="SKIPPED_NO_PREGAME_GAMES",
+                             reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+        recorder.independent_context["legacy_sog_prediction"] = None
+        _run_independent_daily_lanes(recorder=recorder, **recorder.independent_context)
+        return
     if sog_scorer == "poisson_baseline":
         sog_score_command = [
             PY,
             SCRIPTS_DIR / "score_sog_poisson_baseline.py",
-            "--in", str(sog_feat_path),
+            "--in", str(sog_scoring_path),
             "--out", str(calibrated_pred_path),
             "--unscored-out", str(unscored_pred_path),
         ]
@@ -2592,7 +2660,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                 PY,
                 SCRIPTS_DIR / "score_sog_denali_pairings_ordinal_lgbm.py",
                 "--in",
-                str(sog_feat_path),
+                str(sog_scoring_path),
                 "--out",
                 str(calibrated_pred_path),
                 "--model-root",
@@ -2616,7 +2684,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
             PY,
             SCRIPTS_DIR / "score_sog_poisson_defense_surprise_shadow.py",
             "--in",
-            str(sog_feat_path),
+            str(sog_scoring_path),
             "--out",
             str(shadow_pred_path),
             "--slate-date",
@@ -2755,6 +2823,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         parent_daily_run_id=daily_run_id,
         canonical_game_ids=[game.game_id for game in canonical_games],
         expected_game_set_hash=recorder.canonical_game_set_hash,
+        eligible_game_ids=sog_eligibility["eligible_pregame_game_ids"],
     )
     legacy_sog_identity = _require_current_prediction_artifact(
         calibrated_pred_path, slate=slate, expected_sha256=None)
@@ -2800,7 +2869,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     # Research-only fixed blends consume this exact production feature snapshot
     # and remain an independent, nonblocking daily lane.
     recorder.start_lane("sog_fixed_blend_shadows", inputs=[{
-        "feature_input_sha256": (sog_feature_capture or {}).get("source_sha256"),
+        "feature_input_sha256": (sog_feature_capture or {}).get("retained_sha256"),
         "parent_daily_run_id": daily_run_id,
         "production_model_identity": "poisson_baseline/baseline_v1",
     }])
@@ -2812,7 +2881,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                 output_root=ROOT / "artifacts" / "operational" / "nhl" / "sog_fixed_blend_shadows",
                 run_id=daily_run_id, slate_date=slate,
                 season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
-                feature_sha256=str(sog_feature_capture["source_sha256"]),
+                feature_sha256=str(sog_feature_capture["retained_sha256"]),
                 cutoff_utc=str(sog_feature_capture["cutoff_utc"]),
                 canonical_game_ids=[int(game.game_id) for game in canonical_games],
                 scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py",

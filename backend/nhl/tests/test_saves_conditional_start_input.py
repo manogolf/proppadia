@@ -121,6 +121,47 @@ class SavesConditionalStartInputTests(unittest.TestCase):
         self.assertTrue(result.start_prob.isna().all())
         self.assertTrue(pd.isna(result.loc[result.player_id.eq(12), "d5_saves_per60"]).all())
 
+    def test_scoring_input_retains_only_pregame_games_and_full_canonical_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source, output = root / "mixed.csv", root / "scoring_input.csv"
+            pd.DataFrame([
+                {"player_id": 11, "game_id": 2026020001, "game_date": "2026-10-01", "start_prob": None},
+                {"player_id": 12, "game_id": 2026020002, "game_date": "2026-10-01", "start_prob": None},
+            ]).to_csv(source, index=False)
+            games = [
+                {"game_id": 2026020001, "start_time_utc": "2026-10-02T01:00:00Z", "home_team_id": 1, "away_team_id": 2},
+                {"game_id": 2026020002, "start_time_utc": "2026-10-02T03:00:00Z", "home_team_id": 3, "away_team_id": 4},
+            ]
+            cutoff = "2026-10-02T02:00:00Z"
+            identity = prepare_scoring_input(
+                source_path=source, output_path=output, canonical_games=games,
+                slate="2026-10-01", parent_daily_run_id="mixed-run",
+                feature_input_cutoff_utc=cutoff,
+                expected_game_set_hash=canonical_game_set_hash([2026020001, 2026020002]),
+            )
+            result = pd.read_csv(output)
+            self.assertEqual(result.game_id.tolist(), [2026020002])
+            self.assertEqual(identity["canonical_game_count"], 2)
+            self.assertEqual(identity["eligible_pregame_game_ids"], [2026020002])
+            self.assertEqual(identity["started_excluded_game_ids"], [2026020001])
+
+    def test_scoring_input_returns_clean_no_pregame_classification_when_all_started(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.csv"
+            pd.DataFrame([{"player_id": 11, "game_id": 2026020001}]).to_csv(source, index=False)
+            with self.assertRaisesRegex(RuntimeError, "SCORING_INPUT_NO_PREGAME_GAMES_REMAIN"):
+                prepare_scoring_input(
+                    source_path=source, output_path=root / "out.csv",
+                    canonical_games=[{"game_id": 2026020001,
+                                      "start_time_utc": "2026-10-02T01:00:00Z",
+                                      "home_team_id": 1, "away_team_id": 2}],
+                    slate="2026-10-01", parent_daily_run_id="started-run",
+                    feature_input_cutoff_utc="2026-10-02T02:00:00Z",
+                    expected_game_set_hash=canonical_game_set_hash([2026020001]),
+                )
+
     def test_missing_contract_feature_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
