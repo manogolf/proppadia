@@ -1,7 +1,7 @@
 {
   "classification": "HGB_ROUTINE_DAILY_INTEGRATION_PASS",
   "coherence_crossing_count": 0,
-  "daily_cli_integration_sha256": "f5e0a57b5641cdf23d4690ebc338b2edcc24adead3c70ebb94b83e3d0c656952",
+  "daily_cli_integration_sha256": "1d185d9d0745b1dea1ae831938a0a7f5c7403024fa5dc01b0c2bf5427de9dc2c",
   "database_mutations": 0,
   "deterministic_replay": "DETERMINISTIC_REPLAY_PASS",
   "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V1",
@@ -13,7 +13,7 @@
   "phoenix_control_prediction_sha256": "730cb908bac956b090683dce15d9e24631920231a3933c2101e60e7041396cf4",
   "prediction_sha256": "ced771f9db3f67a1cc09db17bc6b310dce17980b54e1dc6d0751cb086fe3763d",
   "production_orchestration_helper": "backend/nhl/points_hgb_shadow.py:capture_from_files",
-  "production_orchestration_helper_sha256": "2363190fe2813e3635c485a7c2786f4c14e1c63cf0dfe7bdf45cfa5f6695f495",
+  "production_orchestration_helper_sha256": "b3e91c1247d37b3d4fa080cb67e70939a3f0a91a3159c4d308030be58cdf0e9e",
   "proof_scope": "BOUNDED_DRY_RUN_SHARED_PRODUCTION_CAPTURE_HELPER",
   "provider_calls": 0,
   "schema_version": "NHL_POINTS_HGB_ROUTINE_DAILY_INTEGRATION_EVIDENCE_V1",

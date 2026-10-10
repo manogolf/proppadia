@@ -1,10 +1,12 @@
 {
   "schema_version": "NHL_POINTS_MODEL_AUTHORITY_V1",
-  "authority_version": 1,
-  "production_authority": "phoenix_v2",
-  "shadow_authorities": ["NHL_POINTS_COUNT_HGB_V1"],
+  "authority_version": 2,
+  "production_authority": "NHL_POINTS_COUNT_HGB_V1",
+  "shadow_authorities": [
+    "phoenix_v2"
+  ],
   "reversible": true,
   "change_requires": "promotion evaluator READY_FOR_HGB_PRODUCTION_PROMOTION and explicit reviewed authority version update",
-  "updated_at_utc": "2026-10-09T00:00:00Z",
-  "production_changed": false
+  "updated_at_utc": "2026-10-10T13:22:26.341756Z",
+  "production_changed": true
 }
