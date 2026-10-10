@@ -21,6 +21,7 @@ from backend.nhl.performance_summary import (
     generate_from_artifacts,
     select_authoritative_summary,
 )
+from backend.nhl.sog_fixed_blend import grade_slate as grade_sog_fixed_blend_slate
 from backend.nhl.points_hgb_shadow import (
     discover_daily_points_authority,
     grade_prior_hgb_capture,
@@ -333,6 +334,15 @@ def ensure_prior_learning(
                 "NHL_DAILY_RECEIPT_ROOT", ROOT / "artifacts/operational/nhl/daily_runs")),
             market_coverage=coverage.get("sog"),
         )
+    try:
+        fixed_blend_grade = grade_sog_fixed_blend_slate(
+            slate_date=slate_date, reconciliation_package=package,
+            daily_run_root=ROOT / "artifacts/operational/nhl/sog_fixed_blend_shadows",
+            output_root=ROOT / "artifacts/operational/nhl/sog_fixed_blend_grades",
+        )
+    except Exception as error:
+        fixed_blend_grade = {"status": "GRADE_FAILED_NONBLOCKING",
+                             "reason": f"{type(error).__name__}:{error}"}
     daily_run_root = Path(daily_run_root or os.environ.get(
         "NHL_DAILY_RECEIPT_ROOT", ROOT / "artifacts/operational/nhl/daily_runs"))
     try:
@@ -379,6 +389,7 @@ def ensure_prior_learning(
         "performance_summary_identity": performance.get("summary_identity"),
         "performance_summary_revision": performance.get("summary_revision"),
         "points_hgb_shadow_grade": hgb_grade,
+        "sog_fixed_blend_shadow_grade": fixed_blend_grade,
         "performance_summary_lineage_key": performance.get("revision_lineage_key"),
         "moneyline_grade_status": ("NOT_AVAILABLE" if ml.empty else "COMPLETE"
                                     if ml.grading_status.eq("REGULAR_SEASON_GRADED").all()

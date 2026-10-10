@@ -36,6 +36,7 @@ LANE_NAMES = (
     "shared_prerequisites",
     "roster",
     "legacy_sog",
+    "sog_fixed_blend_shadows",
     "points",
     "points_hgb_shadow",
     "saves",

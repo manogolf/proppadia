@@ -129,6 +129,8 @@ SELECT
   calc.d5_sog_per60,
   calc.d10_sog_per60,
   calc.d20_sog_per60,
+  calc.d10_prior_game_count,
+  calc.d20_prior_game_count,
   calc.attempts_d10_per60,
   b.d5_toi_min_avg,
   b.d10_toi_min_avg,
@@ -238,13 +240,17 @@ CROSS JOIN LATERAL (
       SUM(att)     FILTER (WHERE rn <= 10) AS att_10,
       SUM(toi_min) FILTER (WHERE rn <= 10) AS toi_10,
       SUM(sog)     FILTER (WHERE rn <= 20) AS sog_20,
-      SUM(toi_min) FILTER (WHERE rn <= 20) AS toi_20
+      SUM(toi_min) FILTER (WHERE rn <= 20) AS toi_20,
+      COUNT(*)    FILTER (WHERE rn <= 10) AS d10_prior_game_count,
+      COUNT(*)    FILTER (WHERE rn <= 20) AS d20_prior_game_count
     FROM last20
   )
   SELECT
     CASE WHEN sums.toi_5  IS NULL OR sums.toi_5  <= 0 THEN NULL ELSE (sums.sog_5  / sums.toi_5 ) * 60 END AS d5_sog_per60,
     CASE WHEN sums.toi_10 IS NULL OR sums.toi_10 <= 0 THEN NULL ELSE (sums.sog_10 / sums.toi_10) * 60 END AS d10_sog_per60,
     CASE WHEN sums.toi_20 IS NULL OR sums.toi_20 <= 0 THEN NULL ELSE (sums.sog_20 / sums.toi_20) * 60 END AS d20_sog_per60,
+    sums.d10_prior_game_count,
+    sums.d20_prior_game_count,
     CASE WHEN sums.toi_10 IS NULL OR sums.toi_10 <= 0 THEN NULL ELSE (sums.att_10 / sums.toi_10) * 60 END AS attempts_d10_per60
   FROM sums
 ) AS calc
