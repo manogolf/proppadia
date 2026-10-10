@@ -1,0 +1,40 @@
+{
+  "calibration_fitted": "NO",
+  "d20_coverage_rows": 1582,
+  "d20_full_20_rows": 1488,
+  "d20_history_max": 20,
+  "d20_history_min": 1,
+  "database_mutations": 0,
+  "discovery_cutoffs": {
+    "d10_bottom_quintile_max": 3.306,
+    "d10_middle_60_lower": 3.306,
+    "d10_middle_60_upper": 7.501,
+    "d10_minus_d20_spread_quintile_edges": [
+      -0.8573371427261012,
+      -0.26691695276716154,
+      0.18763121981893385,
+      0.8132013872991257
+    ],
+    "d10_top_decile_min": 8.771848529054541,
+    "d10_top_quintile_min": 7.501,
+    "discovery_calculated_q10": 2.397838182385373,
+    "discovery_calculated_q40": 4.5792588386978155,
+    "discovery_calculated_q60": 5.905701270695975
+  },
+  "distribution_changed": "NO",
+  "full_population_count_mae_leader": "D10_25_D20_75",
+  "new_weight_optimized": "NO",
+  "next_research_direction": "ACCUMULATE_MORE_SAMPLE_BEFORE_SHADOW",
+  "paid_credits": 0,
+  "population_n": 1582,
+  "production_1_5_over": 566,
+  "production_1_5_under": 1016,
+  "production_changed": "NO",
+  "provider_calls": 0,
+  "schema_version": "NHL_SOG_D10_D20_FIXED_BLEND_BAKEOFF_V1",
+  "window": {
+    "end": "2026-10-08",
+    "start": "2026-10-03"
+  },
+  "winner_classification": "MORE_SAMPLE_REQUIRED"
+}

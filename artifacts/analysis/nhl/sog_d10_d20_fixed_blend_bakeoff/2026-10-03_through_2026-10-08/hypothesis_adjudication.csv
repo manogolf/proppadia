@@ -1,0 +1,14 @@
+hypothesis,statement,adjudication
+H1,At least one fixed blend improves full-population count MAE versus d10.,SUPPORTED
+H2,At least one fixed blend improves full-population count RMSE versus d10.,SUPPORTED
+H3,At least one blend reduces high-d10 mean overstatement materially.,PARTIALLY_SUPPORTED
+H4,At least one blend improves 1.5 Brier versus production d10.,SUPPORTED
+H5,At least one blend improves 1.5 log loss versus production d10.,SUPPORTED
+H6,Blend improvement replicates chronologically in validation.,SUPPORTED
+H7,Pure d20 loses useful responsiveness relative to d10/blends during continuing streaks.,PARTIALLY_SUPPORTED
+H8,A fixed blend improves both hot and cold extreme-state errors.,SUPPORTED
+H9,A fixed blend improves the 1.5 Over region without materially degrading Under region.,SUPPORTED
+H10,A fixed blend does not materially degrade 2.5/3.5 performance.,SUPPORTED
+H11,The gain is broad across players rather than driven by a few identities.,SUPPORTED
+H12,"The 50/50 candidate performs competitively, consistent with the prior persistence result.",SUPPORTED
+H13,Evidence is strong enough to justify prospective fixed-blend shadow testing.,INSUFFICIENT_EVIDENCE
