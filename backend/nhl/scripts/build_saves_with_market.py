@@ -263,6 +263,14 @@ def build_match_candidates(predictions: pd.DataFrame, odds: pd.DataFrame) -> pd.
                          suffixes=("_prediction", "_odds"))
 
 
+def _prediction_canonical_game_set_hash(predictions: pd.DataFrame) -> str:
+    """Read the full slate identity retained on an eligible prediction subset."""
+    values = predictions["canonical_game_set_hash"].dropna().astype(str).str.strip().unique()
+    if len(values) != 1 or not values[0]:
+        raise AttachmentIntegrityError("PREDICTION_CANONICAL_GAME_SET_HASH_INVALID")
+    return str(values[0])
+
+
 def reduce_match_candidates(
     predictions: pd.DataFrame, candidates: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -426,6 +434,8 @@ def main():
         ):
             raise AttachmentIntegrityError("STRICT_CURRENT_RUN_ODDS_LINEAGE_MISSING")
         if args.odds_observation_dir:
+            prediction_game_ids = pd.to_numeric(
+                pred_wide["game_id"], errors="raise").astype(int).unique().tolist()
             odds_lineage = validate_odds_observation(
                 observation_dir=Path(args.odds_observation_dir),
                 odds_json=Path(args.odds_json),
@@ -434,8 +444,12 @@ def main():
                 expected_slate_date=slate,
                 expected_season=args.odds_season,
                 expected_phase=args.odds_phase,
-                expected_game_set_hash=canonical_game_set_hash(
-                    pd.to_numeric(pred_wide["game_id"], errors="raise").astype(int)),
+                expected_game_set_hash=(
+                    _prediction_canonical_game_set_hash(pred_wide)
+                    if "canonical_game_set_hash" in pred_wide.columns
+                    else canonical_game_set_hash(prediction_game_ids)
+                ),
+                expected_prediction_game_ids=prediction_game_ids,
                 replayed=args.odds_replayed,
             )
     odds_candidates = parse_odds_candidates(odds_raw)
