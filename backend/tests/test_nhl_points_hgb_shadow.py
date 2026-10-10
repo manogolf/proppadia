@@ -123,7 +123,8 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
         phoenix_model_identity_sha256="phoenix-model",phoenix_feature_contract_sha256="phoenix-contract",
         phoenix_feature_cutoff_utc="2026-10-09T14:00:00Z",slate_date="2026-10-09",season=2026,
         capture_phase="EARLY",parent_run_id="routine-test",feature_cutoff_utc="2026-10-09T15:00:00Z",
-        output_root=tmp_path/"operational")
+        output_root=tmp_path/"operational", canonical_game_ids=[2026020066,2026020067],
+        excluded_started_game_ids=[2026020067])
     capture = Path(result["capture_path"])
     verify_package(capture)
     receipt=json.loads((capture/"receipt.json").read_text())
@@ -131,13 +132,19 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
     assert receipt["deterministic_replay"] == "DETERMINISTIC_REPLAY_PASS"
     assert receipt["coherence_crossing_count"] == 0
     assert receipt["phoenix_control"]["prediction_sha256"] == digest
+    assert receipt["canonical_game_ids"] == [2026020066,2026020067]
+    assert receipt["eligible_pregame_game_ids"] == [2026020066]
+    assert receipt["started_excluded_game_ids"] == [2026020067]
+    assert receipt["canonical_game_count"] == 2
     assert (capture/"model_identity.json").is_file()
     assert (capture/"feature_contract_identity.json").is_file()
     production_csv = tmp_path / "points_predictions.csv"
     production_identity = build_production_prediction_artifact(
         capture_path=capture, output_path=production_csv,
         canonical_games=[SimpleNamespace(game_id=2026020066,
-            start_time_utc="2026-10-10T01:00:00Z", home_team_id=1, away_team_id=2)],
+            start_time_utc="2026-10-10T01:00:00Z", home_team_id=1, away_team_id=2),
+            SimpleNamespace(game_id=2026020067,
+            start_time_utc="2026-10-09T14:00:00Z", home_team_id=1, away_team_id=2)],
         slate_date="2026-10-09", parent_run_id="routine-test",
         feature_cutoff_utc="2026-10-09T15:00:00Z",
         canonical_game_set_sha256=receipt["canonical_game_set_hash"],
@@ -145,6 +152,9 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
     production_rows = pd.read_csv(production_csv)
     assert set(production_rows.line) == {0.5, 1.5, 2.5}
     assert production_identity["row_count"] == 3
+    assert production_identity["canonical_game_count"] == 2
+    assert production_identity["eligible_pregame_game_ids"] == [2026020066]
+    assert production_identity["started_excluded_game_ids"] == [2026020067]
     assert production_rows.groupby(["game_id", "player_id"]).size().eq(3).all()
     market_keys = prediction_rows(production_csv, lane="points")
     assert set(market_keys.line.astype(float)) == {0.5, 1.5, 2.5}

@@ -1643,7 +1643,8 @@ def _run_independent_daily_lanes(
                         capture_phase=odds_phase, parent_run_id=daily_run_id,
                         feature_cutoff_utc=points_cutoff,
                         output_root=ROOT / "artifacts/operational/nhl/points_hgb_shadow",
-                        excluded_started_game_ids=source_summary["excluded_started_game_ids"],
+                        excluded_started_game_ids=source_summary["started_excluded_game_ids"],
+                        canonical_game_ids=source_summary["canonical_game_ids"],
                     )
                     hgb_capture_result["source_summary"] = source_summary
                 except Exception as shadow_error:
@@ -1689,6 +1690,11 @@ def _run_independent_daily_lanes(
                     "feature_contract": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2",
                     "path": phoenix_shadow_identity["path"],
                     "sha256": phoenix_shadow_identity["sha256"],
+                    "prediction_row_count": phoenix_shadow_identity["row_count"],
+                    "feature_input_cutoff_utc": phoenix_shadow_identity["feature_input_cutoff_utc"],
+                    "eligible_pregame_game_ids": source_summary["eligible_pregame_game_ids"],
+                    "started_excluded_game_ids": source_summary["started_excluded_game_ids"],
+                    "identity_count": source_summary["slate_identity_count"],
                     "fitted_model_identity_sha256": phoenix_shadow_identity["fitted_model_evidence"]["fitted_model_identity_sha256"],
                     "feature_contract_sha256": phoenix_shadow_identity["fitted_model_evidence"].get("scoring_configuration", {}).get("feature_contract_sha256")}
                     if phoenix_shadow_identity else {"status": "FAILED_NONBLOCKING",
@@ -2029,7 +2035,8 @@ def _run_independent_daily_lanes(
                     capture_phase=odds_phase, parent_run_id=daily_run_id,
                     feature_cutoff_utc=cutoff,
                     output_root=ROOT / "artifacts/operational/nhl/points_hgb_shadow",
-                    excluded_started_game_ids=source_summary["excluded_started_game_ids"],
+                    excluded_started_game_ids=source_summary["started_excluded_game_ids"],
+                    canonical_game_ids=source_summary["canonical_game_ids"],
                 )
             result["source_summary"] = source_summary
             recorder.finish_lane(

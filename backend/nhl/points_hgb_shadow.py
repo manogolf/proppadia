@@ -166,6 +166,12 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
     game_frame = pd.DataFrame([{"game_id": int(g.game_id), "game_date": slate_date,
         "game_start_utc": g.start_time_utc, "home_team_id": int(g.home_team_id),
         "away_team_id": int(g.away_team_id)} for g in canonical_games])
+    canonical_ids = sorted(map(int, game_frame.game_id.unique()))
+    eligible_mask = pd.to_datetime(game_frame.game_start_utc, utc=True).gt(pd.Timestamp(asof_utc))
+    eligible_game_ids = sorted(map(int, game_frame.loc[eligible_mask, "game_id"]))
+    started_games = sorted(set(canonical_ids) - set(eligible_game_ids))
+    if not eligible_game_ids:
+        raise RuntimeError("HGB_ALL_CANONICAL_GAMES_ALREADY_STARTED")
     roster = pd.DataFrame(roster_rows, columns=roster_columns)
     if phoenix_predictions is not None and Path(phoenix_predictions).is_file():
         phoenix = pd.read_csv(phoenix_predictions)
@@ -178,7 +184,6 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
     slate = slate_identities.merge(roster, on=["game_id", "player_id"], how="left", validate="one_to_one")
     slate = slate.merge(game_frame, on="game_id", how="left", validate="many_to_one")
     eligible = pd.to_datetime(slate.game_start_utc, utc=True).gt(pd.Timestamp(asof_utc))
-    started_games = sorted(map(int, slate.loc[~eligible, "game_id"].unique()))
     slate = slate.loc[eligible].copy()
     if slate.empty:
         raise RuntimeError("HGB_ALL_CANONICAL_GAMES_ALREADY_STARTED")
@@ -191,6 +196,11 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
         "history_game_count": len(game_ids), "history_player_game_count": len(outcomes),
         "source_outcome_package_count": len(outcome_frames),
         "slate_identity_count": len(slate), "source_history_cutoff_exclusive": slate_date,
+        "canonical_game_ids": canonical_ids,
+        "canonical_game_count": len(canonical_ids),
+        "canonical_game_set_hash": canonical_game_set_hash(canonical_ids),
+        "eligible_pregame_game_ids": eligible_game_ids,
+        "started_excluded_game_ids": started_games,
         "excluded_started_game_ids": started_games,
     }
 
@@ -202,6 +212,7 @@ def capture_from_files(
     phoenix_feature_cutoff_utc: str | None, slate_date: str, season: int,
     capture_phase: str, parent_run_id: str, feature_cutoff_utc: str,
     output_root: Path, excluded_started_game_ids: list[int] | None = None,
+    canonical_game_ids: list[int] | None = None,
 ) -> dict[str, Any]:
     """Exercise exporter and scorer as production does, then retain a sealed capture."""
     phoenix_available = (phoenix_predictions_path is not None
@@ -256,11 +267,19 @@ def capture_from_files(
         phoenix = pd.read_csv(phoenix_predictions_path) if phoenix_available else pd.DataFrame()
         if phoenix_available:
             phoenix_keys = set(map(tuple, phoenix[keycols].drop_duplicates().astype("int64").to_numpy()))
-            if not hgb_keys.issubset(phoenix_keys):
+            if hgb_keys != phoenix_keys:
                 raise ValueError("HGB_PHOENIX_IDENTITY_SET_MISMATCH")
         game_hash = canonical_game_set_hash(features.game_id.unique())
         if game_hash != manifest.get("canonical_game_set_hash"):
             raise ValueError("HGB_CANONICAL_GAME_SET_MISMATCH")
+        eligible_game_ids = sorted(map(int, features.game_id.unique()))
+        excluded_ids = sorted(set(map(int, excluded_started_game_ids or [])))
+        canonical_ids = sorted(set(map(int, canonical_game_ids or [])) or
+                               (set(eligible_game_ids) | set(excluded_ids)))
+        if (set(eligible_game_ids) & set(excluded_ids)
+                or set(eligible_game_ids) | set(excluded_ids) != set(canonical_ids)):
+            raise ValueError("HGB_CANONICAL_ELIGIBILITY_PARTITION_INVALID")
+        full_game_hash = canonical_game_set_hash(canonical_ids)
         fitted = joblib.load(MODEL)
         scaler_sha = joblib.hash(fitted["scaler"]) if isinstance(fitted, dict) and "scaler" in fitted else None
         if not scaler_sha:
@@ -319,9 +338,14 @@ def capture_from_files(
             "status": "COMPLETE", "research_model_id": contract["research_model_id"],
             "production_authority": False, "blocking": False,
             "slate_date": slate_date, "season": season, "capture_phase": capture_phase,
-            "parent_run_id": parent_run_id, "canonical_game_set_hash": game_hash,
-            "canonical_game_ids": sorted(map(int, features.game_id.unique())),
-            "excluded_started_game_ids": sorted(map(int, excluded_started_game_ids or [])),
+            "parent_run_id": parent_run_id, "canonical_game_set_hash": full_game_hash,
+            "canonical_game_ids": canonical_ids, "canonical_game_count": len(canonical_ids),
+            "eligible_pregame_game_ids": eligible_game_ids,
+            "eligible_pregame_game_count": len(eligible_game_ids),
+            "eligible_game_set_hash": game_hash,
+            "started_excluded_game_ids": excluded_ids,
+            "started_excluded_game_count": len(excluded_ids),
+            "excluded_started_game_ids": excluded_ids,
             "feature_cutoff_utc": cutoff.isoformat(), "capture_timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "feature_path": "features.csv", "feature_sha256": sha(feature_out),
             "prediction_path": "predictions.csv", "prediction_sha256": sha(prediction_out),
@@ -363,7 +387,7 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
                                          parent_run_id: str, feature_cutoff_utc: str,
                                          canonical_game_set_sha256: str) -> dict[str, Any]:
     """Bind retained HGB probabilities to the normal Points line-grain contract."""
-    from backend.nhl.prediction_lineage import build_canonical_game_map
+    from backend.nhl.prediction_lineage import build_canonical_game_map, pregame_game_eligibility
 
     capture_path = Path(capture_path)
     capture_receipt = json.loads((capture_path / "receipt.json").read_text())
@@ -378,8 +402,39 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
         raise ValueError("HGB_PRODUCTION_FEATURE_PREDICTION_IDENTITY_MISMATCH")
     canonical = build_canonical_game_map(canonical_games, slate=slate_date,
                                          expected_game_set_hash=canonical_game_set_sha256)
-    if set(features.game_id.astype(int)) != set(canonical):
-        raise ValueError("HGB_PRODUCTION_PARTIAL_CANONICAL_SLATE")
+    eligibility = pregame_game_eligibility(canonical_games, feature_cutoff_utc)
+    eligible_ids = set(eligibility["eligible_pregame_game_ids"])
+    excluded_ids = set(eligibility["started_excluded_game_ids"])
+    feature_game_ids = set(features.game_id.astype(int))
+    if feature_game_ids - set(canonical):
+        raise ValueError("HGB_PRODUCTION_NONCANONICAL_GAME")
+    if feature_game_ids & excluded_ids:
+        raise ValueError("STARTED_GAME_PRESENT_IN_HGB_PRODUCTION_OUTPUT")
+    if feature_game_ids != eligible_ids:
+        raise ValueError("HGB_PRODUCTION_ELIGIBLE_GAME_COVERAGE_MISMATCH")
+    if capture_receipt.get("parent_run_id") != parent_run_id:
+        raise ValueError("HGB_PRODUCTION_CAPTURE_PARENT_MISMATCH")
+    if capture_receipt.get("canonical_game_ids") is not None and sorted(map(
+            int, capture_receipt["canonical_game_ids"])) != sorted(canonical):
+        raise ValueError("HGB_PRODUCTION_CAPTURE_CANONICAL_GAME_MISMATCH")
+    if capture_receipt.get("canonical_game_set_hash") not in (None, canonical_game_set_sha256):
+        raise ValueError("HGB_PRODUCTION_CAPTURE_CANONICAL_HASH_MISMATCH")
+    if capture_receipt.get("eligible_pregame_game_ids") is not None and sorted(map(
+            int, capture_receipt["eligible_pregame_game_ids"])) != sorted(eligible_ids):
+        raise ValueError("HGB_PRODUCTION_CAPTURE_ELIGIBLE_GAME_MISMATCH")
+    if capture_receipt.get("started_excluded_game_ids") is not None and sorted(map(
+            int, capture_receipt["started_excluded_game_ids"])) != sorted(excluded_ids):
+        raise ValueError("HGB_PRODUCTION_CAPTURE_EXCLUDED_GAME_MISMATCH")
+    if int(capture_receipt.get("identity_count", len(features))) != len(features):
+        raise ValueError("HGB_PRODUCTION_CAPTURE_IDENTITY_COUNT_MISMATCH")
+    if (capture_receipt.get("feature_sha256") is not None
+            and capture_receipt["feature_sha256"] != sha(capture_path / "features.csv")):
+        raise ValueError("HGB_PRODUCTION_CAPTURE_FEATURE_HASH_MISMATCH")
+    if (capture_receipt.get("prediction_sha256") is not None
+            and capture_receipt["prediction_sha256"] != sha(capture_path / "predictions.csv")):
+        raise ValueError("HGB_PRODUCTION_CAPTURE_PREDICTION_HASH_MISMATCH")
+    if int(capture_receipt.get("prediction_count", len(predictions))) != len(predictions):
+        raise ValueError("HGB_PRODUCTION_CAPTURE_PREDICTION_COUNT_MISMATCH")
     starts = pd.to_datetime(features.game_start_utc, utc=True, errors="coerce")
     cutoff = pd.Timestamp(feature_cutoff_utc)
     cutoff = cutoff.tz_localize("UTC") if cutoff.tzinfo is None else cutoff.tz_convert("UTC")
@@ -387,6 +442,45 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
         raise ValueError("HGB_PRODUCTION_NOT_STRICTLY_PREGAME")
     if not features.game_date.astype(str).eq(slate_date).all():
         raise ValueError("HGB_PRODUCTION_SLATE_DATE_MISMATCH")
+
+    phoenix_shadow = {"status": "UNAVAILABLE_PHOENIX_SHADOW_FAILED"}
+    if capture_receipt.get("phoenix_control", {}).get("status") == "BOUND":
+        phoenix_path = capture_path / "phoenix_control_predictions.csv"
+        if not phoenix_path.is_file():
+            raise ValueError("HGB_PRODUCTION_PHOENIX_CONTROL_MISSING")
+        phoenix = pd.read_csv(phoenix_path)
+        key = ["game_id", "player_id"]
+        if not set(key + ["line", "prob_over"]).issubset(phoenix.columns):
+            raise ValueError("HGB_PRODUCTION_PHOENIX_CONTROL_SCHEMA_MISSING")
+        if phoenix.duplicated(key + ["line"]).any():
+            raise ValueError("HGB_PRODUCTION_PHOENIX_CONTROL_DUPLICATE_IDENTITY")
+        phoenix_game_ids = set(pd.to_numeric(phoenix.game_id, errors="raise").astype(int))
+        if phoenix_game_ids & excluded_ids:
+            raise ValueError("STARTED_GAME_PRESENT_IN_PHOENIX_CONTROL_OUTPUT")
+        phoenix_keys = set(map(tuple, phoenix[key].drop_duplicates().astype("int64").to_numpy()))
+        hgb_keys = set(map(tuple, features[key].astype("int64").to_numpy()))
+        if phoenix_keys != hgb_keys or phoenix_game_ids != eligible_ids:
+            raise ValueError("HGB_PRODUCTION_PHOENIX_ELIGIBLE_IDENTITY_MISMATCH")
+        line_counts = phoenix.groupby(key).line.agg(list)
+        expected_lines = {0.5, 1.5, 2.5}
+        if any(set(map(float, values)) != expected_lines or len(values) != 3
+               for values in line_counts):
+            raise ValueError("HGB_PRODUCTION_PHOENIX_LINE_POPULATION_MISMATCH")
+        control = capture_receipt["phoenix_control"]
+        if control.get("parent_run_id") != parent_run_id:
+            raise ValueError("HGB_PRODUCTION_PHOENIX_PARENT_MISMATCH")
+        if control.get("prediction_sha256") != sha(phoenix_path):
+            raise ValueError("HGB_PRODUCTION_PHOENIX_HASH_MISMATCH")
+        phoenix_shadow = {
+            "status": "COMPLETE", "model": "PHOENIX_POINTS_INCUMBENT_SHADOW",
+            "model_family": "phoenix", "model_version": "phoenix_v2",
+            "path": str(phoenix_path.resolve()), "sha256": sha(phoenix_path),
+            "prediction_count": len(phoenix), "identity_count": len(phoenix_keys),
+            "eligible_pregame_game_ids": sorted(phoenix_game_ids),
+            "started_excluded_game_ids": sorted(excluded_ids),
+            "fitted_model_identity_sha256": control.get("fitted_model_identity_sha256"),
+            "feature_contract_sha256": control.get("feature_contract_sha256"),
+        }
     rows = []
     for row in features.itertuples(index=False):
         game_id, player_id = int(row.game_id), int(row.player_id)
@@ -422,10 +516,18 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
         "identity_count": int(output[key].drop_duplicates().shape[0]),
         "canonical_game_count": len(canonical),
         "canonical_game_set_hash": canonical_game_set_sha256,
+        "canonical_game_ids": sorted(canonical),
+        "eligible_pregame_game_count": len(eligible_ids),
+        "eligible_pregame_game_ids": sorted(eligible_ids),
+        "started_excluded_game_count": len(excluded_ids),
+        "started_excluded_game_ids": sorted(excluded_ids),
+        "started_exclusion_reason": "GAME_ALREADY_STARTED" if excluded_ids else None,
+        "line_count": 3,
         "parent_daily_run_id": parent_run_id,
         "feature_input_cutoff_utc": cutoff.isoformat().replace("+00:00", "Z"),
         "source_hgb_capture_path": str(capture_path.resolve()),
         "source_hgb_capture_prediction_sha256": capture_receipt["prediction_sha256"],
+        "phoenix_shadow": phoenix_shadow,
         "coherence_crossing_count": 0,
         "validated_prediction_identity": True,
     }
