@@ -2914,6 +2914,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
             "--model-family", sog_model_family,
             "--model-version", sog_model_version,
             "--feature-hash", sog_feature_hash,
+            "--parent-run-id", daily_run_id,
         ]
     )
     recorder.finish_lane(

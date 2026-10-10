@@ -160,12 +160,35 @@ class ScoreSogPoissonBaselineTests(unittest.TestCase):
             cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
             with patch("sys.argv", [
                 "load", "--pred-csv", str(pred_path), "--db-url", "postgresql://local/test",
+                "--parent-run-id", "daily-run-1",
             ]), patch.object(load_sog_predictions_denali.psycopg, "connect", return_value=connection):
                 load_sog_predictions_denali.main()
             rows = cursor.executemany.call_args.args[1]
             self.assertEqual(len(rows), 6)
             self.assertEqual({row[0] for row in rows}, {102, 103})
             self.assertNotIn(101, {row[0] for row in rows})
+
+    def test_prediction_loader_uses_model_aware_run_scoped_identity(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            pred_path = Path(temporary) / "predictions.csv"
+            scored, _ = score_predictions(_features())
+            scored.to_csv(pred_path, index=False)
+            connection = MagicMock()
+            cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
+            with patch("sys.argv", [
+                "load", "--pred-csv", str(pred_path), "--db-url", "postgresql://local/test",
+                "--model-family", "poisson_baseline", "--model-version", "baseline_v1",
+                "--feature-hash", "poisson_baseline_v1", "--parent-run-id", "daily-run-1",
+            ]), patch.object(load_sog_predictions_denali.psycopg, "connect", return_value=connection):
+                load_sog_predictions_denali.main()
+            sql, rows = cursor.executemany.call_args.args
+            self.assertIn("ON CONFLICT (prop, player_id, game_id, line, feature_hash)", sql)
+            self.assertNotIn("ON CONFLICT (player_id, game_id, prop, line)", sql)
+            self.assertEqual(len(rows), 6)
+            self.assertEqual({row[7] for row in rows}, {
+                "poisson_baseline_v1:model:poisson_baseline:version:baseline_v1:run:daily-run-1"
+            })
+            self.assertIn('"parent_daily_run_id": "daily-run-1"', rows[0][8])
 
     def test_raw_8rain_selector_only_sees_scoreable_population(self):
         with tempfile.TemporaryDirectory() as temporary:

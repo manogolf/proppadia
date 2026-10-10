@@ -27,6 +27,7 @@ If your column names differ, tweak the INSERT below accordingly.
 
 from __future__ import annotations
 import argparse
+import json
 import os
 from pathlib import Path
 
@@ -44,10 +45,14 @@ def main():
     ap.add_argument("--model-family", default="denali_blend")
     ap.add_argument("--model-version", default="phoenix_v2")
     ap.add_argument("--feature-hash", default="phoenix_v2")
+    ap.add_argument("--parent-run-id", default=None,
+                    help="Bind this observation to its immutable daily run")
     args = ap.parse_args()
 
     if not args.db_url:
         raise SystemExit("FATAL: --db-url or SUPABASE_DB_URL/DATABASE_URL is required")
+    if not args.parent_run_id:
+        raise SystemExit("FATAL: --parent-run-id is required for run-scoped SOG persistence")
 
     pred_path = Path(args.pred_csv)
     if not pred_path.exists():
@@ -150,9 +155,13 @@ def main():
             args.prop_type,      # becomes nhl.predictions.prop (e.g. "sog")
             float(r.line),
             float(r.prob_over),  # becomes p_over
-            str(r.model),        # becomes model_family (e.g. "sog_phoenix_lr")
+            str(args.model_family),
             str(args.model_version),
-            str(args.feature_hash),
+            f"{args.feature_hash}:model:{args.model_family}:version:{args.model_version}:run:{args.parent_run_id}",
+            json.dumps({
+                "base_feature_hash": str(args.feature_hash),
+                "parent_daily_run_id": str(args.parent_run_id),
+            }),
         )
         for r in df.itertuples(index=False)
     ]
@@ -171,15 +180,16 @@ def main():
       p_over,
       model_family,
       model_version,
-      feature_hash
+      feature_hash,
+      model_params
     )
-    VALUES (%s,%s,%s,%s,%s,%s,%s,%s)
-    ON CONFLICT (player_id, game_id, prop, line)
+    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    ON CONFLICT (prop, player_id, game_id, line, feature_hash)
     DO UPDATE SET
       p_over       = EXCLUDED.p_over,
       model_family = EXCLUDED.model_family,
       model_version= EXCLUDED.model_version,
-      feature_hash = EXCLUDED.feature_hash,
+      model_params = EXCLUDED.model_params,
       updated_at   = now();
     """
 
