@@ -1,0 +1,38 @@
+#!/bin/sh
+set -eu
+
+project_python="/Users/jerrystrain/Projects/.proppadia-py311-scipy1152-macos12-arm64-candidate/bin/python"
+
+if [ ! -x "$project_python" ]; then
+    printf 'Project Python is missing or not executable: %s\n' "$project_python" >&2
+    exit 127
+fi
+
+"$project_python" - "$project_python" <<'PY'
+import platform
+import sys
+from pathlib import Path
+
+expected = Path(sys.argv[1]).resolve()
+actual = Path(sys.executable).resolve()
+if actual != expected:
+    raise SystemExit(f"Python executable mismatch: expected {expected}, got {actual}")
+
+if sys.version_info[:2] != (3, 11):
+    raise SystemExit(f"Python version mismatch: expected 3.11, got {sys.version.split()[0]}")
+
+machine = platform.machine()
+if machine != "arm64":
+    raise SystemExit(f"Architecture mismatch: expected arm64, got {machine}")
+
+try:
+    import numpy
+    import scipy
+    import sklearn
+except Exception as error:
+    raise SystemExit(f"Scientific Python import failed: {type(error).__name__}: {error}") from None
+
+print(f"Python environment PASS: {actual}")
+print(f"Architecture: {machine}")
+print(f"NumPy {numpy.__version__}; SciPy {scipy.__version__}; scikit-learn {sklearn.__version__}")
+PY

@@ -4,36 +4,36 @@
 .PHONY: mlb-cleanroom-outcome-closeout-lineage-status mlb-cleanroom-bol-tb15-pregame-freeze mlb-cleanroom-bol-tb15-lifecycle-status mlb-cleanroom-bol-tb15-fixed-cohort mlb-cleanroom-bol-tb15-fixed-cohort-closeout mlb-cleanroom-bol-tb15-fixed-cohort-status mlb-cleanroom-bol-tb15-fixed-cohort-block-status mlb-cleanroom-bol-tb15-schedule-cohort mlb-cleanroom-bol-tb15-schedule-cohort-closeout mlb-cleanroom-bol-tb15-schedule-cohort-status mlb-cleanroom-bol-tb15-schedule-cohort-block-status mlb-cleanroom-bol-tb15-routine-cohort mlb-cleanroom-bol-tb15-routine-cohort-closeout mlb-cleanroom-bol-tb15-routine-cohort-status mlb-cleanroom-bol-tb15-routine-verification-status mlb-cleanroom-routine-outcome-audit mlb-player-stats-game-completeness mlb-player-stats-date-completeness mlb-player-stats-repair-game mlb-player-stats-recover-date mlb-bol-game-settlement-audit mlb-cleanroom-bol-settlement-status mlb-cleanroom-nonstandard-final-scan mlb-cleanroom-routine-history-inventory mlb-cleanroom-routine-history-replay mlb-cleanroom-routine-history-status mlb-cleanroom-routine-history-recovery-inventory mlb-cleanroom-routine-history-recovery-freeze mlb-cleanroom-routine-history-recovery-replay mlb-cleanroom-routine-history-recovery-status
 
 mlb-cleanroom-routine-history-recovery-inventory:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_recovery --mode inventory --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_recovery --mode inventory --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
 
 mlb-cleanroom-routine-history-recovery-freeze:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_recovery --mode freeze --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_recovery --mode freeze --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
 
 mlb-cleanroom-routine-history-recovery-replay:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_recovery --mode replay --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_recovery --mode replay --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
 
 mlb-cleanroom-routine-history-recovery-status:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_recovery --mode status
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_recovery --mode status
 
 mlb-cleanroom-routine-history-inventory:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_replay --mode inventory --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_replay --mode inventory --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
 
 mlb-cleanroom-routine-history-replay:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_replay --mode replay --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_replay --mode replay --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
 
 mlb-cleanroom-routine-history-status:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_replay --mode status
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.historical_routine_replay --mode status
 
 mlb-bol-game-settlement-audit:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.shortened_game_settlement_audit --mode game-audit --game-pk "$(MLB_GAME_PK)"
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.shortened_game_settlement_audit --mode game-audit --game-pk "$(MLB_GAME_PK)"
 
 mlb-cleanroom-bol-settlement-status:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.shortened_game_settlement_audit --mode settlement-status --date "$(MLB_DATE)"
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.shortened_game_settlement_audit --mode settlement-status --date "$(MLB_DATE)"
 
 mlb-cleanroom-nonstandard-final-scan:
-	.venv/bin/python -m backend.mlb.scripts.cleanroom_v1.shortened_game_settlement_audit --mode nonstandard-scan --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
+	./bin/python -m backend.mlb.scripts.cleanroom_v1.shortened_game_settlement_audit --mode nonstandard-scan --from-date "$(MLB_FROM_DATE)" --to-date "$(MLB_TO_DATE)"
 
-VENV_PY ?= .venv/bin/python
+VENV_PY ?= ./bin/python
 # Canonical model root (same default local + render); cron/runtime can still override MODEL_DIR.
 export MODEL_DIR ?= /var/data/proppadia/models
 BASE_URL ?= http://127.0.0.1:8001
@@ -368,7 +368,7 @@ MLB_PROP_REGIME_EXECUTION_CSV ?= artifacts/analysis/mlb/execution_vs_model/exten
 MLB_PROP_REGIME_OUT_DIR ?= artifacts/analysis/mlb/prop_regime_validation
 MLB_PROP_REGIME_DEPLOY_CSV ?= backend/mlb/data/prop_regime_validation/prop_regime_combined_signal.csv
 MLB_MODEL_PERFORMANCE_TO_DATE ?= $(MLB_POST_GRADE_DATE)
-MLB_MODEL_PERFORMANCE_FROM_DATE ?= $(shell python3 -c 'from datetime import date,timedelta; print((date.fromisoformat("$(MLB_MODEL_PERFORMANCE_TO_DATE)")-timedelta(days=13)).isoformat())')
+MLB_MODEL_PERFORMANCE_FROM_DATE ?= $(shell ./bin/python -c 'from datetime import date,timedelta; print((date.fromisoformat("$(MLB_MODEL_PERFORMANCE_TO_DATE)")-timedelta(days=13)).isoformat())')
 MLB_MODEL_PERFORMANCE_DAILY_CSV ?= backend/mlb/exports/model_performance/prop_daily_performance.csv
 MLB_MODEL_PERFORMANCE_SUMMARY_CSV ?= backend/mlb/exports/model_performance/prop_rolling_summary.csv
 MLB_MODEL_PERFORMANCE_SOURCE_TYPE ?= full_slate_model_pick

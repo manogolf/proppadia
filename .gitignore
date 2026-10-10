@@ -3,6 +3,8 @@
 Thumbs.db
 .idea/
 .vscode/
+!.vscode/
+!.vscode/settings.json
 .history/
 *.log
 *.swp

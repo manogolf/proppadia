@@ -115,7 +115,7 @@ if (( GAME_COUNT < MIN_GAMES )); then
   exit 0
 fi
 
-cmd=(.venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE_DATE")
+cmd=(./bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE_DATE")
 if (( ENABLE_BASE_V2 == 1 )); then
   cmd+=(--enable-base-v2-arm)
 fi

@@ -30,17 +30,17 @@ CMD
       ;;
     daily)
       cat <<'CMD'
-.venv/bin/python -m backend.nhl.cli daily --with-odds
+./bin/python -m backend.nhl.cli daily --with-odds
 CMD
       ;;
     denali-upload)
       cat <<'CMD'
-.venv/bin/python backend/nhl/scripts/export_sog_denali_book_upload.py
+./bin/python backend/nhl/scripts/export_sog_denali_book_upload.py
 CMD
       ;;
     candidates)
       cat <<'CMD'
-SLATE=$(date +%F) && .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" --segment-min-model-prob under:1.5=0.65 --segment-max-price under:1.5=100 --segment-min-ev-override over:2.5=0.15 --segment-min-gap-override over:2.5=0.07 --segment-min-ev-override under:2.5=0.19 --segment-min-gap-override under:2.5=0.10 --segment-max-price over:3.5=130 --emit-book-upload --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv --book-upload-max-fair-favorite -300
+SLATE=$(date +%F) && ./bin/python backend/nhl/scripts/select_sog_candidates_live.py --game-date "$SLATE" --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" --segment-min-model-prob under:1.5=0.65 --segment-max-price under:1.5=100 --segment-min-ev-override over:2.5=0.15 --segment-min-gap-override over:2.5=0.07 --segment-min-ev-override under:2.5=0.19 --segment-min-gap-override under:2.5=0.10 --segment-max-price over:3.5=130 --emit-book-upload --book-upload-out-csv backend/nhl/data/processed/sog_candidate_book_upload.csv --book-upload-max-fair-favorite -300
 CMD
       ;;
 eight-rain-export)
@@ -55,17 +55,17 @@ CMD
       ;;
     reconcile)
       cat <<'CMD'
-.venv/bin/python -m backend.nhl.scripts.reconcile_sog_base_vs_betonline_by_month --from-date 2025-10-07 --to-date $(date +%F) --out-csv tmp/nhl_sog_base_vs_betonline_monthly.csv --out-json tmp/nhl_sog_base_vs_betonline_monthly.json --out-rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv
+./bin/python -m backend.nhl.scripts.reconcile_sog_base_vs_betonline_by_month --from-date 2025-10-07 --to-date $(date +%F) --out-csv tmp/nhl_sog_base_vs_betonline_monthly.csv --out-json tmp/nhl_sog_base_vs_betonline_monthly.json --out-rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv
 CMD
       ;;
     walkforward)
       cat <<'CMD'
-.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward.py --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv --out-picks-csv tmp/nhl_sog_walkforward_selected.csv --out-threshold-history-csv tmp/nhl_sog_walkforward_threshold_history.csv --out-summary-json tmp/nhl_sog_walkforward_research_summary.json
+./bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward.py --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv --out-picks-csv tmp/nhl_sog_walkforward_selected.csv --out-threshold-history-csv tmp/nhl_sog_walkforward_threshold_history.csv --out-summary-json tmp/nhl_sog_walkforward_research_summary.json
 CMD
       ;;
     odds-backfill-sog)
       cat <<'CMD'
-.venv/bin/python backend/nhl/scripts/backfill_nhl_oddsapi_history.py --season 2025 --to-date 2026-03-01 --markets player_shots_on_goal_alternate --regions us --max-days 10 --sleep-ms 250
+./bin/python backend/nhl/scripts/backfill_nhl_oddsapi_history.py --season 2025 --to-date 2026-03-01 --markets player_shots_on_goal_alternate --regions us --max-days 10 --sleep-ms 250
 CMD
       ;;
     vite)
@@ -139,7 +139,7 @@ cmd="${1:-list}"
 case "$cmd" in
   eight-rain-export)
     shift
-    exec .venv/bin/python backend/nhl/scripts/run_nhl_8rain_export.py "$@"
+    exec ./bin/python backend/nhl/scripts/run_nhl_8rain_export.py "$@"
     ;;
   list)
     print_table
