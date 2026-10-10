@@ -48,6 +48,33 @@ def lineage_values(row: Dict[str, Any]) -> Dict[str, Any]:
     return {field: row.get(field) for field in LINEAGE_FIELDS if field in row}
 
 
+def persistence_feature_hash(feature_hash: str, parent_daily_run_id: Any,
+                             prop: str) -> str:
+    """Scope Points model identity to a daily observation when lineage is present.
+
+    The predictions table stores feature_hash as part of its logical uniqueness
+    key. Including the parent run lets two same-day observations coexist while
+    a retry of the same run remains an upsert.
+    """
+    if prop != "player_points":
+        return feature_hash
+    run_id = str(parent_daily_run_id or "").strip()
+    return f"{feature_hash}:run:{run_id}" if run_id else feature_hash
+
+
+def persistence_model_params(model_params: Dict[str, Any], row: Dict[str, Any],
+                             base_feature_hash: str, prop: str) -> Dict[str, Any]:
+    """Retain model identity and daily-run context in the existing JSONB field."""
+    params = dict(model_params)
+    if prop != "player_points":
+        return params
+    params.setdefault("base_feature_hash", base_feature_hash)
+    for field in LINEAGE_FIELDS:
+        if field in row:
+            params.setdefault(field, row[field])
+    return params
+
+
 def require_db_url() -> str:
     db = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL") or os.environ.get("DB")
     if not db:
@@ -303,8 +330,10 @@ def main() -> None:
                             "line": float(ln),
                             "p_over": float(p),
                             "model_family": default_model_family,
-                            "model_params": model_params,
-                            "feature_hash": default_feature_hash,
+                            "model_params": persistence_model_params(
+                                model_params, r, default_feature_hash, args.prop),
+                            "feature_hash": persistence_feature_hash(
+                                default_feature_hash, r.get("parent_daily_run_id"), args.prop),
                             "model_version": default_model_version,
                             **lineage_values(r),
                         }
@@ -332,8 +361,10 @@ def main() -> None:
                         "line": float(ln),
                         "p_over": float(p),
                         "model_family": default_model_family,
-                        "model_params": model_params,
-                        "feature_hash": default_feature_hash,
+                        "model_params": persistence_model_params(
+                            model_params, r, default_feature_hash, args.prop),
+                        "feature_hash": persistence_feature_hash(
+                            default_feature_hash, r.get("parent_daily_run_id"), args.prop),
                         "model_version": default_model_version,
                         **lineage_values(r),
                     }
@@ -345,9 +376,6 @@ def main() -> None:
                 # --- DEDUPE: avoid CardinalityViolation on ON CONFLICT DO UPDATE ---
         # Postgres errors if the same (prop, player_id, game_id, line, feature_hash)
         # appears more than once in *this* insert payload.
-        default_model_family = "phoenix"
-        default_feature_hash = "phoenix_v2"
-
         dedup: Dict[tuple, Dict[str, Any]] = {}
         for row in payload:
             # normalize naming: sometimes upstream code used prob_over; DB expects p_over
@@ -367,7 +395,13 @@ def main() -> None:
                 continue
 
             key = (prop, int(pid), int(gid), float(ln), fh)
-            # keep the *last* row we saw for this key
+            previous = dedup.get(key)
+            if previous is not None and previous != row:
+                raise SystemExit(
+                    "Conflicting duplicate prediction key in CSV: "
+                    f"prop={prop}, player_id={pid}, game_id={gid}, line={ln}, feature_hash={fh}"
+                )
+            # Exact duplicate input rows are harmless and collapse idempotently.
             dedup[key] = row
 
         payload = list(dedup.values())
@@ -432,8 +466,8 @@ def main() -> None:
             """,
             (
                 json.dumps(payload),
-                "phoenix",      # default model_family
-                "phoenix_v2",   # default feature_hash (matches your table default)
+                default_model_family,
+                default_feature_hash,
                 now,
                 now,
             ),

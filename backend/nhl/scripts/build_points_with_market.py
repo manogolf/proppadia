@@ -59,6 +59,13 @@ def read_csv_required(p: Path) -> pd.DataFrame:
     except Exception as e:
         die(f"failed reading CSV {p}: {e}")
 
+
+def _prediction_canonical_game_set_hash(predictions: pd.DataFrame) -> str:
+    values = predictions["canonical_game_set_hash"].dropna().astype(str).str.strip().unique()
+    if len(values) != 1 or not values[0]:
+        raise AttachmentIntegrityError("PREDICTION_CANONICAL_GAME_SET_HASH_INVALID")
+    return str(values[0])
+
 def melt_preds(pred: pd.DataFrame) -> pd.DataFrame:
     """
     Normalize predictions to long format with columns:
@@ -370,8 +377,14 @@ def main():
                 expected_slate_date=slate,
                 expected_season=args.odds_season,
                 expected_phase=args.odds_phase,
-                expected_game_set_hash=canonical_game_set_hash(
-                    pd.to_numeric(pred_wide["game_id"], errors="raise").astype(int)),
+                expected_game_set_hash=(
+                    _prediction_canonical_game_set_hash(pred_wide)
+                    if "canonical_game_set_hash" in pred_wide.columns
+                    else canonical_game_set_hash(
+                        pd.to_numeric(pred_wide["game_id"], errors="raise").astype(int))
+                ),
+                expected_prediction_game_ids=pd.to_numeric(
+                    pred_wide["game_id"], errors="raise").astype(int).unique().tolist(),
                 replayed=args.odds_replayed,
             )
 

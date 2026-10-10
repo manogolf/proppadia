@@ -5,7 +5,7 @@ import hashlib
 import json
 import re
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any, Iterable, Sequence
 
 import pandas as pd
 
@@ -101,7 +101,9 @@ def validate_odds_observation(
     *, observation_dir: Path, odds_json: Path, expected_manifest_sha256: str,
     expected_parent_daily_run_id: str, expected_slate_date: str,
     expected_season: int | None = None, expected_phase: str | None = None,
-    expected_game_set_hash: str | None = None, replayed: bool = False,
+    expected_game_set_hash: str | None = None,
+    expected_prediction_game_ids: Sequence[int] | None = None,
+    replayed: bool = False,
 ) -> dict[str, Any]:
     observation_dir = Path(observation_dir).resolve()
     odds_json = Path(odds_json).resolve()
@@ -133,6 +135,10 @@ def validate_odds_observation(
     if (expected_game_set_hash is not None
             and summary.get("canonical_game_set_hash") != expected_game_set_hash):
         raise AttachmentIntegrityError("ODDS_OBSERVATION_GAME_SET_MISMATCH")
+    observation_game_ids = {int(game_id) for game_id in summary.get("canonical_game_ids", [])}
+    if (expected_prediction_game_ids is not None
+            and not {int(game_id) for game_id in expected_prediction_game_ids} <= observation_game_ids):
+        raise AttachmentIntegrityError("PREDICTION_GAMES_OUTSIDE_ODDS_OBSERVATION")
     if not str(summary.get("classification", "")).startswith("CAPTURED_"):
         raise AttachmentIntegrityError("ODDS_OBSERVATION_NOT_CAPTURED")
     return {
@@ -141,6 +147,7 @@ def validate_odds_observation(
         "odds_raw_response_sha256": sha256_file(odds_json),
         "odds_observation_replayed": bool(replayed),
         "odds_observation_source_parent_daily_run_id": source_parent_daily_run_id,
+        "odds_observation_canonical_game_ids": sorted(observation_game_ids),
     }
 
 
