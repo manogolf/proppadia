@@ -18,7 +18,7 @@ from backend.nhl.scripts.refresh_nhl_8rain_catalog import validate_catalog
 
 
 ROOT = Path(__file__).resolve().parents[3]
-PYTHON = ROOT / ".venv" / "bin" / "python"
+PYTHON = ROOT / "bin" / "python"
 OBSERVATION_ROOT = ROOT / "artifacts/operational/nhl/odds_observations"
 CATALOG_ROOT = ROOT / "artifacts/operational/nhl/8rain_catalog"
 CROSS_MARKET_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow"

@@ -20,6 +20,19 @@ spec.loader.exec_module(pulse)
 
 
 class PlayerPerformancePulseTests(unittest.TestCase):
+    def test_receipt_bound_points_identity_uses_hgb_while_legacy_history_stays_phoenix(self):
+        self.assertEqual(
+            pulse.pulse._model_identity("points", {
+                "model_family": "hist_gradient_boosting",
+                "model_version": "NHL_POINTS_COUNT_HGB_V1",
+            }),
+            "hist_gradient_boosting/NHL_POINTS_COUNT_HGB_V1",
+        )
+        self.assertEqual(
+            pulse.pulse._model_identity("points"),
+            "phoenix/phoenix_v2 (per-line logistic)",
+        )
+
     def test_integrity_valid_source_unbound_transition_is_valid_learning_evidence(self):
         with tempfile.TemporaryDirectory() as temp:
             paths = []

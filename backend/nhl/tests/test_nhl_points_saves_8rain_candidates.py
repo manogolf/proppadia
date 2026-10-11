@@ -3,14 +3,15 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 import pandas as pd
 
 from backend.nhl.eightrain_adapter import build_rows, UPLOAD_COLUMNS, validate_upload
 from backend.nhl.scripts.select_nhl_points_saves_8rain_candidates import (
-    DEFAULT_POLICIES, load_active_policy, require_current_slate, select_lane,
-    select_raw_lane,
+    DEFAULT_POLICIES, bind_current_points_authority, load_active_policy,
+    require_current_slate, select_lane, select_raw_lane,
 )
 from backend.nhl.scripts.build_points_with_market import parse_points_odds
 from backend.nhl.scripts.build_saves_with_market import parse_odds_candidates
@@ -181,6 +182,76 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
             self.assertTrue(upload.edge_over.dropna().lt(0).any())
             self.assertTrue(upload.price_under.isna().all())
             self.assertEqual(set(decisions.candidate_policy_name), {"RAW_PREDICTION_COLLECTION"})
+
+    def test_raw_hgb_points_identity_is_preserved_and_phoenix_remains_separate(self):
+        raw_source = self.source(lines=(0.5,)).copy()
+        raw_common = dict(
+            lane="points", slate_date="2026-10-01", source_sha256="sha",
+            observation_id="obs", observation_manifest_sha256="manifest",
+            capture_timestamp_utc="2026-10-01T15:00:00Z",
+            team_map=self.common["team_map"], player_map=self.common["player_map"],
+            unique_name_map={}, ambiguous_team_keys=set(), ambiguous_names=set(),
+            allowed_bets={"points": {"over", "under"}}, parent_run_id="daily-1",
+            model_family="hist_gradient_boosting",
+            model_version="NHL_POINTS_COUNT_HGB_V1",
+        )
+        decisions, selected, _ = select_raw_lane(
+            raw_source, self.names, self.schedule, **raw_common,
+        )
+        self.assertEqual(set(decisions.model_family), {"hist_gradient_boosting"})
+        self.assertEqual(set(decisions.model_version), {"NHL_POINTS_COUNT_HGB_V1"})
+        self.assertEqual(set(decisions.model_identity), {
+            "NHL_POINTS_HIST_GRADIENT_BOOSTING_NHL_POINTS_COUNT_HGB_V1_REFERENCE"
+        })
+        self.assertEqual(len(selected), 1)
+        self.assertEqual(set(selected.model_version), {"NHL_POINTS_COUNT_HGB_V1"})
+
+    def test_points_source_must_match_authority_and_daily_prediction_sha(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_id = "daily-hgb"
+            run_dir = root / f"run_id={run_id}"
+            run_dir.mkdir()
+            prediction = root / "points_predictions.csv"
+            pd.DataFrame([{
+                "game_id": 100, "player_id": 10, "line": 0.5, "prob_over": 0.7,
+            }]).to_csv(prediction, index=False)
+            import hashlib
+            prediction_sha = hashlib.sha256(prediction.read_bytes()).hexdigest()
+            (run_dir / "SHA256SUMS").write_text("receipt package")
+            receipt = {
+                "parent_daily_run_id": run_id,
+                "lanes": {"points": {
+                    "status": "COMPLETE",
+                    "inputs": [{"production_authority": "NHL_POINTS_COUNT_HGB_V1"}],
+                    "outputs": [{
+                        "path": str(prediction), "sha256": prediction_sha,
+                        "fitted_model_evidence": {
+                            "model_family": "hist_gradient_boosting",
+                            "model_version": "NHL_POINTS_COUNT_HGB_V1",
+                            "prediction_artifact_sha256": prediction_sha,
+                        },
+                    }],
+                }},
+            }
+            (run_dir / "parent_receipt.json").write_text(json.dumps(receipt))
+            source = pd.DataFrame({
+                "parent_daily_run_id": [run_id],
+                "prediction_artifact_sha256": [prediction_sha],
+                "game_id": [100], "player_id": [10], "line": [0.5], "p_over": [0.7],
+            })
+            with patch("backend.nhl.scripts.select_nhl_points_saves_8rain_candidates.verify_package"), \
+                    patch("backend.nhl.scripts.select_nhl_points_saves_8rain_candidates.selected_production_authority",
+                          return_value={"production_authority": "NHL_POINTS_COUNT_HGB_V1", "authority_version": 2}):
+                bound = bind_current_points_authority(source, parent_run_id=run_id, daily_run_root=root)
+                self.assertEqual(bound["prediction_artifact_sha256"], prediction_sha)
+                source.loc[0, "prediction_artifact_sha256"] = "phoenix-or-stale-sha"
+                with self.assertRaisesRegex(ValueError, "NOT_DAILY_PRODUCTION"):
+                    bind_current_points_authority(source, parent_run_id=run_id, daily_run_root=root)
+                source.loc[0, "prediction_artifact_sha256"] = prediction_sha
+                source.loc[0, "p_over"] = 0.4
+                with self.assertRaisesRegex(ValueError, "VALUES_NOT_HGB"):
+                    bind_current_points_authority(source, parent_run_id=run_id, daily_run_root=root)
 
     def test_raw_sog_accepts_valid_probability_without_policy_or_market_quote(self):
         source = self.source(lines=(1.5, 2.5)).drop(columns=["price_over", "price_under", "p_over_mkt", "p_under_mkt", "attachment_status"])

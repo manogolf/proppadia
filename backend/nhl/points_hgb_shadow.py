@@ -551,7 +551,10 @@ def discover_daily_points_authority(*, slate_date: str,
                 continue
             selection = next((item for item in points_lane.get("inputs", [])
                               if item.get("production_authority")), {})
-            production = str(selection.get("production_authority") or "phoenix_v2")
+            production = str(selection.get("production_authority") or "")
+            if production not in {"phoenix_v2", HGB_AUTHORITY_LOCAL}:
+                # A missing authority is unavailable evidence, never a Phoenix default.
+                continue
             identity = next((item for item in points_lane.get("outputs", [])
                              if str(item.get("path", "")).endswith("points_predictions.csv")), None)
             if not identity or not Path(identity.get("path", "")).is_file():

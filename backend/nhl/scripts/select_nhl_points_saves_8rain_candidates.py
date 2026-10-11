@@ -17,6 +17,8 @@ from backend.nhl.eightrain_adapter import (
     ambiguous_player_bindings, ambiguous_player_names, load_catalogs,
     normalize_player_name, unique_player_codes_by_name,
 )
+from backend.nhl.points_hgb_promotion import HGB_AUTHORITY, selected_production_authority
+from backend.nhl.daily_capture import verify_package
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -73,6 +75,75 @@ def require_current_slate(slate_date: str, *, current_date: str) -> None:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def bind_current_points_authority(source: pd.DataFrame, *, parent_run_id: str,
+                                  daily_run_root: Path | None = None) -> dict[str, Any]:
+    """Require the attached Points population to be the selected production artifact."""
+    authority = selected_production_authority()
+    if authority.get("production_authority") != HGB_AUTHORITY:
+        raise ValueError("POINTS_PRODUCTION_AUTHORITY_IS_NOT_HGB")
+    if "prediction_artifact_sha256" not in source or "parent_daily_run_id" not in source:
+        raise ValueError("POINTS_SOURCE_PROVENANCE_MISSING")
+    run_ids = set(source.parent_daily_run_id.dropna().astype(str))
+    hashes = set(source.prediction_artifact_sha256.dropna().astype(str))
+    if run_ids != {parent_run_id} or len(hashes) != 1:
+        raise ValueError("POINTS_SOURCE_PROVENANCE_NOT_UNIFORM")
+    root = Path(daily_run_root or ROOT / "artifacts/operational/nhl/daily_runs")
+    receipt_path = root / f"run_id={parent_run_id}" / "parent_receipt.json"
+    receipt = json.loads(receipt_path.read_text())
+    verify_package(receipt_path.parent)
+    lane = (receipt.get("lanes") or {}).get("points") or {}
+    if lane.get("status") != "COMPLETE":
+        raise ValueError("POINTS_DAILY_LANE_NOT_COMPLETE")
+    selection = next((item for item in lane.get("inputs", [])
+                      if item.get("production_authority")), {})
+    if selection.get("production_authority") != authority.get("production_authority"):
+        raise ValueError("POINTS_DAILY_AUTHORITY_MISMATCH")
+    output = next((item for item in lane.get("outputs", [])
+                   if str(item.get("path", "")).endswith("/points_predictions.csv")), None)
+    if not output or output.get("sha256") not in hashes:
+        raise ValueError("POINTS_SOURCE_ARTIFACT_NOT_DAILY_PRODUCTION")
+    path = Path(output["path"])
+    if not path.is_file() or _sha256(path) != output["sha256"]:
+        raise ValueError("POINTS_DAILY_PRODUCTION_ARTIFACT_HASH_MISMATCH")
+    hgb = pd.read_csv(path)
+    if {"game_id", "player_id", "line", "prob_over"} - set(hgb.columns):
+        raise ValueError("POINTS_DAILY_PRODUCTION_SCHEMA_INVALID")
+    attached = source[["game_id", "player_id", "line", "p_over"]].copy()
+    for frame in (hgb, attached):
+        for column in ("game_id", "player_id", "line"):
+            frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    hgb = hgb[["game_id", "player_id", "line", "prob_over"]].rename(
+        columns={"prob_over": "_hgb_prob_over"})
+    attached = attached.rename(columns={"p_over": "_attached_prob_over"})
+    if (hgb.duplicated(["game_id", "player_id", "line"]).any()
+            or attached.duplicated(["game_id", "player_id", "line"]).any()):
+        raise ValueError("POINTS_SOURCE_DUPLICATE_PRODUCTION_KEYS")
+    comparison = attached.merge(hgb, on=["game_id", "player_id", "line"],
+                                how="outer", validate="one_to_one", indicator=True)
+    if (not comparison["_merge"].eq("both").all()
+            or comparison[["_attached_prob_over", "_hgb_prob_over"]].isna().any().any()
+            or (pd.to_numeric(comparison["_attached_prob_over"], errors="coerce")
+                .sub(pd.to_numeric(comparison["_hgb_prob_over"], errors="coerce"))
+                .abs().gt(1e-12).any())):
+        raise ValueError("POINTS_ATTACHMENT_VALUES_NOT_HGB_PRODUCTION")
+    evidence = output.get("fitted_model_evidence") or {}
+    if (evidence.get("model_family") != "hist_gradient_boosting"
+            or evidence.get("model_version") != HGB_AUTHORITY
+            or evidence.get("prediction_artifact_sha256") != output.get("sha256")):
+        raise ValueError("POINTS_DAILY_MODEL_IDENTITY_MISMATCH")
+    return {
+        "production_authority": HGB_AUTHORITY,
+        "authority_version": authority.get("authority_version"),
+        "model_family": evidence["model_family"],
+        "model_version": evidence["model_version"],
+        "parent_daily_run_id": parent_run_id,
+        "prediction_artifact_path": str(path.resolve()),
+        "prediction_artifact_sha256": output["sha256"],
+        "daily_receipt_path": str(receipt_path.resolve()),
+        "daily_receipt_manifest_sha256": _sha256(receipt_path.parent / "SHA256SUMS"),
+    }
 
 
 def select_lane(
@@ -332,6 +403,7 @@ def select_raw_lane(
     unique_name_map: dict[str, str], ambiguous_team_keys: set[tuple[str, str]],
     ambiguous_names: set[str], allowed_bets: dict[str, set[str]],
     parent_run_id: str,
+    model_family: str = "phoenix", model_version: str = "phoenix_v2",
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     """Preserve every valid raw model line; mapping only controls thin CSV admission."""
     lane = lane.lower()
@@ -435,7 +507,8 @@ def select_raw_lane(
         ev_under = (1.0 - model_probability) / implied_under - 1 if math.isfinite(model_probability) and math.isfinite(implied_under) else math.nan
         edge_over = model_probability - market_prob_over if math.isfinite(model_probability) and math.isfinite(market_prob_over) else math.nan
         edge_under = 1.0 - model_probability - market_prob_under if math.isfinite(model_probability) and math.isfinite(market_prob_under) else math.nan
-        model_identity = str(source_row.get("model_identity") or f"NHL_{lane.upper()}_PHOENIX_PHOENIX_V2_REFERENCE")
+        model_identity = str(source_row.get("model_identity") or
+                             f"NHL_{lane.upper()}_{model_family.upper()}_{model_version.upper()}_REFERENCE")
         prediction_identity = hashlib.sha256(json.dumps({
             "source_sha256": identity_hash, "player_id": player_id,
             "game_id": game_id, "market": lane, "line": line,
@@ -446,8 +519,8 @@ def select_raw_lane(
             "player_id": player_id, "player_name": str(source_row.get("full_name") or ""),
             "team": team, "opponent": opponent, "market": lane, "line": line,
             "side": "OVER", "model_pick": "over", "model_side_prob": model_probability,
-            "model_identity": model_identity, "model_family": "phoenix",
-            "model_version": "phoenix_v2", "run_id": parent_run_id,
+            "model_identity": model_identity, "model_family": model_family,
+            "model_version": model_version, "run_id": parent_run_id,
             "parent_daily_run_id": parent_run_id,
             "odds_observation_id": observation_id,
             "odds_observation_manifest_sha256": observation_manifest_sha256,
@@ -594,6 +667,8 @@ def main() -> None:
     if len(run_ids) != 1:
         raise ValueError(f"CURRENT_DAILY_RUN_ID_NOT_UNIQUE:{sorted(run_ids)}")
     parent_run_id = next(iter(run_ids))
+    points_source = pd.read_csv(args.points_csv)
+    points_authority = bind_current_points_authority(points_source, parent_run_id=parent_run_id)
     output_dir = Path(args.out_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     prop_outputs: list[pd.DataFrame] = []
@@ -605,7 +680,7 @@ def main() -> None:
     ):
         if args.mode == "raw":
             decisions, selected, summary = select_raw_lane(
-                pd.read_csv(source_path), names, schedule, lane=lane,
+                points_source if lane == "points" else pd.read_csv(source_path), names, schedule, lane=lane,
                 slate_date=args.slate_date, source_sha256=_sha256(source_path),
                 observation_id=observation_id,
                 observation_manifest_sha256=observation_manifest_sha256,
@@ -614,6 +689,8 @@ def main() -> None:
                 unique_name_map=unique_name_map, ambiguous_team_keys=ambiguous,
                 ambiguous_names=ambiguous_names, allowed_bets=allowed_bets,
                 parent_run_id=parent_run_id,
+                **({"model_family": points_authority["model_family"],
+                   "model_version": points_authority["model_version"]} if lane == "points" else {}),
             )
             decisions_path = output_dir / f"nhl_{lane}_raw_prediction_decisions_{args.slate_date}.csv"
             selected_path = output_dir / f"nhl_{lane}_raw_mapped_predictions_{args.slate_date}.csv"
@@ -646,6 +723,8 @@ def main() -> None:
             "odds_observation_manifest_sha256": observation_manifest_sha256,
             "capture_timestamp_utc": capture_timestamp,
         })
+        if lane == "points":
+            summary["production_authority_evidence"] = points_authority
         summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
         lane_summaries[lane] = summary
         prop_outputs.append(selected)

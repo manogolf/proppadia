@@ -410,7 +410,7 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
                 "feature_sha256": input_hash, "feature_hash_bound_by_receipt": bool(declared_input_hash),
                 "prediction_path": str(pred.relative_to(ROOT)), "prediction_sha256": pred_hash,
                 "prediction_ladder": row.get("prediction_ladder", "[]"),
-                "model_family_version": _model_identity(lane),
+                "model_family_version": _model_identity(lane, fitted_evidence if evidence_bound else None),
                 "fitted_model_identity_sha256": fitted_identity,
                 "fitted_model_evidence_bound": bool(evidence_bound),
                 "feature_values": {c: _featureval(c, row.get(c)) for c in cfg["feature_candidates"] if c in d.columns},
@@ -425,7 +425,12 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
     return pd.DataFrame(grouped.values())
 
 
-def _model_identity(lane: str) -> str:
+def _model_identity(lane: str, fitted_evidence: dict[str, Any] | None = None) -> str:
+    if fitted_evidence:
+        family = fitted_evidence.get("model_family")
+        version = fitted_evidence.get("model_version")
+        if family and version:
+            return f"{family}/{version}"
     if lane == "sog": return "poisson_baseline/baseline_v1"
     if lane == "points": return "phoenix/phoenix_v2 (per-line logistic)"
     return "phoenix_v2 goalie_saves (Poisson + eligible line calibration)"
