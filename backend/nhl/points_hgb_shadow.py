@@ -601,7 +601,7 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
                             daily_run_root: Path | None = None) -> dict[str, Any]:
     """Grade the highest available pregame phase without rebuilding predictions."""
     from backend.nhl.daily_capture import verify_package
-    from backend.nhl.scripts.grade_nhl_points_hgb_shadow import grade
+    from backend.nhl.scripts.grade_nhl_points_hgb_shadow import grade, selected_side_record
     from backend.nhl.postgame_learning import verify_reconciliation_package
 
     shadow_root = Path(shadow_root or ROOT / "artifacts/operational/nhl/points_hgb_shadow")
@@ -670,9 +670,13 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
         return {"status": "OUTCOMES_NOT_FINAL", "capture_path": str(capture)}
     report = grade(pred, outcomes)
     phoenix_thresholds = {}
+    phoenix_selected_side = None
+    selected_side_comparison = None
     if receipt.get("phoenix_control", {}).get("status") == "BOUND":
         phoenix = pd.read_csv(capture / "phoenix_control_predictions.csv")
         phoenix = phoenix.loc[phoenix.game_id.astype(int).isin(game_ids)]
+        if phoenix.duplicated(["game_id", "player_id", "line"]).any():
+            raise RuntimeError("PHOENIX_DUPLICATE_GRADE_KEY")
         phoenix_lines = phoenix.pivot(index=["game_id", "player_id"], columns="line", values="prob_over").reset_index()
         phoenix_lines = phoenix_lines.rename(columns={0.5: "prob_over_0_5", 1.5: "prob_over_1_5", 2.5: "prob_over_2_5"})
         scored_outcomes = outcomes.merge(phoenix_lines, on=["game_id", "player_id"], how="inner", validate="one_to_one")
@@ -683,6 +687,69 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
         final = scored_outcomes.official_final.astype(str).str.lower().isin({"true", "t", "1"}) if "official_final" in scored_outcomes else pd.Series(True,index=scored_outcomes.index)
         participated = scored_outcomes.participation_state.eq("PARTICIPATED") if "participation_state" in scored_outcomes else pd.Series(True,index=scored_outcomes.index)
         valid = final & participated & y_source.notna()
+        hgb_scored = pred.merge(outcomes, on=["game_id", "player_id"], how="left", validate="one_to_one")
+        hgb_points = (pd.to_numeric(hgb_scored.official_points, errors="coerce")
+                      if "official_points" in hgb_scored else
+                      pd.to_numeric(hgb_scored.official_goals, errors="coerce") +
+                      pd.to_numeric(hgb_scored.official_assists, errors="coerce"))
+        hgb_final = hgb_scored.official_final.astype(str).str.lower().isin({"true", "t", "1"}) if "official_final" in hgb_scored else pd.Series(True, index=hgb_scored.index)
+        hgb_participated = hgb_scored.participation_state.eq("PARTICIPATED") if "participation_state" in hgb_scored else pd.Series(True, index=hgb_scored.index)
+        hgb_valid = hgb_final & hgb_participated & hgb_points.notna()
+        common = hgb_scored.loc[hgb_valid, ["game_id", "player_id"]].merge(
+            phoenix_lines, on=["game_id", "player_id"], how="left", validate="one_to_one", indicator=True)
+        phoenix_probability_columns = ["prob_over_0_5", "prob_over_1_5", "prob_over_2_5"]
+        if (not common._merge.eq("both").all()
+                or common[phoenix_probability_columns].isna().any().any()):
+            raise RuntimeError("PHOENIX_MISSING_HGB_GRADEABLE_IDENTITY")
+        if set(phoenix.line.astype(float).unique()) != {0.5, 1.5, 2.5}:
+            raise RuntimeError("PHOENIX_LINE_SET_INVALID")
+        hgb_valid_rows = hgb_scored.loc[hgb_valid].reset_index(drop=True)
+        phoenix_valid = common.drop(columns="_merge").reset_index(drop=True)
+        if len(hgb_valid_rows) != int(report["hgb_metrics"]["n"] if "hgb_metrics" in report else report["n"]):
+            raise RuntimeError("HGB_SELECTED_SIDE_POPULATION_MISMATCH")
+        hgb_selected = report["selected_side_record"]
+        phoenix_selected_side = selected_side_record(
+            phoenix_valid, hgb_points.loc[hgb_valid].astype(int).to_numpy(),
+            ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5"),
+            unresolved=int((~hgb_valid).sum()))
+        # HGB selected-side rows are the same gradeable identities and use the
+        # same line and official outcome semantics as Phoenix.
+        hgb_long = hgb_valid_rows[["game_id", "player_id", "prob_over_0_5", "prob_over_1_5", "prob_over_2_5"]].melt(
+            id_vars=["game_id", "player_id"], var_name="probability_column", value_name="hgb_probability")
+        phoenix_long = phoenix_valid[["game_id", "player_id", "prob_over_0_5", "prob_over_1_5", "prob_over_2_5"]].melt(
+            id_vars=["game_id", "player_id"], var_name="probability_column", value_name="phoenix_probability")
+        paired = hgb_long.merge(phoenix_long, on=["game_id", "player_id", "probability_column"], validate="one_to_one")
+        paired["line"] = paired.probability_column.map({"prob_over_0_5": 0.5, "prob_over_1_5": 1.5, "prob_over_2_5": 2.5})
+        paired = paired.merge(hgb_valid_rows[["game_id", "player_id"]].assign(
+            official_points=hgb_points.loc[hgb_valid].astype(int).to_numpy()),
+            on=["game_id", "player_id"], validate="many_to_one")
+        paired["hgb_side"] = np.where(paired.hgb_probability >= 0.5, "OVER", "UNDER")
+        paired["phoenix_side"] = np.where(paired.phoenix_probability >= 0.5, "OVER", "UNDER")
+        paired["realized_side"] = np.where(paired.official_points >= paired.line + 0.5, "OVER", "UNDER")
+        paired["hgb_win"] = paired.hgb_side.eq(paired.realized_side)
+        paired["phoenix_win"] = paired.phoenix_side.eq(paired.realized_side)
+        disagreement = paired.hgb_side.ne(paired.phoenix_side)
+        same_side = ~disagreement
+        if (paired.loc[disagreement, "hgb_win"].astype(int) + paired.loc[disagreement, "phoenix_win"].astype(int)).ne(1).any():
+            raise RuntimeError("DISAGREEMENT_WINNER_INVARIANT_FAILED")
+        selected_side_comparison = {
+            "common_settled_line_predictions": int(len(paired)),
+            "common_player_game_identities": int(hgb_valid_rows[["game_id", "player_id"]].drop_duplicates().shape[0]),
+            "hgb_wins": int(paired.hgb_win.sum()), "hgb_losses": int((~paired.hgb_win).sum()),
+            "hgb_win_rate": float(paired.hgb_win.mean()),
+            "phoenix_wins": int(paired.phoenix_win.sum()), "phoenix_losses": int((~paired.phoenix_win).sum()),
+            "phoenix_win_rate": float(paired.phoenix_win.mean()),
+            "win_difference": int(paired.hgb_win.sum() - paired.phoenix_win.sum()),
+            "loss_difference": int((~paired.hgb_win).sum() - (~paired.phoenix_win).sum()),
+            "win_rate_difference": float(paired.hgb_win.mean() - paired.phoenix_win.mean()),
+            "side_disagreements": int(disagreement.sum()),
+            "hgb_wins_on_disagreement_rows": int(paired.loc[disagreement, "hgb_win"].sum()),
+            "phoenix_wins_on_disagreement_rows": int(paired.loc[disagreement, "phoenix_win"].sum()),
+            "disagreement_ties_or_impossible_states": int((paired.loc[disagreement, "hgb_win"].astype(int) + paired.loc[disagreement, "phoenix_win"].astype(int)).ne(1).sum()),
+            "same_side_count": int(same_side.sum()),
+            "shared_same_side_wins": int(paired.loc[same_side, "hgb_win"].sum()),
+            "shared_same_side_losses": int((~paired.loc[same_side, "hgb_win"]).sum()),
+        }
         for threshold, col in zip((1, 2, 3), ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5")):
             y = (y_source[valid].astype(int) >= threshold).astype(int).to_numpy()
             p = np.clip(scored_outcomes.loc[valid, col].astype(float).to_numpy(), 1e-12, 1 - 1e-12)
@@ -696,6 +763,7 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
     input_identity = hashlib.sha256(json.dumps({"capture_manifest_sha256":capture_manifest_sha,
         "prediction_sha256":production_prediction_sha256 or receipt["prediction_sha256"],
         "outcomes_sha256":outcome_sha,
+        "selected_side_contract":"POINTS_SELECTED_SIDE_AT_0_5_V1",
         "game_ids":sorted(game_ids)}, sort_keys=True).encode()).hexdigest()
     grade_root = shadow_root / "grades" / f"season={season}" / f"slate_date={slate_date}" / f"capture={capture.name}" / f"grade={input_identity[:20]}"
     # A prior failed grade may have created its destination before finishing.
@@ -713,7 +781,7 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
         existing["grade_sha256"] = sha(grade_root / "grade.json")
         return existing
     grade_root.mkdir(parents=True, exist_ok=False)
-    result = {"schema_version":"NHL_POINTS_HGB_SHADOW_GRADE_V1", "status":"COMPLETE",
+    result = {"schema_version":"NHL_POINTS_HGB_SHADOW_GRADE_V2", "status":"COMPLETE",
         "slate_date":slate_date, "capture_path":str(capture), "capture_manifest_sha256":capture_manifest_sha,
         "hgb_prediction_sha256":receipt["prediction_sha256"], "model_identity":receipt["model_identity"],
         "evaluation_role":"PRODUCTION" if hgb_is_production else "SHADOW",
@@ -730,6 +798,8 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
         "official_outcome_path":str(outcomes_path), "official_outcome_sha256":outcome_sha,
         "official_outcome_identity":input_identity, "hgb_metrics":report,
         "phoenix_same_capture_threshold_metrics":phoenix_thresholds,
+        "phoenix_same_capture_selected_side_record":phoenix_selected_side,
+        "selected_side_comparison":selected_side_comparison,
         "phoenix_prediction_sha256":receipt.get("phoenix_control", {}).get("prediction_sha256"),
         "comparison_type":"DESCRIPTIVE_SAME_CAPTURE_CONTROL", "promotion_decision_from_single_slate":False}
     (grade_root / "grade.json").write_text(json.dumps(result, indent=2, sort_keys=True)+"\n")

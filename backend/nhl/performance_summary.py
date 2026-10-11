@@ -1201,6 +1201,28 @@ def render_markdown(summary: dict[str, Any]) -> str:
                         f"average threshold log loss="
                         f"{metrics.get('average_threshold_log_loss', 'unavailable')}; "
                         f"grade SHA={evaluation.get('grade_sha256', 'unavailable')}.")
+                    comparison = evaluation.get("selected_side_comparison")
+                    phoenix_record = evaluation.get("phoenix_same_capture_selected_side_record")
+                    hgb_record = metrics.get("selected_side_record", {})
+                    if comparison and phoenix_record:
+                        lines.append(
+                            "Same-capture selected-side record: "
+                            f"HGB {hgb_record.get('wins', 0)}-{hgb_record.get('losses', 0)} "
+                            f"({hgb_record.get('win_rate', 0):.1%}); Phoenix "
+                            f"{phoenix_record.get('wins', 0)}-{phoenix_record.get('losses', 0)} "
+                            f"({phoenix_record.get('win_rate', 0):.1%}); "
+                            f"{comparison.get('common_player_game_identities', 0)} identities, "
+                            f"{comparison.get('common_settled_line_predictions', 0)} line predictions.")
+                        for line, hgb_line in hgb_record.get("by_line", {}).items():
+                            phoenix_line = phoenix_record.get("by_line", {}).get(line, {})
+                            lines.append(
+                                f"  Line {line}: HGB {hgb_line.get('wins', 0)}-"
+                                f"{hgb_line.get('losses', 0)}; Phoenix "
+                                f"{phoenix_line.get('wins', 0)}-{phoenix_line.get('losses', 0)}.")
+                        lines.append(
+                            f"  Disagreements: {comparison.get('side_disagreements', 0)}; "
+                            f"HGB wins {comparison.get('hgb_wins_on_disagreement_rows', 0)}, "
+                            f"Phoenix wins {comparison.get('phoenix_wins_on_disagreement_rows', 0)}.")
         return lines
 
     models = summary["models"]

@@ -362,6 +362,9 @@ def ensure_prior_learning(
             "metrics": hgb_grade.get("hgb_metrics"),
             "phoenix_same_capture_threshold_metrics": hgb_grade.get(
                 "phoenix_same_capture_threshold_metrics"),
+            "phoenix_same_capture_selected_side_record": hgb_grade.get(
+                "phoenix_same_capture_selected_side_record"),
+            "selected_side_comparison": hgb_grade.get("selected_side_comparison"),
             "comparison_type": hgb_grade.get("comparison_type"),
         }
     performance_json, performance_md, performance = generate_from_artifacts(

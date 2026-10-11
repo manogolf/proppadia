@@ -42,13 +42,16 @@ def grade(predictions: pd.DataFrame, outcomes: pd.DataFrame) -> dict:
     graded = df.loc[participated]
     y = points.loc[participated].astype(int).to_numpy()
     mu = np.maximum(graded.expected_points.astype(float).to_numpy(), 1e-8)
+    selected_side = selected_side_record(
+        graded, y, ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5"),
+        unresolved=int(unresolved.sum()))
     out = {"n": len(graded), "identity_reconciled_count": int(df._merge.eq("both").sum()),
            "missing_outcome_count": int(df._merge.eq("left_only").sum()),
            "participated_graded_count": int(participated.sum()), "nonparticipant_count": int(nonparticipant.sum()),
            "unresolved_count": int(unresolved.sum()),
            "mean_predicted": float(mu.mean()), "mean_observed": float(y.mean()),
            "count_nll": float(-poisson.logpmf(y, mu).mean()), "crossing_count": int(((df.prob_over_0_5 < df.prob_over_1_5) | (df.prob_over_1_5 < df.prob_over_2_5)).sum()),
-           "thresholds": {}}
+           "thresholds": {}, "selected_side_record": selected_side}
     threshold_losses = []
     for line, col in zip((1, 2, 3), ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5")):
         target = (y >= line).astype(int)
@@ -64,6 +67,50 @@ def grade(predictions: pd.DataFrame, outcomes: pd.DataFrame) -> dict:
             "lift": average_precision / base_rate if average_precision is not None and base_rate > 0 else None}
     out["average_threshold_log_loss"] = float(np.mean(threshold_losses))
     return out
+
+
+def selected_side_record(graded: pd.DataFrame, points: np.ndarray,
+                         probability_columns: tuple[str, str, str], *,
+                         unresolved: int = 0) -> dict:
+    """Grade over/under at the established 0.5 probability decision threshold."""
+    lines = {}
+    side_totals = {side: {"wins": 0, "losses": 0, "settled": 0}
+                   for side in ("OVER", "UNDER")}
+    total_wins = total_losses = 0
+    for line, threshold, column in zip((0.5, 1.5, 2.5), (1, 2, 3), probability_columns):
+        p = pd.to_numeric(graded[column], errors="raise").to_numpy(dtype=float)
+        predicted_over = p >= 0.5
+        realized_over = points >= threshold
+        wins = predicted_over == realized_over
+        losses = ~wins
+        over_mask, under_mask = predicted_over, ~predicted_over
+        line_wins, line_losses = int(wins.sum()), int(losses.sum())
+        lines[str(line)] = {
+            "wins": line_wins, "losses": line_losses, "settled": len(graded),
+            "win_rate": line_wins / len(graded) if len(graded) else None,
+            "predicted_over_count": int(over_mask.sum()),
+            "predicted_under_count": int(under_mask.sum()),
+            "realized_over_count": int(realized_over.sum()),
+            "realized_under_count": int((~realized_over).sum()),
+        }
+        for side, mask in (("OVER", over_mask), ("UNDER", under_mask)):
+            side_wins = int((wins & mask).sum())
+            side_losses = int((losses & mask).sum())
+            side_totals[side]["wins"] += side_wins
+            side_totals[side]["losses"] += side_losses
+            side_totals[side]["settled"] += int(mask.sum())
+        total_wins += line_wins
+        total_losses += line_losses
+    for totals in side_totals.values():
+        totals["win_rate"] = totals["wins"] / totals["settled"] if totals["settled"] else None
+    settled = total_wins + total_losses
+    return {
+        "wins": total_wins, "losses": total_losses, "settled": settled,
+        "win_rate": total_wins / settled if settled else None, "pushes": 0,
+        "unresolved": int(unresolved),
+        "denominator_definition": "participated identities with final official points, across lines 0.5/1.5/2.5",
+        "by_line": lines, "by_selected_side": side_totals,
+    }
 
 
 def main() -> None:
