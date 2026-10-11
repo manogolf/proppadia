@@ -163,12 +163,16 @@ def select_lane(
     player_map: dict[tuple[str, str], str],
     ambiguous_player_keys: set[tuple[str, str]],
     allowed_bets: dict[str, set[str]],
-    model_family: str = "phoenix",
-    model_version: str = "phoenix_v2",
+    model_family: str | None = None,
+    model_version: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     lane = lane.lower()
     if lane not in {"points", "saves"} or policy.get("lane") != lane.upper():
         raise ValueError("PROP_LANE_POLICY_MISMATCH")
+    if lane == "points" and (not model_family or not model_version):
+        raise ValueError("POINTS_MODEL_IDENTITY_REQUIRED")
+    model_family = model_family or "phoenix"
+    model_version = model_version or "phoenix_v2"
     if lane not in allowed_bets or not {"over", "under"}.issubset(allowed_bets[lane]):
         raise ValueError(f"PROP_MARKET_NOT_SUPPORTED_BY_CATALOG:{lane}")
     if source.empty:

@@ -55,6 +55,7 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
         return select_lane(
             self.source(name=name, lines=lines), self.names, self.schedule,
             lane=lane, policy=self.policy_points if lane == "points" else self.policy_saves,
+            **({"model_family": "phoenix", "model_version": "phoenix_v2"} if lane == "points" else {}),
             **self.common,
         )
 
@@ -218,6 +219,11 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "MODEL_IDENTITY_REQUIRED"):
             select_raw_lane(self.source(lines=(0.5,)), self.names, self.schedule, **raw_common)
+        with self.assertRaisesRegex(ValueError, "MODEL_IDENTITY_REQUIRED"):
+            select_lane(
+                self.source(lines=(0.5,)), self.names, self.schedule,
+                lane="points", policy=self.policy_points, **self.common,
+            )
 
     def test_points_source_must_match_authority_and_daily_prediction_sha(self):
         with tempfile.TemporaryDirectory() as tmp:
