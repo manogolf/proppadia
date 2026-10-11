@@ -8,7 +8,10 @@ import pandas as pd
 
 from backend.nhl.daily_capture import verify_package
 from backend.nhl.daily_orchestration import DailyRunRecorder
-from backend.nhl.sog_fixed_blend import MODELS, build_predictions, capture, grade, performance_metrics
+from backend.nhl.sog_fixed_blend import (
+    MODELS, _pair_with_production_control, build_predictions, capture, grade,
+    performance_metrics,
+)
 from backend.nhl.scripts.score_sog_poisson_baseline import _poisson_tail, score_predictions
 
 
@@ -96,6 +99,20 @@ class FixedBlendTests(unittest.TestCase):
         metrics = performance_metrics(result)
         self.assertEqual(metrics["n"], 3)
         self.assertIn("3.5", metrics["by_line"])
+
+    def test_paired_grades_retain_production_selected_side(self):
+        frame, prod = self.fixture()
+        predictions = build_predictions(
+            frame, prod, run_id="r", slate_date="2026-10-10", season=2026,
+            feature_sha256="x", cutoff_utc="2026-10-10T12:00:00Z",
+            canonical_game_ids=[11])[MODELS[0]["identity"]]
+        outcomes = pd.DataFrame([{"game_id": 11, "player_id": 101, "official_sog": 3}])
+        candidate = grade(predictions, outcomes)
+        control = grade(prod.assign(line=1.5, p_over=0.6, selected_side="OVER",
+                                    shadow_lambda=1.0), outcomes)
+        paired = _pair_with_production_control(candidate, control)
+        self.assertIn("selected_side_production", paired.columns)
+        self.assertEqual(set(paired.selected_side_production), {"OVER"})
 
     def test_research_lane_is_nonblocking_and_prod_scorer_unchanged(self):
         recorder = DailyRunRecorder(run_id="r", command=[], phase="EARLY")

@@ -383,6 +383,21 @@ def _verify_daily_receipt(receipt_path: Path, slate_date: str) -> tuple[dict[str
     return receipt, _sha(run_dir / "SHA256SUMS")
 
 
+def _validate_production_sog_game_set(
+    receipt: dict[str, Any], output_identity: dict[str, Any], predictions: pd.DataFrame,
+) -> None:
+    """Bind predictions to the frozen slate and its run-time eligible subset."""
+    canonical_ids = sorted(map(int, receipt.get("canonical_game_ids", [])))
+    game_hash = canonical_game_set_hash(canonical_ids)
+    eligible_ids = sorted(map(int, receipt.get("eligible_pregame_game_ids") or canonical_ids))
+    prediction_ids = sorted(map(int, predictions.game_id.unique()))
+    if (game_hash != receipt.get("canonical_game_set_hash")
+            or not set(eligible_ids).issubset(set(canonical_ids))
+            or prediction_ids != eligible_ids
+            or output_identity.get("canonical_game_set_hash") != game_hash):
+        raise ValueError("PRODUCTION_SOG_CANONICAL_GAME_SET_MISMATCH")
+
+
 def build_production_sog_reference(
     *, slate_date: str, package: Path, daily_run_root: Path,
     market_coverage: dict[str, Any] | None = None,
@@ -464,10 +479,8 @@ def build_production_sog_reference(
         raise ValueError("PRODUCTION_SOG_DUPLICATE_PLAYER_GAME_IDENTITY")
     canonical_ids = sorted(map(int, receipt.get("canonical_game_ids", [])))
     game_hash = canonical_game_set_hash(canonical_ids)
-    if (game_hash != receipt.get("canonical_game_set_hash")
-            or sorted(map(int, predictions.game_id.unique())) != canonical_ids
-            or output_identity.get("canonical_game_set_hash") != game_hash):
-        raise ValueError("PRODUCTION_SOG_CANONICAL_GAME_SET_MISMATCH")
+    eligible_ids = sorted(map(int, receipt.get("eligible_pregame_game_ids") or canonical_ids))
+    _validate_production_sog_game_set(receipt, output_identity, predictions)
     if len(predictions) != int(output_identity.get("natural_identity_count", len(predictions))):
         raise ValueError("PRODUCTION_SOG_PREDICTION_ROW_COUNT_MISMATCH")
 
@@ -483,6 +496,9 @@ def build_production_sog_reference(
     outcomes = outcomes.rename(columns={"participation_state": "participation_status"})
     outcomes["participation_status"] = outcomes.participation_status.replace({"PARTICIPATED": "APPEARED"})
     outcomes["canonical_season"] = pd.to_numeric(outcomes.canonical_season, errors="raise").astype(int)
+    # Started games remain in the canonical slate and outcome package, but are
+    # outside this run's prospective prediction population.
+    eligible_outcomes = outcomes[outcomes.game_id.astype(int).isin(eligible_ids)].copy()
 
     line_probabilities = ((1.5, "p_over_1_5"), (2.5, "p_over_2_5"), (3.5, "p_over_3_5"))
     long_rows = []
@@ -501,7 +517,7 @@ def build_production_sog_reference(
         rows["selected_side"] = rows.p_over.ge(0.5).map({True: "OVER", False: "UNDER"})
         long_rows.append(rows)
     graded = grade_sog_predictions(
-        pd.concat(long_rows, ignore_index=True), outcomes,
+        pd.concat(long_rows, ignore_index=True), eligible_outcomes,
         grading_timestamp_utc=datetime.now(timezone.utc).isoformat())
     display = _grouped_props(graded, lane="sog")
     total = display["overall"]
@@ -520,13 +536,17 @@ def build_production_sog_reference(
         **feature_binding,
         "scorer": expected_scorer_path, "scorer_sha256": scorer.get("sha256"),
         "canonical_game_ids": canonical_ids, "canonical_game_set_hash": game_hash,
+        "eligible_pregame_game_ids": eligible_ids,
+        "started_excluded_game_ids": sorted(map(
+            int, receipt.get("started_excluded_game_ids", []))),
         "downstream_export_reference": True,
         "downstream_export": "bin/nhl_ops.sh eight-rain-export --latest-refresh",
         "side_selection": "OVER when p_over >= 0.5; otherwise UNDER",
     }
 
     prediction_keys = set(map(tuple, predictions[["game_id", "player_id"]].astype("int64").to_numpy()))
-    outcome_keys = set(map(tuple, outcomes[["game_id", "player_id"]].astype("int64").to_numpy()))
+    outcome_keys = set(map(tuple, eligible_outcomes[["game_id", "player_id"]]
+                           .astype("int64").to_numpy()))
     missing_prediction_keys = outcome_keys - prediction_keys
     prediction_without_outcome_keys = prediction_keys - outcome_keys
     missing_predictions_path = package / "graded_sog_missing_predictions.csv"
@@ -536,12 +556,6 @@ def build_production_sog_reference(
         missing_predictions = pd.read_csv(missing_predictions_path)
         if not {"game_id", "player_id", "reason"}.issubset(missing_predictions.columns):
             raise ValueError("PRODUCTION_SOG_MISSING_PREDICTIONS_SCHEMA_MISSING")
-        package_missing_keys = set(map(tuple, missing_predictions[["game_id", "player_id"]]
-                                       .astype("int64").to_numpy()))
-        if package_missing_keys != missing_prediction_keys:
-            raise ValueError("PRODUCTION_SOG_MISSING_PREDICTIONS_IDENTITY_MISMATCH")
-    elif missing_prediction_keys:
-        raise ValueError("PRODUCTION_SOG_MISSING_PREDICTIONS_ARTIFACT_MISSING")
     unscored_item = next((item for item in lane.get("outputs", [])
                           if str(item.get("path", "")).endswith("sog_predictions_unscored.csv")), None)
     unscored_rows = pd.DataFrame()
@@ -556,17 +570,19 @@ def build_production_sog_reference(
                       unscored_rows.reason.fillna("UNSPECIFIED").value_counts().items()}
                      if "reason" in unscored_rows else {})
     if missing_prediction_keys:
-        for reason, count in missing_predictions.reason.fillna("UNSPECIFIED").value_counts().items():
-            key = f"MISSING_PREDICTION:{reason}"
-            reason_counts[key] = reason_counts.get(key, 0) + int(count)
+        key = "MISSING_PREDICTION:NOT_IN_PRODUCTION_PREDICTION_ARTIFACT"
+        reason_counts[key] = len(missing_prediction_keys)
     source_exclusion_keys = (set(map(tuple, unscored_rows[["game_id", "player_id"]]
                                      .drop_duplicates().astype("int64").to_numpy()))
                              if {"game_id", "player_id"}.issubset(unscored_rows.columns)
                              else set())
-    unscored_union = missing_prediction_keys | source_exclusion_keys
+    eligible_source_exclusion_keys = {
+        key for key in source_exclusion_keys if int(key[0]) in set(eligible_ids)
+    }
+    unscored_union = missing_prediction_keys | eligible_source_exclusion_keys
     display["unscored"] = {
         "missing_prediction_identities": len(missing_prediction_keys),
-        "source_exclusions": len(source_exclusion_keys),
+        "source_exclusions": len(eligible_source_exclusion_keys),
         "unscored_identities": len(unscored_union),
         "predictions_without_official_outcome_identities": len(prediction_without_outcome_keys),
         "unscored_reason_counts": reason_counts,

@@ -619,7 +619,7 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
                 continue
             candidates.append((phase_order.get(str(receipt.get("capture_phase", "")).upper(), -1),
                                str(receipt.get("capture_timestamp_utc", "")), capture, receipt))
-        except (OSError, ValueError, KeyError, json.JSONDecodeError):
+        except (OSError, ValueError, KeyError, RuntimeError, json.JSONDecodeError):
             continue
     if not candidates:
         return {"status": "NOT_AVAILABLE", "reason": "NO_VALID_IMMUTABLE_HGB_CAPTURE"}

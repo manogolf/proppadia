@@ -234,6 +234,14 @@ def grade(predictions: pd.DataFrame, outcomes: pd.DataFrame) -> pd.DataFrame:
     return joined
 
 
+def _pair_with_production_control(graded: pd.DataFrame, control: pd.DataFrame) -> pd.DataFrame:
+    columns = ["game_id", "player_id", "line", "shots_on_goal", "p_over",
+               "shadow_lambda", "selected_side", "correct_side"]
+    return graded.merge(control[columns],
+                        on=["game_id", "player_id", "line", "shots_on_goal"],
+                        suffixes=("", "_production"), validate="one_to_one")
+
+
 def performance_metrics(frame: pd.DataFrame) -> dict[str, Any]:
     settled = frame[frame.brier.notna()].copy()
     result: dict[str, Any] = {"n": int(len(settled)), "unsettled_n": int(len(frame) - len(settled))}
@@ -296,9 +304,7 @@ def grade_slate(*, slate_date: str, reconciliation_package: Path,
             pred = pd.read_csv(pred_path)
             graded = grade(pred, outcomes)
             control = grade(pd.read_csv(package / "production_control.csv"), outcomes)
-            paired = graded.merge(control[["game_id", "player_id", "line", "shots_on_goal", "p_over", "shadow_lambda", "correct_side"]],
-                                  on=["game_id", "player_id", "line", "shots_on_goal"], suffixes=("", "_production"),
-                                  validate="one_to_one")
+            paired = _pair_with_production_control(graded, control)
             production_over_ids = set(control.loc[control.line.eq(1.5) & control.selected_side.eq("OVER"), "player_id"])
             player_d10 = control[["player_id", "d10_sog_per60"]].drop_duplicates("player_id")
             player_d10["d10_sog_per60"] = pd.to_numeric(player_d10.d10_sog_per60, errors="coerce")

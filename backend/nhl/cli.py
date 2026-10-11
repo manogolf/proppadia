@@ -156,9 +156,9 @@ _ACTIVE_DAILY_LANE = "shared_prerequisites"
 
 DAILY_EXECUTION_GRAPH = (
     "DATABASE_SANITY",
-    "FULL_LEAGUE_ROSTER_REFRESH",
-    "PRIOR_DATE_OUTCOME_FINALIZATION",
     "CANONICAL_SCHEDULE_AND_SLATE_VALIDATION",
+    "PRIOR_DATE_OUTCOME_FINALIZATION",
+    "FULL_LEAGUE_ROSTER_REFRESH",
     "SLATE_ROSTER_CAPTURE_AND_NORMALIZATION",
     "FEATURE_AND_PREDICTION_DURABILITY",
     "OPTIONAL_GOVERNED_ODDS_OBSERVATION",
@@ -2158,6 +2158,34 @@ def _roster_refresh_environment(
     return environment
 
 
+def _bootstrap_daily_canonical_slate(*, slate: str, recorder: DailyRunRecorder):
+    """Import and freeze today's schedule before prior learning or lane checks."""
+    run([PY, SCRIPTS_DIR / "import_schedule_today.py"], env={"SLATE_DATE": slate})
+    slate_health_path = ROOT / "artifacts" / "operational" / "nhl" / "slates" / slate / "slate_health.json"
+    if not slate_health_path.exists():
+        raise RuntimeError(f"NHL slate health missing for {slate}: {slate_health_path}")
+    slate_health = json.loads(slate_health_path.read_text())
+    if slate_health.get("slate_date") != slate or not slate_health.get("downstream_ready"):
+        raise RuntimeError(f"NHL slate not downstream-ready for {slate}: {slate_health}")
+    season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
+    completion_status = slate_health.get("completion_status")
+    if completion_status == "VALID_EMPTY_SLATE":
+        canonical_games = []
+    elif completion_status == "READY":
+        canonical_games = load_canonical_slate(
+            slate_date=slate,
+            raw_schedule_path=slate_health_path.parent / "raw_schedule_response.json",
+            slate_health_path=slate_health_path,
+        )
+    else:
+        raise RuntimeError(f"Unexpected NHL slate completion status for {slate}: {slate_health}")
+    game_ids = [int(game.game_id) for game in canonical_games]
+    game_hash = canonical_game_set_hash(game_ids)
+    recorder.set_canonical(
+        slate_date=slate, season=season, game_ids=game_ids, game_set_hash=game_hash)
+    return slate_health, canonical_games, game_hash
+
+
 # ---------- daily pipeline ----------
 
 # --- REPLACE the very top of cmd_daily(with_odds: bool) down through the two print() lines ---
@@ -2215,6 +2243,11 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
 
     # 0) DB sanity
     run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", "SELECT now();"])
+
+    # Establish and freeze the current slate before prior-day learning performs
+    # any production-lane lineage checks against retained daily receipts.
+    slate_health, canonical_games, game_hash = _bootstrap_daily_canonical_slate(
+        slate=slate, recorder=recorder)
 
     # Complete yesterday's official learning handoff before history updates.
     # Official NHL requests are governed; this path never invokes Odds API.
@@ -2349,41 +2382,12 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     # PHASE B: Build SLATE pregame features (history through yday)
     # ============================================================
 
-    # 1) Today: schedule & roster
-    run([PY, SCRIPTS_DIR / "import_schedule_today.py"], env={"SLATE_DATE": slate})
-
-    # A date-bound completion record distinguishes a valid empty slate from a
-    # failed or never-run fetch.  Never proceed from database rows alone.
-    slate_health_path = ROOT / "artifacts" / "operational" / "nhl" / "slates" / slate / "slate_health.json"
-    if not slate_health_path.exists():
-        raise RuntimeError(f"NHL slate health missing for {slate}: {slate_health_path}")
-    slate_health = json.loads(slate_health_path.read_text())
-    if slate_health.get("slate_date") != slate or not slate_health.get("downstream_ready"):
-        raise RuntimeError(f"NHL slate not downstream-ready for {slate}: {slate_health}")
+    # 1) Today's schedule was imported and frozen before prior-day learning.
+    # The date-bound health record distinguishes a verified empty slate from
+    # an uninitialized/missing schedule.
     if slate_health.get("completion_status") == "VALID_EMPTY_SLATE":
-        recorder.set_canonical(
-            slate_date=slate,
-            season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
-            game_ids=[],
-            game_set_hash=canonical_game_set_hash([]),
-        )
         print(f"ℹ️ Valid empty NHL slate for {slate} — skipping scoring/export steps.")
         return
-    if slate_health.get("completion_status") != "READY":
-        raise RuntimeError(f"Unexpected NHL slate completion status for {slate}: {slate_health}")
-
-    canonical_games = load_canonical_slate(
-        slate_date=slate,
-        raw_schedule_path=slate_health_path.parent / "raw_schedule_response.json",
-        slate_health_path=slate_health_path,
-    )
-    game_hash = canonical_game_set_hash(game.game_id for game in canonical_games)
-    recorder.set_canonical(
-        slate_date=slate,
-        season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
-        game_ids=[game.game_id for game in canonical_games],
-        game_set_hash=game_hash,
-    )
 
     # --- EARLY EXIT: no NHL games on this slate date ---
     no_games_sql = f"SELECT COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}';"
