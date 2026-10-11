@@ -403,12 +403,16 @@ def select_raw_lane(
     unique_name_map: dict[str, str], ambiguous_team_keys: set[tuple[str, str]],
     ambiguous_names: set[str], allowed_bets: dict[str, set[str]],
     parent_run_id: str,
-    model_family: str = "phoenix", model_version: str = "phoenix_v2",
+    model_family: str | None = None, model_version: str | None = None,
 ) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
     """Preserve every valid raw model line; mapping only controls thin CSV admission."""
     lane = lane.lower()
     if lane not in {"points", "saves", "shots_on_goal"}:
         raise ValueError("RAW_PROP_LANE_INVALID")
+    if lane == "points" and (not model_family or not model_version):
+        raise ValueError("POINTS_MODEL_IDENTITY_REQUIRED")
+    model_family = model_family or "phoenix"
+    model_version = model_version or "phoenix_v2"
     if lane not in allowed_bets or not {"over", "under"}.issubset(allowed_bets[lane]):
         raise ValueError(f"PROP_MARKET_NOT_SUPPORTED_BY_CATALOG:{lane}")
     required = {"player_id", "game_id", "line", "p_over", "game_date"}
@@ -710,6 +714,8 @@ def main() -> None:
                 capture_timestamp_utc=capture_timestamp,
                 team_map=team_map, player_map=player_map,
                 ambiguous_player_keys=ambiguous, allowed_bets=allowed_bets,
+                **({"model_family": points_authority["model_family"],
+                   "model_version": points_authority["model_version"]} if lane == "points" else {}),
             )
             decisions_path = output_dir / f"nhl_{lane}_candidate_decisions_{args.slate_date}.csv"
             selected_path = output_dir / f"nhl_{lane}_candidates_{args.slate_date}.csv"

@@ -168,6 +168,7 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
             unique_name_map={}, ambiguous_team_keys=set(), ambiguous_names=set(),
             allowed_bets={"points": {"over", "under"}, "saves": {"over", "under"}},
             parent_run_id="daily-1",
+            model_family="phoenix", model_version="phoenix_v2",
         )
         for lane in ("points", "saves"):
             raw_common["lane"] = lane
@@ -205,6 +206,18 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
         })
         self.assertEqual(len(selected), 1)
         self.assertEqual(set(selected.model_version), {"NHL_POINTS_COUNT_HGB_V1"})
+
+    def test_raw_points_requires_explicit_model_identity(self):
+        raw_common = dict(
+            lane="points", slate_date="2026-10-01", source_sha256="sha",
+            observation_id="obs", observation_manifest_sha256="manifest",
+            capture_timestamp_utc="2026-10-01T15:00:00Z",
+            team_map=self.common["team_map"], player_map=self.common["player_map"],
+            unique_name_map={}, ambiguous_team_keys=set(), ambiguous_names=set(),
+            allowed_bets={"points": {"over", "under"}}, parent_run_id="daily-1",
+        )
+        with self.assertRaisesRegex(ValueError, "MODEL_IDENTITY_REQUIRED"):
+            select_raw_lane(self.source(lines=(0.5,)), self.names, self.schedule, **raw_common)
 
     def test_points_source_must_match_authority_and_daily_prediction_sha(self):
         with tempfile.TemporaryDirectory() as tmp:
