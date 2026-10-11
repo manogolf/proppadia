@@ -13,6 +13,7 @@ from backend.nhl.attachment_integrity import (
     AttachmentIntegrityError,
     canonical_attachment_keys,
     prediction_rows,
+    validate_attachment_frame,
 )
 from backend.nhl.daily_capture import sha256_file
 from backend.nhl.scripts import build_saves_with_market as saves
@@ -150,6 +151,116 @@ class SavesAttachmentMixedStartTests(unittest.TestCase):
         self.assertEqual(result.loc[0, "attachment_status"], "AMBIGUOUS_ALIAS_MATCH")
         self.assertTrue(pd.isna(result.loc[0, "price_over"]))
         self.assertEqual(len(ambiguous), 2)
+
+    def test_integrity_accepts_a_matched_under_only_market(self):
+        prediction = pd.DataFrame({
+            "game_date": ["2026-10-10"], "game_id": [2026020072],
+            "player_id": [8470001], "line": [18.5],
+        })
+        attachment = prediction.assign(
+            attachment_status="MATCHED", price_over=pd.NA, price_under=-104,
+            parent_daily_run_id=RUN_ID, prediction_artifact_sha256=PRED_SHA256,
+            odds_observation_manifest_sha256=ODDS_SHA256,
+        )
+        result = validate_attachment_frame(
+            prediction_frame=prediction, attachment_frame=attachment,
+            expected_parent_daily_run_id=RUN_ID,
+            expected_prediction_sha256=PRED_SHA256,
+            expected_odds_manifest_sha256=ODDS_SHA256,
+        )
+        self.assertTrue(all(result["checks"].values()))
+        self.assertEqual(result["counts"]["matched_count"], 1)
+
+    def test_duplicate_missing_and_extra_keys_still_fail_integrity(self):
+        prediction = pd.DataFrame({
+            "game_date": ["2026-10-10", "2026-10-10"],
+            "game_id": [2026020072, 2026020072],
+            "player_id": [8470001, 8470002], "line": [18.5, 18.5],
+        })
+        attachment = prediction.assign(attachment_status="UNMATCHED")
+        with self.assertRaisesRegex(AttachmentIntegrityError, "ATTACHMENT_INTEGRITY_FAILED"):
+            validate_attachment_frame(
+                prediction_frame=prediction,
+                attachment_frame=pd.concat([attachment, attachment.iloc[[0]]], ignore_index=True),
+            )
+        with self.assertRaisesRegex(AttachmentIntegrityError, "ATTACHMENT_INTEGRITY_FAILED"):
+            validate_attachment_frame(
+                prediction_frame=prediction, attachment_frame=attachment.iloc[[0]].copy())
+        extra = attachment.copy()
+        extra.loc[1, "player_id"] = 8470099
+        with self.assertRaisesRegex(AttachmentIntegrityError, "ATTACHMENT_INTEGRITY_FAILED"):
+            validate_attachment_frame(prediction_frame=prediction, attachment_frame=extra)
+
+
+class SavesMiddayAttachmentRegressionTests(unittest.TestCase):
+    """Offline regression for the retained Oct. 11 midday observation."""
+
+    run_id = "nhldaily_20261011T195547605240Z_932ee4ee"
+    prediction_path = ROOT / "backend/nhl/data/processed/daily_runs" / run_id / "saves_predictions.csv"
+    odds_dir = ROOT / (
+        "artifacts/operational/nhl/odds_observations/season=2026/"
+        "slate_date=2026-10-11/observation=20261011T195856.810055Z_d0b3ebafeeddccfa"
+    )
+    prediction_sha = "cb23dc21b4f5e62d233018caca60df4473409e7f60a8eb2814cea9af9e891957"
+    odds_sha = "88f43db1700a700abc71017766227dac16511c855acc3baf4ff59a537df83650"
+    full_game_set_hash = "9e6df258f6f50edb36b077c118385acdcaa8b458cf43372cbb2d7ad6e0efdcf0"
+    game_ids = {2026020084, 2026020085, 2026020086}
+
+    def setUp(self) -> None:
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+
+    def replay(self, output_dir: Path) -> tuple[pd.DataFrame, dict]:
+        output_dir.mkdir(parents=True)
+        out = output_dir / "saves_with_market.csv"
+        unmatched = output_dir / "unmatched_saves.csv"
+        ambiguous = output_dir / "ambiguous_saves_alias_matches.csv"
+        report_path = output_dir / "saves_attachment_integrity.json"
+        args = [
+            "build_saves_with_market.py", "--pred", str(self.prediction_path),
+            "--names", str(ROOT / "backend/nhl/exports/daily/names/names_2026-10-11.csv"),
+            "--out", str(out), "--unmatched", str(unmatched),
+            "--ambiguous", str(ambiguous), "--integrity-report", str(report_path),
+            "--strict-current-run", "--parent-run-id", self.run_id,
+            "--expected-pred-sha256", self.prediction_sha,
+            "--odds-json", str(self.odds_dir / "raw_response.json"),
+            "--odds-observation-dir", str(self.odds_dir),
+            "--expected-odds-manifest-sha256", self.odds_sha,
+            "--odds-season", "2026", "--odds-phase", "EARLY",
+        ]
+        with patch.dict(os.environ, {"SLATE_DATE": "2026-10-11"}), patch("sys.argv", args):
+            saves.main()
+        return pd.read_csv(out), json.loads(report_path.read_text())
+
+    def test_exact_midday_replay_preserves_keys_and_is_deterministic(self):
+        self.assertEqual(sha256_file(self.prediction_path), self.prediction_sha)
+        self.assertEqual(sha256_file(self.odds_dir / "SHA256SUMS"), self.odds_sha)
+        first, report = self.replay(Path(self.temp.name) / "first")
+        second, second_report = self.replay(Path(self.temp.name) / "second")
+        predictions = prediction_rows(self.prediction_path, lane="saves")
+        self.assertEqual(len(predictions), 182)
+        self.assertEqual(len(set(canonical_attachment_keys(predictions))), 182)
+        self.assertEqual(len(first), 182)
+        self.assertEqual(len(set(canonical_attachment_keys(first))), 182)
+        self.assertEqual(set(first.game_id.astype(int)), self.game_ids)
+        self.assertEqual(set(first.parent_daily_run_id), {self.run_id})
+        self.assertEqual(set(first.prediction_artifact_sha256), {self.prediction_sha})
+        self.assertEqual(set(first.odds_observation_manifest_sha256), {self.odds_sha})
+        wide_predictions = pd.read_csv(self.prediction_path)
+        self.assertEqual(set(wide_predictions.canonical_game_set_hash),
+                         {self.full_game_set_hash})
+        self.assertEqual(report["odds_observation_canonical_game_ids"],
+                         sorted(self.game_ids))
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["counts"]["matched_count"], 13)
+        self.assertEqual(report["counts"]["unmatched_count"], 169)
+        self.assertEqual(report["counts"]["ambiguous_count"], 0)
+        self.assertEqual(report["counts"]["duplicate_prediction_key_count"], 0)
+        self.assertEqual(report["counts"]["missing_prediction_key_count"], 0)
+        self.assertEqual(report["counts"]["extra_attachment_key_count"], 0)
+        self.assertEqual(sha256_file(Path(self.temp.name) / "first/saves_with_market.csv"),
+                         sha256_file(Path(self.temp.name) / "second/saves_with_market.csv"))
+        self.assertEqual(report["counts"], second_report["counts"])
 
 
 if __name__ == "__main__":

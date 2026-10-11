@@ -176,13 +176,19 @@ def validate_attachment_frame(
         )
     )
     prices = attachment_frame.get("price_over", pd.Series([pd.NA] * len(attachment_frame), index=attachment_frame.index))
+    under_prices = attachment_frame.get(
+        "price_under", pd.Series([pd.NA] * len(attachment_frame), index=attachment_frame.index))
     matched_count = int(status.eq("MATCHED").sum())
     unmatched_count = int(status.eq("UNMATCHED").sum())
     ambiguous_count = int(status.eq("AMBIGUOUS_ALIAS_MATCH").sum())
     unknown_status_count = int((~status.isin({"MATCHED", "UNMATCHED", "AMBIGUOUS_ALIAS_MATCH"})).sum())
     ambiguous_with_price_count = int((status.eq("AMBIGUOUS_ALIAS_MATCH") & prices.notna()).sum())
     unmatched_with_price_count = int((status.eq("UNMATCHED") & prices.notna()).sum())
-    matched_without_price_count = int((status.eq("MATCHED") & prices.isna()).sum())
+    # A valid player market may expose only one side.  MATCHED means the
+    # identity/line has a usable quote, not necessarily an over quote; the
+    # downstream side selector independently rejects whichever side is absent.
+    matched_without_price_count = int(
+        (status.eq("MATCHED") & prices.isna() & under_prices.isna()).sum())
 
     lineage_failures: list[str] = []
     lineage_expectations = (
