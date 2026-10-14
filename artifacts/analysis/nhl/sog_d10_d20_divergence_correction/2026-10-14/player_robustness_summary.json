@@ -1,0 +1,16 @@
+{
+  "HIGH_D10_ONLY_SHRINK_V1": {
+    "equal_player_mean_mae_difference": -0.012602925193859351,
+    "improved": 499,
+    "players_n": 732,
+    "unchanged": 100,
+    "worsened": 133
+  },
+  "SYMMETRIC_DIVERGENCE_SHRINK_V1": {
+    "equal_player_mean_mae_difference": -0.012813212042791813,
+    "improved": 502,
+    "players_n": 732,
+    "unchanged": 30,
+    "worsened": 200
+  }
+}

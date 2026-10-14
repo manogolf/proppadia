@@ -1,0 +1,53 @@
+{
+  "blend_source_paths": [
+    "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/graded_predictions.csv",
+    "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/graded_predictions.csv"
+  ],
+  "experiment": "SYMMETRIC_DIVERGENCE_SHRINK_V1_AND_HIGH_D10_ONLY_SHRINK_V1",
+  "outputs": {
+    "calibration_bias_comparison.csv": "86836c37e14cda6d9b49b010589727b02f0fc2ffc9f51ffe424cfa299b02bf06",
+    "date_metrics.csv": "51dd7765badf113349242ee9fd8a0957c10476b199efa538416a32b2921fe14a",
+    "divergence_group_metrics.csv": "4f47cbbe9622fd2108d8126f9d149d42b2aa3d324ed2a784cbfd4957e6bfcec9",
+    "fixed_blend_comparison.csv": "1427247cbc801b27621b06ff1fca0ad7f53f5aae69bfc7f142f78e190b48f80c",
+    "historical_global_count_metrics.csv": "e90f32422d5a6bee994872c31bbb3c16818298156644ec1c9fb9231688504859",
+    "historical_line_metrics.csv": "e9edd44ad3c743d5bff84c9c78fa057813ae1d0537ce8f4222e568788cf9eb6b",
+    "historical_paired_impact.csv": "eaa71a578eb9cd2ca327e781cd14b16c7f6131827f2b0540669c03485104b11c",
+    "historical_paired_rows.csv": "fbf77289d489e5112bf4e437f3896442d504e149afb2306464a4c4b4a7920414",
+    "interaction_metrics.csv": "c6afaa896f04edaf52615aa2083de451f9280ae0df67ad0d8c2dd8088b74cb42",
+    "market_comparison.csv": "8eec7aa7178a8f9be6eb980bc12f8ad305ea3df76331866a03ed01273913076e",
+    "near_agreement_identity_check.json": "dce7c3799d994fbce413eef2bca5591061a59a1fa56836de6b54c3202e132308",
+    "player_robustness_metrics.csv": "de47f7214e0e996d492d9fd008e1de8d0178c877cd4b13cae6f8ae61e447594f",
+    "player_robustness_summary.json": "8d796e60a16d0f4488142ba4bf2b1108016391887c02ea6a16b073411aab81fa",
+    "prospective_global_count_metrics.csv": "9a6db5066b6b8746823e232c2fe23aff252898a462f62d89a6fb3ae802379374",
+    "prospective_line_metrics.csv": "eb61983c32989ac9313b599cd6c339e032c47ea10c21ef5492de2e89dfbabcb3",
+    "prospective_paired_impact.csv": "7d16174c67b845ef665dea6bf6550f160ddecd39eea671768dbdb005186aea54",
+    "prospective_paired_rows.csv": "b0659cdba4bba5ece4c93fd6ff91fc7817e653135a142980c621cafced52bdd4",
+    "report.md": "c74dd06bd4baeb5828ea1a554d0d62ce5103d3c590fc7db202b3dd47f24f65ee",
+    "residual_slope_metrics.csv": "119734a040e89d99d7a38cbb95f839247940e71829cae5549b1368d18b483d1e",
+    "signed_divergence_bin_metrics.csv": "5b15d2859683d892dbf1e43ccab807a7836b8ef9e0178b96d54adb32f7f0bf4c",
+    "summary.json": "4f66bd47107ee58661cd772a2b378190f145bd4770a8b5958c6da6b822fc0503",
+    "weekly_metrics.csv": "54829650f159f3ad9c016a5b63bc23c77402dce7cc62c4a2e5e9804607f682be"
+  },
+  "sources": [
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_validation/2026-10-14/historical_paired_rows.csv",
+      "sha256": "2c3b170c30eef3b884c7a34b4027a589c753373e098e5619a05af346a8f69676"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_validation/2026-10-14/prospective_validation_rows.csv",
+      "sha256": "b06675b9e2d4f668d4fba8af8a708459bf42403fce06fb4dff44bb22bc1e0af3"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_validation/2026-10-14/magnitude_bin_metrics.csv",
+      "sha256": "9cee33959db885b050c7a09d79b735022101f05c560ac08b63230c0e09ce458f"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_baseline_characterization/2026-10-14/market_matched_rows.csv",
+      "sha256": "118847b88a4ed457ed6cf917db7823493bd204b4a22fce44a42e5212c3d0f54c"
+    },
+    {
+      "path": "backend/nhl/scripts/score_sog_poisson_baseline.py",
+      "sha256": "cb1794d25ea91738321e1457b5d5b7be428e9e30f57e79f65f7b9bd70f532342"
+    }
+  ]
+}

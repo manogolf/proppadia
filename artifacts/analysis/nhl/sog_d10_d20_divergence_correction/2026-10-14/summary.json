@@ -1,0 +1,348 @@
+{
+  "activity": {
+    "paid_credits": 0,
+    "production_baseline_changed": false,
+    "production_db_mutations": 0,
+    "provider_calls": 0,
+    "push": false
+  },
+  "baseline_replay": {
+    "lambda_max_abs_difference": 1.3322676295501878e-15,
+    "lambda_mismatch_count_gt_1e_10": 0,
+    "lambda_rows_checked": 13369,
+    "probability_checks": [
+      {
+        "max_abs_difference": 6.38378239159465e-16,
+        "mismatch_count_gt_1e_10": 0,
+        "rows": 40107,
+        "source": "historical"
+      },
+      {
+        "max_abs_difference": 3.0010716134398763e-16,
+        "mismatch_count_gt_1e_10": 0,
+        "rows": 3321,
+        "source": "prospective"
+      }
+    ]
+  },
+  "classification": "READY_FOR_PROSPECTIVE_SHADOW_REVIEW",
+  "control": {
+    "model_family": "poisson_baseline",
+    "model_version": "baseline_v1"
+  },
+  "d10_contribution_classification": "CONDITIONAL_CONTRIBUTOR",
+  "date_stability": {
+    "HIGH_D10_ONLY_SHRINK_V1": {
+      "historical": {
+        "line_1.5_brier_dates_improved": 41,
+        "line_1.5_brier_dates_worsened": 5,
+        "line_2.5_brier_dates_improved": 41,
+        "line_2.5_brier_dates_worsened": 5,
+        "line_3.5_brier_dates_improved": 43,
+        "line_3.5_brier_dates_worsened": 3,
+        "mae_dates_improved": 43,
+        "mae_dates_tied": 0,
+        "mae_dates_worsened": 3
+      },
+      "prospective": {
+        "line_1.5_brier_dates_improved": 3,
+        "line_1.5_brier_dates_worsened": 1,
+        "line_2.5_brier_dates_improved": 4,
+        "line_2.5_brier_dates_worsened": 0,
+        "line_3.5_brier_dates_improved": 3,
+        "line_3.5_brier_dates_worsened": 1,
+        "mae_dates_improved": 4,
+        "mae_dates_tied": 0,
+        "mae_dates_worsened": 0
+      }
+    },
+    "SYMMETRIC_DIVERGENCE_SHRINK_V1": {
+      "historical": {
+        "line_1.5_brier_dates_improved": 42,
+        "line_1.5_brier_dates_worsened": 4,
+        "line_2.5_brier_dates_improved": 42,
+        "line_2.5_brier_dates_worsened": 4,
+        "line_3.5_brier_dates_improved": 44,
+        "line_3.5_brier_dates_worsened": 2,
+        "mae_dates_improved": 44,
+        "mae_dates_tied": 0,
+        "mae_dates_worsened": 2
+      },
+      "prospective": {
+        "line_1.5_brier_dates_improved": 3,
+        "line_1.5_brier_dates_worsened": 1,
+        "line_2.5_brier_dates_improved": 4,
+        "line_2.5_brier_dates_worsened": 0,
+        "line_3.5_brier_dates_improved": 3,
+        "line_3.5_brier_dates_worsened": 1,
+        "mae_dates_improved": 4,
+        "mae_dates_tied": 0,
+        "mae_dates_worsened": 0
+      }
+    }
+  },
+  "decision_criteria": {
+    "divergence_slope_reduced_historical_and_prospective": true,
+    "equal_player_mean_mae_improved": true,
+    "historical_brier_all_lines_improved": true,
+    "historical_count_error_improved": true,
+    "historical_log_loss_all_lines_improved": true,
+    "near_agreement_exact_identity": true,
+    "prospective_brier_all_lines_improved": true,
+    "prospective_count_error_improved": true,
+    "prospective_count_mae_improved_all_dates": true,
+    "prospective_log_loss_all_lines_improved": true
+  },
+  "historical_count": {
+    "HIGH_D10_ONLY_SHRINK_V1": {
+      "mae": 1.0217672221477812,
+      "mean_lambda": 1.488395955106051,
+      "mean_residual": 0.037597013702386335,
+      "median_absolute_error": 0.811407007841893,
+      "n": 13369,
+      "realized_mean_sog": 1.5259929688084375,
+      "rmse": 1.325859775248183
+    },
+    "PRODUCTION": {
+      "mae": 1.0349777478660143,
+      "mean_lambda": 1.5356602655468299,
+      "mean_residual": -0.009667296738392414,
+      "median_absolute_error": 0.8999999999999995,
+      "n": 13369,
+      "realized_mean_sog": 1.5259929688084375,
+      "rmse": 1.3377491857693706
+    },
+    "SYMMETRIC_DIVERGENCE_SHRINK_V1": {
+      "mae": 1.0206778193190904,
+      "mean_lambda": 1.5388350567644868,
+      "mean_residual": -0.012842087956049212,
+      "median_absolute_error": 0.8507499573887849,
+      "n": 13369,
+      "realized_mean_sog": 1.5259929688084375,
+      "rmse": 1.3177064296031546
+    }
+  },
+  "historical_paired": [
+    {
+      "count_absolute_error_improved": 4643,
+      "count_absolute_error_tied": 5150,
+      "count_absolute_error_worsened": 3576,
+      "count_n": 13369,
+      "line_1.5_brier_difference": -0.003945852858731878,
+      "line_1.5_brier_improved_fraction": 0.30331363602363676,
+      "line_1.5_brier_tied_fraction": 0.3852195377365547,
+      "line_1.5_brier_worsened_fraction": 0.31146682623980854,
+      "line_1.5_log_loss_difference": -0.015855804662093808,
+      "line_1.5_log_loss_improved_fraction": 0.30331363602363676,
+      "line_1.5_log_loss_tied_fraction": 0.3852195377365547,
+      "line_1.5_log_loss_worsened_fraction": 0.31146682623980854,
+      "line_2.5_brier_difference": -0.0023650282920595653,
+      "line_2.5_brier_improved_fraction": 0.29897524122971053,
+      "line_2.5_brier_tied_fraction": 0.3852195377365547,
+      "line_2.5_brier_worsened_fraction": 0.31580522103373476,
+      "line_2.5_log_loss_difference": -0.011316164524966732,
+      "line_2.5_log_loss_improved_fraction": 0.29897524122971053,
+      "line_2.5_log_loss_tied_fraction": 0.3852195377365547,
+      "line_2.5_log_loss_worsened_fraction": 0.31580522103373476,
+      "line_3.5_brier_difference": -0.0014589758023532192,
+      "line_3.5_brier_improved_fraction": 0.3014436382676341,
+      "line_3.5_brier_tied_fraction": 0.38551873737751513,
+      "line_3.5_brier_worsened_fraction": 0.3130376243548508,
+      "line_3.5_log_loss_difference": -0.007767341633696227,
+      "line_3.5_log_loss_improved_fraction": 0.3014436382676341,
+      "line_3.5_log_loss_tied_fraction": 0.3852195377365547,
+      "line_3.5_log_loss_worsened_fraction": 0.3133368239958112,
+      "mean_paired_mae_difference": -0.014299928546923852,
+      "mean_paired_squared_error_difference": -0.05322264940912034,
+      "variant": "SYMMETRIC_DIVERGENCE_SHRINK_V1"
+    },
+    {
+      "count_absolute_error_improved": 2495,
+      "count_absolute_error_tied": 9373,
+      "count_absolute_error_worsened": 1501,
+      "count_n": 13369,
+      "line_1.5_brier_difference": -0.0018999245889317544,
+      "line_1.5_brier_improved_fraction": 0.16829979804024237,
+      "line_1.5_brier_tied_fraction": 0.7010995586805295,
+      "line_1.5_brier_worsened_fraction": 0.13060064327922807,
+      "line_1.5_log_loss_difference": -0.004407788718958788,
+      "line_1.5_log_loss_improved_fraction": 0.16829979804024237,
+      "line_1.5_log_loss_tied_fraction": 0.7010995586805295,
+      "line_1.5_log_loss_worsened_fraction": 0.13060064327922807,
+      "line_2.5_brier_difference": -0.001606323170153454,
+      "line_2.5_brier_improved_fraction": 0.23113172264193282,
+      "line_2.5_brier_tied_fraction": 0.7010995586805295,
+      "line_2.5_brier_worsened_fraction": 0.06776871867753759,
+      "line_2.5_log_loss_difference": -0.003926516888769978,
+      "line_2.5_log_loss_improved_fraction": 0.23113172264193282,
+      "line_2.5_log_loss_tied_fraction": 0.7010995586805295,
+      "line_2.5_log_loss_worsened_fraction": 0.06776871867753759,
+      "line_3.5_brier_difference": -0.0011143993172870704,
+      "line_3.5_brier_improved_fraction": 0.2696536764155883,
+      "line_3.5_brier_tied_fraction": 0.7010995586805295,
+      "line_3.5_brier_worsened_fraction": 0.029246764903882116,
+      "line_3.5_log_loss_difference": -0.003303034699151794,
+      "line_3.5_log_loss_improved_fraction": 0.2696536764155883,
+      "line_3.5_log_loss_tied_fraction": 0.7010995586805295,
+      "line_3.5_log_loss_worsened_fraction": 0.029246764903882116,
+      "mean_paired_mae_difference": -0.013210525718233198,
+      "mean_paired_squared_error_difference": -0.031668740405450965,
+      "variant": "HIGH_D10_ONLY_SHRINK_V1"
+    }
+  ],
+  "near_agreement_identity": {
+    "high_d10_lambda_exactly_unchanged": true,
+    "historical_near_n": 5142,
+    "prospective_near_n": 445,
+    "prospective_predictions_exactly_unchanged": true,
+    "symmetric_lambda_exactly_unchanged": true
+  },
+  "player_equal_weighted": {
+    "HIGH_D10_ONLY_SHRINK_V1": {
+      "equal_player_mean_mae_difference": -0.012602925193859351,
+      "improved": 499,
+      "players_n": 732,
+      "unchanged": 100,
+      "worsened": 133
+    },
+    "SYMMETRIC_DIVERGENCE_SHRINK_V1": {
+      "equal_player_mean_mae_difference": -0.012813212042791813,
+      "improved": 502,
+      "players_n": 732,
+      "unchanged": 30,
+      "worsened": 200
+    }
+  },
+  "population": {
+    "historical_certified_baseline_rows": 13389,
+    "historical_dates": [
+      "2026-02-28",
+      "2026-04-15"
+    ],
+    "historical_rows": 13369,
+    "historical_valid_divergence": 13369,
+    "prospective_dates": [
+      "2026-10-10",
+      "2026-10-11",
+      "2026-10-12",
+      "2026-10-13"
+    ],
+    "prospective_rows": 1107
+  },
+  "prospective_count": {
+    "HIGH_D10_ONLY_SHRINK_V1": {
+      "mae": 1.0252260338398116,
+      "mean_lambda": 1.5148913639298311,
+      "mean_residual": -0.011729665646181614,
+      "median_absolute_error": 0.8000000000000005,
+      "n": 1107,
+      "realized_mean_sog": 1.5031616982836495,
+      "rmse": 1.334812890604303
+    },
+    "PRODUCTION": {
+      "mae": 1.039489183079507,
+      "mean_lambda": 1.5633877049981642,
+      "mean_residual": -0.06022600671451456,
+      "median_absolute_error": 0.8000000000000005,
+      "n": 1107,
+      "realized_mean_sog": 1.5031616982836495,
+      "rmse": 1.347510667526289
+    },
+    "SYMMETRIC_DIVERGENCE_SHRINK_V1": {
+      "mae": 1.0286248436179644,
+      "mean_lambda": 1.5627622420296046,
+      "mean_residual": -0.059600543745954845,
+      "median_absolute_error": 0.8560667514522395,
+      "n": 1107,
+      "realized_mean_sog": 1.5031616982836495,
+      "rmse": 1.3315369282036384
+    }
+  },
+  "prospective_paired": [
+    {
+      "count_absolute_error_improved": 369,
+      "count_absolute_error_tied": 445,
+      "count_absolute_error_worsened": 293,
+      "count_n": 1107,
+      "line_1.5_brier_difference": -0.002665315558098497,
+      "line_1.5_brier_improved_fraction": 0.2917795844625113,
+      "line_1.5_brier_tied_fraction": 0.4019873532068654,
+      "line_1.5_brier_worsened_fraction": 0.3062330623306233,
+      "line_1.5_log_loss_difference": -0.007807124832851196,
+      "line_1.5_log_loss_improved_fraction": 0.2917795844625113,
+      "line_1.5_log_loss_tied_fraction": 0.4019873532068654,
+      "line_1.5_log_loss_worsened_fraction": 0.3062330623306233,
+      "line_2.5_brier_difference": -0.0023930208507979985,
+      "line_2.5_brier_improved_fraction": 0.2971996386630533,
+      "line_2.5_brier_tied_fraction": 0.4019873532068654,
+      "line_2.5_brier_worsened_fraction": 0.3008130081300813,
+      "line_2.5_log_loss_difference": -0.008709561287081261,
+      "line_2.5_log_loss_improved_fraction": 0.2971996386630533,
+      "line_2.5_log_loss_tied_fraction": 0.4019873532068654,
+      "line_2.5_log_loss_worsened_fraction": 0.3008130081300813,
+      "line_3.5_brier_difference": -0.0011508879325973478,
+      "line_3.5_brier_improved_fraction": 0.2981029810298103,
+      "line_3.5_brier_tied_fraction": 0.4019873532068654,
+      "line_3.5_brier_worsened_fraction": 0.2999096657633243,
+      "line_3.5_log_loss_difference": -0.006277261381732889,
+      "line_3.5_log_loss_improved_fraction": 0.2981029810298103,
+      "line_3.5_log_loss_tied_fraction": 0.4019873532068654,
+      "line_3.5_log_loss_worsened_fraction": 0.2999096657633243,
+      "mean_paired_mae_difference": -0.010864339461542541,
+      "mean_paired_squared_error_difference": -0.042794407927163304,
+      "variant": "SYMMETRIC_DIVERGENCE_SHRINK_V1"
+    },
+    {
+      "count_absolute_error_improved": 214,
+      "count_absolute_error_tied": 775,
+      "count_absolute_error_worsened": 118,
+      "count_n": 1107,
+      "line_1.5_brier_difference": -0.0024256606342894864,
+      "line_1.5_brier_improved_fraction": 0.17344173441734417,
+      "line_1.5_brier_tied_fraction": 0.7000903342366757,
+      "line_1.5_brier_worsened_fraction": 0.12646793134598014,
+      "line_1.5_log_loss_difference": -0.006473005825041237,
+      "line_1.5_log_loss_improved_fraction": 0.17344173441734417,
+      "line_1.5_log_loss_tied_fraction": 0.7000903342366757,
+      "line_1.5_log_loss_worsened_fraction": 0.12646793134598014,
+      "line_2.5_brier_difference": -0.0020143358750639787,
+      "line_2.5_brier_improved_fraction": 0.23577235772357724,
+      "line_2.5_brier_tied_fraction": 0.7000903342366757,
+      "line_2.5_brier_worsened_fraction": 0.06413730803974707,
+      "line_2.5_log_loss_difference": -0.005485681222706723,
+      "line_2.5_log_loss_improved_fraction": 0.23577235772357724,
+      "line_2.5_log_loss_tied_fraction": 0.7000903342366757,
+      "line_2.5_log_loss_worsened_fraction": 0.06413730803974707,
+      "line_3.5_brier_difference": -0.0010353284415595566,
+      "line_3.5_brier_improved_fraction": 0.2682926829268293,
+      "line_3.5_brier_tied_fraction": 0.7000903342366757,
+      "line_3.5_brier_worsened_fraction": 0.031616982836495035,
+      "line_3.5_log_loss_difference": -0.0025877571198407,
+      "line_3.5_log_loss_improved_fraction": 0.2682926829268293,
+      "line_3.5_log_loss_tied_fraction": 0.7000903342366757,
+      "line_3.5_log_loss_worsened_fraction": 0.031616982836495035,
+      "mean_paired_mae_difference": -0.014263149239695237,
+      "mean_paired_squared_error_difference": -0.03405954617372923,
+      "variant": "HIGH_D10_ONLY_SHRINK_V1"
+    }
+  ],
+  "residual_slopes": {
+    "historical": {
+      "HIGH_D10_ONLY_SHRINK_V1": -0.17980679117094606,
+      "PRODUCTION": -0.24063385068909118,
+      "SYMMETRIC_DIVERGENCE_SHRINK_V1": -0.11511677083376617
+    },
+    "prospective": {
+      "HIGH_D10_ONLY_SHRINK_V1": -0.14175107162657907,
+      "PRODUCTION": -0.2094028601099583,
+      "SYMMETRIC_DIVERGENCE_SHRINK_V1": -0.0772201542054147
+    }
+  },
+  "rule": {
+    "exposure_and_other_scorer_logic": "unchanged retained production exposure and Poisson probability formulas",
+    "high_d10_only": "if divergence>0.5, corrected rate=(D10+D20)/2; else D10",
+    "symmetric": "if abs(divergence)>0.5, corrected rate=(D10+D20)/2; else D10",
+    "threshold_abs_d10_minus_d20_sog60": 0.5
+  },
+  "status": "COMPLETE_OFFLINE_RESEARCH_ONLY"
+}
