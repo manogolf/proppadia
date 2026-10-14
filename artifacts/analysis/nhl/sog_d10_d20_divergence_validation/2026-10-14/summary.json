@@ -1,0 +1,152 @@
+{
+  "activity": {
+    "paid_credits": 0,
+    "production_baseline_changed": false,
+    "production_db_mutations": 0,
+    "provider_calls": 0,
+    "push": false
+  },
+  "classification": "HISTORICALLY_REPRODUCED_SYSTEMATIC_BIAS",
+  "continuous_relationship": {
+    "intercept": -0.016370224052873694,
+    "n": 13369,
+    "pearson_p": 4.882891011932218e-110,
+    "pearson_r": -0.19099874492012023,
+    "r_squared": 0.0364805205610611,
+    "slope_ci95_high": -0.21966881749810435,
+    "slope_ci95_low": -0.261598883880078,
+    "slope_direction_matches_hypothesis": true,
+    "slope_residual_per_sog60": -0.24063385068909118,
+    "slope_se": 0.010696445505605527,
+    "spearman_p": 1.579401116979535e-116,
+    "spearman_rho": -0.19654116609891165
+  },
+  "correction_experiment_justified": true,
+  "counterfactual": {
+    "application": "all historical rows with |D10-D20| > 0.5; no parameter was fit or searched",
+    "formula": "midpoint_lambda = ((D10 rate + D20 rate) / 2) * retained production-selected TOI minutes / 60",
+    "results_path": "counterfactual_diagnostic.csv",
+    "status": "DESCRIPTIVE_FIXED_MIDPOINT_ONLY",
+    "warning": "research-only count-error comparison; not a candidate model or production change"
+  },
+  "date_supporting_days": 46,
+  "date_total_days": 46,
+  "historical_population": {
+    "baseline_line_rows": 40167,
+    "baseline_player_games": 13389,
+    "dates": [
+      "2026-02-28",
+      "2026-04-15"
+    ],
+    "model_identity_counts": [
+      {
+        "line_rows": 40167,
+        "model_or_strategy": "poisson_baseline",
+        "model_version": "baseline_v1"
+      }
+    ],
+    "prepared_source_hash_count": 46,
+    "replay_population_change": 0,
+    "source_ledger": "artifacts/analysis/model_development/nhl_season_2025_sog_baseline_reproduction/2026-07-13/nhl_season_2025_sog_reproduction_ledger_2026-07-13.csv",
+    "source_ledger_sha256": "396d2ab1d2e60629d3856b9d429ca92bbcb860c03df7f8606d8795f96b80a22b",
+    "valid_divergence_line_rows": 40107,
+    "valid_divergence_player_games": 13369
+  },
+  "historical_prospective_comparison": {
+    "historical": {
+      "divergence_quantiles": {
+        "0.05": -1.7815087025080412,
+        "0.1": -1.3421187624171014,
+        "0.25": -0.6963271677195468,
+        "0.5": 0.0,
+        "0.75": 0.6582761198259246,
+        "0.9": 1.290586388656327,
+        "0.95": 1.689436473283434
+      },
+      "material_above": {
+        "mae": 1.0884701654765434,
+        "mean_absolute_divergence": 1.1785645539140546,
+        "mean_d10": 6.937840985247113,
+        "mean_d20": 5.759276431333058,
+        "mean_divergence": 1.1785645539140546,
+        "mean_lambda": 1.8963170987116695,
+        "mean_residual": -0.3299586883142689,
+        "median_residual": -0.4999999999999998,
+        "n": 4001,
+        "realized_mean_sog": 1.5663584103974006,
+        "rmse": 1.3691117519017137
+      },
+      "material_below": {
+        "mae": 1.0171263914670479,
+        "mean_absolute_divergence": 1.2051792585778813,
+        "mean_d10": 4.673009948140764,
+        "mean_d20": 5.878189206718646,
+        "mean_divergence": -1.2051792585778813,
+        "mean_lambda": 1.286355610341148,
+        "mean_residual": 0.25884079287702527,
+        "median_residual": 0.10000000000000009,
+        "n": 4226,
+        "realized_mean_sog": 1.5451964032181733,
+        "rmse": 1.3491566560394574
+      },
+      "window": "2026-02-28_to_2026-04-15"
+    },
+    "historical_group_difference_above_minus_below": -0.5887994811912942,
+    "historical_vs_prospective_direction": "DIRECTIONAL_REPRODUCTION",
+    "material_threshold": 0.5,
+    "prospective": {
+      "divergence_quantiles": {
+        "0.05": -1.6528065302198789,
+        "0.1": -1.2408180620622764,
+        "0.25": -0.6390615993452813,
+        "0.5": 0.0,
+        "0.75": 0.6436007349813944,
+        "0.9": 1.3372980640456793,
+        "0.95": 1.7402542451780831
+      },
+      "material_above": {
+        "mae": 1.1184841830152012,
+        "mean_absolute_divergence": 1.210700671147599,
+        "mean_d10": 7.138126445073812,
+        "mean_d20": 5.927425773926214,
+        "mean_divergence": 1.210700671147599,
+        "mean_lambda": 1.9317760062155174,
+        "mean_residual": -0.3534627532034692,
+        "median_residual": -0.45077808928526397,
+        "n": 332,
+        "realized_mean_sog": 1.5783132530120483,
+        "rmse": 1.4228102741872435
+      },
+      "material_below": {
+        "mae": 1.009556380807575,
+        "mean_absolute_divergence": 1.141079788469752,
+        "mean_d10": 4.507741863883342,
+        "mean_d20": 5.648821652353095,
+        "mean_divergence": -1.141079788469752,
+        "mean_lambda": 1.27138804246859,
+        "mean_residual": 0.19224832116777382,
+        "median_residual": 0.0,
+        "n": 330,
+        "realized_mean_sog": 1.4636363636363636,
+        "rmse": 1.3208551593087352
+      },
+      "window": "2026-10-10_to_2026-10-13"
+    },
+    "prospective_reference_residuals": {
+      "material_above": -0.353,
+      "material_below": 0.192
+    }
+  },
+  "hypothesis": "material D10>D20 predicts negative actual-minus-lambda residual; material D10<D20 predicts positive residual",
+  "material_threshold_abs_d10_minus_d20_sog_per60": 0.5,
+  "player_weighting_sensitivity": {
+    "eligible_players": 732,
+    "equal_player_mean_residual_above": -0.4123592760297007,
+    "equal_player_mean_residual_below": 0.34319586245376393,
+    "player_game_threshold": 3,
+    "players_with_above_and_other": 621,
+    "players_with_both_material_directions": 567,
+    "within_player_paired_mean_difference": -0.6096752356701461
+  },
+  "status": "COMPLETE_WITH_RETAINED_FEATURE_LIMITATION"
+}

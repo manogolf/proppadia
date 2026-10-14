@@ -1,0 +1,9 @@
+{
+  "eligible_players": 732,
+  "equal_player_mean_residual_above": -0.4123592760297007,
+  "equal_player_mean_residual_below": 0.34319586245376393,
+  "player_game_threshold": 3,
+  "players_with_above_and_other": 621,
+  "players_with_both_material_directions": 567,
+  "within_player_paired_mean_difference": -0.6096752356701461
+}

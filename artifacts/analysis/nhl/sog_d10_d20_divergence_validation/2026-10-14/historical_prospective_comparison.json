@@ -1,0 +1,85 @@
+{
+  "historical": {
+    "divergence_quantiles": {
+      "0.05": -1.7815087025080412,
+      "0.1": -1.3421187624171014,
+      "0.25": -0.6963271677195468,
+      "0.5": 0.0,
+      "0.75": 0.6582761198259246,
+      "0.9": 1.290586388656327,
+      "0.95": 1.689436473283434
+    },
+    "material_above": {
+      "mae": 1.0884701654765434,
+      "mean_absolute_divergence": 1.1785645539140546,
+      "mean_d10": 6.937840985247113,
+      "mean_d20": 5.759276431333058,
+      "mean_divergence": 1.1785645539140546,
+      "mean_lambda": 1.8963170987116695,
+      "mean_residual": -0.3299586883142689,
+      "median_residual": -0.4999999999999998,
+      "n": 4001,
+      "realized_mean_sog": 1.5663584103974006,
+      "rmse": 1.3691117519017137
+    },
+    "material_below": {
+      "mae": 1.0171263914670479,
+      "mean_absolute_divergence": 1.2051792585778813,
+      "mean_d10": 4.673009948140764,
+      "mean_d20": 5.878189206718646,
+      "mean_divergence": -1.2051792585778813,
+      "mean_lambda": 1.286355610341148,
+      "mean_residual": 0.25884079287702527,
+      "median_residual": 0.10000000000000009,
+      "n": 4226,
+      "realized_mean_sog": 1.5451964032181733,
+      "rmse": 1.3491566560394574
+    },
+    "window": "2026-02-28_to_2026-04-15"
+  },
+  "historical_group_difference_above_minus_below": -0.5887994811912942,
+  "historical_vs_prospective_direction": "DIRECTIONAL_REPRODUCTION",
+  "material_threshold": 0.5,
+  "prospective": {
+    "divergence_quantiles": {
+      "0.05": -1.6528065302198789,
+      "0.1": -1.2408180620622764,
+      "0.25": -0.6390615993452813,
+      "0.5": 0.0,
+      "0.75": 0.6436007349813944,
+      "0.9": 1.3372980640456793,
+      "0.95": 1.7402542451780831
+    },
+    "material_above": {
+      "mae": 1.1184841830152012,
+      "mean_absolute_divergence": 1.210700671147599,
+      "mean_d10": 7.138126445073812,
+      "mean_d20": 5.927425773926214,
+      "mean_divergence": 1.210700671147599,
+      "mean_lambda": 1.9317760062155174,
+      "mean_residual": -0.3534627532034692,
+      "median_residual": -0.45077808928526397,
+      "n": 332,
+      "realized_mean_sog": 1.5783132530120483,
+      "rmse": 1.4228102741872435
+    },
+    "material_below": {
+      "mae": 1.009556380807575,
+      "mean_absolute_divergence": 1.141079788469752,
+      "mean_d10": 4.507741863883342,
+      "mean_d20": 5.648821652353095,
+      "mean_divergence": -1.141079788469752,
+      "mean_lambda": 1.27138804246859,
+      "mean_residual": 0.19224832116777382,
+      "median_residual": 0.0,
+      "n": 330,
+      "realized_mean_sog": 1.4636363636363636,
+      "rmse": 1.3208551593087352
+    },
+    "window": "2026-10-10_to_2026-10-13"
+  },
+  "prospective_reference_residuals": {
+    "material_above": -0.353,
+    "material_below": 0.192
+  }
+}

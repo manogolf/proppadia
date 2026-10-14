@@ -1,0 +1,25 @@
+{
+  "baseline_replay_population_unchanged": 13389,
+  "eligible_divergence_line_rows": 40107,
+  "feature_formula": "sum prior SOG / sum prior TOI minutes * 60",
+  "historical_baseline_player_games": 13389,
+  "historical_d10_d20_used_as_retained": true,
+  "historical_eligible_player_games": 13369,
+  "historical_source_field_names_match_prospective": true,
+  "historical_target_line_rows": 40167,
+  "prepared_feature_source_sha256_count": 46,
+  "production_lambda_replay_formula_check": {
+    "max_absolute_difference": 1.3322676295501878e-15,
+    "mismatch_count": 0,
+    "rows_with_retained_exposure": 13347,
+    "rows_without_retained_exposure": 22,
+    "within_1e-12": 13347
+  },
+  "prospective_validation_sample": "retained feature-bound 2026-10-10 through 2026-10-13 values; common field names and source feature SQL definition checked. No second series was reconstructed, so direct numerical reconstructed-versus-retained match counts are not applicable.",
+  "raw_history_reconstruction_performed": false,
+  "reason": "The certified prepared feature vectors already carry the pregame D10/D20 values; no rebuilt series was substituted.",
+  "reconstruction_mismatch_count": null,
+  "reconstruction_numeric_match_count": null,
+  "rows_missing_d10_or_d20": 20,
+  "strict_prior_sql_evidence": "The retained feature SQL filters g.game_date < slate_date and orders prior games by date/game_id descending before summing first 10/20 SOG and TOI."
+}

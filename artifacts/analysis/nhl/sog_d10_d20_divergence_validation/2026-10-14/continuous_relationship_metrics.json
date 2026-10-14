@@ -1,0 +1,14 @@
+{
+  "intercept": -0.016370224052873694,
+  "n": 13369,
+  "pearson_p": 4.882891011932218e-110,
+  "pearson_r": -0.19099874492012023,
+  "r_squared": 0.0364805205610611,
+  "slope_ci95_high": -0.21966881749810435,
+  "slope_ci95_low": -0.261598883880078,
+  "slope_direction_matches_hypothesis": true,
+  "slope_residual_per_sog60": -0.24063385068909118,
+  "slope_se": 0.010696445505605527,
+  "spearman_p": 1.579401116979535e-116,
+  "spearman_rho": -0.19654116609891165
+}

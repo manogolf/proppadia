@@ -1,0 +1,232 @@
+{
+  "historical_ledger": {
+    "path": "artifacts/analysis/model_development/nhl_season_2025_sog_baseline_reproduction/2026-07-13/nhl_season_2025_sog_reproduction_ledger_2026-07-13.csv",
+    "sha256": "396d2ab1d2e60629d3856b9d429ca92bbcb860c03df7f8606d8795f96b80a22b"
+  },
+  "historical_prepared_sources": [
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-02-28/sog_features/sog_features_2026-02-28_denali.csv",
+      "prepared_source_sha256": "29e5fb4afc516ae6c78bac44b139292691f76306077ce29089c8ea722d7019f0"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-01/sog_features/sog_features_2026-03-01_denali.csv",
+      "prepared_source_sha256": "bc6284bdad3f0737da85a63b54caa9c52e8bd610310502f241ec672cffff014b"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-02/sog_features/sog_features_2026-03-02_denali.csv",
+      "prepared_source_sha256": "2719c8f9f1f1f0be1720b6613d7ccf136a5cf4d628c2a77a58df2a5106c604fa"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-03/sog_features/sog_features_2026-03-03_denali.csv",
+      "prepared_source_sha256": "06b5f4b46925502a14dc298aaaad4668ba31f4095f97b50aea7e44562a0f075a"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-04/sog_features/sog_features_2026-03-04_denali.csv",
+      "prepared_source_sha256": "19730ba9b358f920b29e29942a7dc672fac08c2f6bce8a04b75eee5128db397e"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-05/sog_features/sog_features_2026-03-05_denali.csv",
+      "prepared_source_sha256": "b77ffdb432b12d41a570195caf4d7894cae82f0667f1a8d1f4b7092a9f646b81"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-06/sog_features/sog_features_2026-03-06_denali.csv",
+      "prepared_source_sha256": "7ad6ccfa5374680173a3ed2b3c8d83772f575ff62471e5f239d3cb4ea8ffd4a7"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-07/sog_features/sog_features_2026-03-07_denali.csv",
+      "prepared_source_sha256": "11e1e9cb712b3ffcf44c01e94c1613454e1046706d2ce4fb0dc36cb2fae6af1d"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-08/sog_features/sog_features_2026-03-08_denali.csv",
+      "prepared_source_sha256": "ffaa41e3fd9329501468c2d24c8648d8d3bb28286b04df12319291761f2d5fc1"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-09/sog_features/sog_features_2026-03-09_denali.csv",
+      "prepared_source_sha256": "7cfaf01ff17a528a47fb1abf5f284b04c441cb48c564d326eae5c0c97d415645"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-10/sog_features/sog_features_2026-03-10_denali.csv",
+      "prepared_source_sha256": "6414f7c7c2f460f345be05ad990bda1cd0129d036aa3067cdc637d0f1a6ad17f"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-11/sog_features/sog_features_2026-03-11_denali.csv",
+      "prepared_source_sha256": "269acb7af38203c3412fb3914fb6be873b3fab9e09a836b55cbfa1cdfdee2e24"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-12/sog_features/sog_features_2026-03-12_denali.csv",
+      "prepared_source_sha256": "7fffa3d163a84d07ab3b100e119c68b21ffe693e45995ceb0a1d97a2f977cee1"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-13/sog_features/sog_features_2026-03-13_denali.csv",
+      "prepared_source_sha256": "1a211dd83a11e25758124abb26d1fe2c3b79a34736d247cb48448f582b230445"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-14/sog_features/sog_features_2026-03-14_denali.csv",
+      "prepared_source_sha256": "204faaa7ecc86d833d0715ebc793f70e6d88014b28e618a9d6ca525757e3eb8e"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-15/sog_features/sog_features_2026-03-15_denali.csv",
+      "prepared_source_sha256": "9a1a80fa86116a29e2423a5ca7515e94a46a9b3ce6ec3fe6841f30cd04c7527f"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-16/sog_features/sog_features_2026-03-16_denali.csv",
+      "prepared_source_sha256": "054c23788224a868ccd0cbf48486ec1b18d4cea5ee212389a3eed0637292092b"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-17/sog_features/sog_features_2026-03-17_denali.csv",
+      "prepared_source_sha256": "825003645213bacd8188b203349a0c65275cadacf34e97a644b3cc748ba21c89"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-18/sog_features/sog_features_2026-03-18_denali.csv",
+      "prepared_source_sha256": "804c98ea833878575aceeb78706262c2412d0c3659e70ffdea6d4bd797e4a646"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-19/sog_features/sog_features_2026-03-19_denali.csv",
+      "prepared_source_sha256": "4e7d81d0151917edbb0d277511b6be1b0b950928d0be24aec63e00b28b7d7d44"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-20/sog_features/sog_features_2026-03-20_denali.csv",
+      "prepared_source_sha256": "6df8a1c3891d7eaa97cf10e5e5001f8966a48906e9f3710d0f625fbbfb4336a0"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-21/sog_features/sog_features_2026-03-21_denali.csv",
+      "prepared_source_sha256": "e05032cfe02c2002a6f52f3afe317d18c142ec188397776d9b224e793795aadc"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-22/sog_features/sog_features_2026-03-22_denali.csv",
+      "prepared_source_sha256": "cb7f9438f13065f120df0f00068d9a51c4526f0c18fac16698b6881e8efbc096"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-23/sog_features/sog_features_2026-03-23_denali.csv",
+      "prepared_source_sha256": "11c513c451f042f29f0a013f4afd40dd009861357312cf62e3c32c62a61e9e77"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-24/sog_features/sog_features_2026-03-24_denali.csv",
+      "prepared_source_sha256": "2aae000c914fe95c7700d8283878323237d4cd8ad8641fd41783074c58befaf1"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-25/sog_features/sog_features_2026-03-25_denali.csv",
+      "prepared_source_sha256": "12ac420e7debdbdc01582a4d871ca416954697123c367f59d2ce5c4c2512b172"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-26/sog_features/sog_features_2026-03-26_denali.csv",
+      "prepared_source_sha256": "f8fe01b5b478de0fe5584091b5d80e669acce2d1abb97e1e4362d4b1ffca241c"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-27/sog_features/sog_features_2026-03-27_denali.csv",
+      "prepared_source_sha256": "bf751435f90b37e013d31ca400f717a079bef6fae1d4f4addfbc2865eb17c821"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-28/sog_features/sog_features_2026-03-28_denali.csv",
+      "prepared_source_sha256": "76882b3329c987d07e44ca3be34009daf856910f85499520461ef6d72ff6a3b9"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-29/sog_features/sog_features_2026-03-29_denali.csv",
+      "prepared_source_sha256": "b46f90ac820d60d951eadfcd1f35664ab03574a5f6b912a68c7fb1f7f5c4ae9d"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-30/sog_features/sog_features_2026-03-30_denali.csv",
+      "prepared_source_sha256": "bc258ffa758560b1c11172db636f28828a12ac047ea85d852949d046096a1174"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-03-31/sog_features/sog_features_2026-03-31_denali.csv",
+      "prepared_source_sha256": "2c0c4d8cb23b223d5e1f9b6cba8b42bfabe4befdb768f337e84f92b9be396554"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-01/sog_features/sog_features_2026-04-01_denali.csv",
+      "prepared_source_sha256": "ad4cf6ed929eca3f9d08f59be9c7aec1142c8e435a20f341b8214cfaf946524e"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-02/sog_features/sog_features_2026-04-02_denali.csv",
+      "prepared_source_sha256": "369789db49ea8fa8d16e3b96f331617c8de6f7dbc543d3ef1768674f9eae294f"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-03/sog_features/sog_features_2026-04-03_denali.csv",
+      "prepared_source_sha256": "c0529f6bc68201ba1a987139b0d990019c35de5c50c5f7e3e5c9121c74a602e8"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-04/sog_features/sog_features_2026-04-04_denali.csv",
+      "prepared_source_sha256": "64873e41ed9e88303fc1a22bb3268fa2afc10c1bc0ca66d5463ff64ba17b4c35"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-05/sog_features/sog_features_2026-04-05_denali.csv",
+      "prepared_source_sha256": "203d3da2a8a0520eea942a75ee4d7ae9bceeaaed46c881e2dcec1bc4b375eeb6"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-06/sog_features/sog_features_2026-04-06_denali.csv",
+      "prepared_source_sha256": "1f3d204ba5bc75ea000ffeedada8c719f103f413a49f00fa5e4e303119bdef48"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-07/sog_features/sog_features_2026-04-07_denali.csv",
+      "prepared_source_sha256": "6e451bb9d0403badff69003a3047d1e9c63e807ef4f7b1ef46a2cd55e8f080b9"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-08/sog_features/sog_features_2026-04-08_denali.csv",
+      "prepared_source_sha256": "71906a517ee81e36ce6a1ef6f2fb10a1b267c5c8375fa10bc838757cee9cde7d"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-09/sog_features/sog_features_2026-04-09_denali.csv",
+      "prepared_source_sha256": "4a435a37678c0ede1242d0186293e7e98cddfd88aec9e9eb283031fc8408561d"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-11/sog_features/sog_features_2026-04-11_denali.csv",
+      "prepared_source_sha256": "32bfaef419a5cb0f36a6b2b59a57e07298db925e7341a9b1be836f1f76b4479e"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-12/sog_features/sog_features_2026-04-12_denali.csv",
+      "prepared_source_sha256": "24b58ab332409021d94cde9632da3bb427712a63a15d8ea5a3df5eb7a1c75499"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-13/sog_features/sog_features_2026-04-13_denali.csv",
+      "prepared_source_sha256": "90862a239d6964fb42bcd43422391fbf935ad33ce93e4b5b5d48020d42edb103"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-14/sog_features/sog_features_2026-04-14_denali.csv",
+      "prepared_source_sha256": "7002d44e22c374e23731d5878b57475b40ec157dbaa1da358349cf762c305006"
+    },
+    {
+      "prepared_source_path": "artifacts/archive/generated_daily/nhl/2026-04-15/sog_features/sog_features_2026-04-15_denali.csv",
+      "prepared_source_sha256": "7971fee46683d6002a599dfe90ea8d8a9e1ea542bf10b39b9b7a21edd0f8dc7c"
+    }
+  ],
+  "outputs": {
+    "continuous_relationship_metrics.json": "c7ab54787483e89fb50404073f1dd6a10ce19cf8526dda835ddde8c8af4ed24e",
+    "counterfactual_diagnostic.csv": "ed2be841eefab4b773c1fb9ec3a80e18d6bb0ec40410508c763de97b17b4fe42",
+    "counterfactual_diagnostic.json": "f5a6e9891993647792adbfe80c0bc6f61947549816bbde3e32b2bbea79496a4c",
+    "counterfactual_diagnostic_rows.csv": "e84766a7c5fb7c7539b06ad8d4d363fbdf096ef3551fb8d6a36d72a65a083ec0",
+    "d10_interaction_metrics.csv": "1d65fde5538c9d4f4e4cb0739f1d66274c0e758287a78896b4fd9539c864623e",
+    "date_period_metrics.csv": "395020f1d35406abcf1c5c715a8e20c8ad74f2ab3ac7d46fe18cdf246b21160c",
+    "exposure_interaction_metrics.csv": "afedcc1c16d60bae40c4a6ed7806cc51b640f51a7a41649bea77c94a6768797f",
+    "extreme_tail_metrics.csv": "2a22385d50ac44ddaea7d633d0723686c20e9000af19e22e618f97e5d092bbda",
+    "historical_paired_rows.csv": "2c3b170c30eef3b884c7a34b4027a589c753373e098e5619a05af346a8f69676",
+    "historical_prospective_comparison.json": "9fa16afc1f7f2e7611d6abd12e1f0a572f1967885a41aa87f7c2041805490dd6",
+    "lambda_interaction_metrics.csv": "528ee2ed5729ab5f73194cee91aa888df671c2d03121b0e870b1c78802a3687c",
+    "magnitude_bin_metrics.csv": "9cee33959db885b050c7a09d79b735022101f05c560ac08b63230c0e09ce458f",
+    "material_divergence_metrics.csv": "c01c110e3ca35835295c74e31be322db6cf9351ecfc47240fee3293d43b0fb0d",
+    "player_robustness_metrics.csv": "fec888f26d0888c5abcb39bae99795cbe00b00bdcb66082c1c79ee1a4ffcebbf",
+    "player_weighting_sensitivity.json": "a1710e63d54f637809038b902f8b8479d56d82a408a5ef5b3f7486fa3f86f39a",
+    "pp_interaction_metrics.csv": "3e8840786384f3b0835df1257aa1fb3e843d674e5c28ab798ddc44c46a539fed",
+    "prospective_validation_rows.csv": "b06675b9e2d4f668d4fba8af8a708459bf42403fce06fb4dff44bb22bc1e0af3",
+    "reconstruction_validation.json": "5a13401b04bd99fb77f2eb5383d4109b1ef4abd0508992807a7b76627f896a13",
+    "report.md": "33e159ba9f693534cca0e4873e5d1a54ed6970ed30accca9c58124fe2798a9c1",
+    "sign_group_metrics.csv": "59720bda30c1beb292799a3ec594ba0fc5cb6d93955673987dec19983d6415b5",
+    "summary.json": "74d383c545cf197548d3a1e6ea3a68259fb408d7fe3880cb7fa83b4511e84912",
+    "threshold_probability_metrics.csv": "fc11be278f97e41700264bda2f6588429b4de4852dd3ec44c50c6291b1774a20",
+    "weekly_period_metrics.csv": "60a70aa8921ceaef33322eaa641bf33ce91da2151a2e54cedf7f139fb79e5e5e"
+  },
+  "prior_characterization_lineage": {
+    "path": "artifacts/analysis/nhl/sog_baseline_characterization/2026-10-14/lineage_manifest.json",
+    "sha256": "bfbe683a7aae13e96f4cd73035caa3105c15e5f3b5698c91c819ddd5eb26c177"
+  },
+  "source_code": [
+    {
+      "path": "backend/nhl/sql/export_sog_denali_pregame.sql",
+      "sha256": "335f96e5d84a54307a8cbccd749de5f97f9a9adc0426d362c9aaac8ad8a30d08"
+    },
+    {
+      "path": "backend/nhl/scripts/score_sog_poisson_baseline.py",
+      "sha256": "cb1794d25ea91738321e1457b5d5b7be428e9e30f57e79f65f7b9bd70f532342"
+    }
+  ],
+  "study": "NHL_SOG_D10_D20_DIVERGENCE_VALIDATION_V1"
+}

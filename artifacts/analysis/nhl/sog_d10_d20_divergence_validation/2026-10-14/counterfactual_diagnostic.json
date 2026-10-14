@@ -1,0 +1,7 @@
+{
+  "application": "all historical rows with |D10-D20| > 0.5; no parameter was fit or searched",
+  "formula": "midpoint_lambda = ((D10 rate + D20 rate) / 2) * retained production-selected TOI minutes / 60",
+  "results_path": "counterfactual_diagnostic.csv",
+  "status": "DESCRIPTIVE_FIXED_MIDPOINT_ONLY",
+  "warning": "research-only count-error comparison; not a candidate model or production change"
+}
