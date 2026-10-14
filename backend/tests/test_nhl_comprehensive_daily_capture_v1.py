@@ -164,7 +164,7 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
                 with_odds=True, slate=SLATE, phase="EARLY"), "capture")
         fetch.assert_called_once()
         command_deck = (Path(__file__).resolve().parents[2] / "bin/nhl_ops.sh").read_text()
-        self.assertIn(".venv/bin/python -m backend.nhl.cli daily --with-odds", command_deck)
+        self.assertIn("./bin/python -m backend.nhl.cli daily --with-odds", command_deck)
 
     def test_no_odds_option_makes_no_acquisition(self):
         with patch("backend.nhl.cli.fetch_odds") as fetch:
@@ -867,7 +867,7 @@ class BoundedOddsTopologyTests(unittest.TestCase):
             self.assertEqual(claim["canonical_game_set_hash"],
                              "92d828be583187109116de1eccda70c2bf8563288ec6ad39ce3976da43a9eec3")
             self.assertEqual(claim["regions"], ["us", "us2", "us_ex"])
-            self.assertEqual(claim["maximum_credits"], 198)
+            self.assertEqual(claim["maximum_credits"], 231)
             self.assertEqual(len(claim["selected_provider_event_ids"]), 11)
 
     def test_empty_unmatched_and_partial_discovery_never_expand_paid_plan(self):
@@ -1006,10 +1006,11 @@ class BoundedOddsTopologyTests(unittest.TestCase):
         self.assertEqual(derive_odds_credit_bound(
             paid_request_count=11,
             markets=NHL_COMPREHENSIVE_PROP_MARKETS,
-            regions=("us", "us2", "us_ex")), (0, 18, 198))
+            regions=("us", "us2", "us_ex")), (0, 21, 231))
 
     def test_comprehensive_market_defaults_include_alternates_and_update_credit_ceiling(self):
         expected = (
+            "h2h",
             "player_shots_on_goal", "player_shots_on_goal_alternate",
             "player_total_saves", "player_total_saves_alternate",
             "player_points", "player_points_alternate",
@@ -1021,7 +1022,7 @@ class BoundedOddsTopologyTests(unittest.TestCase):
                          ",".join(expected))
         self.assertEqual(derive_odds_credit_bound(
             paid_request_count=NHL_ABSOLUTE_GAME_REQUEST_CEILING,
-            markets=expected, regions=("us", "us2", "us_ex")), (0, 18, 288))
+            markets=expected, regions=("us", "us2", "us_ex")), (0, 21, 336))
 
     def test_exact_alternate_market_keys_keep_kalshi_identity_and_do_not_conflate(self):
         payload = [{"id": "event", "bookmakers": [{"key": "kalshi", "markets": [
@@ -1050,10 +1051,10 @@ class BoundedOddsTopologyTests(unittest.TestCase):
             ([{"content-type": "application/json"}, {"content-type": "application/json"}],
              "CAPTURED_NONEMPTY", 2),
             ([{"content-type": "application/json", "x-requests-last": "bad"},
-             {"content-type": "application/json", "x-requests-last": "18"}],
+             {"content-type": "application/json", "x-requests-last": "21"}],
              "FAILED_BUDGET_GUARD", 1),
-            ([{"content-type": "application/json", "x-requests-last": "19"},
-              {"content-type": "application/json", "x-requests-last": "18"}],
+            ([{"content-type": "application/json", "x-requests-last": "22"},
+              {"content-type": "application/json", "x-requests-last": "21"}],
              "FAILED_BUDGET_GUARD", 1),
         ]
         for index, (headers, classification, paid) in enumerate(cases):

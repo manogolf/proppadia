@@ -203,7 +203,15 @@ def build_rows(
     policy-selected population with game/player identity and a selected side.
     The opposing side is added from the complementary model probability.
     """
-    ml = pd.read_csv(package_dir / "v2_immutable_predictions.csv")
+    production_ml_path = package_dir / "moneyline_production_predictions.csv"
+    status_path = package_dir / "daily_execution_status.json"
+    if status_path.is_file():
+        status = json.loads(status_path.read_text())
+        if (status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER"
+                and not production_ml_path.is_file()):
+            raise ValueError("MONEYLINE_PRODUCTION_PREDICTION_MISSING")
+    ml = pd.read_csv(production_ml_path if production_ml_path.is_file()
+                     else package_dir / "v2_immutable_predictions.csv")
     pl = pd.read_csv(package_dir / "puck_line_v1_immutable_predictions.csv")
     games = pd.read_csv(package_dir / "schedule_event_identity.csv")
     required = {"game_id", "game_date", "home_team", "away_team"}
@@ -236,14 +244,18 @@ def build_rows(
         game_id = str(g["game_id"])
         game_identity[game_id] = (date, team_map[home_abbr], team_map[away_abbr])
         m = ml[ml.game_id.astype(str).eq(game_id)].iloc[0]
-        hp, ap = float(m.v2_home_win_probability), float(m.v2_away_win_probability)
+        if "challenger_home_win_probability" in m.index:
+            hp = float(m.challenger_home_win_probability)
+            ap = float(m.challenger_away_win_probability)
+        else:
+            hp, ap = float(m.v2_home_win_probability), float(m.v2_away_win_probability)
         if not math.isclose(hp + ap, 1.0, abs_tol=1e-6):
             raise ValueError(f"MONEYLINE_PAIR_NOT_NORMALIZED:{game_id}")
         for side, probability in (("home", hp), ("away", ap)):
             rows.append(_base_row(date, team_map[home_abbr], team_map[away_abbr],
                                   "head_to_head", "h2h", "", "", side, probability))
         provenance.extend([
-            {"game_id": game_id, "market": "h2h", "model_identity": str(m.get("model_version", "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2")), "side": s, "probability": p}
+            {"game_id": game_id, "market": "h2h", "model_identity": str(m.get("model_version", "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2")), "operational_role": str(m.get("operational_role", "PRODUCTION_CHAMPION")), "side": s, "probability": p}
             for s, p in (("home", hp), ("away", ap))
         ])
 

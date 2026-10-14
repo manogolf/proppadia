@@ -71,6 +71,25 @@ class EightRainAdapterTests(unittest.TestCase):
         self.assertEqual([x["model_identity"] for x in meta["provenance"] if x["market"] == "h2h"],
                          ["MONEYLINE_V2_REFERENCE", "MONEYLINE_V2_REFERENCE"])
 
+    def test_promoted_v3_prediction_is_export_source_and_v2_remains_separate(self):
+        pd.DataFrame([{
+            "game_id": 101, "challenger_home_win_probability": .62,
+            "challenger_away_win_probability": .38,
+            "model_version": "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3",
+            "operational_role": "PRODUCTION_CHAMPION",
+        }]).to_csv(self.package / "moneyline_production_predictions.csv", index=False)
+        pd.DataFrame([{
+            "game_id": 101, "model_version": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2",
+            "operational_role": "SHADOW_CHALLENGER",
+        }]).to_csv(self.package / "moneyline_schedule_logit_v2_shadow_predictions.csv", index=False)
+        rows, meta = self._build()
+        ml = rows[rows.MARKET.eq("h2h")].set_index("SIDE")
+        self.assertAlmostEqual(float(ml.loc["home", "WIN %"]), -round(100 * .62 / .38))
+        provenance = [x for x in meta["provenance"] if x["market"] == "h2h"]
+        self.assertEqual({x["model_identity"] for x in provenance},
+                         {"NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3"})
+        self.assertEqual({x["operational_role"] for x in provenance}, {"PRODUCTION_CHAMPION"})
+
     def test_puck_line_signed_spread_and_probability_pair(self):
         rows, _ = self._build()
         pl = rows[rows.MARKET.eq("spread")].set_index("SIDE")

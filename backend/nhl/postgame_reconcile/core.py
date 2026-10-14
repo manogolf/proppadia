@@ -459,9 +459,17 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
         if (status.get("slate_date") != slate_date or status.get("run_type") != "FINAL_PREGAME"
                 or cross.name != f"state={status.get('substantive_state_sha256')}"):
             raise RuntimeError("IMMUTABLE_CROSS_MARKET_RUN_IDENTITY_MISMATCH")
+        promoted_capture = status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER"
         schedule = pd.read_csv(cross / "schedule_event_identity.csv")
         schedule = _local_spine(schedule, slate_date)
-        moneyline = pd.read_csv(cross / "v2_immutable_predictions.csv", float_precision="round_trip")
+        v3_production = cross / "moneyline_production_predictions.csv"
+        if promoted_capture and not v3_production.is_file():
+            raise RuntimeError("IMMUTABLE_MONEYLINE_PRODUCTION_ARTIFACT_MISSING")
+        v2_shadow = pd.read_csv(cross / "v2_immutable_predictions.csv",
+                                float_precision="round_trip")
+        moneyline = pd.read_csv(v3_production if v3_production.is_file()
+                                else cross / "v2_immutable_predictions.csv",
+                                float_precision="round_trip")
         provenance_name = "moneyline_shot_finishing_challenger_v3_feature_provenance.csv"
         moneyline_provenance_path = cross / provenance_name
         moneyline_provenance = (
@@ -472,17 +480,42 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
         common = {"canonical_season", "slate_date", "game_id", "scheduled_start_time_utc",
                   "home_team_id", "away_team_id", "home_team", "away_team",
                   "prediction_creation_time_utc", "substantive_prediction_sha256"} | set(CROSS_MARKET_FEATURES)
-        _require_columns(moneyline, common, "MONEYLINE")
+        _require_columns(v2_shadow, common, "MONEYLINE_SHADOW")
         _require_columns(puck, common, "PUCK_LINE")
         ids = set(schedule.game_id.astype(int))
+        _verify_cross_market_identities(
+            v2_shadow, puck, moneyline_feature_provenance=moneyline_provenance)
+        if v3_production.is_file():
+            v3_required = {"canonical_season", "slate_date", "game_id",
+                           "scheduled_start_time_utc", "home_team_id", "away_team_id",
+                           "home_team", "away_team", "prediction_creation_time_utc",
+                           "model_version", "model_parameter_sha256",
+                           "challenger_home_win_probability", "challenger_away_win_probability",
+                           "challenger_favored_team", "operational_role"}
+            _require_columns(moneyline, v3_required, "MONEYLINE_PRODUCTION")
+            if (set(moneyline.model_version.astype(str)) != {"NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3"}
+                    or set(moneyline.operational_role.astype(str)) != {"PRODUCTION_CHAMPION"}
+                    or moneyline.game_id.duplicated().any()
+                    or set(moneyline.game_id.astype(int)) != ids):
+                raise RuntimeError("IMMUTABLE_MONEYLINE_PRODUCTION_IDENTITY_CONFLICT")
+            from backend.nhl.cross_market_shadow.moneyline_challenger import load_model
+            expected_model_sha = load_model()["parameter_file_sha256"]
+            if set(moneyline.model_parameter_sha256.astype(str)) != {expected_model_sha}:
+                raise RuntimeError("IMMUTABLE_MONEYLINE_PRODUCTION_MODEL_SHA_MISMATCH")
+            if not np.allclose(
+                    pd.to_numeric(moneyline.challenger_home_win_probability),
+                    1 - pd.to_numeric(moneyline.challenger_away_win_probability),
+                    rtol=0, atol=1e-12):
+                raise RuntimeError("IMMUTABLE_MONEYLINE_PRODUCTION_PROBABILITY_PAIR_INVALID")
         for label, frame in (("MONEYLINE", moneyline), ("PUCK_LINE", puck)):
             if frame.game_id.duplicated().any() or set(frame.game_id.astype(int)) != ids:
                 raise RuntimeError(f"IMMUTABLE_{label}_GAME_IDENTITY_CONFLICT")
             if not frame.slate_date.astype(str).eq(slate_date).all():
                 raise RuntimeError(f"IMMUTABLE_{label}_SLATE_DATE_MISMATCH")
             _pregame(frame, "prediction_creation_time_utc", schedule)
-        _verify_cross_market_identities(
-            moneyline, puck, moneyline_feature_provenance=moneyline_provenance)
+        if not v3_production.is_file():
+            _verify_cross_market_identities(
+                moneyline, puck, moneyline_feature_provenance=moneyline_provenance)
         cross_observed = pd.to_datetime(status["run_timestamp_utc"], utc=True)
 
     ids = set(schedule.game_id.astype(int))
@@ -981,8 +1014,17 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
         puck = pd.DataFrame(columns=empty_columns)
     else:
         cross = Path(cross_binding["run"])
-        moneyline = _pregame(pd.read_csv(cross / "v2_immutable_predictions.csv"),
-                             "prediction_creation_time_utc", schedule)
+        production_path = cross / "moneyline_production_predictions.csv"
+        capture_status = json.loads((cross / "daily_execution_status.json").read_text())
+        if (capture_status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER"
+                and not production_path.is_file()):
+            raise RuntimeError("IMMUTABLE_MONEYLINE_PRODUCTION_ARTIFACT_MISSING")
+        moneyline = _pregame(pd.read_csv(
+            production_path if production_path.is_file() else cross / "v2_immutable_predictions.csv"),
+            "prediction_creation_time_utc", schedule)
+        if production_path.is_file():
+            moneyline["operational_role"] = "PRODUCTION_CHAMPION"
+            moneyline["model_favored_team"] = moneyline.challenger_favored_team
         puck = _pregame(pd.read_csv(cross / "puck_line_v1_immutable_predictions.csv"),
                         "prediction_creation_time_utc", schedule)
         moneyline = moneyline.merge(games[outcome_columns], on="game_id", validate="one_to_one")

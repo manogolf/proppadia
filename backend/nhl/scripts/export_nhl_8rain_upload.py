@@ -159,11 +159,22 @@ def main() -> None:
     out.to_csv(args.out_csv, index=False, columns=UPLOAD_COLUMNS)
     catalog_hashes = {name: hashlib.sha256((catalog_dir / name).read_bytes()).hexdigest()
                       for name in ("model_spec.json", "teams.json", "players.json")}
+    production_moneyline = args.package_dir / "moneyline_production_predictions.csv"
+    source_names = ["puck_line_v1_immutable_predictions.csv", "raw_market_response.json"]
+    source_names.append("moneyline_production_predictions.csv" if production_moneyline.is_file()
+                        else "v2_immutable_predictions.csv")
+    if (args.package_dir / "moneyline_schedule_logit_v2_shadow_predictions.csv").is_file():
+        source_names.append("moneyline_schedule_logit_v2_shadow_predictions.csv")
     source_hashes = {
         name: hashlib.sha256((args.package_dir / name).read_bytes()).hexdigest()
-        for name in ("v2_immutable_predictions.csv", "puck_line_v1_immutable_predictions.csv", "raw_market_response.json")
+        for name in source_names
     }
     capture_receipt = json.loads(args.capture_receipt.read_text()) if args.capture_receipt else {}
+    capture_receipt.setdefault("moneyline_production_model", "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3"
+                               if production_moneyline.is_file()
+                               else "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2")
+    capture_receipt.setdefault("moneyline_shadow_model", "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2"
+                               if production_moneyline.is_file() else None)
     mapping_summary = (
         json.loads(args.mapping_summary_json.read_text())
         if args.mapping_summary_json else {}

@@ -42,6 +42,7 @@ LANE_NAMES = (
     "saves",
     "cold_start_sog_reference",
     "odds",
+    "moneyline",
     "sog_attachment",
     "points_attachment",
     "saves_attachment",
@@ -172,6 +173,7 @@ class DailyRunRecorder:
         self.feature_input_cutoff_utc: str | None = None
         self.roster_observation: dict[str, Any] | None = None
         self.odds_observation: dict[str, Any] | None = None
+        self.moneyline_authority: dict[str, Any] | None = None
         self.prior_learning: dict[str, Any] | None = None
         self.children: list[dict[str, Any]] = []
         self.failure: dict[str, Any] | None = None
@@ -387,6 +389,7 @@ class DailyRunRecorder:
             "lanes": {name: asdict(self.lanes[name]) for name in LANE_NAMES},
             "roster_observation": self.roster_observation,
             "odds_observation": self.odds_observation,
+            "moneyline_authority": self.moneyline_authority,
             "prior_day_learning": self.prior_learning,
             "child_summaries": self.children,
             "database_write_status": self.database_write_status(),

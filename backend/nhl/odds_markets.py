@@ -1,6 +1,7 @@
 """Shared market contract for prospective comprehensive NHL odds captures."""
 
 NHL_COMPREHENSIVE_PROP_MARKETS = (
+    "h2h",
     "player_shots_on_goal",
     "player_shots_on_goal_alternate",
     "player_total_saves",

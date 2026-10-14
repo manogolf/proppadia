@@ -1472,6 +1472,51 @@ def _reference_cold_start_sog(recorder: DailyRunRecorder, slate: str) -> None:
         recorder.fail_lane("cold_start_sog_reference", error, blocking=False)
 
 
+def _cross_market_envelope_from_daily_observation(observation_dir: Path) -> dict[str, Any]:
+    """Project normalized rows from a validated daily package into sidecar input."""
+    observation_dir = Path(observation_dir)
+    summary = json.loads((observation_dir / "observation_summary.json").read_text())
+    raw_rows = pd.read_json(observation_dir / "normalized_odds.jsonl", lines=True)
+    grouped: dict[str, dict[str, Any]] = {}
+    for row in raw_rows.to_dict("records"):
+        event_id = str(row.get("provider_event_id") or "")
+        if not event_id:
+            continue
+        event = grouped.setdefault(event_id, {
+            "id": event_id, "home_team": row.get("home_team"),
+            "away_team": row.get("away_team"),
+            "commence_time": row.get("commence_time"), "bookmakers": [],
+        })
+        bookmaker_key = str(row.get("bookmaker") or "")
+        book = next((item for item in event["bookmakers"]
+                     if item["key"] == bookmaker_key), None)
+        if book is None:
+            book = {"key": bookmaker_key,
+                    "title": row.get("bookmaker_title") or bookmaker_key,
+                    "markets": []}
+            event["bookmakers"].append(book)
+        market_key = str(row.get("market") or "")
+        market = next((item for item in book["markets"]
+                       if item["key"] == market_key), None)
+        if market is None:
+            market = {"key": market_key,
+                      "last_update": row.get("market_last_update"),
+                      "outcomes": []}
+            book["markets"].append(market)
+        outcome = {"name": row.get("outcome"),
+                   "price": row.get("price"), "point": row.get("point")}
+        if row.get("description"):
+            outcome["description"] = row["description"]
+        market["outcomes"].append(outcome)
+    return {
+        "capture_timestamp_utc": summary["observation_timestamp_utc"],
+        "provider": "PARENT_DAILY_ODDS_OBSERVATION",
+        "quota": {"credits_consumed": summary.get("credits_consumed", 0),
+                  "requests_remaining": summary.get("credits_remaining")},
+        "provider_response": list(grouped.values()),
+    }
+
+
 def _run_independent_daily_lanes(
     *, recorder: DailyRunRecorder, db: str, slate: str, with_odds: bool,
     odds_phase: str, daily_run_id: str, canonical_games,
@@ -1488,7 +1533,7 @@ def _run_independent_daily_lanes(
         canonical_games, datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     )["eligible_pregame_game_ids"]
     if no_pregame_games:
-        for lane_name in ("saves", "points", "points_hgb_shadow", "odds",
+        for lane_name in ("saves", "points", "points_hgb_shadow", "odds", "moneyline",
                           "sog_attachment", "points_attachment", "saves_attachment",
                           "research_integrity"):
             recorder.finish_lane(lane_name, status="SKIPPED_NO_PREGAME_GAMES",
@@ -1831,6 +1876,85 @@ def _run_independent_daily_lanes(
             )
         except AttachmentIntegrityError as error:
             odds_integrity_error = error
+
+    # Moneyline uses the same immutable parent odds observation. The retained
+    # normalized event rows are projected into the existing cross-market
+    # capture schema; this integration makes no second provider request.
+    if not with_odds:
+        recorder.finish_lane("moneyline", status="SKIPPED_NOT_REQUESTED")
+    else:
+        _ACTIVE_DAILY_LANE = "moneyline"
+        recorder.start_lane("moneyline", inputs=(
+            [recorder.odds_observation] if captured and odds_integrity_error is None else []))
+        try:
+            from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canonical_slate
+            from backend.nhl.cross_market_shadow.core import run_capture as run_cross_market_capture
+            from backend.nhl.cross_market_shadow.moneyline_authority import load_authority
+            from backend.nhl.scripts.run_nhl_mainline_cross_market_capture_warn_only import export_inputs
+
+            authority = load_authority()
+            recorder.moneyline_authority = authority
+            input_root = prediction_run_dir / "cross_market_inputs"
+            input_root.mkdir(parents=True, exist_ok=True)
+            raw_schedule_path = ROOT / "artifacts/operational/nhl/slates" / slate / "raw_schedule_response.json"
+            cross_schedule = adapt_canonical_slate(
+                canonical_games, json.loads(raw_schedule_path.read_text()), slate_date=slate,
+                canonical_season=infer_nhl_season_from_date_yyyy_mm_dd(slate))
+            schedule_path, history_path, _ = export_inputs(
+                db, slate, input_root, canonical_schedule=cross_schedule)
+            odds_envelope_path = None
+            if captured and odds_result is not None and odds_integrity_error is None:
+                envelope = _cross_market_envelope_from_daily_observation(
+                    odds_result.observation_dir)
+                odds_envelope_path = input_root / "parent_daily_odds_envelope.json"
+                odds_envelope_path.write_text(json.dumps(envelope, sort_keys=True) + "\n")
+                capture_timestamp = envelope["capture_timestamp_utc"]
+            else:
+                envelope = None
+                capture_timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+            run_type = "FINAL_PREGAME" if odds_phase == "FINAL_PREGAME" else "REFRESH"
+            cross_root = ROOT / "artifacts/operational/nhl/cross_market_shadow"
+            cross_run = run_cross_market_capture(
+                schedule_path, history_path, odds_envelope_path, cross_root, slate,
+                capture_timestamp, run_type,
+                canary_mode=bool(cross_schedule.game_type_code.eq(1).all()),
+            )
+            cross_status = json.loads((cross_run / "daily_execution_status.json").read_text())
+            if cross_status.get("mode") != "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER":
+                recorder.finish_lane(
+                    "moneyline", status="SKIPPED_NO_REGULAR_SEASON_MONEYLINE",
+                    reason="NO_ELIGIBLE_REGULAR_SEASON_MONEYLINE_PREDICTIONS",
+                    inputs=([recorder.odds_observation] if recorder.odds_observation else []),
+                    outputs=[artifact_identity(cross_run / "daily_execution_status.json")],
+                    provider_requests=0, credits_consumed=0)
+                recorder.moneyline_authority = authority
+                continue_moneyline_to_export = False
+            else:
+                continue_moneyline_to_export = True
+            if not continue_moneyline_to_export:
+                _ACTIVE_DAILY_LANE = "shared_prerequisites"
+            else:
+                outputs = [artifact_identity(cross_run / name) for name in (
+                    "moneyline_production_predictions.csv",
+                    "moneyline_production_market_ledger.csv",
+                    "moneyline_schedule_logit_v2_shadow_predictions.csv",
+                    "moneyline_shot_finishing_challenger_v3_feature_provenance.csv",
+                    "moneyline_shot_finishing_challenger_v3_ledger.csv",
+                    "daily_execution_status.json", "RUN_COMPLETE.json", "SHA256SUMS",
+                )]
+                recorder.moneyline_authority = authority
+                recorder.finish_lane("moneyline", inputs=[
+                    *([{
+                        **recorder.odds_observation,
+                        "validated_manifest_sha256": odds_lineage.get("odds_observation_manifest_sha256"),
+                    }] if recorder.odds_observation and odds_integrity_error is None else []),
+                    {"authority_version": authority["authority_version"],
+                     "production_model": authority["production_role"],
+                     "shadow_model": authority["shadow_role"],
+                     "parent_odds_reused": bool(odds_envelope_path)},
+                ], outputs=outputs, provider_requests=0, credits_consumed=0)
+        except Exception as error:
+            recorder.fail_lane("moneyline", error, blocking=True)
 
     attachment_specs = [
         ("sog_attachment", "legacy_sog", legacy_sog_prediction, build_sog),

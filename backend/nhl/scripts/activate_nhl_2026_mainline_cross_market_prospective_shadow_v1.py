@@ -274,6 +274,52 @@ def run_validation(work: Path) -> tuple[list[dict], dict]:
         canary_scope_failure = "NO_FAILURE"
     check("canary bypass limited to preseason window", canary_scope_failure == "PRESEASON_CANARY_SCOPE_VIOLATION", canary_scope_failure)
 
+    # Bounded offline authority canary: one synthetic regular-season target,
+    # retained pinned 2025 priors, no provider acquisition, and no DB writes.
+    regular_capture_root = work / "regular_authority_canary"
+    regular_run = run_capture(
+        regular_schedule_path, regular_history_path, paths["odds"], regular_capture_root,
+        "2027-01-02", "2027-01-02T18:00:00Z", "MIDDAY", canary_mode=False,
+    )
+    regular_status = json.loads((regular_run / "daily_execution_status.json").read_text())
+    production_ml = pd.read_csv(regular_run / "moneyline_production_predictions.csv")
+    shadow_ml = pd.read_csv(regular_run / "moneyline_schedule_logit_v2_shadow_predictions.csv")
+    v3_identity = "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3"
+    v2_identity = "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2"
+    check("regular authority canary names V3 production and V2 shadow",
+          regular_status.get("moneyline_production_model") == v3_identity
+          and regular_status.get("moneyline_shadow_model") == v2_identity
+          and regular_status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER",
+          regular_status)
+    check("regular authority canary preserves distinct immutable streams",
+          len(production_ml) == len(shadow_ml) == 1
+          and production_ml.model_version.eq(v3_identity).all()
+          and production_ml.operational_role.eq("PRODUCTION_CHAMPION").all()
+          and shadow_ml.control_name.eq(v2_identity).all()
+          and shadow_ml.operational_role.eq("SHADOW_CHALLENGER").all()
+          and float(production_ml.challenger_home_win_probability.iloc[0])
+          != float(shadow_ml.v2_home_win_probability.iloc[0]),
+          {"production": production_ml.to_dict("records"),
+           "shadow": shadow_ml.to_dict("records")})
+    regular_outcomes = work / "regular_outcomes.csv"
+    pd.DataFrame([{
+        "canonical_season": 2026, "game_id": 2026020600,
+        "final_home_goals": 3, "final_away_goals": 2,
+        "game_status": "FINAL", "outcome_source": "SYNTHETIC_OFFLINE_CANARY",
+        "outcome_source_timestamp_utc": "2027-01-03T03:00:00Z",
+    }]).to_csv(regular_outcomes, index=False)
+    regular_grade = grade_capture(
+        regular_run, regular_outcomes, regular_capture_root / "grades",
+        "2027-01-03T04:00:00Z")
+    grade_status = json.loads((regular_grade / "grading_status.json").read_text())
+    check("regular authority canary paired grading retains both roles",
+          (regular_grade / "graded_moneyline_production_results.csv").is_file()
+          and (regular_grade / "graded_moneyline_schedule_logit_v2_shadow_results.csv").is_file()
+          and (regular_grade / "graded_moneyline_v2_vs_shot_finishing_challenger_v3_paired.csv").is_file()
+          and grade_status.get("moneyline_production_model") == v3_identity
+          and grade_status.get("moneyline_shadow_model") == v2_identity,
+          grade_status)
+
     missing_output = work / "missing_credential.json"
     try:
         fetch_markets("", missing_output)

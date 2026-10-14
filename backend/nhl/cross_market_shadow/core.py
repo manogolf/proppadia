@@ -28,6 +28,7 @@ from .moneyline_challenger import (
     build_challenger_predictions as build_moneyline_challenger,
     make_ledger as make_moneyline_challenger_ledger,
 )
+from .moneyline_authority import load_authority
 
 
 HERE = Path(__file__).resolve().parent
@@ -833,6 +834,7 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     puck_v2_predictions = pd.DataFrame()
     puck_v2_provenance = pd.DataFrame()
     puck_v2_lane = {"status": "NOT_APPLICABLE", "failure": None}
+    authority = load_authority()
     moneyline_challenger_lane = {"status": "SKIPPED_DEPENDENCY_OR_NOT_APPLICABLE", "failure": None}
     if schedule.game_type_code.eq(2).any():
         def build_puck_line_challenger():
@@ -855,7 +857,10 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
             )
             return prior, candidate_input, provenance, candidate_predictions
 
-        puck_result, puck_v2_lane = _run_nonblocking_challenger(build_puck_line_challenger)
+        # V3 is the active prospective production Moneyline model and depends
+        # on the existing pinned shot-prior feature source. Its failure must
+        # fail this capture; V2 remains an independent shadow prediction.
+        puck_result, puck_v2_lane = build_puck_line_challenger(), {"status": "COMPLETE", "failure": None}
         if puck_result is not None:
             (prior_result, challenger_input, puck_v2_provenance,
              puck_v2_predictions) = puck_result
@@ -900,11 +905,15 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
             candidate_ledger["outcome_status"] = "PENDING_OFFICIAL_RECONCILIATION"
             return candidate, provenance, candidate_ledger
 
-        moneyline_result, moneyline_challenger_lane = _run_nonblocking_challenger(
-            build_moneyline_candidate)
+        moneyline_result = build_moneyline_candidate()
+        moneyline_challenger_lane = {"status": "COMPLETE", "failure": None}
         if moneyline_result is not None:
             (moneyline_challenger_predictions, moneyline_challenger_provenance,
              moneyline_challenger_ledger) = moneyline_result
+            v2_times = predictions.set_index("game_id").prediction_creation_time_utc
+            moneyline_challenger_predictions["prediction_creation_time_utc"] = (
+                moneyline_challenger_predictions.game_id.map(v2_times))
+            moneyline_challenger_predictions["operational_role"] = "PRODUCTION_CHAMPION"
     if len(puck_v2_predictions):
         standard = quotes[
             quotes.qualification_status.eq("PREGAME_QUALIFIED")
@@ -981,6 +990,7 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         ]].astype(str).to_dict("records") if len(quotes) else [],
         "coverage": coverage.drop(columns=["observation_timestamp_utc"], errors="ignore").astype(str).to_dict("records"),
         "run_type": run_type,
+        "moneyline_authority_version": authority["authority_version"],
     }
     # Manual intraday refreshes are observations, not idempotent reruns. Keep
     # identical market payloads captured at different times as distinct states.
@@ -996,6 +1006,12 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     # The substantive digest is computed from in-memory binary floats above;
     # 17 significant digits preserve those values across CSV round trips.
     predictions.to_csv(destination / "v2_immutable_predictions.csv", index=False, float_format="%.17g")
+    if len(predictions):
+        predictions.assign(
+            operational_role="SHADOW_CHALLENGER",
+            authority_version=authority["authority_version"],
+        ).to_csv(destination / "moneyline_schedule_logit_v2_shadow_predictions.csv",
+                 index=False, float_format="%.17g")
     puck_predictions.to_csv(destination / "puck_line_v1_immutable_predictions.csv", index=False)
     if len(puck_v2_predictions):
         puck_v2_predictions.to_csv(destination / "puck_line_v2_shot_prior_challenger_predictions.csv", index=False)
@@ -1003,8 +1019,19 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         ledger.to_csv(destination / "puck_line_v2_shot_prior_prospective_ledger.csv", index=False)
     if len(moneyline_challenger_predictions):
         moneyline_challenger_predictions.to_csv(destination / "moneyline_shot_finishing_challenger_v3_predictions.csv", index=False)
+        moneyline_challenger_predictions.assign(
+            operational_role="PRODUCTION_CHAMPION",
+            authority_version=authority["authority_version"],
+            wager_recommendation="NONE_NO_WAGER",
+        ).to_csv(destination / "moneyline_production_predictions.csv", index=False,
+                 float_format="%.17g")
         moneyline_challenger_provenance.to_csv(destination / "moneyline_shot_finishing_challenger_v3_feature_provenance.csv", index=False)
         moneyline_challenger_ledger.to_csv(destination / "moneyline_shot_finishing_challenger_v3_ledger.csv", index=False)
+        moneyline_challenger_ledger.assign(
+            operational_role="PRODUCTION_CHAMPION",
+            authority_version=authority["authority_version"],
+            financial_claim="NONE_NO_WAGER",
+        ).to_csv(destination / "moneyline_production_market_ledger.csv", index=False)
     timing.to_csv(destination / "strict_prior_timing_audit.csv", index=False)
     (destination / "raw_market_response.json").write_text(canonical_json(envelope) + "\n")
     raw_observations.to_csv(destination / "raw_market_observations.csv", index=False)
@@ -1018,7 +1045,16 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     pd.DataFrame(columns=["game_id", "grading_status", "hypothetical_result"]).to_csv(destination / "graded_puck_line_market_results.csv", index=False)
     qualified = quotes[quotes.qualification_status.eq("PREGAME_QUALIFIED")] if len(quotes) else quotes
     status = {
-        "mode": "SHADOW_RESEARCH_ONLY", "slate_date": slate_date, "run_type": run_type,
+        "mode": ("PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER"
+                 if len(moneyline_challenger_predictions)
+                 else "SHADOW_RESEARCH_ONLY"),
+        "slate_date": slate_date, "run_type": run_type,
+        "moneyline_authority": authority,
+        "moneyline_production_model": authority["production_role"],
+        "moneyline_shadow_model": authority["shadow_role"],
+        "moneyline_production_predictions_created": len(moneyline_challenger_predictions),
+        "moneyline_shadow_predictions_created": len(predictions),
+        "moneyline_parent_odds_observation_source": envelope.get("provider"),
         "run_timestamp_utc": parse_utc(run_timestamp_utc).isoformat(), "substantive_state_sha256": substantive_hash,
         "scheduled_games": len(schedule), "v2_predictions_created": len(predictions),
         "puck_line_v1_predictions_created": len(puck_predictions),
@@ -1090,6 +1126,10 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
     moneyline_challenger = pd.DataFrame()
     moneyline_paired = pd.DataFrame()
     moneyline_challenger_path = run_dir / "moneyline_shot_finishing_challenger_v3_predictions.csv"
+    capture_status = json.loads((run_dir / "daily_execution_status.json").read_text())
+    if (capture_status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER"
+            and not moneyline_challenger_path.is_file()):
+        raise RuntimeError("MONEYLINE_PRODUCTION_GRADE_ARTIFACT_MISSING")
     if moneyline_challenger_path.is_file():
         challenger_predictions = pd.read_csv(moneyline_challenger_path)
         moneyline_challenger = challenger_predictions.merge(
@@ -1165,19 +1205,35 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
         references.qualification_status.eq("PREGAME_QUALIFIED")
         & references.market_type.eq("FULL_GAME_MONEYLINE")
         & references.no_vig_probability.notna()
-    ].merge(
-        predictions[["canonical_season", "game_id", "v2_home_win_probability", "v2_away_win_probability"]],
-        on=["canonical_season", "game_id"], how="inner", validate="many_to_one",
-    ).merge(outcomes, on=["canonical_season", "game_id"], how="inner", validate="many_to_one")
-    comparison["v2_side_probability"] = np.where(
-        comparison.side_orientation.eq("HOME"),
-        comparison.v2_home_win_probability,
-        comparison.v2_away_win_probability,
-    )
-    comparison["v2_minus_market_probability_gap"] = (
-        comparison.v2_side_probability - comparison.no_vig_probability
-    )
-    comparison["edge_or_wager_claim"] = "NONE_SHADOW_COMPARISON_ONLY"
+    ]
+    if len(moneyline_challenger):
+        production_market_probability = moneyline_challenger[[
+            "canonical_season", "game_id", "challenger_home_win_probability",
+            "challenger_away_win_probability",
+        ]].rename(columns={
+            "challenger_home_win_probability": "production_home_win_probability",
+            "challenger_away_win_probability": "production_away_win_probability",
+        })
+        comparison = comparison.merge(
+            production_market_probability, on=["canonical_season", "game_id"],
+            how="inner", validate="many_to_one")
+        comparison["production_model_identity"] = MONEYLINE_CHALLENGER_NAME
+        comparison["production_side_probability"] = np.where(
+            comparison.side_orientation.eq("HOME"), comparison.production_home_win_probability,
+            comparison.production_away_win_probability)
+        comparison["production_minus_market_probability_gap"] = (
+            comparison.production_side_probability - comparison.no_vig_probability)
+        comparison["edge_or_wager_claim"] = "NONE_PRODUCTION_PROBABILITY_COMPARISON_NO_WAGER"
+    else:
+        comparison = comparison.merge(
+            predictions[["canonical_season", "game_id", "v2_home_win_probability", "v2_away_win_probability"]],
+            on=["canonical_season", "game_id"], how="inner", validate="many_to_one")
+        comparison["v2_side_probability"] = np.where(
+            comparison.side_orientation.eq("HOME"), comparison.v2_home_win_probability,
+            comparison.v2_away_win_probability)
+        comparison["v2_minus_market_probability_gap"] = (
+            comparison.v2_side_probability - comparison.no_vig_probability)
+        comparison["edge_or_wager_claim"] = "NONE_SHADOW_COMPARISON_ONLY"
     puck = quotes[
         quotes.qualification_status.eq("PREGAME_QUALIFIED") & quotes.market_type.eq("STANDARD_PUCK_LINE")
     ].merge(outcomes, on=["canonical_season", "game_id"], how="inner", validate="many_to_one").merge(
@@ -1382,6 +1438,15 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
     moneyline.to_csv(destination / "graded_moneyline_shadow_results.csv", index=False)
     if len(moneyline_challenger):
         moneyline_challenger.to_csv(destination / "graded_moneyline_shot_finishing_challenger_v3_results.csv", index=False)
+        if json.loads((run_dir / "daily_execution_status.json").read_text()).get(
+                "mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER":
+            production_grade = moneyline_challenger.copy()
+            production_grade["operational_role"] = "PRODUCTION_CHAMPION"
+            production_grade["financial_claim"] = "NONE_NO_WAGER"
+            shadow_grade = moneyline.copy()
+            shadow_grade["operational_role"] = "SHADOW_CHALLENGER"
+            production_grade.to_csv(destination / "graded_moneyline_production_results.csv", index=False)
+            shadow_grade.to_csv(destination / "graded_moneyline_schedule_logit_v2_shadow_results.csv", index=False)
         moneyline_paired.to_csv(destination / "graded_moneyline_v2_vs_shot_finishing_challenger_v3_paired.csv", index=False)
         moneyline_segments.to_csv(destination / "graded_moneyline_shot_finishing_challenger_v3_segments.csv", index=False)
     comparison.to_csv(destination / "graded_moneyline_market_comparison.csv", index=False)
@@ -1429,6 +1494,21 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
         "puck_line_v1_v2_class_changes": int(paired.class_changed.sum()) if len(paired) else 0,
         "puck_line_market_observations_graded": evaluation_count(puck), "wagers_placed": 0,
     }
+    if capture_status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER":
+        status_payload.update({
+            "mode": "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER",
+            "moneyline_production_model": capture_status.get("moneyline_production_model"),
+            "moneyline_shadow_model": capture_status.get("moneyline_shadow_model"),
+            "moneyline_production_games_graded": len(moneyline_challenger),
+            "moneyline_production_brier": float(moneyline_challenger.brier_contribution.mean()) if len(moneyline_challenger) else None,
+            "moneyline_production_log_loss": float(moneyline_challenger.log_loss_contribution.mean()) if len(moneyline_challenger) else None,
+            "moneyline_production_correct": int(moneyline_challenger.correct.fillna(False).sum()) if len(moneyline_challenger) else 0,
+            "moneyline_shadow_v2_correct": int(moneyline.correct.fillna(False).sum()) if len(moneyline) else 0,
+            "moneyline_shadow_games_graded": len(moneyline),
+            "moneyline_shadow_brier": float(moneyline.brier_contribution.mean()) if len(moneyline) else None,
+            "moneyline_shadow_log_loss": float(moneyline.log_loss_contribution.mean()) if len(moneyline) else None,
+            "moneyline_paired_games": len(moneyline_paired),
+        })
     def json_default(value: Any) -> Any:
         if value is pd.NA or value is pd.NaT:
             return None

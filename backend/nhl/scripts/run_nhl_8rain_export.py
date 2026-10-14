@@ -81,12 +81,17 @@ def validate_latest_capture_package(package: Path, *, current_slate: str) -> dat
         "PARTIAL", "PARTIAL_CAPTURE", "NOT_COMPLETE",
     }:
         raise ValueError("CAPTURE_STATUS_FAILED")
-    if status.get("mode") != "SHADOW_RESEARCH_ONLY":
+    if status.get("mode") not in {"SHADOW_RESEARCH_ONLY", "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER"}:
         raise ValueError(f"CAPTURE_STATUS_NOT_COMPLETE:{status.get('mode')}")
     if any(int(status.get(key) or 0) <= 0 for key in (
         "scheduled_games", "v2_predictions_created", "puck_line_v1_predictions_created",
     )):
         raise ValueError("CAPTURE_REFERENCE_OUTPUT_COUNTS_EMPTY")
+    if (status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER"
+            and (status.get("moneyline_production_model") != "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3"
+                 or int(status.get("moneyline_production_predictions_created") or 0) <= 0
+                 or not (package / "moneyline_production_predictions.csv").is_file())):
+        raise ValueError("CAPTURE_PRODUCTION_MONEYLINE_IDENTITY_INVALID")
     required_manifest_entries = set(PACKAGE_REQUIRED_FILES) - {"SHA256SUMS"}
     missing_manifest_entries = sorted(required_manifest_entries - _manifest_names(package))
     if missing_manifest_entries:
