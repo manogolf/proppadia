@@ -1,0 +1,78 @@
+{
+  "classification": "HIGH_RATE_ONLY_INDEPENDENT_BIAS_REMAINS",
+  "contract": {
+    "probability_lines": [
+      1.5,
+      2.5,
+      3.5
+    ],
+    "residual": "actual_sog - lambda",
+    "strict_correction": "abs(D10-D20) > 0.5",
+    "threshold": 0.5,
+    "weights": {
+      "d10": 0.5,
+      "d20": 0.5
+    }
+  },
+  "inputs": [
+    {
+      "path": "artifacts/analysis/nhl/sog_shot_rate_contribution/2026-10-14/historical_replay_rows.csv",
+      "sha256": "f1d125edc7160f4667f9204178c095eee969a116cc2a359440e3d5b1cc0097c5"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_shot_rate_contribution/2026-10-14/prospective_replay_rows.csv",
+      "sha256": "5305a6eaef6de6e7ed31e2b00b40d7a495ee5cd36f30647b00c65dd640861f9e"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_shot_rate_contribution/2026-10-14/rate_tail_metrics.csv",
+      "sha256": "03b7937050166685594a492bb488d580dd4f57edf35435c672b3f13e282fb0c6"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_shot_rate_contribution/2026-10-14/lineage_manifest.json",
+      "sha256": "0ee7662e0e26b06024adfd74fb2e550de4b19ed8b3f6c724fc56c504f13183ed"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_correction/2026-10-14/historical_paired_rows.csv",
+      "sha256": "fbf77289d489e5112bf4e437f3896442d504e149afb2306464a4c4b4a7920414"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_correction/2026-10-14/prospective_paired_rows.csv",
+      "sha256": "b0659cdba4bba5ece4c93fd6ff91fc7817e653135a142980c621cafced52bdd4"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_correction/2026-10-14/lineage_manifest.json",
+      "sha256": "1393833dfa4ff1185e75c889dc4443aa7ebe5eb446b23c2fdf42e62ba77086d4"
+    },
+    {
+      "path": "backend/nhl/sog_divergence_shadow.py",
+      "sha256": "1c87f725e06b76160a1bd0ec05751eb6b881e5a56ab3262de754f773e243cc8b"
+    }
+  ],
+  "outputs": {
+    "continuous_partial_relationship.csv": "fd1a2e17c239a54f0d18dbd6a0a966f4e60c211f4ae891d3b7c6daa3f9b178f8",
+    "d10_divergence_grid.csv": "5d0a82c42263f25e5eefe7e49132512377481dc96036e73f0468bd4f9739a580",
+    "d20_comparison.csv": "37748a64e8852a9402e2f9d8edef4580aa46788588b6b74ec28c6f4f91321425",
+    "date_week_stability.csv": "fbfa933ec217a2078c1a5f92c22839de4d5b2199766ceeecd1c2b764633916a7",
+    "divergence_overlap.csv": "15bed24613b1705958479fe8c0886b52a07a48faead121d7045abf58557069d8",
+    "frozen_d10_cutpoints.csv": "304172a17f6c0a98157a24de7f916a18c0c3b8e9763855d3280a8ebe6f80ef42",
+    "historical_tail_metrics.csv": "630f7bd66dcdaf2b2cfb6872ec902323fa81f4994bf75713a92c2a3846d8d8fd",
+    "history_depth_interaction.csv": "a1b19976c5b36aa5ea0f4a43eeb57c0739bee638da364ed8ea1400a42ec31acd",
+    "lambda_interaction.csv": "88f881e8cee783e1f05512b9cbad99f42020b3cf196bd6b055c5a61ca005b98c",
+    "material_divergence_tail.csv": "9aaf677d815904a7cbc9efcad2b09bb24cf3180569036e4e6eeabce43927df55",
+    "near_agreement_tail.csv": "8723a94de352af943371860feaa1c3a66fdcb69a02215b23b3a6e2da08733b1e",
+    "nonlinear_tail_curve.csv": "7da28a6b32eadf3499f5cb0e381d8b5231efb0a4a7db568d8cb1dffce2e3cf71",
+    "player_robustness.csv": "37b58a910991a21a6fb8722f050144bce007f0fae84b48317fac72dcfccbc786",
+    "prospective_tail_metrics.csv": "6b163c800e8113c7965300095235d280b51029b23dd0f4605d1d78b48fd2e723",
+    "rate_volatility_interaction.csv": "966f1e7437e4ffd13ce8a9a29e517a97c88d21f0992d1f96564aba2b2d3daadd",
+    "replay_validation.csv": "e90c7666b66cabae7f516f91a6da15940151c0b4d7b02f45d2b29bf37e20953f",
+    "report.md": "42e9ba7b03e84f96355d2834338d63b05e923a4337b9d6ed282123cb64768c7c",
+    "summary.json": "80a3985b9045fcd88154bd32dfd6bf746352303b69e292b8b0d6d585de844699",
+    "toi_interaction.csv": "9d9262cab72121d2bd79aa7b70d58617fb7d27484351fa6201a19a551e756920"
+  },
+  "populations": {
+    "historical_rows": 13347,
+    "prospective_oct10_13_rows": 1107
+  },
+  "status": "COMPLETE",
+  "study": "NHL_SOG_EXTREME_RATE_AFTER_DIVERGENCE_V1"
+}

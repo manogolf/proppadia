@@ -1,0 +1,5 @@
+population,comparison,n,mismatch_count,max_abs_difference,tolerance
+historical,production_lambda_vs_lambda_replay,13347,0,1.3322676295501878e-15,1e-09
+historical,corrected_lambda_vs_lambda_SYMMETRIC_DIVERGENCE_SHRINK_V1,13347,0,1.3322676295501878e-15,1e-09
+prospective_oct10_13,production_lambda_vs_lambda_replay,1107,0,8.881784197001252e-16,1e-09
+prospective_oct10_13,corrected_lambda_vs_lambda_SYMMETRIC_DIVERGENCE_SHRINK_V1,1107,0,4.440892098500626e-16,1e-09

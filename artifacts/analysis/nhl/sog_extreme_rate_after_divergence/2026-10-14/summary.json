@@ -1,0 +1,99 @@
+{
+  "classification": "HIGH_RATE_ONLY_INDEPENDENT_BIAS_REMAINS",
+  "feature_classification": "CORE_CONTRIBUTOR_WITH_DIVERGENCE_AND_TAIL_BIAS",
+  "historical_certified_player_games": 13389,
+  "historical_common_valid_lambda_rows": 13347,
+  "historical_d10_d20_valid_rate_rows": 13369,
+  "near_agreement_residuals": {
+    "historical_bottom_decile": 0.26603974090118093,
+    "historical_top_decile": -0.36632088047557393,
+    "prospective_bottom_decile": 0.14074970317520033,
+    "prospective_top_decile": -0.22334402994362207
+  },
+  "prospective_oct10_13_player_games": 1107,
+  "prospective_oct14": "not added; no separately verified final immutable capture was included in frozen inputs",
+  "replay_validation": [
+    {
+      "comparison": "production_lambda_vs_lambda_replay",
+      "max_abs_difference": 1.3322676295501878e-15,
+      "mismatch_count": 0,
+      "n": 13347,
+      "population": "historical",
+      "tolerance": 1e-09
+    },
+    {
+      "comparison": "corrected_lambda_vs_lambda_SYMMETRIC_DIVERGENCE_SHRINK_V1",
+      "max_abs_difference": 1.3322676295501878e-15,
+      "mismatch_count": 0,
+      "n": 13347,
+      "population": "historical",
+      "tolerance": 1e-09
+    },
+    {
+      "comparison": "production_lambda_vs_lambda_replay",
+      "max_abs_difference": 8.881784197001252e-16,
+      "mismatch_count": 0,
+      "n": 1107,
+      "population": "prospective_oct10_13",
+      "tolerance": 1e-09
+    },
+    {
+      "comparison": "corrected_lambda_vs_lambda_SYMMETRIC_DIVERGENCE_SHRINK_V1",
+      "max_abs_difference": 4.440892098500626e-16,
+      "mismatch_count": 0,
+      "n": 1107,
+      "population": "prospective_oct10_13",
+      "tolerance": 1e-09
+    }
+  ],
+  "scope": {
+    "paid_credits": 0,
+    "production_db_mutations": 0,
+    "production_or_shadow_changed": false,
+    "provider_calls": 0
+  },
+  "second_experiment": "A second bounded high-D10 compression experiment is justified for study only; no cap or weights selected.",
+  "status": "COMPLETE",
+  "tail_cutpoints": [
+    {
+      "cutpoint": 1.9581524555292704,
+      "group": "bottom_5pct",
+      "population": "historical"
+    },
+    {
+      "cutpoint": 2.534144706290969,
+      "group": "bottom_decile",
+      "population": "historical"
+    },
+    {
+      "cutpoint": 8.927033916393453,
+      "group": "top_decile",
+      "population": "historical"
+    },
+    {
+      "cutpoint": 10.00104772941456,
+      "group": "top_5pct",
+      "population": "historical"
+    },
+    {
+      "cutpoint": 1.9356805637704968,
+      "group": "bottom_5pct",
+      "population": "prospective"
+    },
+    {
+      "cutpoint": 2.4628808852264408,
+      "group": "bottom_decile",
+      "population": "prospective"
+    },
+    {
+      "cutpoint": 9.123537031840756,
+      "group": "top_decile",
+      "population": "prospective"
+    },
+    {
+      "cutpoint": 10.415493456930108,
+      "group": "top_5pct",
+      "population": "prospective"
+    }
+  ]
+}

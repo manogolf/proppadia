@@ -1,0 +1,9 @@
+population,group,cutpoint
+historical,bottom_5pct,1.9581524555292704
+historical,bottom_decile,2.534144706290969
+historical,top_decile,8.927033916393453
+historical,top_5pct,10.00104772941456
+prospective,bottom_5pct,1.9356805637704968
+prospective,bottom_decile,2.4628808852264408
+prospective,top_decile,9.123537031840756
+prospective,top_5pct,10.415493456930108
