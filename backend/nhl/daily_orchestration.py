@@ -37,6 +37,7 @@ LANE_NAMES = (
     "roster",
     "legacy_sog",
     "sog_fixed_blend_shadows",
+    "sog_d10_d20_divergence_shadow",
     "points",
     "points_hgb_shadow",
     "saves",
