@@ -1,0 +1,81 @@
+{
+  "study": "NHL_SOG_TOI_EXPOSURE_CHARACTERIZATION_V1",
+  "sources": {
+    "historical_rows": {
+      "path": "artifacts/analysis/nhl/sog_baseline_characterization/2026-10-14/historical_characterization_rows.csv",
+      "sha256": "6eccf33f14b89282480fab628c992bdc93818015a2c7e3b932772e113b550fd1"
+    },
+    "prospective_paired_rows": {
+      "path": "artifacts/analysis/nhl/sog_baseline_characterization/2026-10-14/prospective_paired_rows.csv",
+      "sha256": "3dd0ba577ee2d5c2c76700a140b3b0da1dcb65a96a25961d9d7432f10de7e579"
+    },
+    "prospective_feature_bound_rows": {
+      "path": "artifacts/analysis/nhl/sog_baseline_characterization/2026-10-14/prospective_feature_bound_rows.csv",
+      "sha256": "e32fdc7531af7569f4112047dcda87839896022729fefff3f55a1a5be6cd6f7d"
+    },
+    "production_scorer": {
+      "path": "backend/nhl/scripts/score_sog_poisson_baseline.py",
+      "sha256": "cb1794d25ea91738321e1457b5d5b7be428e9e30f57e79f65f7b9bd70f532342"
+    },
+    "study_utility": {
+      "path": "backend/nhl/scripts/characterize_nhl_sog_toi_exposure.py",
+      "sha256": "82cc7437076e8ea5dd038693dc9987fc958c18590b503ab439bd0d5a9d11e64d"
+    },
+    "official_outcomes": [
+      {
+        "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-10/reconciliation=fbe3605043e75c263b78/canonical_skater_outcomes.csv",
+        "sha256": "c33bc07ea82d4397260b386d05ac330636b9b9eb3613cdf0c0dc3a94ad9a5ffa"
+      },
+      {
+        "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-11/reconciliation=e7da8655562d8ca577a9/canonical_skater_outcomes.csv",
+        "sha256": "7e69bf8612c7d12a451fa5d508490735b5079f9425ec1a387d6a5aa2c9d048fe"
+      },
+      {
+        "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-12/reconciliation=3d69dd4ed0bce1fe9846/canonical_skater_outcomes.csv",
+        "sha256": "ac1b3b9992826f957e8dd817f12c9893aa49e63aacc92087a6c4828de06ca5d3"
+      },
+      {
+        "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-13/reconciliation=ba0c2b3c3ef1bd1ddb99/canonical_skater_outcomes.csv",
+        "sha256": "96b5cf8df3e415f31eb16c992cbb3b6350657b1e50d71b66258212960fc0f0b9"
+      }
+    ]
+  },
+  "methods": {
+    "historical_denominator": "distinct game_id/player_id from certified exact/tolerance replay rows",
+    "prospective_denominator": "distinct game_id/player_id from settled Oct 8-13 paired production rows",
+    "feature_bound_denominator": "distinct feature-bound prospective player-games retained in baseline characterization",
+    "toi_error": "official canonical outcome toi parsed as MM:SS minus selected production exposure",
+    "replay_tolerance": 1e-09,
+    "oracle": "POSTGAME_ORACLE_DIAGNOSTIC_ONLY"
+  },
+  "output_hashes": {
+    "d10_d20_exposure_relationship.csv": "38dd1f4d3966cfd68c190a9f6d02d64e30f20321ce666de58a2847e401e422b6",
+    "date_metrics.csv": "16da7c72adfd2d1d03be93561cdf5619cef8c618eb9b3447f773bdf992fffe39",
+    "exposure_ablation_metrics.csv": "ba82ba98e8531cb4661020ccca6f5915d24c826b2ed475cabb1a711a091dc9df",
+    "exposure_weakness_scorecard.csv": "2c4cf20cd936db2c1083dc55b75d3da294e6561291d3b8b42506c9548768df3a",
+    "feature_bound_prospective_exposure_rows.csv": "c319ea737709407c32bb15b6d3a1893ab52019828eb59a0a9578c4f41cc669d2",
+    "historical_exposure_metrics.csv": "f179aa8149f6050d84df8e7137bd3cda14611cf747128c67f5801d28c1c5851f",
+    "historical_exposure_rows.csv": "45435792ec4126d28bee31ecbc16c42869bf3fce0c57273a49e2f330c4f0b656",
+    "historical_source_usage.csv": "2b48a25bbd812fc93459c4caecc5079208f7047c9b59712181bb0ea48e7d126f",
+    "home_away_metrics.csv": "bad30e7e4bfa4715466353f6ee36676733e3eb3d2219eb6ee897bdcd4f7f66fa",
+    "oracle_and_decomposition_rows.csv": "1c53c5aab9f4522f44119b16cdd60d19c95d19a747bbbe0d0bea9917eaa0bc1b",
+    "player_persistence_min3.csv": "ea04fcb0181fa31a75a2cc49a718b9bed8deef8a60dafcc84536d12f53978086",
+    "pp_role_metrics.csv": "812b33478b5f8076b6fa32640da782cc704b9f767b73061726ca1d7c13b6017b",
+    "prior_error_persistence.csv": "0b18bd639269e241eb812ad9bdc78f6e720534a8b35ef8106bb8fe5fea4fbba1",
+    "prior_error_sequence.csv": "a592415599665aebd929c8afa3698c745699d32c33f1f25e69a4bf703dd70aec",
+    "production_exposure_decision_tree.md": "fb45cdcbeed3b796f654d019c9622b8406602c16fc6ab7b88a9a132392d138c4",
+    "prospective_exposure_rows.csv": "6dd81ce1109673d29f30cd362794d784243dfb1c7445815a3d5c2758397135e5",
+    "prospective_source_usage.csv": "c8472e72d22e3286cc1751c977cae9f5759b8fb7a0543dc4d3f67b83917f0cf9",
+    "rate_vs_exposure_decomposition.csv": "5900e7329a754949d95388f03dcd9dad979f5efa5d6a51b82840d822fea37030",
+    "recent_season_divergence_metrics.csv": "7f543abca859dde6a20cd60af47acf8d5bc5f3da06b078647c17850e9f3cf5e2",
+    "recent_vs_season_metrics.csv": "8c49bc16f4a622a65d5ae58325fda9c5324b009462fe267e3d6e3c557ea679aa",
+    "recent_vs_season_rows.csv": "dbd64c2d1bb681a21f22eb0fe97010adc2725398635206fe90ae91c8e12cc774",
+    "report.md": "c3b64c6bede7cdab1f13d6b273bd57bd6dc10516bb2170391200a6879c652d89",
+    "source_contribution_classifications.csv": "91c00cf9fd535c72f6f0c44cca26d2ba868f1e5a0ebfc21258575382e46f1e31",
+    "source_metrics.csv": "824f6296e67a97319cd53f44d039af07cb26468a79e2a5c48f441cf7afd66ea9",
+    "summary.json": "5ab0d9ce959f1b458feeb869a0a4052d1e61933a4f4ffc32df7799115ffc7d19",
+    "team_metrics_min20.csv": "e8672ac6df39d6db81692c26cb302f47f84c2efe568f97a9072d9470fac3ce85",
+    "toi_error_bins.csv": "c1df94b7f6d56bf8e4474c398a92338a7f48cab06b7c1fc409e818898d433a9f",
+    "toi_error_distribution.csv": "8505ee2246b5101a1963e84515bd8c0adf622719f8cae51e45c155a5b88ce45a"
+  }
+}

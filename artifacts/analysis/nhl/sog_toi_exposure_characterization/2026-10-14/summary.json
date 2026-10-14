@@ -1,0 +1,85 @@
+{
+  "study": "NHL_SOG_TOI_EXPOSURE_CHARACTERIZATION_V1",
+  "classification": "EXPOSURE_REPLAY_CONFIRMED_PROSPECTIVE_TOI_ERROR_AVAILABLE_HISTORICAL_TOI_GAP",
+  "historical_player_games": 13389,
+  "prospective_certified_player_games": 1608,
+  "prospective_feature_bound_player_games": 1107,
+  "outcomes_joined_rows": 1107,
+  "source_usage": {
+    "historical": {
+      "d10_toi_min_avg": 13347,
+      "UNAVAILABLE": 42
+    },
+    "prospective_feature_bound": {
+      "d10_toi_min_avg": 1107
+    }
+  },
+  "replay_validation": {
+    "historical": {
+      "rows": 13389,
+      "matched_within_1e-9": 13347,
+      "mismatches": 0,
+      "max_abs_lambda_error": 1.3322676295501878e-15,
+      "unreplayable": 42
+    },
+    "prospective_feature_bound": {
+      "rows": 1107,
+      "matched_within_1e-9": 1107,
+      "mismatches": 0,
+      "max_abs_lambda_error": 8.881784197001252e-16,
+      "unreplayable": 0
+    }
+  },
+  "toi_error_metrics": {
+    "historical_actual_toi": "NOT_RETAINED_IN_CERTIFIED_HISTORICAL_PACKAGE",
+    "prospective": {
+      "n": 1107,
+      "mean": -0.1544902854848655,
+      "median": -0.11333333333333329,
+      "mae": 1.9715726186891496,
+      "rmse": 2.642163470860515,
+      "quantiles": {
+        "0.05": -4.301233333333332,
+        "0.25": -1.6758333333333342,
+        "0.75": 1.4261666666666657,
+        "0.95": 3.8732333333333386
+      }
+    }
+  },
+  "toi_error_vs_sog_residual": {
+    "n": 1107,
+    "pearson_r": 0.1736450084086453,
+    "spearman_rho": 0.1454128413506426,
+    "descriptive_slope_sog_residual_per_toi_min": 0.08862256183432352,
+    "linear_r_squared": 0.030152588945238496
+  },
+  "oracle": {
+    "label": "POSTGAME_ORACLE_DIAGNOSTIC_ONLY",
+    "n": 1107,
+    "production_count_mae": 1.039489183079507,
+    "actual_toi_oracle_count_mae": 1.0099395935097595,
+    "mae_improvement": 0.029549589569747514,
+    "rate_component_mean": 0.055131860845742876,
+    "rate_component_mean_abs": 1.010852739616007,
+    "exposure_component_mean": -0.005617720858108381,
+    "exposure_component_mean_abs": 0.15875267900889053,
+    "interaction_component_mean": 0.009138834183222271,
+    "interaction_component_mean_abs": 0.12548420619085454,
+    "identity_max_abs_error": 1.1830814106161824e-15
+  },
+  "recent_vs_season": {
+    "n": 1104,
+    "recent_mae": 1.9700056360708535,
+    "season_mae": 2.4492842106146004,
+    "recent_closer": 677,
+    "season_closer": 427,
+    "ties": 0
+  },
+  "limits": [
+    "Official realized per-player TOI is not retained in the certified 2025 historical replay package; historical TOI-error, oracle and exposure-vs-residual claims cannot be computed.",
+    "Forty-two historical certified rows have no retained exposure inputs or selected source and are unreplayable; remaining 13,347 rows match production lambda within tolerance.",
+    "Feature-bound prospective window is limited by immutable captured feature evidence; no new provider or database reads were made.",
+    "Position role is not retained in feature-bound rows; role comparisons cannot be produced.",
+    "No replacement, correction, filter, or production change was built."
+  ]
+}

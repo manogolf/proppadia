@@ -1,0 +1,5 @@
+question,classification,evidence
+Systematic mean TOI bias,NOT_ESTABLISHED,Prospective mean -0.154 min; historical actual TOI unavailable.
+Residual association,WEAK_DESCRIPTIVE_SIGNAL,"r=0.174, R2=0.030 in 1,107 feature-bound player-games."
+Oracle headroom,SMALL,Count MAE improves 0.030 SOG using postgame actual TOI.
+Correction study justified,NO_PENDING_HISTORICAL_TOI_BINDING,No historical official TOI to test stability; short prospective window; oracle gain small.

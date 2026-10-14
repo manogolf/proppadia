@@ -1,0 +1,6 @@
+component,classification,evidence
+D10 recent TOI,CORE_IN_AVAILABLE_POPULATION,"Supplies exposure for 13,347/13,389 historical replay rows and 1,107/1,107 feature-bound prospective rows; alternate-source fallback not observed prospectively."
+D20 / D5 TOI fallbacks,CONDITIONAL_REDUNDANT_FALLBACK,Scorer reaches only if preceding TOI is missing; no prospective feature-bound rows required fallback.
+Season TOI fallbacks,CONDITIONAL_FALLBACK_UNVALIDATED,Fallbacks exist in scorer but did not control selected exposure in available measured prospective rows.
+PP TOI,CONDITIONAL,Included only in season 5v5+PP fallback; no separate production multiplier.
+Exposure as SOG error driver,SMALL_ASSOCIATION_NOT_DOMINANT,Prospective Pearson r=0.174; R2=0.030; actual-TOI oracle count MAE gain=0.030 on baseline 1.039.
