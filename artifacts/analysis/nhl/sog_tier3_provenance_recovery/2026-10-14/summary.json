@@ -1,0 +1,95 @@
+{
+  "all_archived_rows_binding": "Exact (game_id, player_id, slate_date) from archived keys and canonical schedule",
+  "audit_date": "2026-10-14",
+  "canonical_games": 1312,
+  "december_tier2": 5991,
+  "december_tier3": 9371,
+  "feature_archived_tier3_player_games": 39701,
+  "limitations": [
+    "No feature archive row is bound to an original pregame run receipt/cutoff.",
+    "Tier2 means retrospective strict-prior rebuild from retained final game logs and retrospective shift/manpower data; it does not prove the original archived row was pregame.",
+    "Raw history has appeared-player rows, not expected pregame skater denominator.",
+    "The selected exposure reconstruction is exact only where the archived selected feature matches within tolerance; mismatch rows remain Tier 3."
+  ],
+  "monthly_recoverability": {
+    "2025-10": {
+      "pct": 76.99216950713956,
+      "remaining": 999,
+      "tier2": 3343,
+      "tier3": 4342
+    },
+    "2025-11": {
+      "pct": 71.27503663898388,
+      "remaining": 2352,
+      "tier2": 5836,
+      "tier3": 8188
+    },
+    "2025-12": {
+      "pct": 63.93127734500054,
+      "remaining": 3380,
+      "tier2": 5991,
+      "tier3": 9371
+    },
+    "2026-01": {
+      "pct": 52.725063101804245,
+      "remaining": 5057,
+      "tier2": 5640,
+      "tier3": 10697
+    },
+    "2026-02": {
+      "pct": 49.10745537276864,
+      "remaining": 1454,
+      "tier2": 1403,
+      "tier3": 2857
+    },
+    "2026-03": {
+      "pct": 90.30837004405286,
+      "remaining": 242,
+      "tier2": 2255,
+      "tier3": 2497
+    },
+    "2026-04": {
+      "pct": 92.3956546598056,
+      "remaining": 133,
+      "tier2": 1616,
+      "tier3": 1749
+    }
+  },
+  "paid_credits": 0,
+  "production_db_mutations": 0,
+  "provider_calls": 0,
+  "pushed": false,
+  "recovery_value_status": "SUBSTANTIAL_TIER2_RECOVERY_AVAILABLE",
+  "remaining_tier3": 13617,
+  "structural_studies_justified": "YES, research-only after this provenance package; the objective forbids executing them now",
+  "tier1_certified_player_games": 13389,
+  "tier1_plus_tier2_line_rows": 118419,
+  "tier1_plus_tier2_player_games": 39473,
+  "tier1_reconstruction_validation": {
+    "certified_player_games_tested": 13389,
+    "lambda_missing": 42,
+    "max_abs_probability_difference_all_rows": 0.12734072300759336,
+    "max_abs_probability_difference_on_exact_input_subset": 8.881784197001252e-16,
+    "max_abs_rolling_exposure_difference": 6.263,
+    "performance_scoring": false,
+    "player_games_with_exact_reconstructed_selected_inputs": 13143,
+    "player_games_with_input_mismatch": 246,
+    "probability_comparisons": 40041,
+    "probability_comparisons_on_exact_input_subset": 39429,
+    "probability_matches_within_1e_12_on_exact_input_subset": 39429,
+    "probability_missing": 42,
+    "probability_rows_within_1e_12": 39444,
+    "rolling_exposure_rows_within_1e_9": 12873,
+    "season_exposure_fallback_rows_within_1e_9": 5378,
+    "validation_scope": "same player-game strict-prior inputs compared to archived selected features and all three certified threshold probabilities; input-matching subset validates exact parity; feature/prediction only, not performance"
+  },
+  "tier2_original_pregame_proven": 0,
+  "tier2_retrospective_strict_prior_reconstructed": 26084,
+  "tier3_evidence_classes": {
+    "A_IMMUTABLE_RUN_BOUND": 0,
+    "B_RECONSTRUCTABLE_STRICT_PRIOR": 26084,
+    "C_CODE_ONLY_SUPPORT": 13586,
+    "D_TIMESTAMP_ONLY": 0,
+    "E_NO_PROVENANCE": 31
+  }
+}

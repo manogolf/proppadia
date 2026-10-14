@@ -1,0 +1,63 @@
+{
+  "method": "Local retrospective strict-prior reconstruction; no scoring/performance conclusions on Tier3",
+  "outputs": {
+    "archived_feature_inventory.csv": "c72194a924f245163902b194a14fd64b920bfeaee2161f45068f3f8aa26022db",
+    "database_chronology_evidence.csv": "456fc30c93c8dbd4f0b7d2f5acf0e0c8f03cc8c9b0ca841acc3364ed37e4c45f",
+    "december_recovery_map.csv": "7aba811c947cfb01c1449598d5678cd5c1b5893daa60268af4ca270273f2e7a0",
+    "generation_code_timeline.csv": "95c88923c3a4e3d1b5705bc4cedaca301dfddd365505724df4b7059024ed9df8",
+    "git_provenance_timeline.csv": "72eaaf0aafd9b461ee26254226c2ace85ffb9d611388d01ce9c31b46d88ad68b",
+    "irrecoverable_reason_table.csv": "8345e17291ddaca023a7e492d3cbe6026d7c721517edf1285c9a2841cd5c6e77",
+    "month_level_recoverability.csv": "32c0c48b61f2db9e6ab53fe16ba867029f9f1ee1ebc9dac501924155628f60aa",
+    "player_game_binding_counts.csv": "5defb0b146e6c395a04979bf7a509a3f97583ead5ade3492c67b203446141406",
+    "player_game_binding_status.csv": "9f5012710ab1cdba975b2810c4947b07fb4528eb931951ae2adfd2e7ce5e24ef",
+    "provenance_evidence_class_counts.csv": "2c6bc9ce048197e85228fe604e3df9f98736c57b9fc486088414192df03856a9",
+    "raw_input_availability.csv": "d85835baac253df05549756012257404748c2bd0ac4140b97806b3a639213a90",
+    "report.md": "2c9ad744846c275815e787b554e962ee17187b1b1a5b4c0d2585efa7f649d7bb",
+    "representative_reconstruction_rows.csv": "306716c43927975a2b11c1d4bfd64e2178a11207687bbfa260bc05d18f121a2d",
+    "representative_reconstruction_summary.csv": "e5486b8bffde776b6595773fc45692baeaacf6ac6bf48a2c984fd0b10c424c73",
+    "retained_player_game_situation_toi.csv": "083a02268a5a8afdb68895f0f8f08c8ab52778c8bd2479028986535abeabdd9a",
+    "run_receipt_manifest_inventory.csv": "94db18d370e278934fa8291b9e8d82591c6f84f28e83c016beb27e96be64b168",
+    "strict_prior_reconstruction_rows.csv": "326fe21f4505dff543084bdaaee7a3055fc1bd9874f23d439d3914e9132f6917",
+    "summary.json": "9ad95ecde34c61531849ad5e72907c0aa656a2d16430e560ae2242ca495f06ef",
+    "tier1_reconstruction_validation.json": "410e39639380f474a9cfbe916b1751a1bef8d1ba59fbbbb3a7e0c8ee5d9c1ea5",
+    "tier1_reconstruction_validation_rows.csv": "0f486dfec92a23002fe2fac9ce6763456ea38916f2923e8e3356873d1276f867"
+  },
+  "policy": {
+    "exposure": "mean total TOI minutes over last N strictly earlier logs; N=10,20,5 priority",
+    "lambda": "rate * exposure / 60",
+    "prior_predicate": "source game_date < target slate_date",
+    "rate": "mean per-appearance SOG per60 over last N strictly earlier regular-season logs; N=10,20,5 priority",
+    "thresholds": {
+      "1.5": 2,
+      "2.5": 3,
+      "3.5": 4
+    },
+    "tier2_label": "retrospective strict-prior reconstruction only if lambda inputs exist; no claim original row was captured pregame"
+  },
+  "sources": [
+    {
+      "path": "artifacts/analysis/model_development/nhl_sog_cold_start_prediction_platform_v1/2026-09-19/retained_game_schedule_snapshot.parquet",
+      "sha256": "0b0707ca52701ef47d95815cf43143c1c6972e2099fb26da962c1422a2bf3600"
+    },
+    {
+      "path": "artifacts/analysis/model_development/nhl_sog_cold_start_prediction_platform_v1/2026-09-19/retained_skater_history_snapshot.parquet",
+      "sha256": "fc2ea96eb226ac384e38db96e1da30a7a9026fca59fc22f607da7d2941d603f5"
+    },
+    {
+      "path": "artifacts/analysis/model_development/nhl_sog_outcome_denominator_certification/2026-07-13/nhl_sog_complete_prediction_qualification_ledger_2026-07-13.csv",
+      "sha256": "92a9563fe73e3eb5ebff4310056d9e0a7f18f2a6629b5c75a32894dbae9da5aa"
+    },
+    {
+      "path": "backend/nhl/scripts/score_sog_poisson_baseline.py",
+      "sha256": "cb1794d25ea91738321e1457b5d5b7be428e9e30f57e79f65f7b9bd70f532342"
+    },
+    {
+      "path": "backend/nhl/sql/seed_sog_features_for_slate.sql",
+      "sha256": "10315413c4097c7d8a4437bf6dbeb709ca04cf26401fff7e58e07003458bc561"
+    },
+    {
+      "path": "backend/nhl/sql/fill_sog_toi_features_for_slate.sql",
+      "sha256": "21fb4840478b968e5ea28c33369c98326eaa42d074e1f0dfc427c6d6abba5c03"
+    }
+  ]
+}

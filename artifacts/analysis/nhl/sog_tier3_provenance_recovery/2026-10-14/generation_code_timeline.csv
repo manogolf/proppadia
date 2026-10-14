@@ -1,0 +1,5 @@
+path,current_sha256,has_strict_prior_game_date_predicate,mentions_earlier_than_slate,assessment
+backend/nhl/sql/seed_sog_features_for_slate.sql,10315413c4097c7d8a4437bf6dbeb709ca04cf26401fff7e58e07003458bc561,True,True,Current file has explicit strict-prior date predicate; historic generation not bound to this exact revision
+backend/nhl/sql/fill_sog_toi_features_for_slate.sql,21fb4840478b968e5ea28c33369c98326eaa42d074e1f0dfc427c6d6abba5c03,True,False,Current file has explicit strict-prior date predicate; historic generation not bound to this exact revision
+backend/nhl/sql/fill_sog_season_toi_features_for_slate.sql,7d20c0cbfb4dc002d85294c48b962e174c383f089e34992186a66f97d7f987a9,True,False,Current file has explicit strict-prior date predicate; historic generation not bound to this exact revision
+backend/nhl/sql/export_sog_denali_pregame.sql,335f96e5d84a54307a8cbccd749de5f97f9a9adc0426d362c9aaac8ad8a30d08,True,False,Current file has explicit strict-prior date predicate; historic generation not bound to this exact revision

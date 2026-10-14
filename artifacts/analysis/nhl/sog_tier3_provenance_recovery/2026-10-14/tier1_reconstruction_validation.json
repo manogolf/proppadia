@@ -1,0 +1,18 @@
+{
+  "certified_player_games_tested": 13389,
+  "lambda_missing": 42,
+  "max_abs_probability_difference_all_rows": 0.12734072300759336,
+  "max_abs_probability_difference_on_exact_input_subset": 8.881784197001252e-16,
+  "max_abs_rolling_exposure_difference": 6.263,
+  "performance_scoring": false,
+  "player_games_with_exact_reconstructed_selected_inputs": 13143,
+  "player_games_with_input_mismatch": 246,
+  "probability_comparisons": 40041,
+  "probability_comparisons_on_exact_input_subset": 39429,
+  "probability_matches_within_1e_12_on_exact_input_subset": 39429,
+  "probability_missing": 42,
+  "probability_rows_within_1e_12": 39444,
+  "rolling_exposure_rows_within_1e_9": 12873,
+  "season_exposure_fallback_rows_within_1e_9": 5378,
+  "validation_scope": "same player-game strict-prior inputs compared to archived selected features and all three certified threshold probabilities; input-matching subset validates exact parity; feature/prediction only, not performance"
+}

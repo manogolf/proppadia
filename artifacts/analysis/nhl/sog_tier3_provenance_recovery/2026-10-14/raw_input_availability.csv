@@ -1,0 +1,4 @@
+source,rows,date_min,date_max,created_at_min,created_at_max,created_at_unique_count,supports_strict_prior_rebuild,proves_original_pregame_capture
+retained_skater_history_snapshot.parquet,144225,2023-10-10,2026-04-15,2025-09-20T01:40:26.753593+00:00,2026-04-16T12:50:49.686090+00:00,226,YES; game_date/game_id/SOG/TOI are present; filter game_date < target,NO; bulk-loaded October 2025 rows have created_at in December 2025
+retained_game_schedule_snapshot.parquet,1312,2025-10-07,2026-04-16,,,0,YES; game_id/date/start_time_utc retained,NO; schedule only
+retained_player_game_situation_toi.csv (read-only database derivation),38908,2025-10-07,2026-04-15,2026-01-03 23:16:23.555793+00:00,2026-04-16 21:35:25.903070+00:00,501,"YES; reconstructed EV/PP/PK game TOI from retained raw shift intervals and manpower segments, then cutoff by game_date < target",NO; source ingested after source games

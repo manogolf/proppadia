@@ -1,0 +1,10 @@
+path,sha256,relevant_terms,finding
+backend/nhl/sql/migrations/20260301_create_blocked_shot_events.sql,bec3d940f1371290e4c3f162882f01fda2aaabce965ed7c036d3faad936778b5,created_at,No retained migration establishes historical created_at/asof semantics for this snapshot
+backend/nhl/sql/migrations/20260228_create_nhl_user_props.sql,00b8342b9beb89e510ccdb5c171f21746cc7d01e34d6a6398743c2e15265bfc8,created_at,No retained migration establishes historical created_at/asof semantics for this snapshot
+backend/nhl/sql/migrations/20260301_create_shot_on_goal_events.sql,9485e8accb32c56933f79cb0d6535fec1893f6de0e83ec95ce214901cbe24c6a,created_at,No retained migration establishes historical created_at/asof semantics for this snapshot
+backend/nhl/sql/migrations/20260301_add_skater_blocks_stage.sql,cb85f0ee6c2ab7bb57b13801aeb2fc40258aa4e54746ff53c065c482b3dea99c,skater_game_logs_raw,No retained migration establishes historical created_at/asof semantics for this snapshot
+backend/nhl/sql/migrations/20251027_add_points_columns.sql,337a3f19c894b888b7462c547d270ce790035e27e10cea20fd154cd55d742e4c,skater_game_logs_raw,No retained migration establishes historical created_at/asof semantics for this snapshot
+backend/nhl/sql/migrations/20260222_drop_legacy_nhl_relations.sql,6e8cba2852653bb1a55e082d3f8e21c1c2bf3016aa00f7149ffafc628a0ae95c,training_features_sog,No retained migration establishes historical created_at/asof semantics for this snapshot
+READ_ONLY_DB:nhl.shiftcharts_shifts,,game_id;player_id;start_sec;end_sec;dur_sec;ingested_at,2025 season regular-season aggregates: 769466 shifts across 1036/1312 games; ingested_at 2026-01-03 through 2026-04-16
+READ_ONLY_DB:nhl.game_manpower_segments,,game_id;period;start_sec;end_sec;pp_team_id;pk_team_id;created_at,7501 segments across 1302/1312 games; created_at 2026-01-11 through 2026-04-16
+READ_ONLY_DB:nhl.training_features_nhl_sog_enriched_pregame_v2,,player_id;game_id;game_date;feature columns;no immutable row cutoff/receipt,Schema provides identity/date and mutable feature values; no immutable historical feature run/cutoff binding
