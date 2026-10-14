@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from datetime import datetime, timezone
 import hashlib
 import json
 import shutil
@@ -15,6 +16,7 @@ from unittest.mock import patch
 import pandas as pd
 
 from backend.nhl.analysis_package_guard import begin_package, finalize_package, verify_manifest
+from backend.nhl.cli import _record_completed_moneyline_capture
 from backend.nhl.cross_market_shadow.core import (
     CONTROL_NAME,
     FEATURES,
@@ -30,7 +32,7 @@ from backend.nhl.cross_market_shadow.core import (
     verify_capture_package,
     write_manifest,
 )
-from backend.nhl.daily_orchestration import artifact_identity
+from backend.nhl.daily_orchestration import DailyRunRecorder, artifact_identity
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -93,6 +95,7 @@ def fixture_files(directory: Path) -> dict[str, Path]:
     odds = {
         "capture_timestamp_utc": RUN_TIME,
         "provider": "SYNTHETIC_LOCAL_REHEARSAL_NO_NETWORK",
+        "parent_daily_odds_observation_manifest_sha256": "a" * 64,
         "quota": {**quota_estimate(), "credits_consumed": 0, "requests_remaining": 999},
         "provider_response": [{
             "id": "synthetic-event-2026010001", "home_team": "Montreal Canadiens",
@@ -311,6 +314,48 @@ def run_validation(work: Path) -> tuple[list[dict], dict]:
           != float(shadow_ml.v2_home_win_probability.iloc[0]),
           {"production": production_ml.to_dict("records"),
            "shadow": shadow_ml.to_dict("records")})
+    recorder = DailyRunRecorder(
+        run_id="moneyline-recorder-contract", command=["daily", "--with-odds"],
+        phase="EARLY", started_at=datetime.now(timezone.utc))
+    odds_lineage = {
+        "path": str(paths["odds"].resolve()),
+        "manifest_sha256": "a" * 64,
+        "classification": "CAPTURED_NONEMPTY",
+    }
+    recorder.odds_observation = odds_lineage
+    recorder.start_lane("moneyline", inputs=[odds_lineage])
+    try:
+        recorder.finish_lane("moneyline", inputs=[odds_lineage])
+    except TypeError as error:
+        unsupported_inputs_failure = str(error)
+    else:
+        unsupported_inputs_failure = "NO_FAILURE"
+    check("finish_lane rejects unsupported inputs keyword",
+          "unexpected keyword argument 'inputs'" in unsupported_inputs_failure,
+          unsupported_inputs_failure)
+    completion = verify_capture_package(regular_run)
+    _record_completed_moneyline_capture(
+        recorder, regular_run, regular_status,
+        {"authority_version": 1, "production_role": v3_identity, "shadow_role": v2_identity},
+        odds_envelope_used=True, odds_integrity_error=None,
+        odds_lineage={"odds_observation_manifest_sha256": "a" * 64},
+    )
+    recorder_root = work / "moneyline_recorder_receipt"
+    receipt_dir = recorder.finalize(recorder_root)
+    receipt = json.loads((receipt_dir / "parent_receipt.json").read_text())
+    moneyline_lane = receipt["lanes"]["moneyline"]
+    completion_output = next(item for item in moneyline_lane["outputs"]
+                             if "cross_market_capture_path" in item)
+    check("Moneyline recorder completes with supported API and retains lineage",
+          moneyline_lane["status"] == "COMPLETE"
+          and moneyline_lane["inputs"][0].get("validated_manifest_sha256") == "a" * 64
+          and completion_output["cross_market_capture_path"] == str(regular_run.resolve())
+          and completion_output["state_sha256"] == regular_run.name.removeprefix("state=")
+          and completion_output["completion_status"] == "COMPLETE"
+          and completion_output["game_ids"] == [2026020600]
+          and completion_output["production_model"] == v3_identity
+          and completion_output["shadow_model"] == v2_identity,
+          moneyline_lane)
     # Exercise the same fail-closed checks used by the current-run integration.
     marker_path = regular_run / "RUN_COMPLETE.json"
     marker_bytes = marker_path.read_bytes()

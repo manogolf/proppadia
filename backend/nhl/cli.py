@@ -1526,6 +1526,52 @@ def _cross_market_envelope_from_daily_observation(
     }
 
 
+def _record_completed_moneyline_capture(
+    recorder: DailyRunRecorder, cross_run: Path, cross_status: Mapping[str, Any],
+    authority: Mapping[str, Any], *, odds_envelope_used: bool,
+    odds_integrity_error: BaseException | None, odds_lineage: Mapping[str, Any],
+) -> None:
+    """Record a validated Moneyline package using the daily recorder contract."""
+    cross_run = Path(cross_run)
+    outputs = [artifact_identity(cross_run / name) for name in (
+        "moneyline_production_predictions.csv",
+        "moneyline_production_market_ledger.csv",
+        "moneyline_schedule_logit_v2_shadow_predictions.csv",
+        "moneyline_shot_finishing_challenger_v3_feature_provenance.csv",
+        "moneyline_shot_finishing_challenger_v3_ledger.csv",
+        "daily_execution_status.json", "RUN_COMPLETE.json", "SHA256SUMS",
+    )]
+    recorder.moneyline_authority = dict(authority)
+    lane = recorder.lane("moneyline")
+    if recorder.odds_observation and odds_integrity_error is None:
+        for lane_input in lane.inputs:
+            if lane_input.get("path") == recorder.odds_observation.get("path"):
+                lane_input["validated_manifest_sha256"] = odds_lineage.get(
+                    "odds_observation_manifest_sha256")
+                break
+    lane.inputs.append({
+        "authority_version": authority["authority_version"],
+        "production_model": authority["production_role"],
+        "shadow_model": authority["shadow_role"],
+        "parent_odds_reused": bool(odds_envelope_used),
+    })
+    outputs.append({
+        "cross_market_capture_path": str(cross_run.resolve()),
+        "state_sha256": cross_run.name.removeprefix("state="),
+        "run_type": cross_status.get("run_type"),
+        "mode": cross_status.get("mode"),
+        "production_model": cross_status.get("moneyline_production_model"),
+        "shadow_model": cross_status.get("moneyline_shadow_model"),
+        "game_ids": sorted(pd.read_csv(cross_run / "schedule_event_identity.csv").game_id.astype(int).unique().tolist()),
+        "game_count": int(cross_status.get("moneyline_games_captured", 0)),
+        "completion_status": "COMPLETE",
+        "completion_marker_sha256": sha256_file(cross_run / "RUN_COMPLETE.json"),
+        "odds_observation_manifest_sha256": cross_status.get(
+            "moneyline_parent_odds_observation_manifest_sha256"),
+    })
+    recorder.finish_lane("moneyline", outputs=outputs, provider_requests=0, credits_consumed=0)
+
+
 def _run_independent_daily_lanes(
     *, recorder: DailyRunRecorder, db: str, slate: str, with_odds: bool,
     odds_phase: str, daily_run_id: str, canonical_games,
@@ -1937,7 +1983,6 @@ def _run_independent_daily_lanes(
                 recorder.finish_lane(
                     "moneyline", status="SKIPPED_NO_REGULAR_SEASON_MONEYLINE",
                     reason="NO_ELIGIBLE_REGULAR_SEASON_MONEYLINE_PREDICTIONS",
-                    inputs=([recorder.odds_observation] if recorder.odds_observation else []),
                     outputs=[artifact_identity(cross_run / "daily_execution_status.json")],
                     provider_requests=0, credits_consumed=0)
                 recorder.moneyline_authority = authority
@@ -1947,25 +1992,12 @@ def _run_independent_daily_lanes(
             if not continue_moneyline_to_export:
                 _ACTIVE_DAILY_LANE = "shared_prerequisites"
             else:
-                outputs = [artifact_identity(cross_run / name) for name in (
-                    "moneyline_production_predictions.csv",
-                    "moneyline_production_market_ledger.csv",
-                    "moneyline_schedule_logit_v2_shadow_predictions.csv",
-                    "moneyline_shot_finishing_challenger_v3_feature_provenance.csv",
-                    "moneyline_shot_finishing_challenger_v3_ledger.csv",
-                    "daily_execution_status.json", "RUN_COMPLETE.json", "SHA256SUMS",
-                )]
-                recorder.moneyline_authority = authority
-                recorder.finish_lane("moneyline", inputs=[
-                    *([{
-                        **recorder.odds_observation,
-                        "validated_manifest_sha256": odds_lineage.get("odds_observation_manifest_sha256"),
-                    }] if recorder.odds_observation and odds_integrity_error is None else []),
-                    {"authority_version": authority["authority_version"],
-                     "production_model": authority["production_role"],
-                     "shadow_model": authority["shadow_role"],
-                     "parent_odds_reused": bool(odds_envelope_path)},
-                ], outputs=outputs, provider_requests=0, credits_consumed=0)
+                _record_completed_moneyline_capture(
+                    recorder, cross_run, cross_status, authority,
+                    odds_envelope_used=bool(odds_envelope_path),
+                    odds_integrity_error=odds_integrity_error,
+                    odds_lineage=odds_lineage,
+                )
         except Exception as error:
             recorder.fail_lane("moneyline", error, blocking=True)
 
