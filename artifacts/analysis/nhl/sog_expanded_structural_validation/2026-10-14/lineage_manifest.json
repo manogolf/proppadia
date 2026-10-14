@@ -1,0 +1,52 @@
+{
+  "fixed_rules": {
+    "divergence": "if abs(D10-D20)>0.5 then midpoint; otherwise D10",
+    "high_rate": "if D10>9 and corrected rate>9 then 9+0.5*(corrected rate-9)",
+    "thresholds": {
+      "1.5": 2,
+      "2.5": 3,
+      "3.5": 4
+    }
+  },
+  "input_sha256": {
+    "artifacts/analysis/model_development/nhl_sog_cold_start_prediction_platform_v1/2026-09-19/retained_skater_history_snapshot.parquet": "fc2ea96eb226ac384e38db96e1da30a7a9026fca59fc22f607da7d2941d603f5",
+    "artifacts/analysis/nhl/sog_full_season_reconstruction_audit/2026-10-14/certified_frozen_correction_rows.csv": "f8b326bb440ad1dd0a015c9c59f3cfa5befd5d4c201fec931dfb2bf8b1a31195",
+    "artifacts/analysis/nhl/sog_full_season_reconstruction_audit/2026-10-14/reconstruction_eligibility.csv": "b8d0f0ed15bdcf489addf46f5faea91f5feaaeccdef0b54d0c82ff15fffb5e88",
+    "artifacts/analysis/nhl/sog_tier3_provenance_recovery/2026-10-14/strict_prior_reconstruction_rows.csv": "326fe21f4505dff543084bdaaee7a3055fc1bd9874f23d439d3914e9132f6917",
+    "artifacts/analysis/nhl/sog_tier3_provenance_recovery/2026-10-14/summary.json": "9ad95ecde34c61531849ad5e72907c0aa656a2d16430e560ae2242ca495f06ef",
+    "artifacts/analysis/nhl/sog_tier3_provenance_recovery/2026-10-14/tier1_reconstruction_validation_rows.csv": "0f486dfec92a23002fe2fac9ce6763456ea38916f2923e8e3356873d1276f867"
+  },
+  "method": "Fixed-rule descriptive structural evaluation; only validated Tier 1 overlap and exact-parity Tier 2 with retained final outcomes; no Tier 3",
+  "outputs_sha256": {
+    "backlog_context.json": "498708101bc9fe36683d1d7ebaa896ea1c08126435edbc36178de47b212717cf",
+    "baseline_safety.csv": "c8eebd7151fc744572699b0b76ea2d20e6611989e9c59bf9ce6da61ef91f4548",
+    "d5_d10_d20_context.csv": "d7c43d0f9eabd8b3ac9705040b74d0a62d44b028b72ce7d1b58b83f39833e44a",
+    "date_week_stability.csv": "a9f1748b8fecc6a5177dafc71ffa19367f26ac4cf5a70fd801787adb6108625a",
+    "date_week_stability_summary.csv": "35d290de26bf9df728cde637385848683524a7747652e0a6296c4c821312b556",
+    "divergence_metrics.csv": "1f762fbf70a719bd103ce1e5287e2a7e3105b2560d55f561418b6f64291454c6",
+    "early_middle_late_comparison.csv": "ebaa47a6bfb2e809188ae7c3d1a3dc4c2f6043b2c103217ae744d092460cfb02",
+    "fixed_d20_comparison.csv": "f7287e1ff01678cd5b54699cf0cbeef810d372d6107dd85b6260dd85dbf94a34",
+    "global_count_metrics.csv": "f7287e1ff01678cd5b54699cf0cbeef810d372d6107dd85b6260dd85dbf94a34",
+    "global_line_metrics.csv": "623c106936ff0ad8e3d2a87e4e2e2c73a26386525bc5e9e1178e3564a1bf60a2",
+    "high_rate_metrics.csv": "ca12733ecf08dd507ab055dde15584312709a7781ccf64c7f1b7c4fc2e319870",
+    "month_level_correction_metrics.csv": "73340e809278bf51afc10556351d792fc4d8762f33199f33a4dcfab7651496c1",
+    "month_level_structural_metrics.csv": "e12a4e303b1a14865e70f5482bec073319a9ab98f0904837b95294ae47c34535",
+    "near_agreement_high_rate_metrics.csv": "8d0d7d68346af9280bd384b0db02da21862dc3ca597504b8fbb02e1852c07ed9",
+    "overlap_high_rate_divergence_metrics.csv": "94bc219dc501bbf3768860275adb605640f4bba41b5b6ecac2385cc814a6f81f",
+    "player_robustness.csv": "cc71b22ea99e1a752197d263d447fd179f22408a6e49145810b2dbd794450df7",
+    "player_robustness_summary.csv": "a6ca45db1b97350749a49154021b5cd397a26e3ebdff80c47610d19a7a43f0bf",
+    "population_disposition.csv": "6d058e0686dff13765b9b24f2c29c860211ec3bc74d29f78d6c11a7fa926df60",
+    "population_manifest.json": "f37f234b89647879a7bd0a8ed2064df3378dc168c009a34be142c263b62e19b3",
+    "rate_tail_cutpoints.csv": "2395021a7ee30feae69c4d63d0b37b3ef53f2d2ee609627bae7d35fc0408d6b4",
+    "reconstruction_validation.csv": "ca79e91cdce3604148ee61298e64d408a02bc71480400556efc7d69d63f6a3b8",
+    "report.md": "3a592c749936c343f0d4ccbe64f61aca40676a7d627344b64f6cd2f14612e088",
+    "signed_divergence_bins.csv": "c7166e4501b1c598d73b6fc71c3068837ed64b24833361cb4882a3a92bd84f3b",
+    "signed_divergence_monotonicity.csv": "275c0b96c994ca8a4631abac6e1ce16389ca2a652895b5725c852b5b800627be",
+    "summary.json": "f874d42665ee6c713e0fb41b0b9728ccd88cc069bd3a0246b3935a731869cc73",
+    "team_robustness.csv": "6ea48dab8cc9bbc0e4af8f5490f66cea8fd6e02c8857baea3bd7c2ff0d0fb709",
+    "tier1_tier2_evaluation_population.csv": "1216c103c78707d6a8b118ef084b569c11e8b90f3bb24eed6c750ae2ba20d1e8",
+    "tier1_vs_tier2_comparison.csv": "5441c7d68b60042058d7e8ed6c8063cfcf80ae479d03506ae14118d90c1ceebe",
+    "tier3_override_decision_support.json": "c779485eab579e065e9ffb49d199daa918c9da8870cb751fded592ce7e930ab4",
+    "toi_pp_interactions.csv": "144274000f9f4a51f60149ce4b59eb9d06333c944fc3e483f6cca0324636a75b"
+  }
+}

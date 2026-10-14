@@ -1,0 +1,6 @@
+{
+  "authorization": "NONE; this is decision support only.",
+  "classification": "TIER3_OVERRIDE_NOT_NEEDED",
+  "reasoning": "Tier 1 and Tier 2 independently agree on divergence direction and high-D10 underprediction, both corrections improve count MAE in both tiers, and combined threshold Brier scores improve at all three lines. Tier 3 is not needed to resolve the present descriptive question; no Tier-3 evidence was used.",
+  "remaining_tier3_rows_excluded": 13617
+}

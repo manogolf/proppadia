@@ -1,0 +1,7 @@
+scope,unit,periods,divergence_gap_supporting,divergence_gap_opposing,divergence_gap_neutral,divergence_mae_supporting,divergence_mae_opposing,divergence_mae_neutral,high_rate_residual_supporting,high_rate_residual_opposing,high_rate_residual_neutral,soft_mae_supporting,soft_mae_opposing,soft_mae_neutral
+COMBINED,game_date,162,158,4,0,146,16,0,138,22,1,122,39,0
+COMBINED,week,26,26,0,0,25,1,0,25,0,0,24,1,0
+TIER1,game_date,46,46,0,0,45,1,0,39,6,1,33,13,0
+TIER1,week,8,8,0,0,8,0,0,8,0,0,8,0,0
+TIER2,game_date,119,112,4,0,102,17,0,99,16,0,89,26,0
+TIER2,week,22,19,0,0,19,3,0,18,0,0,17,1,0

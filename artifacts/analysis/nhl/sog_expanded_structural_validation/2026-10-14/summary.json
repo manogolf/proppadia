@@ -1,0 +1,142 @@
+{
+  "activity": {
+    "existing_shadows_changed": false,
+    "paid_credits": 0,
+    "production_changed": false,
+    "production_db_mutations": 0,
+    "provider_calls": 0,
+    "pushed": false
+  },
+  "classifications": {
+    "combined_shadow_implementation_justified": true,
+    "divergence_bias": "STRONGLY_CONFIRMED",
+    "divergence_plus_soft_compression": "STRONGLY_CONFIRMED",
+    "independent_high_d10_bias": "STRONGLY_CONFIRMED",
+    "midpoint_correction": "STRONGLY_CONFIRMED",
+    "tier3_override_decision_support": "TIER3_OVERRIDE_NOT_NEEDED"
+  },
+  "combined_brier_delta_vs_production": {
+    "DIVERGENCE_ONLY": {
+      "1.5": -0.003995686650659608,
+      "2.5": -0.002361822959137866,
+      "3.5": -0.001345174556008591
+    },
+    "DIVERGENCE_PLUS_SOFT_HIGH_RATE": {
+      "1.5": -0.004395450028061659,
+      "2.5": -0.002920080208818232,
+      "3.5": -0.0018947940103205552
+    }
+  },
+  "combined_mae_improvement": {
+    "divergence_only_vs_production": 0.013998156014991991,
+    "soft_incremental_vs_divergence": 0.004290140242472873
+  },
+  "d10_quantile_cutpoints": {
+    "bottom_5pct": 2.140212461668657,
+    "bottom_decile": 2.7489429758698987,
+    "top_5pct": 10.330667888585436,
+    "top_decile": 9.247127506885318
+  },
+  "fixed_d20_diagnostic": {
+    "group": "all",
+    "mae": 1.0375905610184855,
+    "mean_lambda": 1.5447425007814501,
+    "mean_residual": 0.03697970730809445,
+    "median_absolute_error": 0.8600940538173115,
+    "n": 31448,
+    "realized_mean_sog": 1.5817222080895446,
+    "rmse": 1.3498493170158066,
+    "scope": "COMBINED"
+  },
+  "global_count_metrics": {
+    "DIVERGENCE_ONLY": {
+      "mae": 1.0419080246297998,
+      "mean_lambda": 1.5435493071071447,
+      "mean_residual": 0.038172900982399866,
+      "n": 31448,
+      "realized_mean_sog": 1.5817222080895446,
+      "rmse": 1.3559349899225246
+    },
+    "DIVERGENCE_PLUS_SOFT_HIGH_RATE": {
+      "mae": 1.037617884387327,
+      "mean_lambda": 1.5246759612097418,
+      "mean_residual": 0.05704624687980267,
+      "n": 31448,
+      "realized_mean_sog": 1.5817222080895446,
+      "rmse": 1.3512672153995804
+    },
+    "FIXED_D20_DIAGNOSTIC": {
+      "mae": 1.0375905610184855,
+      "mean_lambda": 1.5447425007814501,
+      "mean_residual": 0.03697970730809445,
+      "n": 31448,
+      "realized_mean_sog": 1.5817222080895446,
+      "rmse": 1.3498493170158066
+    },
+    "PRODUCTION": {
+      "mae": 1.0559061806447918,
+      "mean_lambda": 1.5422875301477195,
+      "mean_residual": 0.03943467794182515,
+      "n": 31448,
+      "realized_mean_sog": 1.5817222080895446,
+      "rmse": 1.3753127965576037
+    }
+  },
+  "limitations": [
+    "Only Tier 1 exact reconstruction overlap and Tier 2 B-class rows with exact required feature inputs and final official outcomes enter scores.",
+    "Original Tier 2 captures are not established; findings are retrospective and trust-tier specific.",
+    "Team IDs come from the retained canonical eligibility ledger; PP interaction uses reconstructed prior-season PP/EV-TOI share proxy.",
+    "Top-decile/top-five-percent groups are descriptive pooled quantiles; no model rule was tuned."
+  ],
+  "population": {
+    "candidate_rows_invalid_structural_inputs": 0,
+    "candidate_rows_missing_official_outcome": 7779,
+    "combined_valid_evaluation_player_games": 31448,
+    "line_rows": 94344,
+    "no_official_outcome_excluded_tier2": 7779,
+    "tier1_candidate_exact_input_overlap": 13143,
+    "tier1_input_mismatch_excluded": 246,
+    "tier1_valid_evaluation_player_games": 13143,
+    "tier2_candidate_exact_input_parity": 26084,
+    "tier2_valid_evaluation_player_games": 18305,
+    "tier3_excluded_rows": 13617
+  },
+  "preserved_backlog": [
+    "Historical official-TOI binding",
+    "Prospective grading of divergence shadow",
+    "Continue fixed-blend collection",
+    "Puck Line deferred until tomorrow",
+    "Reusable cross-prop sanity-check/explanation audit beginning with Points",
+    "Possible remaining Tier-3 override",
+    "Combined high-D10 shadow implementation if supported by prospective review"
+  ],
+  "reconstruction_validation": {
+    "exact_selected_input_player_games": 13143,
+    "excluded_tier1_input_mismatches": 246,
+    "lambda_comparison_rows": 13143,
+    "lambda_max_abs_diff": 2.6645352591003757e-15,
+    "lambda_mismatches_gt_1e_10": 0,
+    "probability_comparisons_on_exact_input_subset": 39429,
+    "probability_matches_within_1e_12_on_exact_input_subset": 39429,
+    "probability_max_abs_diff_on_exact_input_subset": 8.881784197001252e-16,
+    "scope_note": "Tier-1 exact input overlap only is used; all Tier-2 rows pass strict-prior archive input parity; this is method validation, not performance evaluation.",
+    "selected_exposure_max_abs_diff": 4.993,
+    "selected_exposure_mismatches_gt_1e_12": 204,
+    "selected_rate_max_abs_diff": 5.3290705182007506e-15,
+    "selected_rate_mismatches_gt_1e_12": 0,
+    "tier1_player_games_tested": 13389,
+    "validation_accepted": true
+  },
+  "status": "COMPLETE_OFFLINE_RESEARCH_ONLY",
+  "tier1_vs_tier2_consistency": {
+    "classification": "STRONG",
+    "divergence_gap_same_direction": true,
+    "near_agreement_high_d10_residual_same_direction": true
+  },
+  "tier3_override_decision_support": {
+    "authorization": "NONE; this is decision support only.",
+    "classification": "TIER3_OVERRIDE_NOT_NEEDED",
+    "reasoning": "Tier 1 and Tier 2 independently agree on divergence direction and high-D10 underprediction, both corrections improve count MAE in both tiers, and combined threshold Brier scores improve at all three lines. Tier 3 is not needed to resolve the present descriptive question; no Tier-3 evidence was used.",
+    "remaining_tier3_rows_excluded": 13617
+  }
+}

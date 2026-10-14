@@ -1,0 +1,21 @@
+{
+  "counts": {
+    "candidate_rows_invalid_structural_inputs": 0,
+    "candidate_rows_missing_official_outcome": 7779,
+    "combined_valid_evaluation_player_games": 31448,
+    "line_rows": 94344,
+    "no_official_outcome_excluded_tier2": 7779,
+    "tier1_candidate_exact_input_overlap": 13143,
+    "tier1_input_mismatch_excluded": 246,
+    "tier1_valid_evaluation_player_games": 13143,
+    "tier2_candidate_exact_input_parity": 26084,
+    "tier2_valid_evaluation_player_games": 18305,
+    "tier3_excluded_rows": 13617
+  },
+  "outcome_source": "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/model_development/nhl_sog_cold_start_prediction_platform_v1/2026-09-19/retained_skater_history_snapshot.parquet",
+  "tier3_included": false,
+  "trust_tiers": {
+    "TIER1_CERTIFIED": "Certified historical production evidence; exact reconstruction-input overlap only",
+    "TIER2_RETROSPECTIVE_STRICT_PRIOR": "B-class strict-prior retrospective reconstruction with exact required inputs"
+  }
+}

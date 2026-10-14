@@ -1,0 +1,5 @@
+cohort,d10_rate_cut,basis
+top_decile,9.247127506885318,pooled clean Tier1+Tier2 descriptive quantile; fixed rule threshold remains D10>9
+top_5pct,10.330667888585436,pooled clean Tier1+Tier2 descriptive quantile; fixed rule threshold remains D10>9
+low_decile,2.7489429758698987,pooled clean Tier1+Tier2 descriptive quantile; fixed rule threshold remains D10>9
+low_5pct,2.140212461668657,pooled clean Tier1+Tier2 descriptive quantile; fixed rule threshold remains D10>9
