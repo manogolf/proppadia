@@ -1,0 +1,9 @@
+{
+  "method": "player chronological one-step descriptive correlation; no fitting",
+  "n_prior3_pairs": 504,
+  "n_prior_game_pairs": 504,
+  "prior3_mean_next_residual_corr": -0.0170806207588284,
+  "prior_residual_next_residual_corr": -0.02320292342474411,
+  "same_sign_rate": 0.5218253968253969,
+  "window": "feature-supported historical 2025 replay plus prospective 2026 feature-bound rows"
+}

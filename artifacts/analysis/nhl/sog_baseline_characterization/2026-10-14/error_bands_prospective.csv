@@ -1,0 +1,5 @@
+abs_error_band,player_games,window
+<=0.5,337,prospective_2026_feature_bound
+>0.5-1,322,prospective_2026_feature_bound
+>1-2,326,prospective_2026_feature_bound
+>2,122,prospective_2026_feature_bound

@@ -1,0 +1,5 @@
+abs_error_band,player_games,window
+<=0.5,4250,historical_2025_certified_replay
+>0.5-1,3728,historical_2025_certified_replay
+>1-2,3912,historical_2025_certified_replay
+>2,1499,historical_2025_certified_replay

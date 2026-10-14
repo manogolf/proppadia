@@ -1,0 +1,621 @@
+{
+  "historical_feature_archives": [
+    {
+      "game_date": "2026-02-28",
+      "matched": 1401,
+      "path": "artifacts/archive/generated_daily/nhl/2026-02-28/sog_features/sog_features_2026-02-28_denali.csv",
+      "rows": 575,
+      "sha256": "29e5fb4afc516ae6c78bac44b139292691f76306077ce29089c8ea722d7019f0",
+      "status": "LOADED",
+      "target_rows": 1401
+    },
+    {
+      "game_date": "2026-03-01",
+      "matched": 648,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-01/sog_features/sog_features_2026-03-01_denali.csv",
+      "rows": 278,
+      "sha256": "bc6284bdad3f0737da85a63b54caa9c52e8bd610310502f241ec672cffff014b",
+      "status": "LOADED",
+      "target_rows": 648
+    },
+    {
+      "game_date": "2026-03-02",
+      "matched": 636,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-02/sog_features/sog_features_2026-03-02_denali.csv",
+      "rows": 262,
+      "sha256": "2719c8f9f1f1f0be1720b6613d7ccf136a5cf4d628c2a77a58df2a5106c604fa",
+      "status": "LOADED",
+      "target_rows": 636
+    },
+    {
+      "game_date": "2026-03-03",
+      "matched": 1182,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-03/sog_features/sog_features_2026-03-03_denali.csv",
+      "rows": 498,
+      "sha256": "06b5f4b46925502a14dc298aaaad4668ba31f4095f97b50aea7e44562a0f075a",
+      "status": "LOADED",
+      "target_rows": 1182
+    },
+    {
+      "game_date": "2026-03-04",
+      "matched": 537,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-04/sog_features/sog_features_2026-03-04_denali.csv",
+      "rows": 225,
+      "sha256": "19730ba9b358f920b29e29942a7dc672fac08c2f6bce8a04b75eee5128db397e",
+      "status": "LOADED",
+      "target_rows": 537
+    },
+    {
+      "game_date": "2026-03-05",
+      "matched": 861,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-05/sog_features/sog_features_2026-03-05_denali.csv",
+      "rows": 372,
+      "sha256": "b77ffdb432b12d41a570195caf4d7894cae82f0667f1a8d1f4b7092a9f646b81",
+      "status": "LOADED",
+      "target_rows": 861
+    },
+    {
+      "game_date": "2026-03-06",
+      "matched": 750,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-06/sog_features/sog_features_2026-03-06_denali.csv",
+      "rows": 315,
+      "sha256": "7ad6ccfa5374680173a3ed2b3c8d83772f575ff62471e5f239d3cb4ea8ffd4a7",
+      "status": "LOADED",
+      "target_rows": 750
+    },
+    {
+      "game_date": "2026-03-07",
+      "matched": 1167,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-07/sog_features/sog_features_2026-03-07_denali.csv",
+      "rows": 489,
+      "sha256": "11e1e9cb712b3ffcf44c01e94c1613454e1046706d2ce4fb0dc36cb2fae6af1d",
+      "status": "LOADED",
+      "target_rows": 1167
+    },
+    {
+      "game_date": "2026-03-08",
+      "matched": 756,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-08/sog_features/sog_features_2026-03-08_denali.csv",
+      "rows": 323,
+      "sha256": "ffaa41e3fd9329501468c2d24c8648d8d3bb28286b04df12319291761f2d5fc1",
+      "status": "LOADED",
+      "target_rows": 756
+    },
+    {
+      "game_date": "2026-03-09",
+      "matched": 537,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-09/sog_features/sog_features_2026-03-09_denali.csv",
+      "rows": 229,
+      "sha256": "7cfaf01ff17a528a47fb1abf5f284b04c441cb48c564d326eae5c0c97d415645",
+      "status": "LOADED",
+      "target_rows": 537
+    },
+    {
+      "game_date": "2026-03-10",
+      "matched": 1404,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-10/sog_features/sog_features_2026-03-10_denali.csv",
+      "rows": 599,
+      "sha256": "6414f7c7c2f460f345be05ad990bda1cd0129d036aa3067cdc637d0f1a6ad17f",
+      "status": "LOADED",
+      "target_rows": 1404
+    },
+    {
+      "game_date": "2026-03-11",
+      "matched": 216,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-11/sog_features/sog_features_2026-03-11_denali.csv",
+      "rows": 87,
+      "sha256": "269acb7af38203c3412fb3914fb6be873b3fab9e09a836b55cbfa1cdfdee2e24",
+      "status": "LOADED",
+      "target_rows": 216
+    },
+    {
+      "game_date": "2026-03-12",
+      "matched": 1509,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-12/sog_features/sog_features_2026-03-12_denali.csv",
+      "rows": 645,
+      "sha256": "7fffa3d163a84d07ab3b100e119c68b21ffe693e45995ceb0a1d97a2f977cee1",
+      "status": "LOADED",
+      "target_rows": 1509
+    },
+    {
+      "game_date": "2026-03-13",
+      "matched": 216,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-13/sog_features/sog_features_2026-03-13_denali.csv",
+      "rows": 93,
+      "sha256": "1a211dd83a11e25758124abb26d1fe2c3b79a34736d247cb48448f582b230445",
+      "status": "LOADED",
+      "target_rows": 216
+    },
+    {
+      "game_date": "2026-03-14",
+      "matched": 1509,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-14/sog_features/sog_features_2026-03-14_denali.csv",
+      "rows": 646,
+      "sha256": "204faaa7ecc86d833d0715ebc793f70e6d88014b28e618a9d6ca525757e3eb8e",
+      "status": "LOADED",
+      "target_rows": 1509
+    },
+    {
+      "game_date": "2026-03-15",
+      "matched": 648,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-15/sog_features/sog_features_2026-03-15_denali.csv",
+      "rows": 275,
+      "sha256": "9a1a80fa86116a29e2423a5ca7515e94a46a9b3ce6ec3fe6841f30cd04c7527f",
+      "status": "LOADED",
+      "target_rows": 648
+    },
+    {
+      "game_date": "2026-03-16",
+      "matched": 540,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-16/sog_features/sog_features_2026-03-16_denali.csv",
+      "rows": 234,
+      "sha256": "054c23788224a868ccd0cbf48486ec1b18d4cea5ee212389a3eed0637292092b",
+      "status": "LOADED",
+      "target_rows": 540
+    },
+    {
+      "game_date": "2026-03-17",
+      "matched": 969,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-17/sog_features/sog_features_2026-03-17_denali.csv",
+      "rows": 412,
+      "sha256": "825003645213bacd8188b203349a0c65275cadacf34e97a644b3cc748ba21c89",
+      "status": "LOADED",
+      "target_rows": 969
+    },
+    {
+      "game_date": "2026-03-18",
+      "matched": 645,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-18/sog_features/sog_features_2026-03-18_denali.csv",
+      "rows": 277,
+      "sha256": "804c98ea833878575aceeb78706262c2412d0c3659e70ffdea6d4bd797e4a646",
+      "status": "LOADED",
+      "target_rows": 645
+    },
+    {
+      "game_date": "2026-03-19",
+      "matched": 1185,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-19/sog_features/sog_features_2026-03-19_denali.csv",
+      "rows": 511,
+      "sha256": "4e7d81d0151917edbb0d277511b6be1b0b950928d0be24aec63e00b28b7d7d44",
+      "status": "LOADED",
+      "target_rows": 1185
+    },
+    {
+      "game_date": "2026-03-20",
+      "matched": 540,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-20/sog_features/sog_features_2026-03-20_denali.csv",
+      "rows": 227,
+      "sha256": "6df8a1c3891d7eaa97cf10e5e5001f8966a48906e9f3710d0f625fbbfb4336a0",
+      "status": "LOADED",
+      "target_rows": 540
+    },
+    {
+      "game_date": "2026-03-21",
+      "matched": 1185,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-21/sog_features/sog_features_2026-03-21_denali.csv",
+      "rows": 514,
+      "sha256": "e05032cfe02c2002a6f52f3afe317d18c142ec188397776d9b224e793795aadc",
+      "status": "LOADED",
+      "target_rows": 1185
+    },
+    {
+      "game_date": "2026-03-22",
+      "matched": 969,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-22/sog_features/sog_features_2026-03-22_denali.csv",
+      "rows": 415,
+      "sha256": "cb7f9438f13065f120df0f00068d9a51c4526f0c18fac16698b6881e8efbc096",
+      "status": "LOADED",
+      "target_rows": 969
+    },
+    {
+      "game_date": "2026-03-23",
+      "matched": 108,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-23/sog_features/sog_features_2026-03-23_denali.csv",
+      "rows": 46,
+      "sha256": "11c513c451f042f29f0a013f4afd40dd009861357312cf62e3c32c62a61e9e77",
+      "status": "LOADED",
+      "target_rows": 108
+    },
+    {
+      "game_date": "2026-03-24",
+      "matched": 1611,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-24/sog_features/sog_features_2026-03-24_denali.csv",
+      "rows": 698,
+      "sha256": "2aae000c914fe95c7700d8283878323237d4cd8ad8641fd41783074c58befaf1",
+      "status": "LOADED",
+      "target_rows": 1611
+    },
+    {
+      "game_date": "2026-03-25",
+      "matched": 213,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-25/sog_features/sog_features_2026-03-25_denali.csv",
+      "rows": 93,
+      "sha256": "12ac420e7debdbdc01582a4d871ca416954697123c367f59d2ce5c4c2512b172",
+      "status": "LOADED",
+      "target_rows": 213
+    },
+    {
+      "game_date": "2026-03-26",
+      "matched": 1395,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-26/sog_features/sog_features_2026-03-26_denali.csv",
+      "rows": 613,
+      "sha256": "f8fe01b5b478de0fe5584091b5d80e669acce2d1abb97e1e4362d4b1ffca241c",
+      "status": "LOADED",
+      "target_rows": 1395
+    },
+    {
+      "game_date": "2026-03-27",
+      "matched": 213,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-27/sog_features/sog_features_2026-03-27_denali.csv",
+      "rows": 93,
+      "sha256": "bf751435f90b37e013d31ca400f717a079bef6fae1d4f4addfbc2865eb17c821",
+      "status": "LOADED",
+      "target_rows": 213
+    },
+    {
+      "game_date": "2026-03-28",
+      "matched": 1611,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-28/sog_features/sog_features_2026-03-28_denali.csv",
+      "rows": 707,
+      "sha256": "76882b3329c987d07e44ca3be34009daf856910f85499520461ef6d72ff6a3b9",
+      "status": "LOADED",
+      "target_rows": 1611
+    },
+    {
+      "game_date": "2026-03-29",
+      "matched": 648,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-29/sog_features/sog_features_2026-03-29_denali.csv",
+      "rows": 281,
+      "sha256": "b46f90ac820d60d951eadfcd1f35664ab03574a5f6b912a68c7fb1f7f5c4ae9d",
+      "status": "LOADED",
+      "target_rows": 648
+    },
+    {
+      "game_date": "2026-03-30",
+      "matched": 537,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-30/sog_features/sog_features_2026-03-30_denali.csv",
+      "rows": 235,
+      "sha256": "bc258ffa758560b1c11172db636f28828a12ac047ea85d852949d046096a1174",
+      "status": "LOADED",
+      "target_rows": 537
+    },
+    {
+      "game_date": "2026-03-31",
+      "matched": 1074,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-31/sog_features/sog_features_2026-03-31_denali.csv",
+      "rows": 478,
+      "sha256": "2c0c4d8cb23b223d5e1f9b6cba8b42bfabe4befdb768f337e84f92b9be396554",
+      "status": "LOADED",
+      "target_rows": 1074
+    },
+    {
+      "game_date": "2026-04-01",
+      "matched": 318,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-01/sog_features/sog_features_2026-04-01_denali.csv",
+      "rows": 137,
+      "sha256": "ad4cf6ed929eca3f9d08f59be9c7aec1142c8e435a20f341b8214cfaf946524e",
+      "status": "LOADED",
+      "target_rows": 318
+    },
+    {
+      "game_date": "2026-04-02",
+      "matched": 1503,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-02/sog_features/sog_features_2026-04-02_denali.csv",
+      "rows": 665,
+      "sha256": "369789db49ea8fa8d16e3b96f331617c8de6f7dbc543d3ef1768674f9eae294f",
+      "status": "LOADED",
+      "target_rows": 1503
+    },
+    {
+      "game_date": "2026-04-03",
+      "matched": 216,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-03/sog_features/sog_features_2026-04-03_denali.csv",
+      "rows": 94,
+      "sha256": "c0529f6bc68201ba1a987139b0d990019c35de5c50c5f7e3e5c9121c74a602e8",
+      "status": "LOADED",
+      "target_rows": 216
+    },
+    {
+      "game_date": "2026-04-04",
+      "matched": 1614,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-04/sog_features/sog_features_2026-04-04_denali.csv",
+      "rows": 712,
+      "sha256": "64873e41ed9e88303fc1a22bb3268fa2afc10c1bc0ca66d5463ff64ba17b4c35",
+      "status": "LOADED",
+      "target_rows": 1614
+    },
+    {
+      "game_date": "2026-04-05",
+      "matched": 753,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-05/sog_features/sog_features_2026-04-05_denali.csv",
+      "rows": 328,
+      "sha256": "203d3da2a8a0520eea942a75ee4d7ae9bceeaaed46c881e2dcec1bc4b375eeb6",
+      "status": "LOADED",
+      "target_rows": 753
+    },
+    {
+      "game_date": "2026-04-06",
+      "matched": 432,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-06/sog_features/sog_features_2026-04-06_denali.csv",
+      "rows": 191,
+      "sha256": "1f3d204ba5bc75ea000ffeedada8c719f103f413a49f00fa5e4e303119bdef48",
+      "status": "LOADED",
+      "target_rows": 432
+    },
+    {
+      "game_date": "2026-04-07",
+      "matched": 1179,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-07/sog_features/sog_features_2026-04-07_denali.csv",
+      "rows": 522,
+      "sha256": "6e451bb9d0403badff69003a3047d1e9c63e807ef4f7b1ef46a2cd55e8f080b9",
+      "status": "LOADED",
+      "target_rows": 1179
+    },
+    {
+      "game_date": "2026-04-08",
+      "matched": 324,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-08/sog_features/sog_features_2026-04-08_denali.csv",
+      "rows": 144,
+      "sha256": "71906a517ee81e36ce6a1ef6f2fb10a1b267c5c8375fa10bc838757cee9cde7d",
+      "status": "LOADED",
+      "target_rows": 324
+    },
+    {
+      "game_date": "2026-04-09",
+      "matched": 1497,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-09/sog_features/sog_features_2026-04-09_denali.csv",
+      "rows": 671,
+      "sha256": "4a435a37678c0ede1242d0186293e7e98cddfd88aec9e9eb283031fc8408561d",
+      "status": "LOADED",
+      "target_rows": 1497
+    },
+    {
+      "game_date": "2026-04-11",
+      "matched": 1593,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-11/sog_features/sog_features_2026-04-11_denali.csv",
+      "rows": 718,
+      "sha256": "32bfaef419a5cb0f36a6b2b59a57e07298db925e7341a9b1be836f1f76b4479e",
+      "status": "LOADED",
+      "target_rows": 1593
+    },
+    {
+      "game_date": "2026-04-12",
+      "matched": 642,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-12/sog_features/sog_features_2026-04-12_denali.csv",
+      "rows": 297,
+      "sha256": "24b58ab332409021d94cde9632da3bb427712a63a15d8ea5a3df5eb7a1c75499",
+      "status": "LOADED",
+      "target_rows": 642
+    },
+    {
+      "game_date": "2026-04-13",
+      "matched": 1071,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-13/sog_features/sog_features_2026-04-13_denali.csv",
+      "rows": 486,
+      "sha256": "90862a239d6964fb42bcd43422391fbf935ad33ce93e4b5b5d48020d42edb103",
+      "status": "LOADED",
+      "target_rows": 1071
+    },
+    {
+      "game_date": "2026-04-14",
+      "matched": 960,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-14/sog_features/sog_features_2026-04-14_denali.csv",
+      "rows": 451,
+      "sha256": "7002d44e22c374e23731d5878b57475b40ec157dbaa1da358349cf762c305006",
+      "status": "LOADED",
+      "target_rows": 960
+    },
+    {
+      "game_date": "2026-04-15",
+      "matched": 645,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-15/sog_features/sog_features_2026-04-15_denali.csv",
+      "rows": 300,
+      "sha256": "7971fee46683d6002a599dfe90ea8d8a9e1ea542bf10b39b9b7a21edd0f8dc7c",
+      "status": "LOADED",
+      "target_rows": 645
+    }
+  ],
+  "historical_source_ledger": {
+    "path": "artifacts/analysis/model_development/nhl_season_2025_sog_baseline_reproduction/2026-07-13/nhl_season_2025_sog_reproduction_ledger_2026-07-13.csv",
+    "sha256": "396d2ab1d2e60629d3856b9d429ca92bbcb860c03df7f8606d8795f96b80a22b"
+  },
+  "output_hashes": {
+    "best_regime_candidates.csv": "a1d632056d3565e96c2ae70ce8bbe08c277e98122fc7c98adf5bfce76c17a33a",
+    "confidence_bin_metrics.csv": "f0c97feacc4aee30f905107b2b83e0dec862909e7b63382272e9e56ec790f481",
+    "d10_d20_date_stability.csv": "7f81a33d495b867f70c21205492bc1fba5267161ecbd811cfd7a0796791ccf8a",
+    "d10_d20_gap_metrics.csv": "4ecf524185e03d2c332b5176e9fc84f5d70ef6799f2f87ad5b706a2d41b198db",
+    "d10_d20_metrics.csv": "76b938effe4bec30a0800ed9489d252c0f573a2c830bf6f6d6636f191b5c20ca",
+    "d10_rate_metrics.csv": "dfc3b8488bf0e4a5f0423826d75095d0f985540eee6b2c203d90cfffee402787",
+    "d10_vs_d20_line_metrics.csv": "76b938effe4bec30a0800ed9489d252c0f573a2c830bf6f6d6636f191b5c20ca",
+    "d10_vs_d20_metrics.csv": "a911bdfc3bef11ce8ef7705a667a6ff605d99563db141f2421a757189ff8b31f",
+    "date_level_metrics.csv": "c44bee0b3059ee2ea0f9f226bb644a3795ca9291782640926a0ae3112afdb3c7",
+    "error_bands_historical.csv": "47fbb05c95e2f627747f34e1f52786563beeb61f8f95060124629afb8ba6c21a",
+    "error_bands_prospective.csv": "fffd23a5a0f91cf96f4c0c4ca5353423452ef4f9b814a88f84e5c3b1b98f7dd7",
+    "error_distribution.csv": "6edced51bf7670b80815ff6bae4d6abf0e1be036746110008e40c49771f0fd06",
+    "global_count_metrics.csv": "fc58db6386470b33f11e3e351e05529588fef44aa25461028394ba16bfad898e",
+    "global_line_metrics.csv": "3833febd6111cd6227774ed8c619693115033b5b7f364256d5d5edd290682d1c",
+    "historical_characterization_rows.csv": "6eccf33f14b89282480fab628c992bdc93818015a2c7e3b932772e113b550fd1",
+    "historical_d10_d20_line_metrics.csv": "c370e4b411b2f6c13aa542cb1df2bcde8804a80d80bcd084ff13d79a928e4e32",
+    "home_away_metrics.csv": "86f1bf7e0e8d1d1fce643c2537ecb2feffc897fc4f74186cea12ab3a521cc43b",
+    "lambda_bin_metrics.csv": "81689632c6e05b7e923143c1d974cf8576c0c59ec81cdc099adcf91a071d2e02",
+    "largest_prospective_errors.csv": "6df97ae958c6730ed9910c273c766719c3d58e3f762b39634a2609fcb3d94f60",
+    "market_matched_rows.csv": "118847b88a4ed457ed6cf917db7823493bd204b4a22fce44a42e5212c3d0f54c",
+    "market_relative_metrics.csv": "122ce249a0dad4102c9d90bbe0ca1700e71c40e49915b203fadddd1e64a31b14",
+    "model_market_disagreement_metrics.csv": "7dbe6e14f3bd8a2bdeef7c32617fa9107673b8ddaafad5c9378ee05c034ca383",
+    "opponent_metrics_min50.csv": "9a9119a0d1981a99f07399c0b1b391da307879657f04d605cc625a53298c4ed7",
+    "opponent_suppression_environment_metrics.csv": "f1a121fb66db49bbfa7e0275c64b1c4d61b7255bde4c6edacb65e00f43f09da4",
+    "over_under_selection_metrics.csv": "b4e4b4a929203e70dbb46986ec3597b2162fb564daaa886b28c966da9169ab2a",
+    "player_residual_metrics_min5.csv": "a6657148231e74567a6378d32eda3e69fae9fa06d612a34c5b0d533b85d64e79",
+    "pp_role_bin_definitions.csv": "1f94aac55c67ceb9ee19f5a077419c3d08f07a3091c6ef09e9e356de00f619a3",
+    "pp_role_metrics.csv": "b3aceeb49f20be331b508240df12ce8850d3dceec76c5a1147ff136fc07697c6",
+    "prospective_feature_bound_rows.csv": "e32fdc7531af7569f4112047dcda87839896022729fefff3f55a1a5be6cd6f7d",
+    "prospective_historical_residual_sequence.csv": "4e8bcd64a3214e8af48946c9664059c7c471a4bee9cbe5006461aaff52c7857f",
+    "prospective_paired_rows.csv": "3dd0ba577ee2d5c2c76700a140b3b0da1dcb65a96a25961d9d7432f10de7e579",
+    "recent_trend_metrics.csv": "307fa22633e06b0d6ff11a9a45c9b80aa1cc6a597c2137da39cf059d880425da",
+    "report.md": "27589966223469cc3d4eeb1cab6d7958448854378c5981f3894afe5e36180ed2",
+    "residual_persistence.json": "4265784285ed1717460142040bdebd7f46c642bb3c05d9e5193ee717891160c1",
+    "strength_weakness_scorecard.csv": "9a7bbbef23fec704540a60a801ba8aed6e48e44fad57f6a0cef2b061d139e9c7",
+    "summary.json": "61f24f10f0d2e26d60110c592482674ea5027ceeabd363039cd9bec7301bf4ca",
+    "team_metrics_min50.csv": "5df05e3cac0fdbc5aa6972f58996f4b90c8b7222744e4722db054b16f2845f1a",
+    "team_shot_environment_metrics.csv": "0bba7edc19aa54ad8cc9209d6bde015d30aa05507d7759f1ce0dff32a517dea4",
+    "usage_metrics.csv": "30a0f5af237ca3a6090d8954f68f436a22773caecc26f9a495bf3ff139e0e947",
+    "weak_regime_candidates.csv": "a6b64980ae9b0508f03b75a166c316db7bf6ebbcb68cd7dca70e8fb620090228"
+  },
+  "prospective_daily_sources": [
+    {
+      "nonparticipants": 0,
+      "outcomes_path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-08/reconciliation=9b0b9eda717e097cb43b/canonical_skater_outcomes.csv",
+      "outcomes_sha256": "c34ce7064f70fe175538df4878f8dd4c0ea4d0a6b0fd9e5767dead234e54f5c2",
+      "prediction_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261008T223451824582Z_ec21495b/sog_predictions_wide_calibrated.csv",
+      "prediction_player_games": 432,
+      "prediction_sha256": "4a00870fa890cfcb55971f938fe11aa426238cb32f4d70431b07f1001d35696c",
+      "prediction_without_outcome": 74,
+      "run_id": "nhldaily_20261008T223451824582Z_ec21495b",
+      "scored_player_games": 358,
+      "slate_date": "2026-10-08",
+      "summary_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-08/performance_summary=69040b1b0f44e7b41543/performance_summary.json",
+      "summary_sha256": "c38b26f1d51af8b42913ea1f9beb04488823a24ce07adc3cfcdd08a369690ba9",
+      "summary_stored_sog_metrics": {
+        "losses": 256,
+        "pushes": 0,
+        "pushes_applicable": false,
+        "settled": 1074,
+        "unresolved": 222,
+        "win_rate": 0.7616387337057728,
+        "wins": 818
+      },
+      "unresolved_or_nonfinal": 74
+    },
+    {
+      "nonparticipants": 0,
+      "outcomes_path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-09/reconciliation=9a697c482352d19f4cd0/canonical_skater_outcomes.csv",
+      "outcomes_sha256": "90c072da3aadd298156987c0c94168682b119d6d2c8e4bfd55339f69cf84f782",
+      "prediction_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261009T195836812178Z_6d8ecbb3/sog_predictions_wide_calibrated.csv",
+      "prediction_player_games": 178,
+      "prediction_sha256": "9c42bc1f24842550e2a576b79a37af0f7872269edf62003c3331d462d84e2f41",
+      "prediction_without_outcome": 35,
+      "run_id": "nhldaily_20261009T195836812178Z_6d8ecbb3",
+      "scored_player_games": 143,
+      "slate_date": "2026-10-09",
+      "summary_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-09/performance_summary=4769b3a10432da1e8153/performance_summary.json",
+      "summary_sha256": "7b9fb5f6edb410c391040b72b5b9356ba091ec17b1c9d478f423b9965a9f47e9",
+      "summary_stored_sog_metrics": {
+        "losses": 100,
+        "pushes": 0,
+        "pushes_applicable": false,
+        "settled": 429,
+        "unresolved": 105,
+        "win_rate": 0.7668997668997669,
+        "wins": 329
+      },
+      "unresolved_or_nonfinal": 35
+    },
+    {
+      "nonparticipants": 0,
+      "outcomes_path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-10/reconciliation=fbe3605043e75c263b78/canonical_skater_outcomes.csv",
+      "outcomes_sha256": "c33bc07ea82d4397260b386d05ac330636b9b9eb3613cdf0c0dc3a94ad9a5ffa",
+      "prediction_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261010T225230603101Z_6239a125/sog_predictions_wide_calibrated.csv",
+      "prediction_player_games": 435,
+      "prediction_sha256": "b86cfcd0f6274db8248a8f571694bfd828689de93b254b6cd36348beb3e3f307",
+      "prediction_without_outcome": 78,
+      "run_id": "nhldaily_20261010T225230603101Z_6239a125",
+      "scored_player_games": 357,
+      "slate_date": "2026-10-10",
+      "summary_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-10/performance_summary=b2d66d2b75aa89662a6e/performance_summary.json",
+      "summary_sha256": "372278a98e1409666125afb3dca1137db3b4737afdf615936aaeeb6f5c617fc8",
+      "summary_stored_sog_metrics": {
+        "losses": 228,
+        "pushes": 0,
+        "pushes_applicable": false,
+        "settled": 1071,
+        "unresolved": 234,
+        "win_rate": 0.7871148459383753,
+        "wins": 843
+      },
+      "unresolved_or_nonfinal": 78
+    },
+    {
+      "nonparticipants": 0,
+      "outcomes_path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-11/reconciliation=e7da8655562d8ca577a9/canonical_skater_outcomes.csv",
+      "outcomes_sha256": "7e69bf8612c7d12a451fa5d508490735b5079f9425ec1a387d6a5aa2c9d048fe",
+      "prediction_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261011T201233254402Z_92264a17/sog_predictions_wide_calibrated.csv",
+      "prediction_player_games": 132,
+      "prediction_sha256": "3e0a11fbaa8097c339f3736add944ec93f23f802f74061b6183ed3ffff96c0a7",
+      "prediction_without_outcome": 24,
+      "run_id": "nhldaily_20261011T201233254402Z_92264a17",
+      "scored_player_games": 108,
+      "slate_date": "2026-10-11",
+      "summary_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-11/performance_summary=883e87ab54a4f8819b93/performance_summary.json",
+      "summary_sha256": "7d30ec8789bcd9ee5486f6f6e004f70e16c7671cb8c6d11abcb49822c830a7f6",
+      "summary_stored_sog_metrics": {
+        "losses": 55,
+        "pushes": 0,
+        "pushes_applicable": false,
+        "settled": 324,
+        "unresolved": 72,
+        "win_rate": 0.8302469135802469,
+        "wins": 269
+      },
+      "unresolved_or_nonfinal": 24
+    },
+    {
+      "nonparticipants": 0,
+      "outcomes_path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-12/reconciliation=3d69dd4ed0bce1fe9846/canonical_skater_outcomes.csv",
+      "outcomes_sha256": "ac1b3b9992826f957e8dd817f12c9893aa49e63aacc92087a6c4828de06ca5d3",
+      "prediction_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261012T220438660693Z_ab8ff694/sog_predictions_wide_calibrated.csv",
+      "prediction_player_games": 87,
+      "prediction_sha256": "098873be5b12ecce27b2f30f19cd2b7f1d52466b0ecec959cfca9d9eb0b7f801",
+      "prediction_without_outcome": 16,
+      "run_id": "nhldaily_20261012T220438660693Z_ab8ff694",
+      "scored_player_games": 71,
+      "slate_date": "2026-10-12",
+      "summary_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-12/performance_summary=f56d3c70d0a5383dd620/performance_summary.json",
+      "summary_sha256": "63a70f49015ed1197554bd9462dc05cb134597795876edbe73460dc75e2d899f",
+      "summary_stored_sog_metrics": {
+        "losses": 56,
+        "pushes": 0,
+        "pushes_applicable": false,
+        "settled": 213,
+        "unresolved": 48,
+        "win_rate": 0.7370892018779343,
+        "wins": 157
+      },
+      "unresolved_or_nonfinal": 16
+    },
+    {
+      "nonparticipants": 0,
+      "outcomes_path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-13/reconciliation=ba0c2b3c3ef1bd1ddb99/canonical_skater_outcomes.csv",
+      "outcomes_sha256": "96b5cf8df3e415f31eb16c992cbb3b6350657b1e50d71b66258212960fc0f0b9",
+      "prediction_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261013T201458522957Z_22deb90f/sog_predictions_wide_calibrated.csv",
+      "prediction_player_games": 709,
+      "prediction_sha256": "e62fe5303e98b69ea9b67c3e4eb08d545e22422440910fa76e350477125bc8c8",
+      "prediction_without_outcome": 138,
+      "run_id": "nhldaily_20261013T201458522957Z_22deb90f",
+      "scored_player_games": 571,
+      "slate_date": "2026-10-13",
+      "summary_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-13/performance_summary=42b3079b6b327249d6ed/performance_summary.json",
+      "summary_sha256": "6854a0c762ca9f8d7bc4e692194f058a35c0fdb46acfa0d73ddc0ecda69ecbe7",
+      "summary_stored_sog_metrics": {
+        "losses": 388,
+        "pushes": 0,
+        "pushes_applicable": false,
+        "settled": 1713,
+        "unresolved": 414,
+        "win_rate": 0.7734967892586107,
+        "wins": 1325
+      },
+      "unresolved_or_nonfinal": 138
+    }
+  ],
+  "source_code": [
+    {
+      "path": "backend/nhl/scripts/score_sog_poisson_baseline.py",
+      "sha256": "cb1794d25ea91738321e1457b5d5b7be428e9e30f57e79f65f7b9bd70f532342"
+    },
+    {
+      "path": "backend/nhl/sog_feature_input.py",
+      "sha256": "0d8ac0fccfde8a42e876387a300a5ef96c87fc1ec0fd505e7c507dc48e6b701c"
+    }
+  ],
+  "study": "NHL_SOG_PRODUCTION_BASELINE_CHARACTERIZATION_V1"
+}

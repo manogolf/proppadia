@@ -1,0 +1,288 @@
+{
+  "activity": {
+    "challenger_search": false,
+    "model_training": false,
+    "paid_credits": 0,
+    "production_authority_changed": false,
+    "production_db_mutations": 0,
+    "provider_calls": 0
+  },
+  "classification": "STABLE_POISSON_BASELINE_WITH_UNCONFIRMED_HIGH_D10_D20_OVERPREDICTION_SIGNAL",
+  "historical": {
+    "known_scope": "does not represent pre-cutover Denali production; certified model cutover starts 2026-02-28",
+    "line_metrics": [
+      {
+        "accuracy": 0.6602434834565688,
+        "auc": 0.6965701823949246,
+        "average_precision": 0.6196032024378276,
+        "brier": 0.2185791704616897,
+        "calibration_bias": 0.0005791915282626,
+        "count_mae": 1.034850811204776,
+        "count_player_games": 13389,
+        "count_rmse": 1.337894577519679,
+        "line": 1.5,
+        "log_loss": 0.6790519200550124,
+        "mean_lambda": 1.53336635223658,
+        "mean_residual_actual_minus_predicted": -0.0082337807226505,
+        "median_absolute_error": 0.8999999999999995,
+        "n": 13389,
+        "over_selections": 5004,
+        "predicted_over_rate": 0.4209989390822249,
+        "realized_mean_sog": 1.5251325715139294,
+        "realized_over_rate": 0.4204197475539622,
+        "selected_side_losses": 4549,
+        "selected_side_win_rate": 0.6602434834565688,
+        "selected_side_wins": 8840,
+        "under_selections": 8385,
+        "window": "historical_2025_certified_replay"
+      },
+      {
+        "accuracy": 0.7904249757263425,
+        "auc": 0.7301684384712633,
+        "average_precision": 0.4187856218301599,
+        "brier": 0.1489060313712849,
+        "calibration_bias": 0.0042799185120312,
+        "count_mae": 1.034850811204776,
+        "count_player_games": 13389,
+        "count_rmse": 1.337894577519679,
+        "line": 2.5,
+        "log_loss": 0.4807487564631281,
+        "mean_lambda": 1.53336635223658,
+        "mean_residual_actual_minus_predicted": -0.0082337807226505,
+        "median_absolute_error": 0.8999999999999995,
+        "n": 13389,
+        "over_selections": 1462,
+        "predicted_over_rate": 0.2168424698601528,
+        "realized_mean_sog": 1.5251325715139294,
+        "realized_over_rate": 0.2125625513481216,
+        "selected_side_losses": 2806,
+        "selected_side_win_rate": 0.7904249757263425,
+        "selected_side_wins": 10583,
+        "under_selections": 11927,
+        "window": "historical_2025_certified_replay"
+      },
+      {
+        "accuracy": 0.8991709612368363,
+        "auc": 0.7574018562521063,
+        "average_precision": 0.2538131728489563,
+        "brier": 0.0815692998467333,
+        "calibration_bias": 0.0046176868570534,
+        "count_mae": 1.034850811204776,
+        "count_player_games": 13389,
+        "count_rmse": 1.337894577519679,
+        "line": 3.5,
+        "log_loss": 0.2934869758969295,
+        "mean_lambda": 1.53336635223658,
+        "mean_residual_actual_minus_predicted": -0.0082337807226505,
+        "median_absolute_error": 0.8999999999999995,
+        "n": 13389,
+        "over_selections": 225,
+        "predicted_over_rate": 0.1022351340151683,
+        "realized_mean_sog": 1.5251325715139294,
+        "realized_over_rate": 0.0976174471581148,
+        "selected_side_losses": 1350,
+        "selected_side_win_rate": 0.8991709612368363,
+        "selected_side_wins": 12039,
+        "under_selections": 13164,
+        "window": "historical_2025_certified_replay"
+      }
+    ],
+    "line_rows": 40167,
+    "player_games": 13389,
+    "prepared_feature_rows": 40167,
+    "probability_replay_status": "exact/tolerance replay rows only",
+    "source_ledger": "artifacts/analysis/model_development/nhl_season_2025_sog_baseline_reproduction/2026-07-13/nhl_season_2025_sog_reproduction_ledger_2026-07-13.csv",
+    "source_ledger_sha256": "396d2ab1d2e60629d3856b9d429ca92bbcb860c03df7f8606d8795f96b80a22b",
+    "window": "2026-02-28 through 2026-04-15 (certified season 2025 replay)"
+  },
+  "limitations": [
+    "Subgroup prospective features are retained only for October 10-13; global production scoring covers October 8-13.",
+    "The historical certification covers the post-cutover production target window, not all of the 2025-26 schedule.",
+    "Market comparisons are limited to exact matched retained attachments."
+  ],
+  "market": {
+    "matched_line_rows": 1758,
+    "source": "retained exact-key no-vig SOG attachments; feature-supported dates only"
+  },
+  "model_identity": {
+    "feature_construction_sources": [
+      {
+        "path": "backend/nhl/sql/seed_sog_features_for_slate.sql",
+        "sha256": "10315413c4097c7d8a4437bf6dbeb709ca04cf26401fff7e58e07003458bc561"
+      },
+      {
+        "path": "backend/nhl/sql/fill_sog_toi_features_for_slate.sql",
+        "sha256": "21fb4840478b968e5ea28c33369c98326eaa42d074e1f0dfc427c6d6abba5c03"
+      },
+      {
+        "path": "backend/nhl/sql/fill_sog_season_toi_features_for_slate.sql",
+        "sha256": "7d20c0cbfb4dc002d85294c48b962e174c383f089e34992186a66f97d7f987a9"
+      },
+      {
+        "path": "backend/nhl/sql/export_sog_denali_pregame.sql",
+        "sha256": "335f96e5d84a54307a8cbccd749de5f97f9a9adc0426d362c9aaac8ad8a30d08"
+      }
+    ],
+    "feature_contract_path": "backend/nhl/sog_feature_input.py",
+    "feature_contract_sha256": "0d8ac0fccfde8a42e876387a300a5ef96c87fc1ec0fd505e7c507dc48e6b701c",
+    "fitted_model_artifact": null,
+    "model_family": "poisson_baseline",
+    "model_version": "baseline_v1",
+    "scorer_path": "backend/nhl/scripts/score_sog_poisson_baseline.py",
+    "scorer_sha256": "cb1794d25ea91738321e1457b5d5b7be428e9e30f57e79f65f7b9bd70f532342"
+  },
+  "prospective": {
+    "baseline_bound_dates": [
+      "2026-10-08",
+      "2026-10-09",
+      "2026-10-10",
+      "2026-10-11",
+      "2026-10-12",
+      "2026-10-13"
+    ],
+    "daily_population": {
+      "2026-10-08": {
+        "nonparticipants": 0,
+        "prediction_player_games": 432,
+        "prediction_without_outcome": 74,
+        "scored": 358,
+        "unresolved": 74
+      },
+      "2026-10-09": {
+        "nonparticipants": 0,
+        "prediction_player_games": 178,
+        "prediction_without_outcome": 35,
+        "scored": 143,
+        "unresolved": 35
+      },
+      "2026-10-10": {
+        "nonparticipants": 0,
+        "prediction_player_games": 435,
+        "prediction_without_outcome": 78,
+        "scored": 357,
+        "unresolved": 78
+      },
+      "2026-10-11": {
+        "nonparticipants": 0,
+        "prediction_player_games": 132,
+        "prediction_without_outcome": 24,
+        "scored": 108,
+        "unresolved": 24
+      },
+      "2026-10-12": {
+        "nonparticipants": 0,
+        "prediction_player_games": 87,
+        "prediction_without_outcome": 16,
+        "scored": 71,
+        "unresolved": 16
+      },
+      "2026-10-13": {
+        "nonparticipants": 0,
+        "prediction_player_games": 709,
+        "prediction_without_outcome": 138,
+        "scored": 571,
+        "unresolved": 138
+      }
+    },
+    "exclusion_reason": "2026-09-29 through 2026-10-07 reconciliations do not bind poisson_baseline/baseline_v1; their SOG arms are cold-start shadow strategies",
+    "feature_bound_dates": [
+      "2026-10-10",
+      "2026-10-11",
+      "2026-10-12",
+      "2026-10-13"
+    ],
+    "feature_bound_line_rows": 3321,
+    "included_window": "2026-10-08 through 2026-10-13",
+    "line_metrics": [
+      {
+        "accuracy": 0.6442786069651741,
+        "auc": 0.6790490826856925,
+        "average_precision": 0.5818059924071687,
+        "brier": 0.2238426266060676,
+        "calibration_bias": 0.0141669569978313,
+        "count_mae": 1.0662984958548558,
+        "count_player_games": 1608,
+        "count_rmse": 1.380952629046849,
+        "line": 1.5,
+        "log_loss": 0.6427080768832925,
+        "mean_lambda": 1.554004228629264,
+        "mean_residual_actual_minus_predicted": -0.0421883082312541,
+        "median_absolute_error": 0.8987597448617999,
+        "n": 1608,
+        "over_selections": 572,
+        "predicted_over_rate": 0.4295898425699706,
+        "realized_mean_sog": 1.51181592039801,
+        "realized_over_rate": 0.4154228855721393,
+        "selected_side_losses": 572,
+        "selected_side_win_rate": 0.6442786069651741,
+        "selected_side_wins": 1036,
+        "under_selections": 1036,
+        "window": "prospective_2026_production"
+      },
+      {
+        "accuracy": 0.7848258706467661,
+        "auc": 0.7033788653039831,
+        "average_precision": 0.3805043974162477,
+        "brier": 0.1531441618400759,
+        "calibration_bias": 0.0101221035311041,
+        "count_mae": 1.0662984958548558,
+        "count_player_games": 1608,
+        "count_rmse": 1.380952629046849,
+        "line": 2.5,
+        "log_loss": 0.4860795785165639,
+        "mean_lambda": 1.554004228629264,
+        "mean_residual_actual_minus_predicted": -0.0421883082312541,
+        "median_absolute_error": 0.8987597448617999,
+        "n": 1608,
+        "over_selections": 156,
+        "predicted_over_rate": 0.2190773274117012,
+        "realized_mean_sog": 1.51181592039801,
+        "realized_over_rate": 0.208955223880597,
+        "selected_side_losses": 346,
+        "selected_side_win_rate": 0.7848258706467661,
+        "selected_side_wins": 1262,
+        "under_selections": 1452,
+        "window": "prospective_2026_production"
+      },
+      {
+        "accuracy": 0.8973880597014925,
+        "auc": 0.7237306573718447,
+        "average_precision": 0.2206308382558697,
+        "brier": 0.0836966943290913,
+        "calibration_bias": 0.0051965249507479,
+        "count_mae": 1.0662984958548558,
+        "count_player_games": 1608,
+        "count_rmse": 1.380952629046849,
+        "line": 3.5,
+        "log_loss": 0.3025894932188302,
+        "mean_lambda": 1.554004228629264,
+        "mean_residual_actual_minus_predicted": -0.0421883082312541,
+        "median_absolute_error": 0.8987597448617999,
+        "n": 1608,
+        "over_selections": 28,
+        "predicted_over_rate": 0.1015895597766186,
+        "realized_mean_sog": 1.51181592039801,
+        "realized_over_rate": 0.0963930348258706,
+        "selected_side_losses": 165,
+        "selected_side_win_rate": 0.8973880597014925,
+        "selected_side_wins": 1443,
+        "under_selections": 1580,
+        "window": "prospective_2026_production"
+      }
+    ],
+    "line_rows": 4824,
+    "player_games": 1608,
+    "requested_window": "2026-09-29 through latest fully reconciled slate"
+  },
+  "residual_convention": "actual_sog - predicted_lambda; positive is underprediction",
+  "residual_persistence": {
+    "method": "player chronological one-step descriptive correlation; no fitting",
+    "n_prior3_pairs": 504,
+    "n_prior_game_pairs": 504,
+    "prior3_mean_next_residual_corr": -0.0170806207588284,
+    "prior_residual_next_residual_corr": -0.02320292342474411,
+    "same_sign_rate": 0.5218253968253969,
+    "window": "feature-supported historical 2025 replay plus prospective 2026 feature-bound rows"
+  },
+  "status": "COMPLETE_WITH_WINDOW_LIMITS"
+}
