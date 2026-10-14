@@ -1,0 +1,8 @@
+month,canonical_games,archive_player_game_rows,archive_dates_with_games,feature_archive_missing_or_empty_dates,contract_inputs_present_rows,certified_player_games,additional_strict_prior_valid_rows,usable_line_rows,blocked_rows,blocked_percentage_of_archive_player_games,strict_prior_validation_for_noncertified
+2025-10,180,4342,20,4,4342,0,0,0,4342,100.0,NOT_PROVEN
+2025-11,225,8188,29,0,8188,0,0,0,8188,100.0,NOT_PROVEN
+2025-12,226,9371,28,0,9358,0,0,0,9371,100.0,NOT_PROVEN
+2026-01,240,10697,31,0,10697,0,0,0,10697,100.0,NOT_PROVEN
+2026-02,74,3324,9,0,3303,467,0,1401,2857,85.95066185318892,NOT_PROVEN
+2026-03,242,11170,31,0,11114,8673,0,26019,2497,22.35452103849597,NOT_PROVEN
+2026-04,125,5998,15,0,5955,4249,0,12747,1749,29.159719906635544,NOT_PROVEN

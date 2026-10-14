@@ -1,0 +1,4 @@
+game_type,phase,rows_in_retained_season_2025_snapshot,boundary
+1,PRESEASON,0,Excluded; no preseason row in retained schedule snapshot
+2,REGULAR_SEASON,1312,2025-10-07 through 2026-04-16
+3,POSTSEASON,0,Excluded; no postseason row in retained schedule snapshot

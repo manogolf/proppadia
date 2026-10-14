@@ -1,0 +1,2 @@
+certified_rows,source_backed_rows,exact_probability_matches,within_1e_12_matches,mismatches,side_matches,max_abs_probability_difference,tolerance
+40167,40167,1376,40167,0,40167,5.828670879282072e-16,1e-12

@@ -1,0 +1,5 @@
+finding,expanded_season_classification,reason
+A_D10_D20_DIVERGENCE_BIAS,CANNOT_EVALUATE,Tier 2 strict-prior rows = 0; Tier 3 excluded
+B_HIGH_D10_INDEPENDENT_TAIL_BIAS,CANNOT_EVALUATE,Tier 2 strict-prior rows = 0; Tier 3 excluded
+C_DIVERGENCE_MIDPOINT_CORRECTION,CANNOT_EVALUATE,No larger valid historical population than certified late-season replay
+D_HIGH_D10_SOFT_COMPRESSION,CANNOT_EVALUATE,No larger valid historical population than certified late-season replay

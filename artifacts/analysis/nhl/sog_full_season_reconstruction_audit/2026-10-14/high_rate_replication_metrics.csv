@@ -1,0 +1,5 @@
+segment,player_games,mean_d10_rate,mean_count_residual,mae,overlap_abs_divergence_gt_0_5,line_metrics
+TOP_DECILE,1335,10.412786211016256,-0.5419455307015032,1.416885022120213,982,see high_rate_replication_line_metrics.csv
+TOP_5_PERCENT,668,11.396820504420932,-0.6830874154088641,1.4939650377986984,506,see high_rate_replication_line_metrics.csv
+BOTTOM_DECILE,1335,1.8477578029418837,0.36417493985148935,0.7854881036590353,779,see high_rate_replication_line_metrics.csv
+BOTTOM_5_PERCENT,668,1.4240429847727634,0.4386543637278493,0.7692124813129435,408,see high_rate_replication_line_metrics.csv

@@ -1,0 +1,11 @@
+{
+  "exact_rows": 1376,
+  "ledger_sha256": "92a9563fe73e3eb5ebff4310056d9e0a7f18f2a6629b5c75a32894dbae9da5aa",
+  "material_mismatch_rows": 0,
+  "mode_a_rows": 40167,
+  "side_match_rows": 40167,
+  "stored_output_only_rows": 0,
+  "target_rows": 40167,
+  "tolerance": 1e-12,
+  "tolerance_rows": 40167
+}

@@ -1,0 +1,11 @@
+stage,rows,definition
+CERTIFIED_SEASON_2025_ACCURACY_DENOMINATOR,91049,parent filter
+TARGET_MODEL_VERSION,40167,poisson_baseline/baseline_v1
+TARGET_OPERATIONAL_DATE_RANGE,40167,2026-02-28..2026-04-15
+MODE_A_PREPARED_INPUT_ROWS,40167,saved daily prepared feature archive
+EXACT_PROBABILITY_ROWS,1376,absolute difference 0
+TOLERANCE_PROBABILITY_ROWS,40167,absolute difference <= 1e-12
+BOUNDED_RECONSTRUCTION_ROWS,0,not used
+STORED_OUTPUT_ONLY_ROWS,0,prepared input archive missing
+BLOCKED_OR_MATERIAL_MISMATCH_ROWS,0,missing input or material mismatch
+ACCURACY_ELIGIBLE_REPLAY_ROWS,40167,Mode A within tolerance

@@ -1,0 +1,58 @@
+{
+  "additional_reconstructed_valid_player_games": 0,
+  "appeared_player_game_coverage_ratio_reference_only": 0.286623,
+  "audit_date": "2026-10-14",
+  "canonical_game_days": 167,
+  "canonical_games": 1312,
+  "canonical_season": 2025,
+  "certified_bridge": {
+    "exact_rows": 1376,
+    "ledger_sha256": "92a9563fe73e3eb5ebff4310056d9e0a7f18f2a6629b5c75a32894dbae9da5aa",
+    "material_mismatch_rows": 0,
+    "mode_a_rows": 40167,
+    "side_match_rows": 40167,
+    "stored_output_only_rows": 0,
+    "target_rows": 40167,
+    "tolerance": 1e-12,
+    "tolerance_rows": 40167
+  },
+  "certified_line_rows": 40167,
+  "certified_player_games": 13389,
+  "certified_player_games_missing_raw_rate_exposure_for_correction": 42,
+  "certified_player_games_with_raw_rate_exposure_for_correction": 13347,
+  "combined_usable_line_rows": 40167,
+  "combined_usable_player_games": 13389,
+  "daily_feature_archive_game_days": 163,
+  "daily_feature_archive_player_game_rows": 53090,
+  "december_archive_player_game_rows": 9371,
+  "december_certified_player_games": 0,
+  "december_days_with_feature_archive": 28,
+  "december_exact_loss_note": "No exact eligible player-game count can be certified from the available full-season pregame denominator; all December feature rows remain TIER 3.",
+  "december_exact_loss_player_games": null,
+  "december_game_days": 28,
+  "expanded_structural_analysis_status": "CANNOT_EVALUATE_EXPANDED_SAMPLE; no non-certified historical row has a retained immutable per-game feature cutoff proving strict-prior inputs",
+  "first_regular_season_date": "2025-10-07",
+  "last_regular_season_date": "2026-04-16",
+  "months_excluded": [
+    "2025-10",
+    "2025-11",
+    "2025-12",
+    "2026-01"
+  ],
+  "months_represented": [
+    "2026-02",
+    "2026-03",
+    "2026-04"
+  ],
+  "official_skater_history_rows_for_season": 46713,
+  "paid_credits": 0,
+  "phase": "REGULAR_SEASON",
+  "production_db_mutations": 0,
+  "provider_calls": 0,
+  "pushed": false,
+  "tier_counts": {
+    "TIER_1_CERTIFIED": 13389,
+    "TIER_2_RECONSTRUCTED_VALIDATED": 0,
+    "TIER_3_PARTIAL_OR_UNSAFE": 39701
+  }
+}
