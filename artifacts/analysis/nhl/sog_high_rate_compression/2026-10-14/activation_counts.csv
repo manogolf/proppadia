@@ -1,0 +1,15 @@
+population,activation_state,n,pct
+historical,divergence_correction_active,8219,0.615793811343
+historical,high_rate_compression_active,1022,0.0765715141979
+historical,both_mechanisms_active,684,0.0512474713419
+historical,divergence_only,7535,0.564546340001
+historical,high_compression_only,338,0.0253240428561
+historical,neither_mechanism_active,4790,0.358882145801
+historical,high_d10_region_d10_gt_9,1274,0.0954521615344
+prospective,divergence_correction_active,662,0.598012646793
+prospective,high_rate_compression_active,93,0.0840108401084
+prospective,both_mechanisms_active,65,0.0587172538392
+prospective,divergence_only,597,0.539295392954
+prospective,high_compression_only,28,0.0252935862692
+prospective,neither_mechanism_active,417,0.376693766938
+prospective,high_d10_region_d10_gt_9,115,0.103884372177

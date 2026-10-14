@@ -1,0 +1,3 @@
+population,high_rate_players,soft_improved_players,soft_worsened_players,soft_tied_players,cap_improved_players,cap_worsened_players,cap_tied_players,equal_player_mean_mae_control,equal_player_mean_mae_soft,equal_player_mean_mae_cap
+historical,179,116,18,45,113,21,45,1.395320458365666,1.3458790358176753,1.3079643834276549
+prospective,67,42,12,13,42,12,13,1.431999570794292,1.383207150985802,1.3381599739415924

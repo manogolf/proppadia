@@ -1,0 +1,4 @@
+rule,condition,effect,threshold
+divergence_control,abs(D10-D20) > 0.5,rate=0.5*D10+0.5*D20; otherwise D10,0.5
+soft_compression,D10 > 9.0 and corrected_rate > 9.0,rate=9.0+0.5*(corrected_rate-9.0); otherwise unchanged,9.0
+hard_cap_diagnostic,D10 > 9.0 and corrected_rate > 9.0,rate=9.0; otherwise unchanged,9.0

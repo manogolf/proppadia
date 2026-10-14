@@ -1,0 +1,97 @@
+{
+  "classification": "SOFT_HIGH_RATE_COMPRESSION_SUPPORTED",
+  "inputs": [
+    {
+      "path": "artifacts/analysis/nhl/sog_shot_rate_contribution/2026-10-14/historical_replay_rows.csv",
+      "sha256": "f1d125edc7160f4667f9204178c095eee969a116cc2a359440e3d5b1cc0097c5"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_shot_rate_contribution/2026-10-14/prospective_replay_rows.csv",
+      "sha256": "5305a6eaef6de6e7ed31e2b00b40d7a495ee5cd36f30647b00c65dd640861f9e"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_shot_rate_contribution/2026-10-14/rate_tail_metrics.csv",
+      "sha256": "03b7937050166685594a492bb488d580dd4f57edf35435c672b3f13e282fb0c6"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_correction/2026-10-14/historical_paired_rows.csv",
+      "sha256": "fbf77289d489e5112bf4e437f3896442d504e149afb2306464a4c4b4a7920414"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_correction/2026-10-14/prospective_paired_rows.csv",
+      "sha256": "b0659cdba4bba5ece4c93fd6ff91fc7817e653135a142980c621cafced52bdd4"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_correction/2026-10-14/lineage_manifest.json",
+      "sha256": "1393833dfa4ff1185e75c889dc4443aa7ebe5eb446b23c2fdf42e62ba77086d4"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_d10_d20_divergence_correction/2026-10-14/summary.json",
+      "sha256": "4f66bd47107ee58661cd772a2b378190f145bd4770a8b5958c6da6b822fc0503"
+    },
+    {
+      "path": "artifacts/analysis/nhl/sog_baseline_characterization/2026-10-14/market_matched_rows.csv",
+      "sha256": "118847b88a4ed457ed6cf917db7823493bd204b4a22fce44a42e5212c3d0f54c"
+    },
+    {
+      "path": "backend/nhl/sog_divergence_shadow.py",
+      "sha256": "1c87f725e06b76160a1bd0ec05751eb6b881e5a56ab3262de754f773e243cc8b"
+    },
+    {
+      "path": "backend/nhl/scripts/analyze_nhl_sog_high_rate_compression.py",
+      "sha256": "199fe36c5b86cbc07d9e39ae7bddef22f16a7d1adfd5e5a46e0ef6159860b535"
+    },
+    {
+      "path": "backend/nhl/tests/test_analyze_nhl_sog_high_rate_compression.py",
+      "sha256": "836dd8386fa431a3a209a3a7558d4e6c5e19cf1f1b1aac1dc8c4fd2a01cde405"
+    }
+  ],
+  "outputs": {
+    "activation_counts.csv": "08a3623a559eeb59da48ca3f5e6c7bdd9d11aa62142edb3a802a0606d402dc06",
+    "continuous_relationship.csv": "e53a8a2b4f9b91914bfb0372bc846e01c462331394ff3265ffec932c1f99f0b8",
+    "date_metrics.csv": "25ba14b65af0ed9a2282e0127c618199f101347d52044631ef1eb08706c16dc0",
+    "date_stability_summary.csv": "88cb9f597719f87797f8695a98cb6ad899b0fad15dfdb8cc5621bafc32763553",
+    "decile_residual_curve.csv": "b08b61056be600e1a9e9a761fc3d17667b2a3760d0948d8541a55ab45d96dc85",
+    "exact_rule_definitions.csv": "a55ff62622e6077c295b0c39a21955f7fc337996364eeed21ffcbdde6c94142f",
+    "feature_decomposition_update.md": "6406955d02f0423b988840b853380108cab71532eb5b6af22d720c97a561e185",
+    "fixed_d20_comparison.csv": "953026a7d4994dbe3053f36e50ec565d2671da39c80a2f782e0866e69cecde9e",
+    "global_metrics.csv": "4261b929ebcf399fce3aff0356eab1e51da7ba87c509e49e19bc369884d157c3",
+    "historical_paired_rows.csv": "ccd61ef434fe49bd5a2f0af6a87bb0d462f4bbfd1a686a1aa109fe43a6dda49e",
+    "history_depth_interaction.csv": "bcd6e1bc8ecac56d7ba2caeacd5382a974d9cc38c52ba2896771f887ee2e6b54",
+    "line_metrics.csv": "03463e43cd68537127ad5cbd4b08de279a43a176fb8a8c088491e3410beda240",
+    "market_comparison.csv": "0898bdf76238ade0c0d54da27324ab8da195839c1da86d002c00b33785e010aa",
+    "overcorrection_checks.csv": "d6b16f150b276652a37ce8a4440752becf1456c9a1b1546ecef8f5a4231f912c",
+    "overlap_metrics.csv": "911bde6861ede951c00fa22802bf52f29f6e570bbf5045ad31b24e1ef42e2638",
+    "paired_rows.csv": "499423a5e50dfa04562c031a16cc81c5fe90f32372d327e7e5b41c5a401a3209",
+    "player_robustness.csv": "6a881d3e971668f624ce5c5e8eb2b42cfb2af26d3145dd9b6c85fbe9c00ad106",
+    "player_robustness_summary.csv": "e0aa30a003e94559797f5a0270e07e7149469424220a993cf04055fb5cf25a9c",
+    "probability_replay_validation.csv": "6cb878907419c4da915d4c7d0b97fe47192ed74708fa8eb4c01ac5e5ecdc460c",
+    "prospective_paired_rows.csv": "132c94188d3bbb5c29d08ce15462b3f5a2ba4d5b58c1f1b08f3b1c5389664496",
+    "replay_validation.csv": "08de92f2f51035045223b3f948dd8c2f0eff4bab3be0306b803fed5884347c93",
+    "report.md": "ad045042adffacc6f973242dae6077fc23ec358304064c3998b7e5f585af960c",
+    "research_backlog_context.md": "77554dd42bd440cd76ee9ff5ec95183fbf5df4987f048eabb15d306a06f9bf12",
+    "rule_definitions.csv": "b6597f5e7d00d8ee3d9704d82b7fa7dea4712c7967fd601f2417f1015d2451a9",
+    "safety_checks.csv": "6e2ec8eddf46cd65676cebf5745be39081b48aaf866cc2fd66dd77bdcc67545f",
+    "summary.json": "58a5cce97a64dd3ed264b8001a63d2758cf0f7cf974381a88ff7f8853fa005e7",
+    "tail_metrics.csv": "e0caf9a1ec0dffff75134ee64887adfac22a06f506e281cb96cd8ac789b4a76e",
+    "toi_interaction.csv": "76d860f9c2aa280ef0e30408314875b1023dd44ae48e1d136bd1128f9c502abc"
+  },
+  "population_counts": {
+    "historical": 13347,
+    "prospective_oct10_13": 1107
+  },
+  "rules": {
+    "control": "NHL_SOG_D10_D20_DIVERGENCE_SHRINK_V1",
+    "divergence_threshold": 0.5,
+    "hard_cap": 9.0,
+    "high_rate_threshold_d10_sog_per60": 9.0,
+    "probability_lines": [
+      "1.5",
+      "2.5",
+      "3.5"
+    ],
+    "soft_excess_weight": 0.5
+  },
+  "status": "COMPLETE",
+  "study": "NHL_SOG_HIGH_RATE_COMPRESSION_V1"
+}

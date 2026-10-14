@@ -1,0 +1,11 @@
+population,check,passed
+historical,high_rate_only_when_D10_gt_9,True
+historical,no_high_rate_activation_at_or_below_9,True
+historical,middle_80_soft_equals_control,True
+historical,bottom_decile_unchanged,True
+historical,bottom_5pct_unchanged,True
+prospective,high_rate_only_when_D10_gt_9,True
+prospective,no_high_rate_activation_at_or_below_9,True
+prospective,middle_80_soft_equals_control,False
+prospective,bottom_decile_unchanged,True
+prospective,bottom_5pct_unchanged,True

@@ -1,0 +1,120 @@
+{
+  "broad_date_improvement": true,
+  "broad_player_improvement": true,
+  "classification": "SOFT_HIGH_RATE_COMPRESSION_SUPPORTED",
+  "divergence_control": "NHL_SOG_D10_D20_DIVERGENCE_SHRINK_V1",
+  "feature_classification": "CORE_CONTRIBUTOR_WITH_TWO_CORRECTABLE_BIASES",
+  "hard_cap_near_agreement_positive_residual": true,
+  "hard_cap_rule": "if D10>9 and rate_after_divergence>9: 9; otherwise unchanged",
+  "historical_certified_population": 13389,
+  "historical_common_valid_population": 13347,
+  "historical_rate_evidence_population": 13369,
+  "near_agreement_sign_flip": true,
+  "october14_capture": "present with 86 player-games but not graded because no final immutable official outcome reconciliation package was available",
+  "probability_replay_validation": [
+    {
+      "comparison_status": "EXACT_AGGREGATE_REPLAY",
+      "line": "1.5",
+      "max_abs_metric_difference": 6.245004513516506e-17,
+      "n_prior": 1107,
+      "n_replayed": 1107,
+      "population": "prospective",
+      "population_matches": true
+    },
+    {
+      "comparison_status": "EXACT_AGGREGATE_REPLAY",
+      "line": "2.5",
+      "max_abs_metric_difference": 7.28583859910259e-17,
+      "n_prior": 1107,
+      "n_replayed": 1107,
+      "population": "prospective",
+      "population_matches": true
+    },
+    {
+      "comparison_status": "EXACT_AGGREGATE_REPLAY",
+      "line": "3.5",
+      "max_abs_metric_difference": 1.1102230246251565e-16,
+      "n_prior": 1107,
+      "n_replayed": 1107,
+      "population": "prospective",
+      "population_matches": true
+    },
+    {
+      "comparison_status": "NONCOMPARABLE_POPULATION",
+      "line": "1.5",
+      "max_abs_metric_difference": 0.01186950177263224,
+      "n_prior": 13369,
+      "n_replayed": 13347,
+      "population": "historical",
+      "population_matches": false
+    },
+    {
+      "comparison_status": "NONCOMPARABLE_POPULATION",
+      "line": "2.5",
+      "max_abs_metric_difference": 0.0018170580602693276,
+      "n_prior": 13369,
+      "n_replayed": 13347,
+      "population": "historical",
+      "population_matches": false
+    },
+    {
+      "comparison_status": "NONCOMPARABLE_POPULATION",
+      "line": "3.5",
+      "max_abs_metric_difference": 0.002120335817156649,
+      "n_prior": 13369,
+      "n_replayed": 13347,
+      "population": "historical",
+      "population_matches": false
+    }
+  ],
+  "prospective_oct10_13_population": 1107,
+  "prospective_shadow_implementation_justified": true,
+  "replay_validation": [
+    {
+      "comparison": "production",
+      "max_abs_difference": 1.3322676295501878e-15,
+      "mismatch_count": 0,
+      "n": 13347,
+      "population": "historical",
+      "tolerance": 1e-09
+    },
+    {
+      "comparison": "divergence_control",
+      "max_abs_difference": 1.3322676295501878e-15,
+      "mismatch_count": 0,
+      "n": 13347,
+      "population": "historical",
+      "tolerance": 1e-09
+    },
+    {
+      "comparison": "production",
+      "max_abs_difference": 8.881784197001252e-16,
+      "mismatch_count": 0,
+      "n": 1107,
+      "population": "prospective_oct10_13",
+      "tolerance": 1e-09
+    },
+    {
+      "comparison": "divergence_control",
+      "max_abs_difference": 4.440892098500626e-16,
+      "mismatch_count": 0,
+      "n": 1107,
+      "population": "prospective_oct10_13",
+      "tolerance": 1e-09
+    }
+  ],
+  "scope": {
+    "paid_credits": 0,
+    "production_db_mutations": 0,
+    "production_or_existing_shadow_changed": false,
+    "provider_calls": 0
+  },
+  "soft_high_rate_brier_1_5_improved_historical": true,
+  "soft_high_rate_brier_1_5_improved_prospective": true,
+  "soft_high_rate_count_improved_historical": true,
+  "soft_high_rate_count_improved_prospective": true,
+  "soft_near_agreement_positive_residual": false,
+  "soft_rule": "if D10>9 and rate_after_divergence>9: 9 + 0.5*(rate_after_divergence-9); otherwise unchanged",
+  "status": "COMPLETE",
+  "threshold_d10_sog_per60": 9.0
+}
