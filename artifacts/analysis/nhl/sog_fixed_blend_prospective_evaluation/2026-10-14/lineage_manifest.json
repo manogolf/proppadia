@@ -1,0 +1,182 @@
+{
+  "daily_lineage": [
+    {
+      "feature_path": "artifacts/operational/nhl/sog_feature_inputs/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/sog_features.csv",
+      "feature_sha256": "0fa64ee1e119a7e36b39308d280d5a14572185421e0f210060adaa0aa54078d1",
+      "grade_summary": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/grade_summary.json",
+      "grade_summary_sha256": "7980616c68fd6b8347648ebd9265eb44f866b7ea869441c58f899fabde276878",
+      "graded_predictions_25_path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/graded_predictions.csv",
+      "graded_predictions_25_sha256": "47258162d10d39a9338dfe23584eef0d52d8d2e5fba3db2def1be8fe703fa4a9",
+      "graded_predictions_50_path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/graded_predictions.csv",
+      "graded_predictions_50_sha256": "89e0091629f98786bae82016703bd1866ff12dfbf9428c7db7ea42348c103d7c",
+      "market_integrity_path": "artifacts/operational/nhl/sog_market_attachments/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/sog_attachment_integrity.json",
+      "market_integrity_sha256": "26391b998749d654ed4ce4ff01e8c040c65b6899c723f995fb26da3574ad91ce",
+      "parent_receipt_path": "artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261010T225230603101Z_6239a125/parent_receipt.json",
+      "parent_receipt_sha256": "a3a65248e443d8d5c15540cfebe9190555e14940d2fac03088574a2588ec4bf1",
+      "production_pair_missing": 0,
+      "production_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261010T225230603101Z_6239a125/sog_predictions_wide_calibrated.csv",
+      "production_sha256": "b86cfcd0f6274db8248a8f571694bfd828689de93b254b6cd36348beb3e3f307",
+      "run_id": "nhldaily_20261010T225230603101Z_6239a125",
+      "settled_player_games": 357,
+      "settled_shadow_rows": 1071,
+      "slate_date": "2026-10-10",
+      "started_excluded_game_ids": [
+        2026020070,
+        2026020071,
+        2026020072,
+        2026020073
+      ],
+      "total_shadow_rows": 1305,
+      "unresolved_shadow_rows": 234
+    },
+    {
+      "feature_path": "artifacts/operational/nhl/sog_feature_inputs/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/sog_features.csv",
+      "feature_sha256": "23a55eb831dde3929c76032fcbf35eb4fc35494cb38beaebb99bff3d2de29470",
+      "grade_summary": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/grade_summary.json",
+      "grade_summary_sha256": "016e97c9c0d1180c29a9e939306dd6e8f5c556261812f8446fdc7375f34ee523",
+      "graded_predictions_25_path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/graded_predictions.csv",
+      "graded_predictions_25_sha256": "d6c04287997277a47f17a751dd60bdcdfb02524dcbfc8d0c2692fe2ecb41753f",
+      "graded_predictions_50_path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/graded_predictions.csv",
+      "graded_predictions_50_sha256": "6c4948a0920ab4b571dcb40f3c7020a943693f68ad1fcbf5a8bf19d209ecfd49",
+      "market_integrity_path": "artifacts/operational/nhl/sog_market_attachments/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/sog_attachment_integrity.json",
+      "market_integrity_sha256": "b6dd10f47f5b6ddefe5476163b6b1dbdd65cafc37cb1dc50850dfbbefc7b4eb8",
+      "parent_receipt_path": "artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261011T201233254402Z_92264a17/parent_receipt.json",
+      "parent_receipt_sha256": "8f27060daf63550e4926d63034c196bdf84ec887f3aaca687057006ad8433e0a",
+      "production_pair_missing": 0,
+      "production_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261011T201233254402Z_92264a17/sog_predictions_wide_calibrated.csv",
+      "production_sha256": "3e0a11fbaa8097c339f3736add944ec93f23f802f74061b6183ed3ffff96c0a7",
+      "run_id": "nhldaily_20261011T201233254402Z_92264a17",
+      "settled_player_games": 108,
+      "settled_shadow_rows": 324,
+      "slate_date": "2026-10-11",
+      "started_excluded_game_ids": [],
+      "total_shadow_rows": 396,
+      "unresolved_shadow_rows": 72
+    },
+    {
+      "feature_path": "artifacts/operational/nhl/sog_feature_inputs/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/sog_features.csv",
+      "feature_sha256": "38a2ee4e925c63b77ca2b128fb5e4698e4a1c58bd9dc298e68416c3910127a56",
+      "grade_summary": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/grade_summary.json",
+      "grade_summary_sha256": "b09ee1195032ea131998319209eaa0610c7dd5205b8677ea64733bb2c5dd41c7",
+      "graded_predictions_25_path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/graded_predictions.csv",
+      "graded_predictions_25_sha256": "433fa5568bcf3940c572df8b9f7506a9b7a25831298bd286dc673167cc98d13f",
+      "graded_predictions_50_path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/graded_predictions.csv",
+      "graded_predictions_50_sha256": "a2021d76365f4c7e35198e72078e461073f339553f9453ea133598dc51c68968",
+      "market_integrity_path": "artifacts/operational/nhl/sog_market_attachments/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/sog_attachment_integrity.json",
+      "market_integrity_sha256": "6fbf64ce6ec7dcf7780670c586908c06624365146db05707a6c2f80727dcc688",
+      "parent_receipt_path": "artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261012T220438660693Z_ab8ff694/parent_receipt.json",
+      "parent_receipt_sha256": "ab859e0aea680d864c6d125a304777b21dd29387c90904f4982be8411849317f",
+      "production_pair_missing": 0,
+      "production_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261012T220438660693Z_ab8ff694/sog_predictions_wide_calibrated.csv",
+      "production_sha256": "098873be5b12ecce27b2f30f19cd2b7f1d52466b0ecec959cfca9d9eb0b7f801",
+      "run_id": "nhldaily_20261012T220438660693Z_ab8ff694",
+      "settled_player_games": 71,
+      "settled_shadow_rows": 213,
+      "slate_date": "2026-10-12",
+      "started_excluded_game_ids": [
+        2026020087
+      ],
+      "total_shadow_rows": 261,
+      "unresolved_shadow_rows": 48
+    },
+    {
+      "feature_path": "artifacts/operational/nhl/sog_feature_inputs/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/sog_features.csv",
+      "feature_sha256": "14e4ad362f54a53a54410ab9707563cbb0e487e1f1bca15b9e08d58f8be9382f",
+      "grade_summary": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/grade_summary.json",
+      "grade_summary_sha256": "ba22fd19ad2a059bf2a8b384d58cc529c40073abdc6cb2ac9f80644877b26ca3",
+      "graded_predictions_25_path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/graded_predictions.csv",
+      "graded_predictions_25_sha256": "192805733a0b7cf41a9cf8e59e6a725ddf3d089aabb257038a32800771418a0b",
+      "graded_predictions_50_path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/graded_predictions.csv",
+      "graded_predictions_50_sha256": "db10ac8d5c6e00f1e6382495e089bf737bdc323f8bb100d0ffd686ad3b3dbb3b",
+      "market_integrity_path": "artifacts/operational/nhl/sog_market_attachments/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/sog_attachment_integrity.json",
+      "market_integrity_sha256": "fd42617b86a0d1a7956aafb1cfef8269bb686ffa1a5fb95a884d34b90dd4f0d4",
+      "parent_receipt_path": "artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261013T201458522957Z_22deb90f/parent_receipt.json",
+      "parent_receipt_sha256": "4c3eaf880028e70fe0066a4d7dff00b4ca992bfcb636461124ae3361a58a842d",
+      "production_pair_missing": 0,
+      "production_path": "backend/nhl/data/processed/daily_runs/nhldaily_20261013T201458522957Z_22deb90f/sog_predictions_wide_calibrated.csv",
+      "production_sha256": "e62fe5303e98b69ea9b67c3e4eb08d545e22422440910fa76e350477125bc8c8",
+      "run_id": "nhldaily_20261013T201458522957Z_22deb90f",
+      "settled_player_games": 571,
+      "settled_shadow_rows": 1713,
+      "slate_date": "2026-10-13",
+      "started_excluded_game_ids": [],
+      "total_shadow_rows": 2127,
+      "unresolved_shadow_rows": 414
+    }
+  ],
+  "market_lineage": [
+    {
+      "matched_novig_rows": 561,
+      "path": "artifacts/operational/nhl/sog_market_attachments/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/sog_with_market.csv",
+      "rows": 1305,
+      "run_id": "nhldaily_20261010T225230603101Z_6239a125",
+      "sha256": "977346128a326da500524d1ea1cd160763b19b8fbaa6673e4fba2a4f69e5caa7",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "matched_novig_rows": 178,
+      "path": "artifacts/operational/nhl/sog_market_attachments/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/sog_with_market.csv",
+      "rows": 396,
+      "run_id": "nhldaily_20261011T201233254402Z_92264a17",
+      "sha256": "a3bff5be6a0412de2974f6ad0db6ef895a7eaec7dc12bdbbe9b918f3cb744a1d",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "matched_novig_rows": 120,
+      "path": "artifacts/operational/nhl/sog_market_attachments/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/sog_with_market.csv",
+      "rows": 261,
+      "run_id": "nhldaily_20261012T220438660693Z_ab8ff694",
+      "sha256": "820097f74f3c71f7af2b761cb17a1cbc788dc152774725a7cf8a019dc48048b0",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "matched_novig_rows": 935,
+      "path": "artifacts/operational/nhl/sog_market_attachments/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/sog_with_market.csv",
+      "rows": 2127,
+      "run_id": "nhldaily_20261013T201458522957Z_22deb90f",
+      "sha256": "f01d412bfbcabd58f6011b8a1cf9633441339c471cca8f15bee27cd9e0fb5263",
+      "slate_date": "2026-10-13"
+    }
+  ],
+  "outputs": {
+    "blend_25_vs_50.csv": "c129a930e0237e3884c1cabdbe64c980028327b86ab975f19079e39177e056f7",
+    "bottom_half_metrics.csv": "7ad291adba2e45d0879e9bcf135270bf6ae60baf32eb313336b4dba0b34852c4",
+    "calibration.csv": "8655066d46d18cbc37b58b1f7a480ccde17345afd81666806a3e38b4df7823f5",
+    "count_metrics.csv": "2f704a98873de18df5bfc8234125821dd47e59ad5cb9a2e40ae319781d23bf16",
+    "d10_group_metrics.csv": "62cdee8e6e551b0032c3e6cf915f277486c633442184eaafb2e0050bd6eb9251",
+    "d10_percentile_metrics.csv": "01926b32ecb15a92427ee8a3325dc62d60735086ce5d0e23244f6576cda243c3",
+    "date_level_metrics.csv": "f1dbcc2ef3fde79e272ad4f3737f4e6928b37c4ec07f4d4da2173abe365cde73",
+    "directional_mean_reversion.csv": "2b1a31dc761215aa0e5908ffd402279b4cdb91957c8ed3decc599e567bd8fe77",
+    "gap_tertile_metrics.csv": "9844e3b36446615c1328b80ed7e037ab51c0a5cb00f64a05fa7382a337abaca6",
+    "line_metrics.csv": "f92f0d5014f16a85f6aa4e59020beec9d2cc398d81cd3e4a6226cc32a24fa5af",
+    "market_gap_regimes.csv": "82c8965e9bb6b4c290b7d932d2bbba625a5268cb6aaf856370707e7ac51a7e97",
+    "market_relative_metrics.csv": "16a4ac58da0797622a7fc1fa4e28b05b2d8dd0e78ecf94f6a6c0903ca9535a3d",
+    "overall_metrics.csv": "eeef5a1b438325df900ec624edb0f8f097dfbc4c3b1d61625805016b6b318fc4",
+    "paired_predictions_outcomes.csv": "da7938c3bb8fe55e4fc2a188c225fa31408085a8113e5fc7fb0067e829101418",
+    "paired_score_differences.csv": "0413b2f9c83efa875a8f53fee9cc9b03d9afaa12b6436f9124c0ba24d406907a",
+    "rate_regime_metrics.csv": "f9e60fc01048feba434f09ccd2e54cae42157927499d3bb98423244a87bca944",
+    "report.md": "caf66c5587634387fa9ca5ab4aba875934ee0c451930b680383bea95228a286b",
+    "side_disagreement_rows.csv": "b149409abb61c466ff58e5f232c617d5c9db4c7c76cc0f90afdb41b31d772e7d",
+    "side_disagreement_segments.csv": "ece0f036791a707d32533f8e9599cbc6acde8e01dc747da2c13557073d5217d3",
+    "summary.json": "3910128704e08a7b254db88277a3569ef0cf6d028f970ccabe59f5e737cf6187"
+  },
+  "source_artifacts": [
+    {
+      "path": "backend/nhl/scripts/analyze_sog_fixed_blend_pregame.py",
+      "sha256": "23c15318a2168640a27b30f7d1074356cdc6547f70b6e021ec9ea98f6e7ac52e"
+    },
+    {
+      "path": "backend/nhl/scripts/score_sog_poisson_baseline.py",
+      "sha256": "cb1794d25ea91738321e1457b5d5b7be428e9e30f57e79f65f7b9bd70f532342"
+    },
+    {
+      "path": "backend/nhl/sog_fixed_blend.py",
+      "sha256": "67daa83b699daadeae7b688470492820952a2647d379d02f211e24ad3a724336"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_prospective/sog_fixed_blend_prospective_summary.json",
+      "sha256": "f51ff18441e2213bab7f2496fdbfc15e4f7eca9b918aabd514ef8889111b9383"
+    }
+  ],
+  "study": "NHL_SOG_FIXED_BLEND_PROSPECTIVE_EVALUATION_V1"
+}
