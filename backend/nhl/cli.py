@@ -1485,7 +1485,13 @@ def _cross_market_envelope_from_daily_observation(observation_dir: Path) -> dict
         event = grouped.setdefault(event_id, {
             "id": event_id, "home_team": row.get("home_team"),
             "away_team": row.get("away_team"),
-            "commence_time": row.get("commence_time"), "bookmakers": [],
+            # read_json infers this ISO-8601 column as datetime64; the retained
+            # cross-market envelope contract stores provider timestamps as strings.
+            "commence_time": (
+                row["commence_time"].isoformat().replace("+00:00", "Z")
+                if isinstance(row.get("commence_time"), pd.Timestamp)
+                else row.get("commence_time")
+            ), "bookmakers": [],
         })
         bookmaker_key = str(row.get("bookmaker") or "")
         book = next((item for item in event["bookmakers"]

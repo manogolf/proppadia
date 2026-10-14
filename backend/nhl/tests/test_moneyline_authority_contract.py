@@ -69,6 +69,34 @@ class MoneylineAuthorityContractTests(unittest.TestCase):
         self.assertEqual(outcome["price"], -120)
         self.assertEqual(envelope["provider_response"][0]["bookmakers"][0]["markets"][0]["key"], "h2h")
 
+    def test_parent_daily_timestamp_is_normalized_before_json_serialization(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            observation = Path(temporary)
+            (observation / "observation_summary.json").write_text(
+                '{"observation_timestamp_utc":"2026-10-14T16:06:45Z",'
+                '"credits_consumed":33,"credits_remaining":9}')
+            (observation / "normalized_odds.jsonl").write_text(
+                '{"provider_event_id":"evt-1","home_team":"Montreal Canadiens",'
+                '"away_team":"Ottawa Senators","commence_time":"2026-10-14T23:40:00Z",'
+                '"bookmaker":"betonlineag","bookmaker_title":"BetOnline",'
+                '"market":"h2h","market_last_update":"2026-10-14T16:06:45Z",'
+                '"outcome":"Montreal Canadiens","price":-120,"point":null}\n')
+            inferred_rows = pd.read_json(observation / "normalized_odds.jsonl", lines=True)
+            inferred_start = inferred_rows.iloc[0]["commence_time"]
+            self.assertIsInstance(inferred_start, pd.Timestamp)
+            with self.assertRaisesRegex(TypeError, "Object of type Timestamp is not JSON serializable"):
+                json.dumps({"provider_response": [{"commence_time": inferred_start}]})
+            envelope = _cross_market_envelope_from_daily_observation(observation)
+
+        event = envelope["provider_response"][0]
+        # This reproduces the live inference behavior: pandas materializes the
+        # JSONL timestamp column as Timestamp, while the envelope contract is ISO-8601 UTC.
+        self.assertEqual(event["commence_time"], "2026-10-14T23:40:00Z")
+        encoded = json.dumps(envelope, sort_keys=True)
+        self.assertEqual(json.dumps(envelope, sort_keys=True), encoded)
+        self.assertEqual(json.loads(encoded)["provider_response"][0]["commence_time"],
+                         "2026-10-14T23:40:00Z")
+
     def test_cross_market_export_owns_exclusive_input_directory_creation(self):
         schedule = pd.DataFrame([{
             "slate_date": "2026-10-14",
