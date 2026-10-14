@@ -1,0 +1,29 @@
+{
+  "status": "BINARY_COVER_COMPARISON_AVAILABLE",
+  "provider_lineage": "retained prior framework study: consensus across qualified retained books; latest paired pregame no-vig home -1.5/+1.5 quotes",
+  "target": "home final-score margin >=2; market consensus supports only this binary event",
+  "scores": {
+    "no_vig_market_consensus": {
+      "n": 73,
+      "brier": 0.21684825431669275,
+      "log_loss": 0.6251331234442645
+    },
+    "SIMPLE_GOAL_DISTRIBUTION_BASELINE": {
+      "n": 73,
+      "brier": 0.23397155567234168,
+      "log_loss": 0.662081751515395
+    },
+    "MONEYLINE_CONDITIONED_MARGIN_BASELINE": {
+      "n": 73,
+      "brier": 0.23094576656820653,
+      "log_loss": 0.6592084837936242
+    },
+    "REGULARIZED_GOAL_POISSON": {
+      "n": 73,
+      "brier": 0.23188697612543258,
+      "log_loss": 0.660842946762266
+    }
+  },
+  "roi_status": "NOT_COMPUTED",
+  "roi_reason": "New candidate per-side BetOnline decimal quote and timestamp records are absent from the retained paired-game export; no substitution or reconstructed ROI."
+}

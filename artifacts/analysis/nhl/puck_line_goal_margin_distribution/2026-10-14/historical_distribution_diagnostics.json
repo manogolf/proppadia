@@ -1,0 +1,43 @@
+{
+  "away_goal_mean": 3.0603715170278636,
+  "away_goal_variance": 2.8484051291028867,
+  "away_overdispersion_variance_to_mean": 0.9307383476987683,
+  "empty_net_analysis": "NOT_SUPPORTED_BY_RETAINED_EVIDENCE",
+  "empty_net_state_counts": {
+    "UNRESOLVED_NOT_RECOVERABLE_FROM_LOCAL_CERTIFIED_INPUTS": 1292
+  },
+  "home_away_goal_correlation": -0.11182362766714785,
+  "home_goal_mean": 3.1996904024767803,
+  "home_goal_variance": 3.0940975028357793,
+  "home_overdispersion_variance_to_mean": 0.9669990260434995,
+  "independent_poisson_one_goal_rate": 0.4610565644184135,
+  "independent_poisson_two_plus_rate": 0.5389434355815865,
+  "observed_margin_frequency": {
+    "-1": 272,
+    "-2": 113,
+    "-3": 134,
+    "-4": 64,
+    "-5": 25,
+    "-6": 4,
+    "-7": 3,
+    "-8": 1,
+    "1": 285,
+    "2": 115,
+    "3": 165,
+    "4": 73,
+    "5": 26,
+    "6": 6,
+    "7": 3,
+    "8": 2,
+    "9": 1
+  },
+  "observed_one_goal_rate": 0.4311145510835913,
+  "observed_two_plus_rate": 0.5688854489164087,
+  "outcome_decision_type_counts": {
+    "OVERTIME": 206,
+    "REGULATION": 969,
+    "SHOOTOUT": 117
+  },
+  "training_rows": 1292,
+  "training_season": 2025
+}

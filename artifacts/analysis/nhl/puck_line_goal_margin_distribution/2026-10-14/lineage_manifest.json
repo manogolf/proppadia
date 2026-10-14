@@ -1,0 +1,51 @@
+{
+  "outputs": {
+    "calibration_metrics.csv": "94f8d2369ff733910a3daadfc6f095a65975737e74fcb54d3f83d82f5eadc003",
+    "candidate_comparison.csv": "c24e61db56c1ad240dd4f2bd2bd8a41b2ec944cfa4208372ca0debcc94171a58",
+    "case_examples.csv": "ff8d332626ab88d7feb811d4616ca064e945002374874316f38f824d0b85e4bf",
+    "confusion_matrices.csv": "ccf5afa10ff1c6013efc69ffae1da597ddf5cc38460327687c3f02fa39033180",
+    "historical_distribution_diagnostics.json": "deb2b96e6479a6c93c21d06fc68f593c865923b040ec34097e68de5ad7f65263",
+    "latent_margin_distributions.csv": "2a0f3e9347110120baefcf96ef4f10dd95098da0378895e6de259b5b1a604c76",
+    "margin_frequency_comparison.csv": "43413e7e7cbff5a5cd372e9cc6572c1f10b338f8654f968bcaa4f83718c2f631",
+    "margin_severity_diagnostics.csv": "0bd60007bac900c9c655961e8579a1c763f637b6e9e341a7a74760e9a647609e",
+    "market_comparison.json": "13a2a8f3b09d2316ad7923c8924aa0ec5ee521380366ea06f3945a026f9ab413",
+    "moneyline_bin_analysis.csv": "cd4c9fba284021aa95b99c601141f39ad0ec4f8e973eede0563d2d9940ee6429",
+    "ot_so_analysis.json": "ab075815c5337e0d00e81bc80725cfb5eccb39ee63a68485f3723b9cfc11eb75",
+    "prospective_game_predictions.csv": "d6d8ed7a63a7c62837b52946687eaae658a79994ec24b0c05f6aa373159d1670",
+    "report.md": "4c8c268dae78e80601f19cfffe067340a307717269706b679b34452f9d594862",
+    "score_frequency_comparison.csv": "767b6cc08b9ec8dd0872152a5c6c35ad0bc525e5cd132dacff2cf9d6e26039eb",
+    "summary.json": "a173aae5e25d9ae91687e4ab6caaf10c104c127daeca590972840aee1c2b3cfa"
+  },
+  "source_contracts": {
+    "features": "NHL strict-prior control spine fields",
+    "outcomes": "certified 2025 outcome spine and canonical 2026 learning-restatement grade",
+    "target": "official final-score goal differential including decisive OT/SO goal"
+  },
+  "sources": [
+    {
+      "path": "artifacts/analysis/model_development/nhl_standard_puck_line_simple_baseline_v1/2026-09-15/prediction_populations.parquet",
+      "sha256": "9878841bb5eac23118b416341537de197243ebb3819edfc11e7e2bbcad9e6121"
+    },
+    {
+      "path": "artifacts/analysis/nhl/puck_line_framework_viability/2026-10-14/paired_games.csv",
+      "sha256": "a8e34e787006ab6fc9d6d95d94674efd5c85f8a47ddf4dadbc797740a7fffd49"
+    },
+    {
+      "path": "artifacts/analysis/model_development/nhl_season_2025_frozen_moneyline_replay_and_sog_novelty_v1/2026-09-15/season_2025_strict_prior_control_spine.csv",
+      "sha256": "18bb5ff60b8bae7f5ad4fa618e25f74e2b409639b4dd4c0973325fbb8af9ec54"
+    },
+    {
+      "path": "artifacts/analysis/model_development/nhl_cross_market_game_state_bridge_v1/2026-09-15/season_2025_outcome_spine.parquet",
+      "sha256": "b8b51274837c413ae8d957da93180ba6528a530f1b5e3670503011411133ef43"
+    },
+    {
+      "path": "backend/nhl/scripts/analyze_nhl_puck_line_framework_viability.py",
+      "sha256": "36fbb8e0d3855841939395fe3e61199878c65745cefd310dfae6840e8f8a3bf2"
+    },
+    {
+      "path": "backend/nhl/cross_market_shadow/frozen_puck_line_control_v1.json",
+      "sha256": "ef9dc7cd7c82baed08e8582db01813dfcfb81e848a7a9ee4d1135b1b66fe88c9"
+    }
+  ],
+  "study": "NHL_PUCK_LINE_GOAL_MARGIN_DISTRIBUTION_RESEARCH_V1"
+}

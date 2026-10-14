@@ -1,0 +1,12 @@
+{
+  "final_score_target": "official final score including decisive OT/SO goal; one-goal final is ONE_GOAL_GAME",
+  "historical_decision_types": {
+    "OVERTIME": 206,
+    "REGULATION": 969,
+    "SHOOTOUT": 117
+  },
+  "overtime_shootout_n": 323,
+  "overtime_shootout_one_goal_rate": 1.0,
+  "regulation_n": 969,
+  "regulation_one_goal_rate": 0.24148606811145512
+}

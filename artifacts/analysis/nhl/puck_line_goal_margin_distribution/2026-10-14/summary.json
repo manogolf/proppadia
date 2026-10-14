@@ -1,0 +1,425 @@
+{
+  "assumptions": {
+    "moneyline_conditioned": "empirical 2025 final-margin distribution by pregame frozen Moneyline probability bins; Dirichlet-style smoothing toward 2025 global margin frequencies",
+    "regulation_ties": "remaining regulation tie mass resolved as neutral 50/50 one-goal OT/SO outcome",
+    "rich_model": "separate L2-regularized Poisson regressions for home and away goals",
+    "simple_and_richer_poisson": "independent home/away Poisson counts, score grid capped at 15 goals per side with remaining mass assigned to extreme-margin tails"
+  },
+  "candidate_scores": {
+    "CHALLENGER": {
+      "accuracy": 0.35,
+      "balanced_accuracy": 0.34803921568627455,
+      "class_recall": {
+        "AWAY_BY_2_PLUS": 0.11764705882352941,
+        "HOME_BY_2_PLUS": 0.25,
+        "ONE_GOAL_GAME": 0.6764705882352942
+      },
+      "confusion_actual_rows_predicted_columns": [
+        [
+          4,
+          27,
+          3
+        ],
+        [
+          2,
+          23,
+          9
+        ],
+        [
+          1,
+          23,
+          8
+        ]
+      ],
+      "mean_probability": {
+        "AWAY_BY_2_PLUS": 0.2775318683623478,
+        "HOME_BY_2_PLUS": 0.303526855219961,
+        "ONE_GOAL_GAME": 0.41894127641769124
+      },
+      "multiclass_brier_sum": 0.6789428185858192,
+      "multiclass_log_loss": 1.1118090275997814,
+      "n": 100,
+      "predicted_class_frequency": {
+        "AWAY_BY_2_PLUS": 7,
+        "HOME_BY_2_PLUS": 20,
+        "ONE_GOAL_GAME": 73
+      }
+    },
+    "MONEYLINE_CONDITIONED_MARGIN_BASELINE": {
+      "accuracy": 0.34,
+      "balanced_accuracy": 0.33578431372549017,
+      "class_recall": {
+        "AWAY_BY_2_PLUS": 0.0,
+        "HOME_BY_2_PLUS": 0.125,
+        "ONE_GOAL_GAME": 0.8823529411764706
+      },
+      "confusion_actual_rows_predicted_columns": [
+        [
+          0,
+          34,
+          0
+        ],
+        [
+          0,
+          30,
+          4
+        ],
+        [
+          0,
+          28,
+          4
+        ]
+      ],
+      "mean_probability": {
+        "AWAY_BY_2_PLUS": 0.2733320907141993,
+        "HOME_BY_2_PLUS": 0.2949977320262299,
+        "ONE_GOAL_GAME": 0.43166306746779315
+      },
+      "multiclass_brier_sum": 0.6780577088939671,
+      "multiclass_log_loss": 1.1151826154149487,
+      "n": 100,
+      "predicted_class_frequency": {
+        "AWAY_BY_2_PLUS": 0,
+        "HOME_BY_2_PLUS": 8,
+        "ONE_GOAL_GAME": 92
+      }
+    },
+    "PRIOR_2025_BASE_RATE": {
+      "accuracy": 0.34,
+      "balanced_accuracy": 0.3333333333333333,
+      "class_recall": {
+        "AWAY_BY_2_PLUS": 0.0,
+        "HOME_BY_2_PLUS": 0.0,
+        "ONE_GOAL_GAME": 1.0
+      },
+      "confusion_actual_rows_predicted_columns": [
+        [
+          0,
+          34,
+          0
+        ],
+        [
+          0,
+          34,
+          0
+        ],
+        [
+          0,
+          32,
+          0
+        ]
+      ],
+      "mean_probability": {
+        "AWAY_BY_2_PLUS": 0.26640926640926593,
+        "HOME_BY_2_PLUS": 0.3027027027027031,
+        "ONE_GOAL_GAME": 0.43088803088803024
+      },
+      "multiclass_brier_sum": 0.6803754267229171,
+      "multiclass_log_loss": 1.1183750364003824,
+      "n": 100,
+      "predicted_class_frequency": {
+        "AWAY_BY_2_PLUS": 0,
+        "HOME_BY_2_PLUS": 0,
+        "ONE_GOAL_GAME": 100
+      }
+    },
+    "REFERENCE": {
+      "accuracy": 0.36,
+      "balanced_accuracy": 0.3584558823529412,
+      "class_recall": {
+        "AWAY_BY_2_PLUS": 0.2647058823529412,
+        "HOME_BY_2_PLUS": 0.28125,
+        "ONE_GOAL_GAME": 0.5294117647058824
+      },
+      "confusion_actual_rows_predicted_columns": [
+        [
+          9,
+          22,
+          3
+        ],
+        [
+          4,
+          18,
+          12
+        ],
+        [
+          4,
+          19,
+          9
+        ]
+      ],
+      "mean_probability": {
+        "AWAY_BY_2_PLUS": 0.29201673710193304,
+        "HOME_BY_2_PLUS": 0.30372083895567614,
+        "ONE_GOAL_GAME": 0.40426242394239076
+      },
+      "multiclass_brier_sum": 0.6764170464651736,
+      "multiclass_log_loss": 1.1107440569534062,
+      "n": 100,
+      "predicted_class_frequency": {
+        "AWAY_BY_2_PLUS": 17,
+        "HOME_BY_2_PLUS": 24,
+        "ONE_GOAL_GAME": 59
+      }
+    },
+    "REGULARIZED_GOAL_POISSON": {
+      "accuracy": 0.37,
+      "balanced_accuracy": 0.3645833333333333,
+      "class_recall": {
+        "AWAY_BY_2_PLUS": 0.11764705882352941,
+        "HOME_BY_2_PLUS": 0.09375,
+        "ONE_GOAL_GAME": 0.8823529411764706
+      },
+      "confusion_actual_rows_predicted_columns": [
+        [
+          4,
+          30,
+          0
+        ],
+        [
+          0,
+          30,
+          4
+        ],
+        [
+          0,
+          29,
+          3
+        ]
+      ],
+      "mean_probability": {
+        "AWAY_BY_2_PLUS": 0.26836577479698415,
+        "HOME_BY_2_PLUS": 0.2840784708221674,
+        "ONE_GOAL_GAME": 0.4475557543808484
+      },
+      "multiclass_brier_sum": 0.6739549392875349,
+      "multiclass_log_loss": 1.1039772792372202,
+      "n": 100,
+      "predicted_class_frequency": {
+        "AWAY_BY_2_PLUS": 4,
+        "HOME_BY_2_PLUS": 7,
+        "ONE_GOAL_GAME": 89
+      }
+    },
+    "SIMPLE_GOAL_DISTRIBUTION_BASELINE": {
+      "accuracy": 0.34,
+      "balanced_accuracy": 0.3333333333333333,
+      "class_recall": {
+        "AWAY_BY_2_PLUS": 0.0,
+        "HOME_BY_2_PLUS": 0.0,
+        "ONE_GOAL_GAME": 1.0
+      },
+      "confusion_actual_rows_predicted_columns": [
+        [
+          0,
+          34,
+          0
+        ],
+        [
+          0,
+          34,
+          0
+        ],
+        [
+          0,
+          32,
+          0
+        ]
+      ],
+      "mean_probability": {
+        "AWAY_BY_2_PLUS": 0.2510450042109405,
+        "HOME_BY_2_PLUS": 0.287898431370646,
+        "ONE_GOAL_GAME": 0.4610565644184135
+      },
+      "multiclass_brier_sum": 0.6899981937730862,
+      "multiclass_log_loss": 1.1316087937043633,
+      "n": 100,
+      "predicted_class_frequency": {
+        "AWAY_BY_2_PLUS": 0,
+        "HOME_BY_2_PLUS": 0,
+        "ONE_GOAL_GAME": 100
+      }
+    },
+    "UNIFORM": {
+      "accuracy": 0.34,
+      "balanced_accuracy": 0.3333333333333333,
+      "class_recall": {
+        "AWAY_BY_2_PLUS": 1.0,
+        "HOME_BY_2_PLUS": 0.0,
+        "ONE_GOAL_GAME": 0.0
+      },
+      "confusion_actual_rows_predicted_columns": [
+        [
+          34,
+          0,
+          0
+        ],
+        [
+          34,
+          0,
+          0
+        ],
+        [
+          32,
+          0,
+          0
+        ]
+      ],
+      "mean_probability": {
+        "AWAY_BY_2_PLUS": 0.3333333333333329,
+        "HOME_BY_2_PLUS": 0.3333333333333329,
+        "ONE_GOAL_GAME": 0.3333333333333329
+      },
+      "multiclass_brier_sum": 0.666666666666667,
+      "multiclass_log_loss": 1.0986122886681096,
+      "n": 100,
+      "predicted_class_frequency": {
+        "AWAY_BY_2_PLUS": 100,
+        "HOME_BY_2_PLUS": 0,
+        "ONE_GOAL_GAME": 0
+      }
+    }
+  },
+  "candidate_training": "all candidates fit or summarized only on 2025 regular-season games; 2026 outcomes used only for evaluation",
+  "decision": "The regularized score model modestly beats the frozen reference/challenger proper scores but all distribution candidates trail uniform log loss and Brier; a prospective shadow is not justified from this 100-game sample.",
+  "empty_net_analysis": "NOT_SUPPORTED_BY_RETAINED_EVIDENCE",
+  "features": [
+    "diff_std_goal_diff_pg",
+    "diff_r10_goal_diff_pg",
+    "diff_std_shot_diff_pg",
+    "diff_days_rest",
+    "home_back_to_back",
+    "away_back_to_back"
+  ],
+  "historical_diagnostics": {
+    "away_goal_mean": 3.0603715170278636,
+    "away_goal_variance": 2.8484051291028867,
+    "away_overdispersion_variance_to_mean": 0.9307383476987683,
+    "empty_net_analysis": "NOT_SUPPORTED_BY_RETAINED_EVIDENCE",
+    "empty_net_state_counts": {
+      "UNRESOLVED_NOT_RECOVERABLE_FROM_LOCAL_CERTIFIED_INPUTS": 1292
+    },
+    "home_away_goal_correlation": -0.11182362766714785,
+    "home_goal_mean": 3.1996904024767803,
+    "home_goal_variance": 3.0940975028357793,
+    "home_overdispersion_variance_to_mean": 0.9669990260434995,
+    "independent_poisson_one_goal_rate": 0.4610565644184135,
+    "independent_poisson_two_plus_rate": 0.5389434355815865,
+    "observed_margin_frequency": {
+      "-1": 272,
+      "-2": 113,
+      "-3": 134,
+      "-4": 64,
+      "-5": 25,
+      "-6": 4,
+      "-7": 3,
+      "-8": 1,
+      "1": 285,
+      "2": 115,
+      "3": 165,
+      "4": 73,
+      "5": 26,
+      "6": 6,
+      "7": 3,
+      "8": 2,
+      "9": 1
+    },
+    "observed_one_goal_rate": 0.4311145510835913,
+    "observed_two_plus_rate": 0.5688854489164087,
+    "outcome_decision_type_counts": {
+      "OVERTIME": 206,
+      "REGULATION": 969,
+      "SHOOTOUT": 117
+    },
+    "training_rows": 1292,
+    "training_season": 2025
+  },
+  "margin_severity_summary": {
+    "MONEYLINE_CONDITIONED_MARGIN_BASELINE": {
+      "actual_2plus_correct": 4,
+      "actual_2plus_games": 66,
+      "actual_2plus_undercalled": 62,
+      "actual_2plus_wrong_winner": 0,
+      "correct_side_and_severity": 4,
+      "correct_winner_undercalled_one_goal": 62,
+      "wrong_winner": 0
+    },
+    "REGULARIZED_GOAL_POISSON": {
+      "actual_2plus_correct": 7,
+      "actual_2plus_games": 66,
+      "actual_2plus_undercalled": 59,
+      "actual_2plus_wrong_winner": 0,
+      "correct_side_and_severity": 7,
+      "correct_winner_undercalled_one_goal": 59,
+      "wrong_winner": 0
+    },
+    "SIMPLE_GOAL_DISTRIBUTION_BASELINE": {
+      "actual_2plus_correct": 0,
+      "actual_2plus_games": 66,
+      "actual_2plus_undercalled": 66,
+      "actual_2plus_wrong_winner": 0,
+      "correct_side_and_severity": 0,
+      "correct_winner_undercalled_one_goal": 66,
+      "wrong_winner": 0
+    }
+  },
+  "market": {
+    "provider_lineage": "retained prior framework study: consensus across qualified retained books; latest paired pregame no-vig home -1.5/+1.5 quotes",
+    "roi_reason": "New candidate per-side BetOnline decimal quote and timestamp records are absent from the retained paired-game export; no substitution or reconstructed ROI.",
+    "roi_status": "NOT_COMPUTED",
+    "scores": {
+      "MONEYLINE_CONDITIONED_MARGIN_BASELINE": {
+        "brier": 0.23094576656820653,
+        "log_loss": 0.6592084837936242,
+        "n": 73
+      },
+      "REGULARIZED_GOAL_POISSON": {
+        "brier": 0.23188697612543258,
+        "log_loss": 0.660842946762266,
+        "n": 73
+      },
+      "SIMPLE_GOAL_DISTRIBUTION_BASELINE": {
+        "brier": 0.23397155567234168,
+        "log_loss": 0.662081751515395,
+        "n": 73
+      },
+      "no_vig_market_consensus": {
+        "brier": 0.21684825431669275,
+        "log_loss": 0.6251331234442645,
+        "n": 73
+      }
+    },
+    "status": "BINARY_COVER_COMPARISON_AVAILABLE",
+    "target": "home final-score margin >=2; market consensus supports only this binary event"
+  },
+  "ot_so": {
+    "final_score_target": "official final score including decisive OT/SO goal; one-goal final is ONE_GOAL_GAME",
+    "historical_decision_types": {
+      "OVERTIME": 206,
+      "REGULATION": 969,
+      "SHOOTOUT": 117
+    },
+    "overtime_shootout_n": 323,
+    "overtime_shootout_one_goal_rate": 1.0,
+    "regulation_n": 969,
+    "regulation_one_goal_rate": 0.24148606811145512
+  },
+  "paid_credits": 0,
+  "prior_2025_class_probabilities": {
+    "AWAY_BY_2_PLUS": 0.26640926640926643,
+    "HOME_BY_2_PLUS": 0.3027027027027027,
+    "ONE_GOAL_GAME": 0.4308880308880309
+  },
+  "production_authority_changed": false,
+  "production_db_mutations": 0,
+  "provider_calls": 0,
+  "research_classification": "NO_EVIDENCE_DISTRIBUTIONAL_APPROACH_IMPROVES_PUCK_LINE",
+  "status": "COMPLETE",
+  "window": {
+    "end": "2026-10-13",
+    "prospective_games": 100,
+    "start": "2026-09-29",
+    "training_games": 1292,
+    "training_season": 2025
+  }
+}
