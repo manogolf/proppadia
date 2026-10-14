@@ -1,0 +1,453 @@
+{
+  "historical_prepared_sources": [
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-02-28/sog_features/sog_features_2026-02-28_denali.csv",
+      "retained_expected_sha256": [
+        "29e5fb4afc516ae6c78bac44b139292691f76306077ce29089c8ea722d7019f0"
+      ],
+      "sha256": "29e5fb4afc516ae6c78bac44b139292691f76306077ce29089c8ea722d7019f0"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-01/sog_features/sog_features_2026-03-01_denali.csv",
+      "retained_expected_sha256": [
+        "bc6284bdad3f0737da85a63b54caa9c52e8bd610310502f241ec672cffff014b"
+      ],
+      "sha256": "bc6284bdad3f0737da85a63b54caa9c52e8bd610310502f241ec672cffff014b"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-02/sog_features/sog_features_2026-03-02_denali.csv",
+      "retained_expected_sha256": [
+        "2719c8f9f1f1f0be1720b6613d7ccf136a5cf4d628c2a77a58df2a5106c604fa"
+      ],
+      "sha256": "2719c8f9f1f1f0be1720b6613d7ccf136a5cf4d628c2a77a58df2a5106c604fa"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-03/sog_features/sog_features_2026-03-03_denali.csv",
+      "retained_expected_sha256": [
+        "06b5f4b46925502a14dc298aaaad4668ba31f4095f97b50aea7e44562a0f075a"
+      ],
+      "sha256": "06b5f4b46925502a14dc298aaaad4668ba31f4095f97b50aea7e44562a0f075a"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-04/sog_features/sog_features_2026-03-04_denali.csv",
+      "retained_expected_sha256": [
+        "19730ba9b358f920b29e29942a7dc672fac08c2f6bce8a04b75eee5128db397e"
+      ],
+      "sha256": "19730ba9b358f920b29e29942a7dc672fac08c2f6bce8a04b75eee5128db397e"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-05/sog_features/sog_features_2026-03-05_denali.csv",
+      "retained_expected_sha256": [
+        "b77ffdb432b12d41a570195caf4d7894cae82f0667f1a8d1f4b7092a9f646b81"
+      ],
+      "sha256": "b77ffdb432b12d41a570195caf4d7894cae82f0667f1a8d1f4b7092a9f646b81"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-06/sog_features/sog_features_2026-03-06_denali.csv",
+      "retained_expected_sha256": [
+        "7ad6ccfa5374680173a3ed2b3c8d83772f575ff62471e5f239d3cb4ea8ffd4a7"
+      ],
+      "sha256": "7ad6ccfa5374680173a3ed2b3c8d83772f575ff62471e5f239d3cb4ea8ffd4a7"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-07/sog_features/sog_features_2026-03-07_denali.csv",
+      "retained_expected_sha256": [
+        "11e1e9cb712b3ffcf44c01e94c1613454e1046706d2ce4fb0dc36cb2fae6af1d"
+      ],
+      "sha256": "11e1e9cb712b3ffcf44c01e94c1613454e1046706d2ce4fb0dc36cb2fae6af1d"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-08/sog_features/sog_features_2026-03-08_denali.csv",
+      "retained_expected_sha256": [
+        "ffaa41e3fd9329501468c2d24c8648d8d3bb28286b04df12319291761f2d5fc1"
+      ],
+      "sha256": "ffaa41e3fd9329501468c2d24c8648d8d3bb28286b04df12319291761f2d5fc1"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-09/sog_features/sog_features_2026-03-09_denali.csv",
+      "retained_expected_sha256": [
+        "7cfaf01ff17a528a47fb1abf5f284b04c441cb48c564d326eae5c0c97d415645"
+      ],
+      "sha256": "7cfaf01ff17a528a47fb1abf5f284b04c441cb48c564d326eae5c0c97d415645"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-10/sog_features/sog_features_2026-03-10_denali.csv",
+      "retained_expected_sha256": [
+        "6414f7c7c2f460f345be05ad990bda1cd0129d036aa3067cdc637d0f1a6ad17f"
+      ],
+      "sha256": "6414f7c7c2f460f345be05ad990bda1cd0129d036aa3067cdc637d0f1a6ad17f"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-11/sog_features/sog_features_2026-03-11_denali.csv",
+      "retained_expected_sha256": [
+        "269acb7af38203c3412fb3914fb6be873b3fab9e09a836b55cbfa1cdfdee2e24"
+      ],
+      "sha256": "269acb7af38203c3412fb3914fb6be873b3fab9e09a836b55cbfa1cdfdee2e24"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-12/sog_features/sog_features_2026-03-12_denali.csv",
+      "retained_expected_sha256": [
+        "7fffa3d163a84d07ab3b100e119c68b21ffe693e45995ceb0a1d97a2f977cee1"
+      ],
+      "sha256": "7fffa3d163a84d07ab3b100e119c68b21ffe693e45995ceb0a1d97a2f977cee1"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-13/sog_features/sog_features_2026-03-13_denali.csv",
+      "retained_expected_sha256": [
+        "1a211dd83a11e25758124abb26d1fe2c3b79a34736d247cb48448f582b230445"
+      ],
+      "sha256": "1a211dd83a11e25758124abb26d1fe2c3b79a34736d247cb48448f582b230445"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-14/sog_features/sog_features_2026-03-14_denali.csv",
+      "retained_expected_sha256": [
+        "204faaa7ecc86d833d0715ebc793f70e6d88014b28e618a9d6ca525757e3eb8e"
+      ],
+      "sha256": "204faaa7ecc86d833d0715ebc793f70e6d88014b28e618a9d6ca525757e3eb8e"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-15/sog_features/sog_features_2026-03-15_denali.csv",
+      "retained_expected_sha256": [
+        "9a1a80fa86116a29e2423a5ca7515e94a46a9b3ce6ec3fe6841f30cd04c7527f"
+      ],
+      "sha256": "9a1a80fa86116a29e2423a5ca7515e94a46a9b3ce6ec3fe6841f30cd04c7527f"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-16/sog_features/sog_features_2026-03-16_denali.csv",
+      "retained_expected_sha256": [
+        "054c23788224a868ccd0cbf48486ec1b18d4cea5ee212389a3eed0637292092b"
+      ],
+      "sha256": "054c23788224a868ccd0cbf48486ec1b18d4cea5ee212389a3eed0637292092b"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-17/sog_features/sog_features_2026-03-17_denali.csv",
+      "retained_expected_sha256": [
+        "825003645213bacd8188b203349a0c65275cadacf34e97a644b3cc748ba21c89"
+      ],
+      "sha256": "825003645213bacd8188b203349a0c65275cadacf34e97a644b3cc748ba21c89"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-18/sog_features/sog_features_2026-03-18_denali.csv",
+      "retained_expected_sha256": [
+        "804c98ea833878575aceeb78706262c2412d0c3659e70ffdea6d4bd797e4a646"
+      ],
+      "sha256": "804c98ea833878575aceeb78706262c2412d0c3659e70ffdea6d4bd797e4a646"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-19/sog_features/sog_features_2026-03-19_denali.csv",
+      "retained_expected_sha256": [
+        "4e7d81d0151917edbb0d277511b6be1b0b950928d0be24aec63e00b28b7d7d44"
+      ],
+      "sha256": "4e7d81d0151917edbb0d277511b6be1b0b950928d0be24aec63e00b28b7d7d44"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-20/sog_features/sog_features_2026-03-20_denali.csv",
+      "retained_expected_sha256": [
+        "6df8a1c3891d7eaa97cf10e5e5001f8966a48906e9f3710d0f625fbbfb4336a0"
+      ],
+      "sha256": "6df8a1c3891d7eaa97cf10e5e5001f8966a48906e9f3710d0f625fbbfb4336a0"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-21/sog_features/sog_features_2026-03-21_denali.csv",
+      "retained_expected_sha256": [
+        "e05032cfe02c2002a6f52f3afe317d18c142ec188397776d9b224e793795aadc"
+      ],
+      "sha256": "e05032cfe02c2002a6f52f3afe317d18c142ec188397776d9b224e793795aadc"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-22/sog_features/sog_features_2026-03-22_denali.csv",
+      "retained_expected_sha256": [
+        "cb7f9438f13065f120df0f00068d9a51c4526f0c18fac16698b6881e8efbc096"
+      ],
+      "sha256": "cb7f9438f13065f120df0f00068d9a51c4526f0c18fac16698b6881e8efbc096"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-23/sog_features/sog_features_2026-03-23_denali.csv",
+      "retained_expected_sha256": [
+        "11c513c451f042f29f0a013f4afd40dd009861357312cf62e3c32c62a61e9e77"
+      ],
+      "sha256": "11c513c451f042f29f0a013f4afd40dd009861357312cf62e3c32c62a61e9e77"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-24/sog_features/sog_features_2026-03-24_denali.csv",
+      "retained_expected_sha256": [
+        "2aae000c914fe95c7700d8283878323237d4cd8ad8641fd41783074c58befaf1"
+      ],
+      "sha256": "2aae000c914fe95c7700d8283878323237d4cd8ad8641fd41783074c58befaf1"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-25/sog_features/sog_features_2026-03-25_denali.csv",
+      "retained_expected_sha256": [
+        "12ac420e7debdbdc01582a4d871ca416954697123c367f59d2ce5c4c2512b172"
+      ],
+      "sha256": "12ac420e7debdbdc01582a4d871ca416954697123c367f59d2ce5c4c2512b172"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-26/sog_features/sog_features_2026-03-26_denali.csv",
+      "retained_expected_sha256": [
+        "f8fe01b5b478de0fe5584091b5d80e669acce2d1abb97e1e4362d4b1ffca241c"
+      ],
+      "sha256": "f8fe01b5b478de0fe5584091b5d80e669acce2d1abb97e1e4362d4b1ffca241c"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-27/sog_features/sog_features_2026-03-27_denali.csv",
+      "retained_expected_sha256": [
+        "bf751435f90b37e013d31ca400f717a079bef6fae1d4f4addfbc2865eb17c821"
+      ],
+      "sha256": "bf751435f90b37e013d31ca400f717a079bef6fae1d4f4addfbc2865eb17c821"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-28/sog_features/sog_features_2026-03-28_denali.csv",
+      "retained_expected_sha256": [
+        "76882b3329c987d07e44ca3be34009daf856910f85499520461ef6d72ff6a3b9"
+      ],
+      "sha256": "76882b3329c987d07e44ca3be34009daf856910f85499520461ef6d72ff6a3b9"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-29/sog_features/sog_features_2026-03-29_denali.csv",
+      "retained_expected_sha256": [
+        "b46f90ac820d60d951eadfcd1f35664ab03574a5f6b912a68c7fb1f7f5c4ae9d"
+      ],
+      "sha256": "b46f90ac820d60d951eadfcd1f35664ab03574a5f6b912a68c7fb1f7f5c4ae9d"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-30/sog_features/sog_features_2026-03-30_denali.csv",
+      "retained_expected_sha256": [
+        "bc258ffa758560b1c11172db636f28828a12ac047ea85d852949d046096a1174"
+      ],
+      "sha256": "bc258ffa758560b1c11172db636f28828a12ac047ea85d852949d046096a1174"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-03-31/sog_features/sog_features_2026-03-31_denali.csv",
+      "retained_expected_sha256": [
+        "2c0c4d8cb23b223d5e1f9b6cba8b42bfabe4befdb768f337e84f92b9be396554"
+      ],
+      "sha256": "2c0c4d8cb23b223d5e1f9b6cba8b42bfabe4befdb768f337e84f92b9be396554"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-01/sog_features/sog_features_2026-04-01_denali.csv",
+      "retained_expected_sha256": [
+        "ad4cf6ed929eca3f9d08f59be9c7aec1142c8e435a20f341b8214cfaf946524e"
+      ],
+      "sha256": "ad4cf6ed929eca3f9d08f59be9c7aec1142c8e435a20f341b8214cfaf946524e"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-02/sog_features/sog_features_2026-04-02_denali.csv",
+      "retained_expected_sha256": [
+        "369789db49ea8fa8d16e3b96f331617c8de6f7dbc543d3ef1768674f9eae294f"
+      ],
+      "sha256": "369789db49ea8fa8d16e3b96f331617c8de6f7dbc543d3ef1768674f9eae294f"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-03/sog_features/sog_features_2026-04-03_denali.csv",
+      "retained_expected_sha256": [
+        "c0529f6bc68201ba1a987139b0d990019c35de5c50c5f7e3e5c9121c74a602e8"
+      ],
+      "sha256": "c0529f6bc68201ba1a987139b0d990019c35de5c50c5f7e3e5c9121c74a602e8"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-04/sog_features/sog_features_2026-04-04_denali.csv",
+      "retained_expected_sha256": [
+        "64873e41ed9e88303fc1a22bb3268fa2afc10c1bc0ca66d5463ff64ba17b4c35"
+      ],
+      "sha256": "64873e41ed9e88303fc1a22bb3268fa2afc10c1bc0ca66d5463ff64ba17b4c35"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-05/sog_features/sog_features_2026-04-05_denali.csv",
+      "retained_expected_sha256": [
+        "203d3da2a8a0520eea942a75ee4d7ae9bceeaaed46c881e2dcec1bc4b375eeb6"
+      ],
+      "sha256": "203d3da2a8a0520eea942a75ee4d7ae9bceeaaed46c881e2dcec1bc4b375eeb6"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-06/sog_features/sog_features_2026-04-06_denali.csv",
+      "retained_expected_sha256": [
+        "1f3d204ba5bc75ea000ffeedada8c719f103f413a49f00fa5e4e303119bdef48"
+      ],
+      "sha256": "1f3d204ba5bc75ea000ffeedada8c719f103f413a49f00fa5e4e303119bdef48"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-07/sog_features/sog_features_2026-04-07_denali.csv",
+      "retained_expected_sha256": [
+        "6e451bb9d0403badff69003a3047d1e9c63e807ef4f7b1ef46a2cd55e8f080b9"
+      ],
+      "sha256": "6e451bb9d0403badff69003a3047d1e9c63e807ef4f7b1ef46a2cd55e8f080b9"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-08/sog_features/sog_features_2026-04-08_denali.csv",
+      "retained_expected_sha256": [
+        "71906a517ee81e36ce6a1ef6f2fb10a1b267c5c8375fa10bc838757cee9cde7d"
+      ],
+      "sha256": "71906a517ee81e36ce6a1ef6f2fb10a1b267c5c8375fa10bc838757cee9cde7d"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-09/sog_features/sog_features_2026-04-09_denali.csv",
+      "retained_expected_sha256": [
+        "4a435a37678c0ede1242d0186293e7e98cddfd88aec9e9eb283031fc8408561d"
+      ],
+      "sha256": "4a435a37678c0ede1242d0186293e7e98cddfd88aec9e9eb283031fc8408561d"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-11/sog_features/sog_features_2026-04-11_denali.csv",
+      "retained_expected_sha256": [
+        "32bfaef419a5cb0f36a6b2b59a57e07298db925e7341a9b1be836f1f76b4479e"
+      ],
+      "sha256": "32bfaef419a5cb0f36a6b2b59a57e07298db925e7341a9b1be836f1f76b4479e"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-12/sog_features/sog_features_2026-04-12_denali.csv",
+      "retained_expected_sha256": [
+        "24b58ab332409021d94cde9632da3bb427712a63a15d8ea5a3df5eb7a1c75499"
+      ],
+      "sha256": "24b58ab332409021d94cde9632da3bb427712a63a15d8ea5a3df5eb7a1c75499"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-13/sog_features/sog_features_2026-04-13_denali.csv",
+      "retained_expected_sha256": [
+        "90862a239d6964fb42bcd43422391fbf935ad33ce93e4b5b5d48020d42edb103"
+      ],
+      "sha256": "90862a239d6964fb42bcd43422391fbf935ad33ce93e4b5b5d48020d42edb103"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-14/sog_features/sog_features_2026-04-14_denali.csv",
+      "retained_expected_sha256": [
+        "7002d44e22c374e23731d5878b57475b40ec157dbaa1da358349cf762c305006"
+      ],
+      "sha256": "7002d44e22c374e23731d5878b57475b40ec157dbaa1da358349cf762c305006"
+    },
+    {
+      "hash_matches_retained": true,
+      "path": "artifacts/archive/generated_daily/nhl/2026-04-15/sog_features/sog_features_2026-04-15_denali.csv",
+      "retained_expected_sha256": [
+        "7971fee46683d6002a599dfe90ea8d8a9e1ea542bf10b39b9b7a21edd0f8dc7c"
+      ],
+      "sha256": "7971fee46683d6002a599dfe90ea8d8a9e1ea542bf10b39b9b7a21edd0f8dc7c"
+    }
+  ],
+  "inputs": {
+    "artifacts/analysis/nhl/sog_baseline_characterization/2026-10-14/historical_characterization_rows.csv": {
+      "sha256": "6eccf33f14b89282480fab628c992bdc93818015a2c7e3b932772e113b550fd1"
+    },
+    "artifacts/analysis/nhl/sog_baseline_characterization/2026-10-14/prospective_feature_bound_rows.csv": {
+      "sha256": "e32fdc7531af7569f4112047dcda87839896022729fefff3f55a1a5be6cd6f7d"
+    },
+    "artifacts/analysis/nhl/sog_baseline_characterization/2026-10-14/prospective_paired_rows.csv": {
+      "sha256": "3dd0ba577ee2d5c2c76700a140b3b0da1dcb65a96a25961d9d7432f10de7e579"
+    },
+    "backend/nhl/cli.py": {
+      "sha256": "0e59c1802bd69230ae459a041ddb60045ec2be9a5a07fa3daa92d3c5490cbd94"
+    },
+    "backend/nhl/scripts/score_sog_poisson_baseline.py": {
+      "sha256": "cb1794d25ea91738321e1457b5d5b7be428e9e30f57e79f65f7b9bd70f532342"
+    },
+    "backend/nhl/sog_feature_input.py": {
+      "sha256": "0d8ac0fccfde8a42e876387a300a5ef96c87fc1ec0fd505e7c507dc48e6b701c"
+    }
+  },
+  "methods": {
+    "historical_depth": "unavailable; retained num_event_last10 is not a player appearance count",
+    "key": "distinct game_id/player_id",
+    "paid_credits": 0,
+    "production_db_mutations": 0,
+    "prospective_depth_source": "d10_prior_game_count",
+    "provider_calls": 0,
+    "replay_tolerance": 1e-09,
+    "window_comparison": "exact common rows with production exposure held fixed"
+  },
+  "output_sha256": {
+    "context_contribution_metrics.csv": "494e33fcb9ce7c7e09b354ddda2066133365f806ebefff1250eacbe8f5d345a9",
+    "d10_ablation.csv": "9339d361d4337e32d5a0d9175dad92fe3e1fe8905744db3af57ffaed4fd2c63f",
+    "d5_d10_d20_comparison.csv": "f17a465c304c8eaa3bba4323d2d4622536aef9b87c6c4ca8c322d468fc0a48fe",
+    "feature_contribution_scorecard.csv": "e194cca6efa00bebed33d08476d6cf2704b63ec2ad5c82512033d9539c0c28ad",
+    "historical_replay_rows.csv": "f1d125edc7160f4667f9204178c095eee969a116cc2a359440e3d5b1cc0097c5",
+    "history_depth_metrics.csv": "f0cd628f6576007fb9e9843f60078e0055266d7260fe21aaaf55e2b1ef79ff40",
+    "player_rate_persistence.csv": "376f472ab046495af68a5a0b3d4766223c6f8bd5677441ca4d7735881ebeec2a",
+    "population_metrics.csv": "e3c96ae4d02ee27a4576e691428f8cfbe95f9827e20343dd01505a3e563ab899",
+    "production_rate_decision_tree.md": "8aecb6654ddaa3bb626cbe12e13eadfbd4830379397700eaa75ab2cb36aacfd5",
+    "prospective_replay_rows.csv": "5305a6eaef6de6e7ed31e2b00b40d7a495ee5cd36f30647b00c65dd640861f9e",
+    "rate_source_ablations.csv": "9339d361d4337e32d5a0d9175dad92fe3e1fe8905744db3af57ffaed4fd2c63f",
+    "rate_source_usage.csv": "3cac341de538d182e4aabc773c3f3c6e5f5dd602b808e17979081d2033ecc720",
+    "rate_tail_metrics.csv": "03b7937050166685594a492bb488d580dd4f57edf35435c672b3f13e282fb0c6",
+    "rate_window_comparison.csv": "9339d361d4337e32d5a0d9175dad92fe3e1fe8905744db3af57ffaed4fd2c63f",
+    "replay_validation.csv": "48e7e6382005ba54454b619899b5cec2f386d353c086efb77801e697bb1c2d99",
+    "report.md": "7e162c51d89dd88718fbdc8b463be10b2cd4070f37c7b5c9e249ef09e11bfc45",
+    "research_backlog_context.md": "cc9aa895e72a4bdba553542f06eadb25bff65ca87fb801fab40d34ea8456410a",
+    "sparse_history_metrics.csv": "f0cd628f6576007fb9e9843f60078e0055266d7260fe21aaaf55e2b1ef79ff40",
+    "sparse_history_summary.csv": "1faabcb660d52f5b9a77ed86d31bba42661c2895ec3b8b4b8d113fdd5332b434",
+    "summary.json": "6e8b3d81489619d5195eb3f79c5ad72e27a001ed74012c9def434d76738d3e60",
+    "unreplayable_reasons.csv": "d97b40d0fa14e151b520b5b76c41c8f8704b47569c3fecce3d7a5feb3d3a0f5b",
+    "weakness_scorecard.csv": "5d1a4a55033237289be32251e79950c8ed3623052bf999cb4049d808d0c6b869"
+  },
+  "prospective_official_outcomes": [
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-08/reconciliation=9b0b9eda717e097cb43b/canonical_skater_outcomes.csv",
+      "sha256": "c34ce7064f70fe175538df4878f8dd4c0ea4d0a6b0fd9e5767dead234e54f5c2"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-09/reconciliation=9a697c482352d19f4cd0/canonical_skater_outcomes.csv",
+      "sha256": "90c072da3aadd298156987c0c94168682b119d6d2c8e4bfd55339f69cf84f782"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-10/reconciliation=fbe3605043e75c263b78/canonical_skater_outcomes.csv",
+      "sha256": "c33bc07ea82d4397260b386d05ac330636b9b9eb3613cdf0c0dc3a94ad9a5ffa"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-11/reconciliation=e7da8655562d8ca577a9/canonical_skater_outcomes.csv",
+      "sha256": "7e69bf8612c7d12a451fa5d508490735b5079f9425ec1a387d6a5aa2c9d048fe"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-12/reconciliation=3d69dd4ed0bce1fe9846/canonical_skater_outcomes.csv",
+      "sha256": "ac1b3b9992826f957e8dd817f12c9893aa49e63aacc92087a6c4828de06ca5d3"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-13/reconciliation=ba0c2b3c3ef1bd1ddb99/canonical_skater_outcomes.csv",
+      "sha256": "96b5cf8df3e415f31eb16c992cbb3b6350657b1e50d71b66258212960fc0f0b9"
+    }
+  ],
+  "study": "NHL_SOG_SHOT_RATE_CONTRIBUTION_V1"
+}

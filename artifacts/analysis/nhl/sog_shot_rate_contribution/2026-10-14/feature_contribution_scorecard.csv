@@ -1,0 +1,9 @@
+component,classification,evidence
+D10 rate,CORE_CONTRIBUTOR,First valid rate; >99% historical/prospective feature-bound usage.
+D20 rate,CONDITIONAL_CONTRIBUTOR,Second fallback controlled no measured row; fixed-window reference modestly improved count and threshold scores and remains useful for divergence diagnostics.
+D5 rate,NO_DEMONSTRATED_VALUE,Third fallback controlled no measured row; fixed-window D5 scored worse than D10 in both populations.
+Season rate,NO_DEMONSTRATED_VALUE,Not present in production rate coalesce.
+Attempts context,NO_DEMONSTRATED_VALUE,Generated upstream but scorer does not consume attempts.
+Team context,NO_DEMONSTRATED_VALUE,Team shot-generation fields are not read by production scorer.
+Opponent context,NO_DEMONSTRATED_VALUE,Opponent suppression fields are not read by production scorer.
+PP role,NO_DEMONSTRATED_VALUE,Role/PP fields do not modify production rate or lambda.

@@ -1,0 +1,6 @@
+population,source,count,pct,n
+historical,d10_sog_per60,13369,0.9985062364627679,13389
+historical,UNAVAILABLE,20,0.001493763537232056,13389
+prospective_oct08_13,d10_sog_per60,1107,0.6884328358208955,1608
+prospective_oct08_13,UNAVAILABLE,501,0.31156716417910446,1608
+prospective_feature_bound_oct10_13,d10_sog_per60,1107,1.0,1107

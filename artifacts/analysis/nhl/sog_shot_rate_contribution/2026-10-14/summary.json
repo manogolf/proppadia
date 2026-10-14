@@ -1,0 +1,76 @@
+{
+  "historical_player_games": 13389,
+  "package_path": "artifacts/analysis/nhl/sog_shot_rate_contribution/2026-10-14",
+  "paid_credits": 0,
+  "production_db_mutations": 0,
+  "prospective_feature_bound_player_games_oct10_13": 1107,
+  "prospective_player_games_oct08_13": 1608,
+  "provider_calls": 0,
+  "rate_source_usage": [
+    {
+      "count": 13369,
+      "n": 13389,
+      "pct": 0.9985062364627679,
+      "population": "historical",
+      "source": "d10_sog_per60"
+    },
+    {
+      "count": 20,
+      "n": 13389,
+      "pct": 0.001493763537232056,
+      "population": "historical",
+      "source": "UNAVAILABLE"
+    },
+    {
+      "count": 1107,
+      "n": 1608,
+      "pct": 0.6884328358208955,
+      "population": "prospective_oct08_13",
+      "source": "d10_sog_per60"
+    },
+    {
+      "count": 501,
+      "n": 1608,
+      "pct": 0.31156716417910446,
+      "population": "prospective_oct08_13",
+      "source": "UNAVAILABLE"
+    },
+    {
+      "count": 1107,
+      "n": 1107,
+      "pct": 1.0,
+      "population": "prospective_feature_bound_oct10_13",
+      "source": "d10_sog_per60"
+    }
+  ],
+  "replay_validation": [
+    {
+      "matches_1e-9": 13347,
+      "max_abs_lambda_difference": 1.3322676295501878e-15,
+      "mismatches": 0,
+      "population": "historical",
+      "replayed": 13347,
+      "rows": 13389,
+      "unreplayable": 42
+    },
+    {
+      "matches_1e-9": 1107,
+      "max_abs_lambda_difference": 8.881784197001252e-16,
+      "mismatches": 0,
+      "population": "prospective_oct08_13",
+      "replayed": 1107,
+      "rows": 1608,
+      "unreplayable": 501
+    },
+    {
+      "matches_1e-9": 1107,
+      "max_abs_lambda_difference": 8.881784197001252e-16,
+      "mismatches": 0,
+      "population": "prospective_feature_bound_oct10_13",
+      "replayed": 1107,
+      "rows": 1107,
+      "unreplayable": 0
+    }
+  ],
+  "study": "NHL_SOG_SHOT_RATE_CONTRIBUTION_V1"
+}

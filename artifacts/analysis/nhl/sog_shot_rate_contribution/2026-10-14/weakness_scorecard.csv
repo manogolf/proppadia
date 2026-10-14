@@ -1,0 +1,5 @@
+candidate,evidence,classification
+D10/D20 divergence,Previously identified; handled by existing prospective shadow,NOT_NEW_WEAKNESS
+Extreme D10 rate estimates,High selected-rate decile and top 5% show negative residuals in historical and prospective samples; the low-rate tail has the reverse bias.,LIKELY_SYSTEMATIC
+Sparse history,Only 48 prospective feature-bound rows have fewer than 10 prior games; depth groups are too small for a stable history rule.,NO_EVIDENCE_BEYOND_NOISE
+D5 short horizon,D5 controls no retained row; the fixed-window counterfactual is worse but does not establish a fallback defect.,NO_EVIDENCE_BEYOND_NOISE

@@ -1,0 +1,4 @@
+population,rows,replayed,unreplayable,matches_1e-9,mismatches,max_abs_lambda_difference
+historical,13389,13347,42,13347,0,1.3322676295501878e-15
+prospective_oct08_13,1608,1107,501,1107,0,8.881784197001252e-16
+prospective_feature_bound_oct10_13,1107,1107,0,1107,0,8.881784197001252e-16
