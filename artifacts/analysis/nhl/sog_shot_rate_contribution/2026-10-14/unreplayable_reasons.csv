@@ -1,4 +1,4 @@
 population,reason,rows
 historical,MISSING_EXPOSURE_INPUT,22
 historical,MISSING_RATE_INPUT,20
-prospective_oct08_13,MISSING_RATE_INPUT,501
+prospective_oct08_13,MISSING_BOUND_FEATURE_ROW,501

@@ -34,7 +34,7 @@
 ]
 ```
 
-Historical unreplayable rows are primarily missing D10 exposure (42 total); the wider prospective denominator has 501 rows without detailed bound feature inputs. Counts and reasons: `unreplayable_reasons.csv`.
+Historical unreplayable rows: 20 lack a rate input and 22 lack selected exposure. The wider prospective denominator has 501 rows without detailed bound feature inputs. Counts and reasons: `unreplayable_reasons.csv`.
 
 ## Actual rate-source use
 
