@@ -1895,7 +1895,6 @@ def _run_independent_daily_lanes(
             authority = load_authority()
             recorder.moneyline_authority = authority
             input_root = prediction_run_dir / "cross_market_inputs"
-            input_root.mkdir(parents=True, exist_ok=True)
             raw_schedule_path = ROOT / "artifacts/operational/nhl/slates" / slate / "raw_schedule_response.json"
             cross_schedule = adapt_canonical_slate(
                 canonical_games, json.loads(raw_schedule_path.read_text()), slate_date=slate,
