@@ -1472,7 +1472,9 @@ def _reference_cold_start_sog(recorder: DailyRunRecorder, slate: str) -> None:
         recorder.fail_lane("cold_start_sog_reference", error, blocking=False)
 
 
-def _cross_market_envelope_from_daily_observation(observation_dir: Path) -> dict[str, Any]:
+def _cross_market_envelope_from_daily_observation(
+    observation_dir: Path, *, observation_manifest_sha256: str | None = None,
+) -> dict[str, Any]:
     """Project normalized rows from a validated daily package into sidecar input."""
     observation_dir = Path(observation_dir)
     summary = json.loads((observation_dir / "observation_summary.json").read_text())
@@ -1517,6 +1519,7 @@ def _cross_market_envelope_from_daily_observation(observation_dir: Path) -> dict
     return {
         "capture_timestamp_utc": summary["observation_timestamp_utc"],
         "provider": "PARENT_DAILY_ODDS_OBSERVATION",
+        "parent_daily_odds_observation_manifest_sha256": observation_manifest_sha256,
         "quota": {"credits_consumed": summary.get("credits_consumed", 0),
                   "requests_remaining": summary.get("credits_remaining")},
         "provider_response": list(grouped.values()),
@@ -1894,7 +1897,10 @@ def _run_independent_daily_lanes(
             [recorder.odds_observation] if captured and odds_integrity_error is None else []))
         try:
             from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canonical_slate
-            from backend.nhl.cross_market_shadow.core import run_capture as run_cross_market_capture
+            from backend.nhl.cross_market_shadow.core import (
+                run_capture as run_cross_market_capture,
+                verify_capture_package as verify_cross_market_capture_package,
+            )
             from backend.nhl.cross_market_shadow.moneyline_authority import load_authority
             from backend.nhl.scripts.run_nhl_mainline_cross_market_capture_warn_only import export_inputs
 
@@ -1910,7 +1916,8 @@ def _run_independent_daily_lanes(
             odds_envelope_path = None
             if captured and odds_result is not None and odds_integrity_error is None:
                 envelope = _cross_market_envelope_from_daily_observation(
-                    odds_result.observation_dir)
+                    odds_result.observation_dir,
+                    observation_manifest_sha256=odds_result.manifest_sha256)
                 odds_envelope_path = input_root / "parent_daily_odds_envelope.json"
                 odds_envelope_path.write_text(json.dumps(envelope, sort_keys=True) + "\n")
                 capture_timestamp = envelope["capture_timestamp_utc"]
@@ -1924,6 +1931,7 @@ def _run_independent_daily_lanes(
                 capture_timestamp, run_type,
                 canary_mode=bool(cross_schedule.game_type_code.eq(1).all()),
             )
+            verify_cross_market_capture_package(cross_run)
             cross_status = json.loads((cross_run / "daily_execution_status.json").read_text())
             if cross_status.get("mode") != "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER":
                 recorder.finish_lane(

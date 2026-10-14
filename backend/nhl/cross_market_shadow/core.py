@@ -4,7 +4,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import re
+import tempfile
 import fcntl
 import unicodedata
 import urllib.parse
@@ -800,6 +802,69 @@ def verify_manifest(path: Path) -> None:
             raise RuntimeError("MANIFEST_MISMATCH")
 
 
+def _capture_completion_artifacts(path: Path, status: dict[str, Any]) -> list[str]:
+    required = ["daily_execution_status.json", "schedule_event_identity.csv",
+                "v2_immutable_predictions.csv"]
+    if status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER":
+        if (status.get("moneyline_production_model") != "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3"
+                or status.get("moneyline_shadow_model") != "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2"
+                or int(status.get("moneyline_production_predictions_created", 0)) <= 0
+                or int(status.get("moneyline_shadow_predictions_created", 0)) <= 0):
+            raise RuntimeError("CROSS_MARKET_PRODUCTION_AUTHORITY_OR_OUTPUT_INVALID")
+        required.extend([
+            "moneyline_production_predictions.csv",
+            "moneyline_schedule_logit_v2_shadow_predictions.csv",
+            "moneyline_shot_finishing_challenger_v3_predictions.csv",
+            "moneyline_shot_finishing_challenger_v3_feature_provenance.csv",
+            "moneyline_shot_finishing_challenger_v3_ledger.csv",
+        ])
+    return required
+
+
+def verify_capture_package(path: Path) -> dict[str, Any]:
+    """Verify that a current-run capture is finalized and bound to its state path."""
+    path = Path(path)
+    verify_manifest(path)
+    marker_path = path / "RUN_COMPLETE.json"
+    if not marker_path.is_file():
+        raise RuntimeError("CROSS_MARKET_CAPTURE_COMPLETION_MARKER_MISSING")
+    marker = json.loads(marker_path.read_text())
+    status = json.loads((path / "daily_execution_status.json").read_text())
+    state_id = path.name.removeprefix("state=")
+    if (marker.get("schema_version") != "NHL_CROSS_MARKET_CAPTURE_COMPLETION_V1"
+            or marker.get("status") != "COMPLETE"
+            or marker.get("state_sha256") != state_id
+            or marker.get("slate_date") != status.get("slate_date")
+            or marker.get("run_type") != status.get("run_type")
+            or marker.get("mode") != status.get("mode")
+            or marker.get("moneyline_production_model") != status.get("moneyline_production_model")
+            or marker.get("moneyline_shadow_model") != status.get("moneyline_shadow_model")
+            or marker.get("parent_daily_odds_observation_manifest_sha256") !=
+               status.get("moneyline_parent_odds_observation_manifest_sha256")):
+        raise RuntimeError("CROSS_MARKET_CAPTURE_COMPLETION_IDENTITY_INVALID")
+    for name in _capture_completion_artifacts(path, status):
+        expected = (marker.get("artifact_sha256") or {}).get(name)
+        if not expected or not (path / name).is_file() or sha256(path / name) != expected:
+            raise RuntimeError(f"CROSS_MARKET_CAPTURE_REQUIRED_ARTIFACT_INVALID:{name}")
+    if status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER":
+        scheduled_ids = set(pd.read_csv(path / "schedule_event_identity.csv").game_id.astype(int))
+        production = pd.read_csv(path / "moneyline_production_predictions.csv")
+        shadow = pd.read_csv(path / "moneyline_schedule_logit_v2_shadow_predictions.csv")
+        challenger = pd.read_csv(path / "moneyline_shot_finishing_challenger_v3_predictions.csv")
+        if (set(production.game_id.astype(int)) != scheduled_ids
+                or set(shadow.game_id.astype(int)) != scheduled_ids
+                or set(challenger.game_id.astype(int)) != scheduled_ids
+                or len(production) != int(status["moneyline_production_predictions_created"])
+                or len(shadow) != int(status["moneyline_shadow_predictions_created"])
+                or len(challenger) != len(production)
+                or not production.model_version.eq("NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3").all()
+                or not production.operational_role.eq("PRODUCTION_CHAMPION").all()
+                or not shadow.control_name.eq("NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2").all()
+                or not shadow.operational_role.eq("SHADOW_CHALLENGER").all()):
+            raise RuntimeError("CROSS_MARKET_CAPTURE_PRODUCTION_SHADOW_IDENTITY_INVALID")
+    return marker
+
+
 def _run_nonblocking_challenger(callback):
     """Keep optional challenger failures out of the frozen control capture."""
     try:
@@ -992,6 +1057,9 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "run_type": run_type,
         "moneyline_authority_version": authority["authority_version"],
     }
+    odds_manifest_identity = envelope.get("parent_daily_odds_observation_manifest_sha256")
+    if odds_manifest_identity:
+        substantive["parent_daily_odds_observation_manifest_sha256"] = odds_manifest_identity
     # Manual intraday refreshes are observations, not idempotent reruns. Keep
     # identical market payloads captured at different times as distinct states.
     if run_type == "REFRESH":
@@ -999,7 +1067,7 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     substantive_hash = digest_value(substantive)
     destination = root / f"season={SEASON}" / f"slate_date={slate_date}" / f"run_type={run_type}" / f"state={substantive_hash}"
     if destination.is_dir():
-        verify_manifest(destination)
+        verify_capture_package(destination)
         return destination
     destination.mkdir(parents=True, exist_ok=False)
     schedule.to_csv(destination / "schedule_event_identity.csv", index=False)
@@ -1055,6 +1123,8 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "moneyline_production_predictions_created": len(moneyline_challenger_predictions),
         "moneyline_shadow_predictions_created": len(predictions),
         "moneyline_parent_odds_observation_source": envelope.get("provider"),
+        "moneyline_parent_odds_observation_manifest_sha256": envelope.get(
+            "parent_daily_odds_observation_manifest_sha256"),
         "run_timestamp_utc": parse_utc(run_timestamp_utc).isoformat(), "substantive_state_sha256": substantive_hash,
         "scheduled_games": len(schedule), "v2_predictions_created": len(predictions),
         "puck_line_v1_predictions_created": len(puck_predictions),
@@ -1082,7 +1152,39 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "wagers_selected": 0, "production_writes": 0,
     }
     (destination / "daily_execution_status.json").write_text(json.dumps(status, indent=2, sort_keys=True) + "\n")
+    required_artifacts = _capture_completion_artifacts(destination, status)
+    marker = {
+        "schema_version": "NHL_CROSS_MARKET_CAPTURE_COMPLETION_V1",
+        "status": "COMPLETE",
+        "season": SEASON,
+        "slate_date": slate_date,
+        "run_type": run_type,
+        "state_sha256": substantive_hash,
+        "mode": status["mode"],
+        "moneyline_production_model": status.get("moneyline_production_model"),
+        "moneyline_shadow_model": status.get("moneyline_shadow_model"),
+        "parent_daily_odds_observation_manifest_sha256": envelope.get(
+            "parent_daily_odds_observation_manifest_sha256"),
+        "artifact_sha256": {name: sha256(destination / name) for name in required_artifacts},
+    }
+    marker_path = destination / "RUN_COMPLETE.json"
+    fd, temporary_marker = tempfile.mkstemp(prefix=".RUN_COMPLETE.", suffix=".tmp", dir=destination)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            stream.write(json.dumps(marker, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary_marker, marker_path)
+        directory_fd = os.open(destination, os.O_RDONLY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
+    finally:
+        if os.path.exists(temporary_marker):
+            os.unlink(temporary_marker)
     write_manifest(destination)
+    verify_capture_package(destination)
     return destination
 
 

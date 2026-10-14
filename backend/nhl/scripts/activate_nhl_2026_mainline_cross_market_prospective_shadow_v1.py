@@ -6,6 +6,7 @@ import argparse
 import csv
 import hashlib
 import json
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -26,7 +27,10 @@ from backend.nhl.cross_market_shadow.core import (
     quota_estimate,
     run_capture,
     sha256,
+    verify_capture_package,
+    write_manifest,
 )
+from backend.nhl.daily_orchestration import artifact_identity
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -279,8 +283,14 @@ def run_validation(work: Path) -> tuple[list[dict], dict]:
     regular_capture_root = work / "regular_authority_canary"
     regular_run = run_capture(
         regular_schedule_path, regular_history_path, paths["odds"], regular_capture_root,
-        "2027-01-02", "2027-01-02T18:00:00Z", "MIDDAY", canary_mode=False,
+        "2027-01-02", "2027-01-02T18:00:00Z", "REFRESH", canary_mode=False,
     )
+    completion = verify_capture_package(regular_run)
+    current_marker = artifact_identity(regular_run / "RUN_COMPLETE.json")
+    check("REFRESH completion marker binds current returned state",
+          completion.get("state_sha256") == regular_run.name.removeprefix("state=")
+          and current_marker["path"] == str((regular_run / "RUN_COMPLETE.json").resolve()),
+          {"state": regular_run.name, "marker": completion, "artifact": current_marker})
     regular_status = json.loads((regular_run / "daily_execution_status.json").read_text())
     production_ml = pd.read_csv(regular_run / "moneyline_production_predictions.csv")
     shadow_ml = pd.read_csv(regular_run / "moneyline_schedule_logit_v2_shadow_predictions.csv")
@@ -301,6 +311,66 @@ def run_validation(work: Path) -> tuple[list[dict], dict]:
           != float(shadow_ml.v2_home_win_probability.iloc[0]),
           {"production": production_ml.to_dict("records"),
            "shadow": shadow_ml.to_dict("records")})
+    # Exercise the same fail-closed checks used by the current-run integration.
+    marker_path = regular_run / "RUN_COMPLETE.json"
+    marker_bytes = marker_path.read_bytes()
+    marker_path.unlink()
+    write_manifest(regular_run)
+    try:
+        verify_capture_package(regular_run)
+    except RuntimeError as error:
+        missing_marker_failure = str(error)
+    else:
+        missing_marker_failure = "NO_FAILURE"
+    marker_path.write_bytes(marker_bytes)
+    write_manifest(regular_run)
+    check("current-run validation rejects missing completion marker",
+          missing_marker_failure == "CROSS_MARKET_CAPTURE_COMPLETION_MARKER_MISSING",
+          missing_marker_failure)
+
+    v3_path = regular_run / "moneyline_shot_finishing_challenger_v3_predictions.csv"
+    v3_bytes = v3_path.read_bytes()
+    v3_path.unlink()
+    write_manifest(regular_run)
+    try:
+        verify_capture_package(regular_run)
+    except RuntimeError as error:
+        missing_v3_failure = str(error)
+    else:
+        missing_v3_failure = "NO_FAILURE"
+    v3_path.write_bytes(v3_bytes)
+    write_manifest(regular_run)
+    check("current-run validation rejects missing V3 production output",
+          missing_v3_failure.endswith("moneyline_shot_finishing_challenger_v3_predictions.csv"),
+          missing_v3_failure)
+
+    v2_path = regular_run / "moneyline_schedule_logit_v2_shadow_predictions.csv"
+    v2_bytes = v2_path.read_bytes()
+    v2_path.unlink()
+    write_manifest(regular_run)
+    try:
+        verify_capture_package(regular_run)
+    except RuntimeError as error:
+        missing_v2_failure = str(error)
+    else:
+        missing_v2_failure = "NO_FAILURE"
+    v2_path.write_bytes(v2_bytes)
+    write_manifest(regular_run)
+    check("current-run validation rejects missing V2 shadow output",
+          missing_v2_failure.endswith("moneyline_schedule_logit_v2_shadow_predictions.csv"),
+          missing_v2_failure)
+
+    wrong_path = work / "wrong_state" / "state=wrong"
+    shutil.copytree(regular_run, wrong_path)
+    try:
+        verify_capture_package(wrong_path)
+    except RuntimeError as error:
+        wrong_path_failure = str(error)
+    else:
+        wrong_path_failure = "NO_FAILURE"
+    check("current-run validation rejects marker at another state path",
+          wrong_path_failure == "CROSS_MARKET_CAPTURE_COMPLETION_IDENTITY_INVALID",
+          wrong_path_failure)
     regular_outcomes = work / "regular_outcomes.csv"
     pd.DataFrame([{
         "canonical_season": 2026, "game_id": 2026020600,
