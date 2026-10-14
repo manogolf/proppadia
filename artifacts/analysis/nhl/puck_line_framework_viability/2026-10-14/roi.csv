@@ -1,0 +1,3 @@
+model,provider,observation_rule,stake_convention,candidate_directional_picks,priced_bets,missing_selected_side_price,one_goal_abstentions,wins,losses,net_units,roi_per_unit_staked,slate_coverage
+v1,BetOnline (betonlineag),latest qualified standard -1.5 quote before scheduled start,one unit staked per predicted two-plus winner; abstain on ONE_GOAL_GAME,41,38,3,59,18,20,6.1317204142194,0.16136106353208945,0.38
+v2,BetOnline (betonlineag),latest qualified standard -1.5 quote before scheduled start,one unit staked per predicted two-plus winner; abstain on ONE_GOAL_GAME,27,23,4,73,12,11,4.860811323310308,0.2113396227526221,0.23

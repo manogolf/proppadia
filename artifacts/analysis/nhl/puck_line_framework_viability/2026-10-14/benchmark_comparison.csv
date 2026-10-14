@@ -1,0 +1,6 @@
+benchmark,n,accuracy,log_loss,brier_sum,notes
+window modal class,100,0.34000000,,,descriptive full-window class frequency
+expanding prior mode,97,0.30927835051546393,,,prior dates only
+expanding moneyline-conditioned class mode,97,0.29896907,,,prior-date class mode within ML-favored home/away cell
+uniform class probabilities,100,,1.09861229,0.66666667,no-skill proper-score reference
+moneyline direction,100,0.60000000,,,favored winner direction only; not a margin-class score

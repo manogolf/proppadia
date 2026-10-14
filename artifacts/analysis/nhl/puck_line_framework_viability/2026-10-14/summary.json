@@ -1,0 +1,554 @@
+{
+  "authority_terms": {
+    "formal_puck_line_champion_label_found": false,
+    "repository_uses": "operational/reference and challenger"
+  },
+  "benchmarks": {
+    "expanding_moneyline_direction_conditioned_class_mode_accuracy": 0.29896907216494845,
+    "expanding_moneyline_direction_conditioned_class_mode_games": 97,
+    "expanding_moneyline_direction_conditioned_class_mode_overall_fallbacks": 0,
+    "expanding_prior_mode_accuracy": 0.30927835051546393,
+    "expanding_prior_mode_games": 97,
+    "moneyline_direction_accuracy": 0.6,
+    "uniform_class_probability_brier_sum": 0.6666666666666666,
+    "uniform_class_probability_log_loss": 1.0986122886681098,
+    "window_modal_accuracy": 0.34,
+    "window_modal_class_descriptive": "ONE_GOAL_GAME"
+  },
+  "diagnosis": {
+    "canonical_outcome": "official final score goal differential including the decisive OT/SO goal; absolute margin 1 is ONE_GOAL_GAME, margin >=2 is winner-by-2-plus",
+    "empty_net": "not evaluated; retained inputs do not provide certified empty-net goal attribution in this package",
+    "market_target": "binary standard -1.5/+1.5 cover, not equivalent to the three-class target",
+    "recommendation": "C_DEMOTE_BOTH_TO_BASELINE_REFERENCE_AND_DESIGN_MARGIN_DISTRIBUTION_RESEARCH"
+  },
+  "disagreement": {
+    "both_wrong": 6,
+    "challenger_correct_reference_wrong": 7,
+    "n": 21,
+    "predicted_classes_challenger": {
+      "AWAY_BY_2_PLUS": 2,
+      "HOME_BY_2_PLUS": 2,
+      "ONE_GOAL_GAME": 17
+    },
+    "predicted_classes_reference": {
+      "AWAY_BY_2_PLUS": 12,
+      "HOME_BY_2_PLUS": 6,
+      "ONE_GOAL_GAME": 3
+    },
+    "realized_classes": {
+      "AWAY_BY_2_PLUS": 7,
+      "HOME_BY_2_PLUS": 6,
+      "ONE_GOAL_GAME": 8
+    },
+    "reference_correct_challenger_wrong": 8
+  },
+  "goal_margin_bands": {
+    "one_goal": 34,
+    "three_plus": 44,
+    "two_goal": 22
+  },
+  "home_away_actual_split": {
+    "away_wins": 46,
+    "home_wins": 54
+  },
+  "lineage": [
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "912940f8a3091b289b723759e47c0bdf0daaa4133c93877086bdee330af29338",
+        "puck_line_v1_immutable_predictions.csv": "8dc618fbc4fb48af0a6d73649e1a4a954e06e0fc5148df5ef1d0c81f56f6a1d7",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "7cd94894736fb7d282bca0425280709951a3190a9007d798353d98671fcc8804",
+        "v2_immutable_predictions.csv": "59b4e64699a1129e004826d2ea81b50be1da79f45594fda57cb514295c715038"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-09-30/run_type=FINAL_PREGAME/state=b1c8a454beed479226c157842e2b48f7b5e9b8173f31b07be11b13273a19db07",
+      "capture_state": "state=b1c8a454beed479226c157842e2b48f7b5e9b8173f31b07be11b13273a19db07",
+      "paired_games": 3,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-09-30/restatement=ea52994b6f2cb570a2cc/graded_puck_line.csv",
+      "reconciliation_sha256": "b9010f6fe4d5cf118a5972690233b5680df638ccaea4350a8e64b8e689801e2c",
+      "slate_date": "2026-09-30"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "ecde67a732253c46f9573a7c75c5ff8acf91d3976a632a4ada8c39e81278b294",
+        "puck_line_v1_immutable_predictions.csv": "69092c40bcb24c8b995a55474137a7ef8fb65a48689d0caf7fe8dae27f1eb935",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "00d3d2a2610a407c0096bdb374013cacd578d4e1809c52a32d64fe5d7ae04ac3",
+        "v2_immutable_predictions.csv": "ff5ffb07911aaec9c398aa05dcdfdd300a5cac03f95612e9818dc187cf801fa9"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-01/run_type=FINAL_PREGAME/state=9e7ecbdca9afecfb76ac47bedbd6192dec6f6b10f40efe6a2c6888f46714c1d2",
+      "capture_state": "state=9e7ecbdca9afecfb76ac47bedbd6192dec6f6b10f40efe6a2c6888f46714c1d2",
+      "paired_games": 8,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-01/restatement=c171b2fbc7be5239e488/graded_puck_line.csv",
+      "reconciliation_sha256": "f684779d33dd965a0b412093563e38fa45f9b70c09a8fbccfa1d9751f389897e",
+      "slate_date": "2026-10-01"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "ed6a1748ac03057cb1b649dee40301e245e5b8764b8ceb5d9f5286ec2b4492a4",
+        "puck_line_v1_immutable_predictions.csv": "1dd11a6a21b62e79fb9fe5201289cf10349b7e40d2b22f47929657b6f31c626c",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "02a9fa3d092136ce93f6dd257585dbb60ea27ad5223917c25283e5139ed1cd62",
+        "v2_immutable_predictions.csv": "64257a93dec7f91a618ca2efdbfd19b8fbc457d9c941f1249883538e08b7c25d"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-02/run_type=FINAL_PREGAME/state=a52c1664b01f755ffe3b64f4ad228c8094cd0cf6ac8dead8920d4a20176d71c2",
+      "capture_state": "state=a52c1664b01f755ffe3b64f4ad228c8094cd0cf6ac8dead8920d4a20176d71c2",
+      "paired_games": 5,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-02/restatement=ec98019b557f18860788/graded_puck_line.csv",
+      "reconciliation_sha256": "a41d59b137f8a593df6627c4a1e0e5332722eb232e92ae49c65638f1a3f2d55f",
+      "slate_date": "2026-10-02"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "31c910bbd3aa1a684e73196fd957003ad0c4039437b3ef98485790283be8d090",
+        "puck_line_v1_immutable_predictions.csv": "8e2007525e15f0ad4affb19e7d8c6b0134c013c7f8740126de7cf73ed029bcd1",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "d263c5bee4a959c401024bd34c7a768ef9e6a8197c5fe6f1f902b2df17a3517f",
+        "v2_immutable_predictions.csv": "1d6f907c454a047cd05193807892c6e1d015d6f212d40a6591b8cdcb3d87a499"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-03/run_type=FINAL_PREGAME/state=1f532eac5f37ddd9b912e0664adefb402a904210998e4ac56383924de71a79b8",
+      "capture_state": "state=1f532eac5f37ddd9b912e0664adefb402a904210998e4ac56383924de71a79b8",
+      "paired_games": 13,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-03/restatement=398875bfabbeb512d3de/graded_puck_line.csv",
+      "reconciliation_sha256": "1b9966dea5a17e8cd46998410b37dd3be4685ef387463c7f53df2e6c108c363e",
+      "slate_date": "2026-10-03"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "9b0361f65aec6a7215c7cecc6c00b060578ed01e512edfc66be41ffc33921e52",
+        "puck_line_v1_immutable_predictions.csv": "f795f5363e1262bbdb8e2da01fc0665d078d5a1a7d84e529838279f79afd7e25",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "32442a32d89f6ca786b85492a8c66b4b302fd48d36265860031a50eb92cb8b02",
+        "v2_immutable_predictions.csv": "c8d3135cc245deec9d2ee80c1c21d75794d28d17c30c6f4dfed463049b480f83"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-04/run_type=FINAL_PREGAME/state=305372208280e5785ccc8743b2591c472a19ce267e47e5cf577a6cc9d16ad53b",
+      "capture_state": "state=305372208280e5785ccc8743b2591c472a19ce267e47e5cf577a6cc9d16ad53b",
+      "paired_games": 5,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-04/restatement=d2d12ca4c2cd11d04cd9/graded_puck_line.csv",
+      "reconciliation_sha256": "5b02bed9ecf3039c0b6d036de94bef6619edbc7978bcd8884a6c91d246213948",
+      "slate_date": "2026-10-04"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "22a1ee7d5caefe2ef31e64a09f2149b6e5a76d5599599f020a35fe53ddeabd3c",
+        "puck_line_v1_immutable_predictions.csv": "c99145b7f66d4808030cc594bc22a79c9d0ffd3519845c68b6172242248efcbd",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "d396d8e42e5e3932a458a11ec7849f0b7acc3d2d367cd261ce3f5e5d0bc10a0c",
+        "v2_immutable_predictions.csv": "6609932e4158aa2dc96a5ec42de59b3cb1f27b2d81136fd95872fd989fc8c391"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-05/run_type=FINAL_PREGAME/state=4b1d9fad756ecdcdcd367b158740607dd004a9b9cb565a86bf13cba9422244f6",
+      "capture_state": "state=4b1d9fad756ecdcdcd367b158740607dd004a9b9cb565a86bf13cba9422244f6",
+      "paired_games": 4,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-05/restatement=e1b43932d2478baa6381/graded_puck_line.csv",
+      "reconciliation_sha256": "cd80b2a329d8ab226906517259ef43f08a80ee1bf84c011e384346a529b5e903",
+      "slate_date": "2026-10-05"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "e990886fc31c14fa667c9883065e948b4e2cbc02413d84380672ea2acb64c1f6",
+        "puck_line_v1_immutable_predictions.csv": "d825f20f4a4ecd375a10501b2c8f4507c40556181accb9af330cf5b5b0d2ccbf",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "fb0f16fc1cc39ea9771f5a8bd7bcad091fa09014c549a65f0e02f5df1adb3bc6",
+        "v2_immutable_predictions.csv": "d2a62afd0794bc11c2b792e181fb8477c3dcf483ced01ddbafd0e18be4cf8bda"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-06/run_type=FINAL_PREGAME/state=d71bbb99702b12b18364b6b3631b8e77cf4105b97443118518cd69001e415e6d",
+      "capture_state": "state=d71bbb99702b12b18364b6b3631b8e77cf4105b97443118518cd69001e415e6d",
+      "paired_games": 9,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-06/restatement=29896ebbf06564f7012a/graded_puck_line.csv",
+      "reconciliation_sha256": "acd9d2f07d38f8038af527b150334f0663e450fdb644c43d296c8ae30e3b2d88",
+      "slate_date": "2026-10-06"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "79d5c02fbd3f69f23b4712949550963b0f84452b18e42604d4e77f6d09b99bb6",
+        "puck_line_v1_immutable_predictions.csv": "36f0258b5efdeefecff063d1709da0c35374334f1ae54123014bfeb59412f196",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "746ca44dcbccc0891695818e697fcb16b10ce5918a731feb0b2fcf525ae38094",
+        "v2_immutable_predictions.csv": "d2ab819f501e9ca5a750dfb23fda54dc8308cd7012345cd7abec822a19fcd36a"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-07/run_type=FINAL_PREGAME/state=7336cc625bda11cb2afbcb6b216ffc7bbdd4d4098d8c37b3ffc6ce54e4f8ec93",
+      "capture_state": "state=7336cc625bda11cb2afbcb6b216ffc7bbdd4d4098d8c37b3ffc6ce54e4f8ec93",
+      "paired_games": 3,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-07/restatement=8ec311530a587ca5c954/graded_puck_line.csv",
+      "reconciliation_sha256": "4aa016b3b8d3a8b8640f390e1f4341a0c5b4f5542fb77fd86bd3d2d38763fa4a",
+      "slate_date": "2026-10-07"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "07073ba16fbe0b0c319f6e101aab016cc5760e0d25d5dc9c246b7fa1ed3298ac",
+        "puck_line_v1_immutable_predictions.csv": "881315484bf93f92486b3b4b207ff31e9c0b3b051a0041281e135e78cad32331",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "f641aa3a23095674ed9a6f93f80e646b81f37447007a74e8af821cf0dfed2fe4",
+        "v2_immutable_predictions.csv": "90c4373c75603f345240d6e25d9d44b24bb2d36494c12ff2b6fbcd36eb3caff4"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-08/run_type=FINAL_PREGAME/state=899cd7b6c6cbf9eaeb1d6a35193f44dfa581654de674eb2d5bb2bec3c4a52889",
+      "capture_state": "state=899cd7b6c6cbf9eaeb1d6a35193f44dfa581654de674eb2d5bb2bec3c4a52889",
+      "paired_games": 10,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-08/restatement=7c78be776ab279d8a922/graded_puck_line.csv",
+      "reconciliation_sha256": "6fff3709b31fa9dd353bd5252c364131a6b977d371690f2815dcba0789e76a33",
+      "slate_date": "2026-10-08"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "672a98b5252eb52beb5c98da7721c2d2e90b4c0fd3cc2d6cf19c29a022752834",
+        "puck_line_v1_immutable_predictions.csv": "e4d1cf6bd5c20bf6165681de5a0bfaa66a1036d34ce7bb528aef83602782d438",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "dcc21d1b99fb142a688997ec29d6320216d58f1a9b8879e82a2da80ebbe82bd3",
+        "v2_immutable_predictions.csv": "497bedceea0e3ada7affa2910074598cf73ee996b49b071e712b25b3fb474740"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-09/run_type=FINAL_PREGAME/state=23a87afbc85a487da7689c22f2412a16715e5b17f2487193b7892c4c469f20ea",
+      "capture_state": "state=23a87afbc85a487da7689c22f2412a16715e5b17f2487193b7892c4c469f20ea",
+      "paired_games": 4,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-09/restatement=f6477c4f44e615589d71/graded_puck_line.csv",
+      "reconciliation_sha256": "5a8a51377950935d069ae4302a9492ee2f0e5d1627f88d93ad06cb0b65362c09",
+      "slate_date": "2026-10-09"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "f4417456e52a14a8f24eeef4e7440ba3af56b158f9fc88dfc30496c04579cf6f",
+        "puck_line_v1_immutable_predictions.csv": "176eff9a98161c5b9e4d5cc8c2ac35047ad75ae76bcc17a18055d5c9bc473dfa",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "b3bfc1a8c65dc8fe0838d86ad1103d8e03ae83c508c0e21b8cff83e39f79d8d1",
+        "v2_immutable_predictions.csv": "d230df02eccdad769f080c085565987c6aa54a418064a29c36d369e136be1de4"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-10/run_type=FINAL_PREGAME/state=1f92f8ceb5a3b1a3bf6b2f599b11fea54c07609d76b1bf0175743a76006c477d",
+      "capture_state": "state=1f92f8ceb5a3b1a3bf6b2f599b11fea54c07609d76b1bf0175743a76006c477d",
+      "paired_games": 14,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-10/restatement=fde1a0fbaec054d85737/graded_puck_line.csv",
+      "reconciliation_sha256": "f9779c1432595054709a6a51477bfa6cc541d0d20f27405957611ca6a8e32cb0",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "e354f6477a81e66b256535c2acaa140043524f4c3297df82e1e81b714c800f58",
+        "puck_line_v1_immutable_predictions.csv": "e20e996f9bc301ac38261ff9ccab7369170aafa596f75e9407b238b58f7d8729",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "37a1b6ba7de40ab2ab21b92e1707b9ec5021f220fecdade86c35d49969b76117",
+        "v2_immutable_predictions.csv": "54fcb47ba25835486817f87400342c3ac7f027e9d215825066aaeba343b5eb51"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-11/run_type=FINAL_PREGAME/state=f1c15422c4524be95d81bec008676a2bce681e0c55adb955bf8d11f6d5b0cb6c",
+      "capture_state": "state=f1c15422c4524be95d81bec008676a2bce681e0c55adb955bf8d11f6d5b0cb6c",
+      "paired_games": 3,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-11/restatement=7d8e0264837067716297/graded_puck_line.csv",
+      "reconciliation_sha256": "3a5babcdb549ec55597cc4c3e0ab0eb95926b84028cd4cd9e206e49658c1bcbc",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "de6dda0512bd3386b88e69457ec7151c5c0a3c063cb389112358048623bb133b",
+        "puck_line_v1_immutable_predictions.csv": "72e04c974361aadafd1c701e7cebc716948ea06075d68a1808e27e7b81369d78",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "d3b66dafcc978a5e2c3f279bfa4b028493efa69722bd81fbf231bd11855665b6",
+        "v2_immutable_predictions.csv": "f42af37d2024da503f4cc9b7d51365cfc64c2cb6484285c7db86785f0fd223bc"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-12/run_type=FINAL_PREGAME/state=1f54896c639106e4a9305f26611ecd7151b86d697b486a93bd8855ef2d099bfa",
+      "capture_state": "state=1f54896c639106e4a9305f26611ecd7151b86d697b486a93bd8855ef2d099bfa",
+      "paired_games": 3,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-12/restatement=5b10a991cb64df15745f/graded_puck_line.csv",
+      "reconciliation_sha256": "0446cddaa67c30ad1140658798c09e957d0de2a3ce86ced52cffaafe36101a3f",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "capture_files_sha256": {
+        "normalized_market_observations.csv": "f7f17b4d3fefffad190ae0644c29f9ddfa4fafbb65bb476806de39d1f83adf75",
+        "puck_line_v1_immutable_predictions.csv": "8be49ede9aa4ee862e75f3a19de2d791980cac34430d9c48745ac44a2c9d133b",
+        "puck_line_v2_shot_prior_challenger_predictions.csv": "c09d00bbff346cc524620a4d1e1431a2a029b378a53b668c2be202808e617c59",
+        "v2_immutable_predictions.csv": "79bcce19a50a825a862ffb9ab64ec037eb59166f1b6ae91e04759cff759f6683"
+      },
+      "capture_path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-13/run_type=FINAL_PREGAME/state=114cc2ea24b2407f6073bcaa37dedbf0149933ce2881797f88721a738fae944a",
+      "capture_state": "state=114cc2ea24b2407f6073bcaa37dedbf0149933ce2881797f88721a738fae944a",
+      "paired_games": 16,
+      "reconciliation_path": "artifacts/operational/nhl/postgame_reconciliation/learning_restatements/2026-10-13/restatement=742bdc9795d10f759af2/graded_puck_line.csv",
+      "reconciliation_sha256": "06ce8b5b5db317a9ae06dbd7843c1c279ce34a3f26957b2ff50d8517c866527d",
+      "slate_date": "2026-10-13"
+    }
+  ],
+  "margin_goal_counts": {
+    "1": 34,
+    "2": 22,
+    "3": 24,
+    "4": 10,
+    "5": 7,
+    "6": 2,
+    "7": 1
+  },
+  "market": {
+    "challenger_cover_brier": 0.2296791593772722,
+    "challenger_cover_side_accuracy": 0.6438356164383562,
+    "coverage": 0.73,
+    "games": 73,
+    "market_cover_brier": 0.21684825431669275,
+    "market_direction_accuracy": 0.684931506849315,
+    "provider_game_coverage": {
+      "ballybet": 65,
+      "betanysports": 63,
+      "betmgm": 60,
+      "betonlineag": 64,
+      "betopenly": 28,
+      "betparx": 65,
+      "betrivers": 65,
+      "betus": 65,
+      "bovada": 63,
+      "courtside": 59,
+      "draftkings": 63,
+      "espnbet": 61,
+      "fanatics": 62,
+      "fanduel": 59,
+      "fliff": 30,
+      "hardrockbet": 60,
+      "kalshi": 35,
+      "lowvig": 64,
+      "mybookieag": 62,
+      "novig": 34,
+      "polymarket": 33,
+      "polymarket_us": 30,
+      "prophetx": 33,
+      "rebet": 49
+    },
+    "provider_semantics": "consensus across retained books, latest qualified pregame paired quotes; standard home -1.5 vs away +1.5 binary cover event",
+    "reference_cover_brier": 0.23503503089220304,
+    "reference_cover_side_accuracy": 0.684931506849315
+  },
+  "models": {
+    "challenger": {
+      "accuracy": 0.35,
+      "artifact_sha256": "c09d00bbff346cc524620a4d1e1431a2a029b378a53b668c2be202808e617c59",
+      "balanced_accuracy": 0.34803921568627455,
+      "class_precision": {
+        "AWAY_BY_2_PLUS": 0.5714285714285714,
+        "HOME_BY_2_PLUS": 0.4,
+        "ONE_GOAL_GAME": 0.3150684931506849
+      },
+      "class_recall": {
+        "AWAY_BY_2_PLUS": 0.11764705882352941,
+        "HOME_BY_2_PLUS": 0.25,
+        "ONE_GOAL_GAME": 0.6764705882352942
+      },
+      "confusion_actual_rows_predicted_columns": {
+        "AWAY_BY_2_PLUS": {
+          "AWAY_BY_2_PLUS": 4,
+          "HOME_BY_2_PLUS": 3,
+          "ONE_GOAL_GAME": 27
+        },
+        "HOME_BY_2_PLUS": {
+          "AWAY_BY_2_PLUS": 1,
+          "HOME_BY_2_PLUS": 8,
+          "ONE_GOAL_GAME": 23
+        },
+        "ONE_GOAL_GAME": {
+          "AWAY_BY_2_PLUS": 2,
+          "HOME_BY_2_PLUS": 9,
+          "ONE_GOAL_GAME": 23
+        }
+      },
+      "correct": 35,
+      "feature_policy": "NHL_PUCK_LINE_SHOT_PRIOR_POLICY_V1",
+      "feature_policy_sha256": "2685167120bdda0a9d45c6ae7e5f252fbaf6ca65dc9b4be076086b12b0e4b13c",
+      "identity": "NHL_PUCK_LINE_SHOT_PRIOR_CHALLENGER_V2",
+      "mean_probability_by_class": {
+        "AWAY_BY_2_PLUS": 0.2775318683623478,
+        "HOME_BY_2_PLUS": 0.3035268552199609,
+        "ONE_GOAL_GAME": 0.4189412764176912
+      },
+      "model_sha256": "2b72a59436ace35435b86c2dd1fa36afd3ee65fa73542db5093dd92571121d9a",
+      "multiclass_brier_sum": 0.6789428185858192,
+      "multiclass_log_loss": 1.1118090275997814,
+      "n": 100
+    },
+    "reference": {
+      "accuracy": 0.36,
+      "artifact_sha256": "8be49ede9aa4ee862e75f3a19de2d791980cac34430d9c48745ac44a2c9d133b",
+      "balanced_accuracy": 0.3584558823529412,
+      "class_precision": {
+        "AWAY_BY_2_PLUS": 0.5294117647058824,
+        "HOME_BY_2_PLUS": 0.375,
+        "ONE_GOAL_GAME": 0.3050847457627119
+      },
+      "class_recall": {
+        "AWAY_BY_2_PLUS": 0.2647058823529412,
+        "HOME_BY_2_PLUS": 0.28125,
+        "ONE_GOAL_GAME": 0.5294117647058824
+      },
+      "confusion_actual_rows_predicted_columns": {
+        "AWAY_BY_2_PLUS": {
+          "AWAY_BY_2_PLUS": 9,
+          "HOME_BY_2_PLUS": 3,
+          "ONE_GOAL_GAME": 22
+        },
+        "HOME_BY_2_PLUS": {
+          "AWAY_BY_2_PLUS": 4,
+          "HOME_BY_2_PLUS": 9,
+          "ONE_GOAL_GAME": 19
+        },
+        "ONE_GOAL_GAME": {
+          "AWAY_BY_2_PLUS": 4,
+          "HOME_BY_2_PLUS": 12,
+          "ONE_GOAL_GAME": 18
+        }
+      },
+      "correct": 36,
+      "identity": "NHL_STANDARD_PUCK_LINE_SIMPLE_BASELINE_V1",
+      "mean_probability_by_class": {
+        "AWAY_BY_2_PLUS": 0.29201673710193304,
+        "HOME_BY_2_PLUS": 0.30372083895567614,
+        "ONE_GOAL_GAME": 0.40426242394239076
+      },
+      "model_sha256": "2b72a59436ace35435b86c2dd1fa36afd3ee65fa73542db5093dd92571121d9a",
+      "multiclass_brier_sum": 0.6764170464651736,
+      "multiclass_log_loss": 1.1107440569534062,
+      "n": 100
+    }
+  },
+  "moneyline_bins": [
+    {
+      "challenger_accuracy": 0.42105263157894735,
+      "home_winner_by_2_plus_frequency": 0.23684210526315788,
+      "moneyline_direction_accuracy": 0.5789473684210527,
+      "moneyline_home_probability_bin": "(-0.001, 0.5]",
+      "n": 38,
+      "one_goal_frequency": 0.3157894736842105,
+      "reference_accuracy": 0.4473684210526316,
+      "two_plus_frequency": 0.6842105263157895
+    },
+    {
+      "challenger_accuracy": 0.2647058823529412,
+      "home_winner_by_2_plus_frequency": 0.35294117647058826,
+      "moneyline_direction_accuracy": 0.47058823529411764,
+      "moneyline_home_probability_bin": "(0.5, 0.6]",
+      "n": 34,
+      "one_goal_frequency": 0.29411764705882354,
+      "reference_accuracy": 0.29411764705882354,
+      "two_plus_frequency": 0.7058823529411765
+    },
+    {
+      "challenger_accuracy": 0.4,
+      "home_winner_by_2_plus_frequency": 0.35,
+      "moneyline_direction_accuracy": 0.75,
+      "moneyline_home_probability_bin": "(0.6, 0.7]",
+      "n": 20,
+      "one_goal_frequency": 0.4,
+      "reference_accuracy": 0.25,
+      "two_plus_frequency": 0.6
+    },
+    {
+      "challenger_accuracy": 0.3333333333333333,
+      "home_winner_by_2_plus_frequency": 0.5,
+      "moneyline_direction_accuracy": 0.8333333333333334,
+      "moneyline_home_probability_bin": "(0.7, 0.8]",
+      "n": 6,
+      "one_goal_frequency": 0.5,
+      "reference_accuracy": 0.5,
+      "two_plus_frequency": 0.5
+    },
+    {
+      "challenger_accuracy": 0.0,
+      "home_winner_by_2_plus_frequency": 0.5,
+      "moneyline_direction_accuracy": 1.0,
+      "moneyline_home_probability_bin": "(0.8, 0.9]",
+      "n": 2,
+      "one_goal_frequency": 0.5,
+      "reference_accuracy": 0.5,
+      "two_plus_frequency": 0.5
+    }
+  ],
+  "one_goal_frequency": 0.34,
+  "realized_classes": {
+    "AWAY_BY_2_PLUS": 34,
+    "HOME_BY_2_PLUS": 32,
+    "ONE_GOAL_GAME": 34
+  },
+  "roi": {
+    "provider": "BetOnline (betonlineag)",
+    "results": [
+      {
+        "candidate_directional_picks": 41,
+        "losses": 20,
+        "missing_selected_side_price": 3,
+        "model": "v1",
+        "net_units": 6.1317204142194,
+        "observation_rule": "latest qualified standard -1.5 quote before scheduled start",
+        "one_goal_abstentions": 59,
+        "priced_bets": 38,
+        "provider": "BetOnline (betonlineag)",
+        "roi_per_unit_staked": 0.16136106353208945,
+        "slate_coverage": 0.38,
+        "stake_convention": "one unit staked per predicted two-plus winner; abstain on ONE_GOAL_GAME",
+        "wins": 18
+      },
+      {
+        "candidate_directional_picks": 27,
+        "losses": 11,
+        "missing_selected_side_price": 4,
+        "model": "v2",
+        "net_units": 4.860811323310308,
+        "observation_rule": "latest qualified standard -1.5 quote before scheduled start",
+        "one_goal_abstentions": 73,
+        "priced_bets": 23,
+        "provider": "BetOnline (betonlineag)",
+        "roi_per_unit_staked": 0.2113396227526221,
+        "slate_coverage": 0.23,
+        "stake_convention": "one unit staked per predicted two-plus winner; abstain on ONE_GOAL_GAME",
+        "wins": 12
+      }
+    ],
+    "stake": "one unit per directional two-plus prediction; abstain on ONE_GOAL_GAME",
+    "timing": "latest qualified standard -1.5 quote before scheduled start"
+  },
+  "sources": {
+    "challenger_policy": "backend/nhl/cross_market_shadow/shot_prior.py",
+    "class_definition": "backend/nhl/postgame_reconcile/core.py",
+    "parameter_contract": "backend/nhl/cross_market_shadow/frozen_puck_line_control_v1.json",
+    "scorer": "backend/nhl/cross_market_shadow/core.py"
+  },
+  "study_window": {
+    "dates": [
+      "2026-09-30",
+      "2026-10-01",
+      "2026-10-02",
+      "2026-10-03",
+      "2026-10-04",
+      "2026-10-05",
+      "2026-10-06",
+      "2026-10-07",
+      "2026-10-08",
+      "2026-10-09",
+      "2026-10-10",
+      "2026-10-11",
+      "2026-10-12",
+      "2026-10-13"
+    ],
+    "games": 100,
+    "games_per_date": {
+      "2026-09-30": 3,
+      "2026-10-01": 8,
+      "2026-10-02": 5,
+      "2026-10-03": 13,
+      "2026-10-04": 5,
+      "2026-10-05": 4,
+      "2026-10-06": 9,
+      "2026-10-07": 3,
+      "2026-10-08": 10,
+      "2026-10-09": 4,
+      "2026-10-10": 14,
+      "2026-10-11": 3,
+      "2026-10-12": 3,
+      "2026-10-13": 16
+    },
+    "latest_reconciled_date": "2026-10-13",
+    "requested_start": "2026-09-29",
+    "unpaired_or_missing": [
+      {
+        "date": "2026-09-29",
+        "game_id": 2026020001,
+        "reason": "CHALLENGER_NOT_AVAILABLE_IN_PROSPECTIVE_CAPTURE"
+      },
+      {
+        "date": "2026-09-29",
+        "game_id": 2026020002,
+        "reason": "CHALLENGER_NOT_AVAILABLE_IN_PROSPECTIVE_CAPTURE"
+      },
+      {
+        "date": "2026-09-29",
+        "game_id": 2026020003,
+        "reason": "CHALLENGER_NOT_AVAILABLE_IN_PROSPECTIVE_CAPTURE"
+      },
+      {
+        "date": "2026-09-29",
+        "game_id": 2026020004,
+        "reason": "CHALLENGER_NOT_AVAILABLE_IN_PROSPECTIVE_CAPTURE"
+      },
+      {
+        "date": "2026-09-29",
+        "game_id": 2026020005,
+        "reason": "CHALLENGER_NOT_AVAILABLE_IN_PROSPECTIVE_CAPTURE"
+      }
+    ]
+  },
+  "two_plus_frequency": 0.66
+}
