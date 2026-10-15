@@ -1,0 +1,9 @@
+{
+  "frozen_stage_1": "selected production edge < 0",
+  "frozen_stage_2": "Stage 1 survivor signed selected-side no-vig gap > +0.15",
+  "frozen_stage_3": "Stage 2 survivor model side differs from no-vig market implied side",
+  "independent_unit": "finalized slate_date",
+  "append_policy": "append exact-key rows and preserve source hashes; report each date and pooled descriptive metrics",
+  "no_cutoff_optimization": true,
+  "stage_3_status": "PROVISIONAL_RESEARCH_EXCLUSION_REQUIRES_PROSPECTIVE_VALIDATION"
+}

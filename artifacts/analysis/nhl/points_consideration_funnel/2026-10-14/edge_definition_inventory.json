@@ -1,0 +1,15 @@
+{
+  "8rain_gap": "selected-side model probability minus source side market probability (attachment raw implied, fallback raw American implied); candidate policy requires gap > 0 and EV > 0",
+  "ev": "model probability times decimal return minus one at selected side median price; descriptive only because side medians aggregate across books and are not an executable paired quote",
+  "fair_price": "American equivalent odds from model probability, not an edge",
+  "frontend_ranked_edge": "Over model probability minus p_over_mkt; ranking accepts attached prices from -350 through +500 American",
+  "production_export": "selected side model probability minus raw American implied probability of that side's separately aggregated median attachment price; p_mkt includes vig",
+  "signed_gap": "selected-side model probability minus selected-side no-vig market probability; raw American implied probabilities normalized by their two-side sum",
+  "site_edge": "selected p minus p_over_mkt, fallback to raw American implied probability; bps filter keeps edge*10000 >= threshold and leaves missing-edge rows visible",
+  "source_locations": {
+    "8rain": "backend/nhl/scripts/select_nhl_points_saves_8rain_candidates.py: american_implied_probability, per-side EV and model_market_gap; backend/nhl/config/nhl_points_active_candidate_policy_v1.json",
+    "frontend_rank": "frontend/src/Pages/nhl/NHLPredictions.jsx: bestEdgeCandidate/topPlayableEdgeRows/isPlayableMarket",
+    "production_edge": "backend/nhl/scripts/build_points_with_market.py: p_over_mkt, p_under_mkt, edge_over, edge_under",
+    "site_edge_ev": "nhl/site/index.html: probFromAmerican, evPerUnit, row edge derivation and Min Edge bps control"
+  }
+}

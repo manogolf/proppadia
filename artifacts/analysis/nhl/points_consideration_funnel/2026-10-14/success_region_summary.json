@@ -1,0 +1,33 @@
+{
+  "status": "DESCRIPTIVE_ONLY",
+  "candidate_regions": [
+    {
+      "region": "survivor edge 1\u20133pp",
+      "table": "survivor_edge_bands.csv",
+      "n": 32,
+      "wins": 24,
+      "losses": 8,
+      "accuracy": 0.75,
+      "expected_losses": 9.728391743487412,
+      "observed_losses": 8,
+      "excess_losses": -1.7283917434874123,
+      "brier": 0.18646586398765325,
+      "log_loss": 0.5626821149426442,
+      "log_loss_sum": 18.005827678164614,
+      "mean_signed_gap": 0.04952404976450636,
+      "mean_edge": 0.021005346527987124,
+      "mean_model_selected_p": 0.6959877580160184,
+      "mean_selected_market_p": 0.646463708251512,
+      "mean_selected_price_american": -225.296875,
+      "min_selected_price_american": -475.0,
+      "max_selected_price_american": -120.0,
+      "market_no_vig_brier": 0.2193485025754207,
+      "market_no_vig_log_loss": 0.6900081157086254,
+      "segment": "1\u20133pp",
+      "dates": "2026-10-10|2026-10-11|2026-10-12|2026-10-13",
+      "share_survivor_losses": 0.09195402298850575,
+      "interpretation": "small favorable proper-score slice; requires later-date replication and is not an inclusion rule"
+    }
+  ],
+  "no_inclusion_criteria_created": true
+}
