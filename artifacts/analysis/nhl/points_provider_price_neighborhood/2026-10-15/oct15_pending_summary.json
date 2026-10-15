@@ -1,0 +1,10 @@
+{
+  "best_observed_prediction_instances": 269,
+  "betonline_selected_side_quotes": 165,
+  "predictions_with_any_provider_quote": 269,
+  "predictions_with_selected_side_price_ge_100": 55,
+  "production_negative_near_zero_plus_100": 1,
+  "provider_negative_near_zero_plus_100": 0,
+  "status": "PENDING_OUTCOME",
+  "total_0_5_provider_quote_rows": 4388
+}

@@ -1,0 +1,5 @@
+# Retained odds schema notes
+
+The immutable `normalized_odds.jsonl` is a deterministic normalization of each bound `raw_response.json`. Each row has event teams and commence time, provider key, market key, market `last_update`, outcome description (player name), Over/Under side, numeric `point` line, and American `price`. `game_binding.jsonl` maps the provider event ID to one canonical game ID. The exact player ID comes from matching the provider description to the same run’s Points attachment identity for that game. The study prefers standard `player_points` when a duplicate exact provider/player/game/line/side is also present under `player_points_alternate`; alternate is used only where the standard quote is absent. Duplicate collisions in the chosen market are audited and excluded.
+
+American prices are already the canonical source representation; no decimal-to-American conversion was applied. Quote timestamps must be no later than the bound observation, and the observation must precede the event commence time. The Oct. 15 observation is bound by the active daily receipt and its raw response hash; no later observations are considered.

@@ -1,0 +1,355 @@
+{
+  "base_inventory_sha256": "bf79497b3889cd622ce3efb2f447d32b3b92158473117e314e00eaf84d6932ab",
+  "canonical_intersection_sha256": "3eef9ac165811b7a815426284db887ba653cc777155162c2262bb2099c53db1d",
+  "inputs": [
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-10/observation=20261010T225536.565242Z_64679d4ca105cd9c/raw_response.json",
+      "sha256": "cc3335ce9522e8f18ff0b0369e1228f6977dc572107389d4d270118a11a0e905",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-10/observation=20261010T225536.565242Z_64679d4ca105cd9c/normalized_odds.jsonl",
+      "sha256": "e6a54d2db9eabc5d8874306fcd06e24c061599b4ad8abc2694f78f32c4c7852a",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-10/points_attachment_integrity.json",
+      "sha256": "8959ef9adecf84f6d48cb41ee9e6d44cadddeb131eb76d9937b807b855399917",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-10/points_with_market.csv",
+      "sha256": "10370ade6b0fd4d4bc4e3e1ced14cd7f81051f927345ebb8a78e4e009acf7d1f",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261010T225230603101Z_6239a125/points_predictions.csv",
+      "sha256": "077bddeef92f358e5efb3b58fffc23201e45fa592b548344cb417463ec1650b6",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-11/observation=20261011T201554.625646Z_8d7caddbdf6fe001/raw_response.json",
+      "sha256": "2bbbe2b418043158e6f1f8ce2c4d798dc2b89e7912f7cf7cbe97af82a19cd247",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-11/observation=20261011T201554.625646Z_8d7caddbdf6fe001/normalized_odds.jsonl",
+      "sha256": "97449934e22ad86fce69cb0ed4892ee4b7c414164961fe1158d6c89758ea47c7",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-11/points_attachment_integrity.json",
+      "sha256": "4bc6fb6afe2094b700313292be48da4bc9035ed6835e7803a6f4eba0b9862524",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-11/points_with_market.csv",
+      "sha256": "47b329d803eb93fe11e5be547540bf15a8f18786603aacc1132c88199401ba6a",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261011T201233254402Z_92264a17/points_predictions.csv",
+      "sha256": "1971f455813979287fcca09dc17af20a76f7579e52175798acdd6b9c90ca5df2",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-12/observation=20261012T220702.698678Z_b28f25d7f10393f0/raw_response.json",
+      "sha256": "37c59ef71cd61f824fd3bcd54c81fda39d1fe061e6c56db41363b1a5b4b3410c",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-12/observation=20261012T220702.698678Z_b28f25d7f10393f0/normalized_odds.jsonl",
+      "sha256": "c82b35738dfe55d9d698a0942c7e236ce5a8ce47cd6f13de5241bb3a585bcfa5",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-12/points_attachment_integrity.json",
+      "sha256": "b4687347d5085a204a2fd99067dbc6a9374cd988ffbab3222de7f4dd28149408",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-12/points_with_market.csv",
+      "sha256": "a8b4f79fae116cd55f467b7b418254c0e6342c96310695954eff8f58706bc6ec",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261012T220438660693Z_ab8ff694/points_predictions.csv",
+      "sha256": "cb84ad38225a4da802976ed39a902e16ef149bc88e31224f28fab6a6497fd3e6",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-13/observation=20261013T201814.503757Z_5b1182a46f3bd857/raw_response.json",
+      "sha256": "5a5c0758b131c7ddda21c4e6bfce900e32e0fd28d456ceb205030a7cf6378379",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-13/observation=20261013T201814.503757Z_5b1182a46f3bd857/normalized_odds.jsonl",
+      "sha256": "93cfc2d2bad134cd34578a313bdd952e4c8c55a2c39198ba7621fc448475b84f",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-13/points_attachment_integrity.json",
+      "sha256": "8a70670bddca97be27b9758ce163011003be162e2aad187af7577eadccc55911",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-13/points_with_market.csv",
+      "sha256": "81008106b675e0206630f98f7ac3816bd85e45bbf44405c29e91d36d9e9e7bb5",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261013T201458522957Z_22deb90f/points_predictions.csv",
+      "sha256": "72bf74eab67f6986578169050489ab536523e36b2fa5077b49803bc3e1cebfc4",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-14/observation=20261014T192925.340306Z_550c5cff05794f70/raw_response.json",
+      "sha256": "ca65e5d69c095a75d86bf23f937285e5739c8639e75f881fd8f62643c5a1f14e",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-14/observation=20261014T192925.340306Z_550c5cff05794f70/normalized_odds.jsonl",
+      "sha256": "63da2f492587cdbeedaa39ae9c0950a5d46b2b52fc4044295c9d4636e281fa4f",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-14/points_attachment_integrity.json",
+      "sha256": "c5790e8e5e65177b32324c9d492497ebcb9bee3d414d0ff0f62c6e58848a1db3",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-14/points_with_market.csv",
+      "sha256": "a964969cc39c394adb2ccc063c55fde56fb9556e0372de90a4d761e79a2ab0a1",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261014T192554086407Z_2b980c9e/points_predictions.csv",
+      "sha256": "71e2972de2d26791df0af03a8aa74a48972cd858bb7d1f82311068de9874816e",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-15/observation=20261015T140801.764276Z_b285d926b19b66ff/raw_response.json",
+      "sha256": "6951bdb7dc651edc7807b50933aa2c2b62a98a705b607a51f589454a699347b6",
+      "slate_date": "2026-10-15"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261015T140453183604Z_bfa01e59/points_predictions.csv",
+      "sha256": "b283cc7b5e4def7ca90ea3c1a8f1a1cb84b202d17e3ccd1391987d52bc6bcb17",
+      "slate_date": "2026-10-15"
+    },
+    {
+      "artifact": "nhl/site/data/points_with_market.csv",
+      "sha256": "9c93efab3b19c33d9d047e19e94060acfb656cf6d901b9e505be2a9856894358",
+      "slate_date": "2026-10-15"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-10/reconciliation=fbe3605043e75c263b78/graded_points.csv",
+      "sha256": "26c727dc2ef7d066ee5837bd5277f46b5d6261c7c4ce4c04566c3e6945033057",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-11/reconciliation=e7da8655562d8ca577a9/graded_points.csv",
+      "sha256": "ec1e55000f67c71ed55f9204fc8532b92db2e1017005033ce8dc6591c536a62e",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-12/reconciliation=3d69dd4ed0bce1fe9846/graded_points.csv",
+      "sha256": "7994ba7d0c8a714bac5f116a1aeb475acdd1dbeeb4dc671aff10008f94954767",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-13/reconciliation=ba0c2b3c3ef1bd1ddb99/graded_points.csv",
+      "sha256": "1d2b4df5014ab4d0ce3f3dcbbea56458c00222cedb215c825206abe32028ba14",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/canonical_skater_outcomes.csv",
+      "sha256": "fe387ec8dde29efc6f63d46dcf2edd9a675629d7824066f67753c736cd01638c",
+      "slate_date": "2026-10-14"
+    }
+  ],
+  "output_files": [
+    {
+      "path": "aggregated_median_vs_provider_price.csv",
+      "sha256": "8a8ad3aaf3426fea52cd25eaddbaa32570b31e142c57f9d7635d2a2a3199e042"
+    },
+    {
+      "path": "backlog_context.md",
+      "sha256": "4f56ca885aa1404bd9e3f03a0070b471c1f062c36e7f3d683493ed3ba18965d2"
+    },
+    {
+      "path": "best_observed_price_analysis.csv",
+      "sha256": "aa78213053b75a46182e38d534ec142626fda35e862a0b68cefa47fa62c623ac"
+    },
+    {
+      "path": "betonline_analysis.csv",
+      "sha256": "59a70a814fe60c24ec239e3134d847d4414d287406c9b539b05deb82bf2f4d71"
+    },
+    {
+      "path": "canonical_prediction_rows.csv",
+      "sha256": "f0bfb848587e1cd05e83a22df4f0d2345482d68f0f03cddcd544646c0b215945"
+    },
+    {
+      "path": "canonical_provider_quote_rows.csv",
+      "sha256": "ec56c9bd32eef3b768d67590aac57515635ff6bac4614662c07a654fa0117f3a"
+    },
+    {
+      "path": "date_level_provider_metrics.csv",
+      "sha256": "c18eacd59f41f3dab151d7917494021624af2aee5f864916e535db8a6132dc7a"
+    },
+    {
+      "path": "date_neighborhood_performance.csv",
+      "sha256": "abc255894356a1f364f49a6608510bf1e9abe79f73208af7cf77883e6d3efc70"
+    },
+    {
+      "path": "date_policy_metrics.csv",
+      "sha256": "b5f38266e4264787a4cadc1b99672aecf54db4b0b11f15b04769ea894e523c0e"
+    },
+    {
+      "path": "date_stability.csv",
+      "sha256": "b5f38266e4264787a4cadc1b99672aecf54db4b0b11f15b04769ea894e523c0e"
+    },
+    {
+      "path": "decision_classification.json",
+      "sha256": "b8d04b77aed565853ee000190039a1ff8f1bf8b08787e33d51753c278a6d4109"
+    },
+    {
+      "path": "duplicate_quote_audit.csv",
+      "sha256": "e29db981f7c00aa9594aa10b5239ebd9d8c2772c3c60e651126c9af70ce53f80"
+    },
+    {
+      "path": "fixed_edge_band_registry.json",
+      "sha256": "e08b03b731d1a3513ecebb71feb114635e22743e9aad79f60dc44476b5dcf492"
+    },
+    {
+      "path": "fixed_price_band_metrics.csv",
+      "sha256": "4e1de340e9b4c3252e6bb36adf045b447c0b46b9371b48ece585d6ec0d6a5771"
+    },
+    {
+      "path": "fixed_price_band_registry.json",
+      "sha256": "fdcbc4bac2aebb93ae24dfb96287d0ce64e3f74b11b1780fd92e238d3e5cf1f6"
+    },
+    {
+      "path": "large_positive_edge_control.csv",
+      "sha256": "a05c97e796aab1ec8546a9561ee8198a4051c97a8c9e62a5518fd1a571accbd2"
+    },
+    {
+      "path": "model_market_complementarity.csv",
+      "sha256": "96bb9860955b4cccda27ea7c6edc16c51855652acef851008901bb46d96d99d5"
+    },
+    {
+      "path": "near_zero_neighborhood_performance.csv",
+      "sha256": "4f576bc37bb48b354f9bcd79575be2237abef18bd0594fbec4089e63cf6c3b0f"
+    },
+    {
+      "path": "negative_edge_plus_money_availability.csv",
+      "sha256": "29bf412598ce01353c0f2c4bd74c8d71a9977915bf6effd03b0b4aa8b7205623"
+    },
+    {
+      "path": "neighborhood_performance.csv",
+      "sha256": "635e59951c2262aa6be2a8e37d85fcee427caf633ae0d8691cdc1d4af08c355a"
+    },
+    {
+      "path": "oct15_pending_inventory.csv",
+      "sha256": "93ce0ce01708e5931d4cde155a76bca7c15d98e9eca0815d2c0cce7fb21bb3a9"
+    },
+    {
+      "path": "oct15_pending_summary.json",
+      "sha256": "6b91eda3462cd766902a5866288ace205c860e8b7cb2bce2b550b8643f11062b"
+    },
+    {
+      "path": "out_of_window_quote_audit.csv",
+      "sha256": "35d5c9da7c7c7c673aede445796aa9cb095c307cdc4a596d0a885e901e8dc36c"
+    },
+    {
+      "path": "policy_performance.csv",
+      "sha256": "71840ac0ce60d591b531ffbc5a2daa89e920e2596fe599032a6cd61939a4bc54"
+    },
+    {
+      "path": "positive_edge_worse_provider_price.csv",
+      "sha256": "45fd2f9df187bc411dc80df5c4c4844ac00f4dd69bc69453f1893a5d143433d6"
+    },
+    {
+      "path": "prediction_neighborhood_rows.csv",
+      "sha256": "64c9889621a963a4a07b64aa7dd813dac618b0eaf30602f4109f9eabf392ff04"
+    },
+    {
+      "path": "prediction_policy_rows.csv",
+      "sha256": "857a6ff05ec8f280c6fa130a3026f101d10a3f0a2bae3b1bf26f0d610b94a0e0"
+    },
+    {
+      "path": "prediction_price_inventory.csv",
+      "sha256": "fbd6be6f9f4cbd6a650bed67db88339df02d364978edf7e18d190c5df7782fd0"
+    },
+    {
+      "path": "price_dispersion.csv",
+      "sha256": "8a8ad3aaf3426fea52cd25eaddbaa32570b31e142c57f9d7635d2a2a3199e042"
+    },
+    {
+      "path": "production_edge_band_metrics.csv",
+      "sha256": "66b9126bfc39cb0dd1dbc34acb6ac7623fd0a63af056893b5e834d7fca9eb64c"
+    },
+    {
+      "path": "production_edge_reproduction.csv",
+      "sha256": "407dd1414bc6708f4fcae49cf57e0bf9c833e391753568ec9a86b134d408de45"
+    },
+    {
+      "path": "provider_coverage.csv",
+      "sha256": "93588c5d1655ec3aa58c0bd73dc2e6ceb614852ed6996fa22ac5b06f2d59bc1a"
+    },
+    {
+      "path": "provider_edge_band_metrics.csv",
+      "sha256": "e44c7cd3e298e0ab52ddba82b4d02f9c20c00aaa300e3465c77e94dcbb770779"
+    },
+    {
+      "path": "provider_edge_band_prediction_metrics.csv",
+      "sha256": "9f0a4b08571e586bea5a1113a77d35fd61958aa2c4de9fa944a8e960aa247b9c"
+    },
+    {
+      "path": "provider_inventory.csv",
+      "sha256": "b24fae7fbb1dc92065aa63c9a93cb92118d385bbbeea99a4d81e0486b18f175a"
+    },
+    {
+      "path": "provider_quote_edge_calculations.csv",
+      "sha256": "ec289a938a944c3a305980c4614fc8efe00ba7d1c625c7c120c4c3ea2c188e81"
+    },
+    {
+      "path": "provider_quote_performance.csv",
+      "sha256": "ac4b1a648a3e8aff54b10efb2fcecb683d7fb54970d661f97b8460a3f3ff49fc"
+    },
+    {
+      "path": "provider_quotes.csv",
+      "sha256": "ec56c9bd32eef3b768d67590aac57515635ff6bac4614662c07a654fa0117f3a"
+    },
+    {
+      "path": "providers_observed.csv",
+      "sha256": "fed8374e2ed0f6a64cb204ac4955c4b846157e1f756713aa7b9918b75433c9e2"
+    },
+    {
+      "path": "raw_odds_schema_notes.md",
+      "sha256": "045dc1e759f73b23e27f064af2d51ba57f31f20a459871268017da68cb91ce06"
+    },
+    {
+      "path": "report.md",
+      "sha256": "46356bf56f38eb54132718ce621dca872966dd25a8c82335629d08d53174503d"
+    },
+    {
+      "path": "same_provider_no_vig_calculations.csv",
+      "sha256": "618b60dd5ade53a92761247229a900092c74d8877eeefa1397fc6bd93c5a9271"
+    },
+    {
+      "path": "same_side_opposite_side_metrics.csv",
+      "sha256": "bf4d0e97d71f75fa69634af5dede342b19bd1e248c6281d5f90ec4356341fc3d"
+    },
+    {
+      "path": "source_hashes.csv",
+      "sha256": "cce833c5d284a0d950f3aab04e7ed4cd70e9451125cb17fa712436e81bd9c96a"
+    },
+    {
+      "path": "summary.json",
+      "sha256": "3893366fadba0c8ad0b3b5c2bacbaf86dc2811f14fc79b4643e2d45c2cd19c1e"
+    }
+  ],
+  "schema_version": "NHL_POINTS_PROVIDER_PRICE_NEIGHBORHOOD_V1",
+  "script_sha256": "7a4db3dff32546b5d02448fd90598ad945b23682f3922c99f9b45e87478cd605"
+}

@@ -1,0 +1,246 @@
+{
+  "availability_classification": "RARE_NEIGHBORHOOD",
+  "caveats": [
+    "Provider quotes are the prediction/selection evidence; provider quote count is not the independent outcome denominator.",
+    "Same-provider no-vig probabilities are emitted only for exact paired quotes from the same provider and player/game/line.",
+    "Best observed price is not an executable or accessibility claim.",
+    "Quotes are restricted to captured timestamps no later than the bound observation and before puck drop.",
+    "October 15 is pending inventory only and is excluded from all performance metrics."
+  ],
+  "classification": "NO_MEANINGFUL_PROVIDER_LEVEL_SAMPLE",
+  "counts": {
+    "duplicate_quote_keys": 1,
+    "finalized_betonline_prediction_coverage": 581,
+    "finalized_predictions_with_any_provider_quote": 900,
+    "finalized_predictions_with_same_provider_two_sided_quote": 870,
+    "max_production_edge_reproduction_abs_delta": 2.220446049250313e-16,
+    "negative_near_zero_settled_predictions": 47,
+    "out_of_window_quote_rows_excluded": 1060,
+    "prediction_rows": 2150,
+    "primary_neighborhood_settled_prediction_rows": 1,
+    "production_edge_reproduced_rows": 918,
+    "provider_quote_rows": 19283,
+    "provider_quote_rows_finalized": 14893,
+    "provider_quote_rows_pending": 4390,
+    "settled_predictions": 1174
+  },
+  "execution": {
+    "paid_credits": 0,
+    "production_db_mutations": 0,
+    "provider_calls": 0
+  },
+  "frozen_prospective_experiment_justified": false,
+  "large_positive_provider_edge_classification": "MODEL_OVERCONFIDENCE_REGION",
+  "policies": [
+    "AGGREGATED_MEDIAN (baseline attachment)",
+    "BETONLINE (exact only; no substitution)",
+    "BEST_OBSERVED_PROVIDER_PRICE (simultaneous bound quotes; not guaranteed executable)"
+  ],
+  "primary_neighborhood_counts": {
+    "PRODUCTION_NEG3_TO_0_PLUS100": 0,
+    "PROVIDER_0_TO_PLUS1_PLUS100": 0,
+    "PROVIDER_0_TO_PLUS3_PLUS100": 1,
+    "PROVIDER_NEG1_TO_0_PLUS100": 0,
+    "PROVIDER_NEG3_TO_0_PLUS100": 0
+  },
+  "providers_observed": [
+    "ballybet",
+    "betmgm",
+    "betonlineag",
+    "betopenly",
+    "betrivers",
+    "bovada",
+    "courtside",
+    "draftkings",
+    "espnbet",
+    "fanatics",
+    "fanduel",
+    "fliff",
+    "hardrockbet",
+    "kalshi",
+    "novig",
+    "prophetx",
+    "rebet",
+    "williamhill_us"
+  ],
+  "schema_version": "NHL_POINTS_PROVIDER_PRICE_NEIGHBORHOOD_V1",
+  "scope": {
+    "finalized_dates": [
+      "2026-10-10",
+      "2026-10-11",
+      "2026-10-12",
+      "2026-10-13",
+      "2026-10-14"
+    ],
+    "line": 0.5,
+    "pending_date": "2026-10-15",
+    "source": "exact-hash-bound immutable observations and same-run HGB predictions"
+  },
+  "source_hashes": [
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-10/observation=20261010T225536.565242Z_64679d4ca105cd9c/raw_response.json",
+      "sha256": "cc3335ce9522e8f18ff0b0369e1228f6977dc572107389d4d270118a11a0e905",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-10/observation=20261010T225536.565242Z_64679d4ca105cd9c/normalized_odds.jsonl",
+      "sha256": "e6a54d2db9eabc5d8874306fcd06e24c061599b4ad8abc2694f78f32c4c7852a",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-10/points_attachment_integrity.json",
+      "sha256": "8959ef9adecf84f6d48cb41ee9e6d44cadddeb131eb76d9937b807b855399917",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-10/points_with_market.csv",
+      "sha256": "10370ade6b0fd4d4bc4e3e1ced14cd7f81051f927345ebb8a78e4e009acf7d1f",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261010T225230603101Z_6239a125/points_predictions.csv",
+      "sha256": "077bddeef92f358e5efb3b58fffc23201e45fa592b548344cb417463ec1650b6",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-11/observation=20261011T201554.625646Z_8d7caddbdf6fe001/raw_response.json",
+      "sha256": "2bbbe2b418043158e6f1f8ce2c4d798dc2b89e7912f7cf7cbe97af82a19cd247",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-11/observation=20261011T201554.625646Z_8d7caddbdf6fe001/normalized_odds.jsonl",
+      "sha256": "97449934e22ad86fce69cb0ed4892ee4b7c414164961fe1158d6c89758ea47c7",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-11/points_attachment_integrity.json",
+      "sha256": "4bc6fb6afe2094b700313292be48da4bc9035ed6835e7803a6f4eba0b9862524",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-11/points_with_market.csv",
+      "sha256": "47b329d803eb93fe11e5be547540bf15a8f18786603aacc1132c88199401ba6a",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261011T201233254402Z_92264a17/points_predictions.csv",
+      "sha256": "1971f455813979287fcca09dc17af20a76f7579e52175798acdd6b9c90ca5df2",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-12/observation=20261012T220702.698678Z_b28f25d7f10393f0/raw_response.json",
+      "sha256": "37c59ef71cd61f824fd3bcd54c81fda39d1fe061e6c56db41363b1a5b4b3410c",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-12/observation=20261012T220702.698678Z_b28f25d7f10393f0/normalized_odds.jsonl",
+      "sha256": "c82b35738dfe55d9d698a0942c7e236ce5a8ce47cd6f13de5241bb3a585bcfa5",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-12/points_attachment_integrity.json",
+      "sha256": "b4687347d5085a204a2fd99067dbc6a9374cd988ffbab3222de7f4dd28149408",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-12/points_with_market.csv",
+      "sha256": "a8b4f79fae116cd55f467b7b418254c0e6342c96310695954eff8f58706bc6ec",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261012T220438660693Z_ab8ff694/points_predictions.csv",
+      "sha256": "cb84ad38225a4da802976ed39a902e16ef149bc88e31224f28fab6a6497fd3e6",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-13/observation=20261013T201814.503757Z_5b1182a46f3bd857/raw_response.json",
+      "sha256": "5a5c0758b131c7ddda21c4e6bfce900e32e0fd28d456ceb205030a7cf6378379",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-13/observation=20261013T201814.503757Z_5b1182a46f3bd857/normalized_odds.jsonl",
+      "sha256": "93cfc2d2bad134cd34578a313bdd952e4c8c55a2c39198ba7621fc448475b84f",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-13/points_attachment_integrity.json",
+      "sha256": "8a70670bddca97be27b9758ce163011003be162e2aad187af7577eadccc55911",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-13/points_with_market.csv",
+      "sha256": "81008106b675e0206630f98f7ac3816bd85e45bbf44405c29e91d36d9e9e7bb5",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261013T201458522957Z_22deb90f/points_predictions.csv",
+      "sha256": "72bf74eab67f6986578169050489ab536523e36b2fa5077b49803bc3e1cebfc4",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-14/observation=20261014T192925.340306Z_550c5cff05794f70/raw_response.json",
+      "sha256": "ca65e5d69c095a75d86bf23f937285e5739c8639e75f881fd8f62643c5a1f14e",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-14/observation=20261014T192925.340306Z_550c5cff05794f70/normalized_odds.jsonl",
+      "sha256": "63da2f492587cdbeedaa39ae9c0950a5d46b2b52fc4044295c9d4636e281fa4f",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-14/points_attachment_integrity.json",
+      "sha256": "c5790e8e5e65177b32324c9d492497ebcb9bee3d414d0ff0f62c6e58848a1db3",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "backend/nhl/exports/odds_history/2026-10-14/points_with_market.csv",
+      "sha256": "a964969cc39c394adb2ccc063c55fde56fb9556e0372de90a4d761e79a2ab0a1",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261014T192554086407Z_2b980c9e/points_predictions.csv",
+      "sha256": "71e2972de2d26791df0af03a8aa74a48972cd858bb7d1f82311068de9874816e",
+      "slate_date": "2026-10-14"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/odds_observations/season=2026/slate_date=2026-10-15/observation=20261015T140801.764276Z_b285d926b19b66ff/raw_response.json",
+      "sha256": "6951bdb7dc651edc7807b50933aa2c2b62a98a705b607a51f589454a699347b6",
+      "slate_date": "2026-10-15"
+    },
+    {
+      "artifact": "backend/nhl/data/processed/daily_runs/nhldaily_20261015T140453183604Z_bfa01e59/points_predictions.csv",
+      "sha256": "b283cc7b5e4def7ca90ea3c1a8f1a1cb84b202d17e3ccd1391987d52bc6bcb17",
+      "slate_date": "2026-10-15"
+    },
+    {
+      "artifact": "nhl/site/data/points_with_market.csv",
+      "sha256": "9c93efab3b19c33d9d047e19e94060acfb656cf6d901b9e505be2a9856894358",
+      "slate_date": "2026-10-15"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-10/reconciliation=fbe3605043e75c263b78/graded_points.csv",
+      "sha256": "26c727dc2ef7d066ee5837bd5277f46b5d6261c7c4ce4c04566c3e6945033057",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-11/reconciliation=e7da8655562d8ca577a9/graded_points.csv",
+      "sha256": "ec1e55000f67c71ed55f9204fc8532b92db2e1017005033ce8dc6591c536a62e",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-12/reconciliation=3d69dd4ed0bce1fe9846/graded_points.csv",
+      "sha256": "7994ba7d0c8a714bac5f116a1aeb475acdd1dbeeb4dc671aff10008f94954767",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-13/reconciliation=ba0c2b3c3ef1bd1ddb99/graded_points.csv",
+      "sha256": "1d2b4df5014ab4d0ce3f3dcbbea56458c00222cedb215c825206abe32028ba14",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "artifact": "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/canonical_skater_outcomes.csv",
+      "sha256": "fe387ec8dde29efc6f63d46dcf2edd9a675629d7824066f67753c736cd01638c",
+      "slate_date": "2026-10-14"
+    }
+  ]
+}

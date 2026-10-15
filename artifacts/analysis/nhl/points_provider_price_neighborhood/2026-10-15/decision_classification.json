@@ -1,0 +1,13 @@
+{
+  "availability_classification": "RARE_NEIGHBORHOOD",
+  "frozen_prospective_provider_price_experiment_justified": false,
+  "large_positive_provider_edge_classification": "MODEL_OVERCONFIDENCE_REGION",
+  "manual_search_neighborhood_classification": "NO_MEANINGFUL_PROVIDER_LEVEL_SAMPLE",
+  "primary_prediction_level_counts": {
+    "PRODUCTION_NEG3_TO_0_PLUS100": 0,
+    "PROVIDER_0_TO_PLUS1_PLUS100": 0,
+    "PROVIDER_0_TO_PLUS3_PLUS100": 1,
+    "PROVIDER_NEG1_TO_0_PLUS100": 0,
+    "PROVIDER_NEG3_TO_0_PLUS100": 0
+  }
+}

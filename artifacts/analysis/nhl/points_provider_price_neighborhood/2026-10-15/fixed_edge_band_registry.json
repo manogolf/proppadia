@@ -1,0 +1,66 @@
+{
+  "schema_version": "NHL_POINTS_PROVIDER_EDGE_BANDS_V1",
+  "units": "probability difference; multiply by 100 for percentage points",
+  "bands": [
+    {
+      "label": "LT_-15PP",
+      "lower_inclusive": null,
+      "upper_exclusive": -0.15
+    },
+    {
+      "label": "-15_TO_-10PP",
+      "lower_inclusive": -0.15,
+      "upper_exclusive": -0.1
+    },
+    {
+      "label": "-10_TO_-5PP",
+      "lower_inclusive": -0.1,
+      "upper_exclusive": -0.05
+    },
+    {
+      "label": "-5_TO_-3PP",
+      "lower_inclusive": -0.05,
+      "upper_exclusive": -0.03
+    },
+    {
+      "label": "NEG_-3_TO_-1PP",
+      "lower_inclusive": -0.03,
+      "upper_exclusive": -0.01
+    },
+    {
+      "label": "NEG_-1_TO_0PP",
+      "lower_inclusive": -0.01,
+      "upper_exclusive": 0
+    },
+    {
+      "label": "0_TO_+1PP",
+      "lower_inclusive": 0,
+      "upper_exclusive": 0.01
+    },
+    {
+      "label": "+1_TO_+3PP",
+      "lower_inclusive": 0.01,
+      "upper_exclusive": 0.03
+    },
+    {
+      "label": "+3_TO_+5PP",
+      "lower_inclusive": 0.03,
+      "upper_exclusive": 0.05
+    },
+    {
+      "label": "+5_TO_+10PP",
+      "lower_inclusive": 0.05,
+      "upper_exclusive": 0.1
+    },
+    {
+      "label": "+10_TO_+15PP",
+      "lower_inclusive": 0.1,
+      "upper_exclusive": 0.15
+    },
+    {
+      "label": "GE_+15PP",
+      "lower_inclusive": 0.15,
+      "upper_exclusive": null
+    }
+  ]
+}

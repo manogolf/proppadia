@@ -1,0 +1,41 @@
+{
+  "schema_version": "NHL_POINTS_PROVIDER_PRICE_BANDS_V1",
+  "source_odds": "American; no conversion required for these retained observations",
+  "bands": [
+    {
+      "label": "LT_-120",
+      "lower_inclusive": null,
+      "upper_exclusive": -120
+    },
+    {
+      "label": "-120_TO_-106",
+      "lower_inclusive": -120,
+      "upper_exclusive": -105
+    },
+    {
+      "label": "-105_TO_-101",
+      "lower_inclusive": -105,
+      "upper_exclusive": -100
+    },
+    {
+      "label": "EVEN_+100",
+      "lower_inclusive": 100,
+      "upper_exclusive": 101
+    },
+    {
+      "label": "+101_TO_+110",
+      "lower_inclusive": 101,
+      "upper_exclusive": 111
+    },
+    {
+      "label": "+111_TO_+125",
+      "lower_inclusive": 111,
+      "upper_exclusive": 126
+    },
+    {
+      "label": "+126_PLUS",
+      "lower_inclusive": 126,
+      "upper_exclusive": null
+    }
+  ]
+}
