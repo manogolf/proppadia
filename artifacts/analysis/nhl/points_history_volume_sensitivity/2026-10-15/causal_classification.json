@@ -1,0 +1,10 @@
+{
+  "2025_reverse_counterfactual_brier_and_log_loss_improve_at_all_levels": false,
+  "causal_attribution_claimed": false,
+  "classification": "MODEL_SENSITIVE_BUT_NOT_OUTCOME_RELEVANT",
+  "healthy_control_preservation": false,
+  "real_early_2025_support": true,
+  "reason": "Causal label requires reverse-2025 score improvement plus larger 2026 wrong-than-correct maturity effects; this is a sensitivity study and remains non-production.",
+  "training_support_gate": "REVIEWED",
+  "wrong_high_confidence_effect_exceeds_correct": false
+}

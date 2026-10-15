@@ -1,0 +1,4 @@
+repair_family,status,retraining_required
+replace cumulative points/games with season rate plus separate exposure,RESEARCH_ONLY_NOT_AUTHORIZED,RETRAINING_REQUIRED
+retain cumulative fields and add explicit rate representation,RESEARCH_ONLY_NOT_AUTHORIZED,RETRAINING_REQUIRED
+rebalance training toward early-season states,RESEARCH_ONLY_NOT_AUTHORIZED,RETRAINING_REQUIRED

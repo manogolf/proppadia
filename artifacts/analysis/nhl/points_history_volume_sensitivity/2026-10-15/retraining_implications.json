@@ -1,0 +1,6 @@
+{
+  "production_retrained": false,
+  "candidate_feature_representation_repairs": "RETRAINING_REQUIRED",
+  "candidate_training_population_repairs": "RETRAINING_REQUIRED",
+  "implemented": false
+}

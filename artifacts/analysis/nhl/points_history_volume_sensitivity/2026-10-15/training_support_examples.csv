@@ -1,0 +1,4 @@
+target_ppg,target_games_prior,target_points_prior,nearby_training_rows_ppg_within_0_125_games_plus_minus_1,support_status
+0.5,5,2.5,972,COMMON
+1,5,5,264,COMMON
+0.75,7,5.25,708,COMMON

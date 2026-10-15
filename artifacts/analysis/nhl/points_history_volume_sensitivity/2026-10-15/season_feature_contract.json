@@ -1,0 +1,43 @@
+{
+  "calibration": "NONE",
+  "current_season_games_prior": {
+    "appearance_unit": "one player-game, not team game",
+    "cross_season": false,
+    "explicit_pre_hgb_interaction_or_transform": "none; numeric feature is standardized and passed to frozen HGB",
+    "operational": "count matching same-season strict-prior official player-game outcome rows",
+    "scaling": "frozen StandardScaler feature-wise mean/scale",
+    "training": "count of strict-prior player-game outcomes in the target canonical season",
+    "zero_behavior": "0 when no same-season prior rows; missing normalized to 0 at HGB scorer input"
+  },
+  "current_season_points_prior": {
+    "appearance_unit": "one official player-game outcome row",
+    "cross_season": false,
+    "explicit_pre_hgb_interaction_or_transform": "none; numeric feature is standardized and passed to frozen HGB",
+    "operational": "sum of official goals plus assists for prior player-game outcomes where game_date < target game_date and canonical_season equals target season",
+    "scaling": "frozen StandardScaler feature-wise mean/scale",
+    "training": "sum of strict-prior realized points in the target canonical season",
+    "zero_behavior": "0 when no same-season prior rows; missing normalized to 0 at HGB scorer input"
+  },
+  "cutoff": "strict game_date < target game_date; same-date outcomes excluded",
+  "features_in_frozen_model_order": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "market_features_in_model": false,
+  "retraining": false,
+  "schema_version": "NHL_POINTS_CURRENT_SEASON_VOLUME_CONTRACT_V1",
+  "season_ppg_prior": "diagnostic only: points_prior/games_prior when games_prior > 0; missing at zero games; never passed to HGB",
+  "sources": {
+    "exporter": "backend/nhl/scripts/export_nhl_points_hgb_features.py",
+    "scorer": "backend/nhl/scripts/score_nhl_points_hgb_shadow.py",
+    "training_builder": "backend/nhl/scripts/build_nhl_points_architecture_bakeoff.py"
+  }
+}
