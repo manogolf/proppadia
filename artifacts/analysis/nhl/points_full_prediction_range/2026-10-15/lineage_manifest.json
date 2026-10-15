@@ -1,0 +1,20 @@
+{
+  "schema_version": "NHL_POINTS_FULL_RANGE_LINEAGE_V1",
+  "sources": [
+    {
+      "path": "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/nhl/points_display_ev_edge_reliability/2026-10-15/canonical_rows.csv",
+      "sha256": "7eca1d985054036ef03882875d25eabe2f6ff021b720e8d1aea20296aa5bda0f"
+    },
+    {
+      "path": "/Users/jerrystrain/Projects/proppadia/artifacts/analysis/nhl/points_display_ev_edge_reliability/2026-10-15/oct15_pending_map.csv",
+      "sha256": "6a8d1ccb7e6c6fbad93469378a8696f0988c8aedcb8f4b6cb290d07261a671aa"
+    }
+  ],
+  "script_sha256": "20e2feef602ecb40437d85be10845dba283caf5831b820cce4cb994914e192a7",
+  "output_population": "SETTLED, line 0.5, Oct 10-14",
+  "edge_and_ev": "corrected selected side",
+  "return": "one-unit-risk arithmetic at each retained row price; retrospective descriptive only, not an executable quote record",
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "production_db_mutations": 0
+}
