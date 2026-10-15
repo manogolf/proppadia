@@ -77,6 +77,7 @@ from backend.nhl.sog_feature_input import begin_capture as begin_sog_feature_cap
 from backend.nhl.sog_feature_input import finalize_capture as finalize_sog_feature_capture
 from backend.nhl.sog_fixed_blend import capture as capture_sog_fixed_blends
 from backend.nhl.sog_divergence_shadow import capture as capture_sog_divergence_shadow
+from backend.nhl.sog_structural_correction_shadow import capture as capture_sog_structural_correction_shadow
 from backend.nhl.points_hgb_shadow import capture_from_files as capture_points_hgb_shadow
 from backend.nhl.points_hgb_shadow import prepare_authoritative_inputs as prepare_points_hgb_inputs
 from backend.nhl.points_hgb_shadow import build_production_prediction_artifact
@@ -2806,6 +2807,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                              reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
         recorder.finish_lane("sog_fixed_blend_shadows", status="SKIPPED_NO_PREGAME_GAMES",
                              reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
+        recorder.finish_lane("sog_d10_structural_correction_shadow", status="SKIPPED_NO_PREGAME_GAMES",
+                             reason="ALL_CANONICAL_GAMES_ALREADY_STARTED", database_rows_written=False,
+                             provider_requests=0, credits_consumed=0)
         recorder.independent_context["legacy_sog_prediction"] = None
         _run_independent_daily_lanes(recorder=recorder, **recorder.independent_context)
         return
@@ -3112,6 +3116,38 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                              status="SKIPPED_UNSUPPORTED_PRODUCTION_SCORER",
                              reason="DIVERGENCE_SHADOW_REQUIRES_POISSON_BASELINE",
                              provider_requests=0, credits_consumed=0)
+
+    recorder.start_lane("sog_d10_structural_correction_shadow", inputs=[{
+        "model_identity": "NHL_SOG_D10_STRUCTURAL_CORRECTION_V1",
+        "parent_daily_run_id": daily_run_id,
+        "production_feature_sha256": (sog_feature_capture or {}).get("retained_sha256"),
+        "production_model_identity": "poisson_baseline/baseline_v1",
+        "divergence_shadow_identity": "NHL_SOG_D10_D20_DIVERGENCE_SHRINK_V1",
+        "stage1_threshold": 0.5, "stage1_weights": {"d10": 0.5, "d20": 0.5},
+        "stage2_threshold": 9.0, "stage2_compression_factor": 0.5,
+        "provider_requests": 0, "credits_consumed": 0,
+    }])
+    if sog_scorer == "poisson_baseline" and sog_feature_capture is not None:
+        try:
+            structural_package = capture_sog_structural_correction_shadow(
+                feature_path=Path(sog_feature_binding["feature_input_path"]), production_path=calibrated_pred_path,
+                output_root=ROOT / "artifacts" / "operational" / "nhl" / "sog_structural_correction_shadows",
+                run_id=daily_run_id, slate_date=slate, season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+                feature_sha256=str(sog_feature_capture["retained_sha256"]),
+                feature_cutoff_utc=str(sog_feature_capture["cutoff_utc"]),
+                canonical_game_ids=[int(game.game_id) for game in canonical_games],
+                started_excluded_game_ids=list(sog_eligibility["started_excluded_game_ids"]),
+                scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py")
+            recorder.finish_lane("sog_d10_structural_correction_shadow", outputs=[structural_package],
+                reason="PROSPECTIVE_SHADOW_IMMUTABLE_CAPTURE_COMPLETE", database_rows_written=False,
+                provider_requests=0, credits_consumed=0)
+        except Exception as error:
+            recorder.fail_lane("sog_d10_structural_correction_shadow", error, blocking=False)
+            print(f"⚠️ combined structural-correction SOG shadow failed; production continues: {error}")
+    else:
+        recorder.finish_lane("sog_d10_structural_correction_shadow", status="SKIPPED_UNSUPPORTED_PRODUCTION_SCORER",
+            reason="STRUCTURAL_CORRECTION_SHADOW_REQUIRES_POISSON_BASELINE", database_rows_written=False,
+            provider_requests=0, credits_consumed=0)
 
     # 5b) Load SOG into nhl.predictions
     run(

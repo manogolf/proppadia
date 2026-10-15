@@ -38,6 +38,7 @@ LANE_NAMES = (
     "legacy_sog",
     "sog_fixed_blend_shadows",
     "sog_d10_d20_divergence_shadow",
+    "sog_d10_structural_correction_shadow",
     "points",
     "points_hgb_shadow",
     "saves",
