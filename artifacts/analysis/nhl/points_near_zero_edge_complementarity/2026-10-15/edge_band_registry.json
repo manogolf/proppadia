@@ -1,0 +1,74 @@
+[
+  {
+    "band": "LT_MINUS_15",
+    "lower_inclusive": null,
+    "upper_exclusive": -0.15,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "MINUS_15_TO_MINUS_10",
+    "lower_inclusive": -0.15,
+    "upper_exclusive": -0.1,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "MINUS_10_TO_MINUS_5",
+    "lower_inclusive": -0.1,
+    "upper_exclusive": -0.05,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "MINUS_5_TO_MINUS_3",
+    "lower_inclusive": -0.05,
+    "upper_exclusive": -0.03,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "NEGATIVE_NEAR_ZERO_MINUS_3_TO_MINUS_1",
+    "lower_inclusive": -0.03,
+    "upper_exclusive": -0.01,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "NEGATIVE_NEAR_ZERO_MINUS_1_TO_ZERO",
+    "lower_inclusive": -0.01,
+    "upper_exclusive": 0,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "ZERO_TO_PLUS_1",
+    "lower_inclusive": 0,
+    "upper_exclusive": 0.01,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "PLUS_1_TO_PLUS_3",
+    "lower_inclusive": 0.01,
+    "upper_exclusive": 0.03,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "PLUS_3_TO_PLUS_5",
+    "lower_inclusive": 0.03,
+    "upper_exclusive": 0.05,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "PLUS_5_TO_PLUS_10",
+    "lower_inclusive": 0.05,
+    "upper_exclusive": 0.1,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "PLUS_10_TO_PLUS_15",
+    "lower_inclusive": 0.1,
+    "upper_exclusive": 0.15,
+    "units": "probability points; multiply by 100 for percentage points"
+  },
+  {
+    "band": "GT_PLUS_15",
+    "lower_inclusive": 0.15,
+    "upper_exclusive": null,
+    "units": "probability points; multiply by 100 for percentage points"
+  }
+]

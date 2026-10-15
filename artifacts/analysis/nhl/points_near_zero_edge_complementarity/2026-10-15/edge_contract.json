@@ -1,0 +1,10 @@
+{
+  "contract": "NHL_POINTS_CONSIDERATION_FUNNEL_V1 selected-side edge",
+  "formula": "HGB selected-side probability minus raw American implied probability from that side's separately aggregated median attachment price",
+  "raw_probability_includes_vig": true,
+  "units": "probability difference; 0.01 = 1 percentage point",
+  "no_vig_market_probability": "normalize raw implied Over and Under probabilities by their sum",
+  "probability_gap": "selected-side HGB probability minus selected-side no-vig market probability",
+  "ev": "not production edge; median-price EV descriptive only, not executable",
+  "band_assignment_uses_outcomes": false
+}
