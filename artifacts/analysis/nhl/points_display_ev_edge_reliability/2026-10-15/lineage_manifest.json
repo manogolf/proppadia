@@ -1,0 +1,59 @@
+{
+  "schema_version": "NHL_POINTS_DISPLAY_EV_EDGE_RELIABILITY_V1",
+  "sources": [
+    {
+      "path": "artifacts/analysis/nhl/points_model_market_intersection_map/2026-10-15/canonical_intersection_rows.csv",
+      "sha256": "a4e66fb74580560dd6835722d9b20d1ef62988280456b44f98a5f4a26c9f375b"
+    },
+    {
+      "path": "nhl/site/data/points_with_market.csv",
+      "sha256": "9c93efab3b19c33d9d047e19e94060acfb656cf6d901b9e505be2a9856894358"
+    },
+    {
+      "path": "nhl/site/index.html",
+      "sha256": "9b7d14d5ba36b744e1cbf99195349d7a79b17d582d8b230968506cd31efbd969"
+    },
+    {
+      "path": "backend/nhl/scripts/build_points_with_market.py",
+      "sha256": "bfc93350389fc8fb34535cb14644d678f81e99b6b47a6b7cbedd10b0fecaf4f8"
+    },
+    {
+      "path": "backend/nhl/exports/odds_history/2026-10-10/points_with_market.csv",
+      "sha256": "10370ade6b0fd4d4bc4e3e1ced14cd7f81051f927345ebb8a78e4e009acf7d1f"
+    },
+    {
+      "path": "backend/nhl/exports/odds_history/2026-10-11/points_with_market.csv",
+      "sha256": "47b329d803eb93fe11e5be547540bf15a8f18786603aacc1132c88199401ba6a"
+    },
+    {
+      "path": "backend/nhl/exports/odds_history/2026-10-12/points_with_market.csv",
+      "sha256": "a8b4f79fae116cd55f467b7b418254c0e6342c96310695954eff8f58706bc6ec"
+    },
+    {
+      "path": "backend/nhl/exports/odds_history/2026-10-13/points_with_market.csv",
+      "sha256": "81008106b675e0206630f98f7ac3816bd85e45bbf44405c29e91d36d9e9e7bb5"
+    },
+    {
+      "path": "backend/nhl/exports/odds_history/2026-10-14/points_with_market.csv",
+      "sha256": "a964969cc39c394adb2ccc063c55fde56fb9556e0372de90a4d761e79a2ab0a1"
+    }
+  ],
+  "finalized_dates": [
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13",
+    "2026-10-14"
+  ],
+  "discovery_dates": [
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13"
+  ],
+  "first_prospective_date": "2026-10-14",
+  "pending_date": "2026-10-15",
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "production_db_mutations": 0
+}

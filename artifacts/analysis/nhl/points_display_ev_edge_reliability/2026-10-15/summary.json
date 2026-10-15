@@ -1,0 +1,38 @@
+{
+  "schema_version": "NHL_POINTS_DISPLAY_EV_EDGE_RELIABILITY_V1",
+  "classification": "DESCRIPTIVE_CHARACTERIZATION_COMPLETE",
+  "display_contract": "The visible Points table computes Over-side values from p_over and price_over. Selected-side outcome metrics are paired with these exact displayed Over metrics; the UI itself does not switch side based on HGB favored side.",
+  "settled_rows": 1282,
+  "settled_0_5": 714,
+  "settled_1_5": 555,
+  "pending_rows_oct15": 490,
+  "primary_0_5": {
+    "n": 714,
+    "settled_n": 714,
+    "wins": 416,
+    "losses": 298,
+    "accuracy": 0.5826330532212884,
+    "mean_model_probability": 0.7011907086462816,
+    "realized_win_rate": 0.5826330532212884,
+    "expected_losses": 213.3498340265547,
+    "observed_losses": 298,
+    "excess_losses": 84.6501659734453,
+    "excess_loss_rate": 0.11855765542499341,
+    "calibration_gap": 0.11855765542499319,
+    "hgb_brier": 0.2517982183351345,
+    "hgb_log_loss": 0.7011993815335352,
+    "market_brier": 0.22698355750841512,
+    "market_log_loss": 0.6477413345171266,
+    "average_display_ev": -0.22995175305144175,
+    "average_price": 51.07142857142857
+  },
+  "ev_edge_correlation": {
+    "group": "ALL",
+    "n": 1282,
+    "pearson": 0.2818818156874841,
+    "spearman": 0.28685964771996203
+  },
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "production_db_mutations": 0
+}

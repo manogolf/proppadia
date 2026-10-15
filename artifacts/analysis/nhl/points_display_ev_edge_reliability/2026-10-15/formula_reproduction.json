@@ -1,0 +1,9 @@
+{
+  "status": "PASS",
+  "edge_error_max": 0.0,
+  "ev_error_max": 0.0,
+  "fair_price_error_max": 0,
+  "failing_rows": 0,
+  "historical_rows_reproduced": 1284,
+  "note": "Reproduced exact attached historical Over price fields and fair price from per-date retained points_with_market.csv."
+}
