@@ -1,0 +1,6 @@
+source,finding,artifact,rows
+retained_sanity_explanation_audit,Prior study contains season/last10 hit-frequency diagnostics; these variables are not among frozen production features.,artifacts/analysis/nhl/points_sanity_explanation_audit/2026-10-14/season_hit_rate_analysis.csv,3
+current feature contract,season_point_game_hit_rate is not a production input; omitted context requires independent out-of-time testing.,NHL_POINTS_LEADER_CORE_FEATURES_V1,714
+current feature contract,last10_point_game_hit_rate is not a production input; omitted context requires independent out-of-time testing.,NHL_POINTS_LEADER_CORE_FEATURES_V1,714
+current feature contract,recent_TOI_trend is not a production input; omitted context requires independent out-of-time testing.,NHL_POINTS_LEADER_CORE_FEATURES_V1,714
+current feature contract,assist_share is not a production input; omitted context requires independent out-of-time testing.,NHL_POINTS_LEADER_CORE_FEATURES_V1,714

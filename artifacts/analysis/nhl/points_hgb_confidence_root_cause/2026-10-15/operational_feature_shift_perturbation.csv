@@ -1,0 +1,11 @@
+feature,replacement_value_2023_24_training_median,observed_2026_median,observed_2026_missing_rate,mean_expected_count_delta,mean_p_over_delta,interpretation
+is_home,0.0,1.0,0.0,-0.010714305215816887,-0.0068672690826617495,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"
+d10_sog_per60,5.608356027359786,5.879335647290773,0.004201680672268907,-0.005389626442626789,-0.00405854043446435,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"
+attempts_d10_per60,8.332874446340947,0.0,0.004201680672268907,0.10463315127586216,0.06541407825062871,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"
+player_points_last10,0.4,0.5555555555555555,0.0014005602240896359,-0.04953858841483416,-0.030185780161914737,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"
+current_season_points_prior,11.0,4.0,0.0,0.08753498272920529,0.05770017148418052,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"
+current_season_games_prior,30.0,7.0,0.0,-0.0069081588357742035,-0.006562968599338905,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"
+mean_toi_last10,16.551000000000002,17.71,0.004201680672268907,-0.020764105498674974,-0.012386838104909356,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"
+mean_pp_toi_last10,0.3139999999999999,2.313333333333333,0.023809523809523808,-0.01767659382866529,-0.009978893809556183,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"
+team_d10_sf_per_game,29.3,15.3,0.0,0.11193488205436128,0.07070736694292463,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"
+last10_team_sog_share,0.0488721804511278,0.060423512230741105,0.0,-0.03262607459666617,-0.019763235211038115,"population-wide one-feature training-median replacement; diagnostic only, not a repaired forecast"

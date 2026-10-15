@@ -1,0 +1,6 @@
+feature,band,n,mean_predicted_points,mean_realized_points,mean_count_residual,count_mae,count_rmse,point_game_rate,mean_hgb_p_over_0_5,over_calibration_gap,over_brier,over_log_loss,wins,losses,selected_realized_rate,selected_expected_rate,selected_calibration_gap,expected_losses,excess_losses,excess_loss_rate,selected_brier,market_selected_brier,hgb_minus_market_brier,under_n,over_n,same_side_n,opposite_side_n
+attempts_d10_per60,<15,711,0.3704417757196897,0.6019690576652602,0.23152728194557046,0.6221272846104027,0.835701000335895,0.4317862165963432,0.30256678367149903,-0.12921943292484417,0.25101150355678353,0.6993215159794163,415,296,0.5836849507735584,0.7007887261077002,0.11710377533414174,212.73921573742518,83.26078426257482,0.11710377533414179,0.25101150355678353,0.2273867836577496,0.023624719899033926,686,25,506,205
+attempts_d10_per60,15-25,0,,,,,,,,,,,,,,,,,,,,,,,,,
+attempts_d10_per60,25-35,0,,,,,,,,,,,,,,,,,,,,,,,,,
+attempts_d10_per60,35-45,0,,,,,,,,,,,,,,,,,,,,,,,,,
+attempts_d10_per60,45+,0,,,,,,,,,,,,,,,,,,,,,,,,,

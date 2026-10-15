@@ -1,0 +1,4 @@
+regime,n,mean_predicted_points,mean_realized_points,mean_count_residual,count_mae,count_rmse,point_game_rate,mean_hgb_p_over_0_5,over_calibration_gap,over_brier,over_log_loss,wins,losses,selected_realized_rate,selected_expected_rate,selected_calibration_gap,expected_losses,excess_losses,excess_loss_rate,selected_brier,market_selected_brier,hgb_minus_market_brier,under_n,over_n,same_side_n,opposite_side_n
+RECENT_BELOW_SEASON,0,,,,,,,,,,,,,,,,,,,,,,,,,
+NEAR_SEASON,713,0.36999618370976295,0.6016830294530154,0.23168684574325252,0.6218351830947495,0.8351186120218362,0.4319775596072931,0.30225263031625593,-0.12972492929103718,0.2513186826864696,0.7001183756859092,416,297,0.5834502103786816,0.7010934670932961,0.11764325671461451,213.1203579624799,83.87964203752011,0.11764325671461447,0.2513186826864696,0.2271410603516796,0.024177622334789987,688,25,507,206
+RECENT_ABOVE_SEASON,0,,,,,,,,,,,,,,,,,,,,,,,,,

@@ -1,0 +1,13 @@
+{
+  "classification": "MULTIFACTOR",
+  "confidence": "PROVISIONAL",
+  "preferred_direction": "repair expected-count feature representation/population if confirmed",
+  "calibration_as_primary_remediation": false,
+  "market_added_as_feature": false,
+  "candidate_families": [
+    "FEATURE_REPRESENTATION_REPAIR",
+    "FEATURE_ADDITION_JUSTIFIED",
+    "TRAINING_POPULATION_REPAIR"
+  ],
+  "no_retraining_or_production_changes": true
+}

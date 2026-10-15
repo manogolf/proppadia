@@ -1,0 +1,13 @@
+candidate,classification,evidence,limitation
+operational attempt-rate feature collapse,STRONGLY_SUPPORTED,attempts_d10_per60 is exactly 0 in all nonmissing 2026 settled rows and 100% outside training P1-P99; current captures preserve this value,"source defect is established, but its causal contribution to count residual must be isolated in time-separated validation"
+early-season cumulative-stat artifact,NOT_SUPPORTED,2025 strict-prior 0-5 games-prior residual is small; 2026 low-prior sample is sparse,does not explain the 2026 aggregate defect as a standalone cause
+season-games/points interaction,POSSIBLE,fixed season P/G x games-prior cross-tab plus actual-row counterfactual,small October sample and synthetic extrapolation
+recent-points overreaction,POSSIBLE,last10 residual map and recent-vs-season P/G,120-day season-open history is sparse
+shot-oriented proxy bias for assist-heavy players,INSUFFICIENT_EVIDENCE,prior official goals/assists merged by player; descriptive only,historical prior window and low sample
+TOI/PP role lag,INSUFFICIENT_EVIDENCE,captured average TOI/PP TOI feature bands,no retained pregame trend field in frozen feature capture
+team-context suppression,POSSIBLE,fixed team shots and share residual regimes,observational feature marginals
+sparse-history behavior,POSSIBLE,2026 low-games bands are small; 2025 strict-prior opening residual is close to zero,not a strong standalone explanation for the 2026 error
+training-distribution shift,SUPPORTED,"2023-24 training source vs 2026 captured feature quantiles, KS and approximate PSI",distribution shift does not prove harmfulness
+tree/leaf output saturation,INSUFFICIENT_EVIDENCE,unique output counts and version-coupled tree node summaries,no sample-level path attribution
+missing point-hit-frequency context,POSSIBLE,prior sanity explanation audit and omission registry,prior audit not causal and not full current prospective test
+missing assist-production context,POSSIBLE,frozen feature contract omits assists-specific recent history,current comparison is low-power

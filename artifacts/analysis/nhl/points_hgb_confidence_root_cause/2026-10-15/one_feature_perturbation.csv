@@ -1,0 +1,11 @@
+feature,cohort,n,replacement_value,mean_expected_count_delta,median_expected_count_delta,mean_p_over_delta,interpretation
+is_home,CORRECT_HIGH_CONFIDENCE_65_75,151,0.0,-0.00857101962311358,0.0,-0.006015387883287301,one-feature replacement diagnostic; not causal
+d10_sog_per60,CORRECT_HIGH_CONFIDENCE_65_75,151,6.507876796963685,-0.005525966465091048,0.0,-0.004069441929183332,one-feature replacement diagnostic; not causal
+attempts_d10_per60,CORRECT_HIGH_CONFIDENCE_65_75,151,0.0,0.0,0.0,0.0,one-feature replacement diagnostic; not causal
+player_points_last10,CORRECT_HIGH_CONFIDENCE_65_75,151,0.5555555555555555,-0.011066911601745754,-0.006287892488902935,-0.007878816747432238,one-feature replacement diagnostic; not causal
+current_season_points_prior,CORRECT_HIGH_CONFIDENCE_65_75,151,4.0,-0.0033385178002812233,0.0,-0.002328419417455673,one-feature replacement diagnostic; not causal
+current_season_games_prior,CORRECT_HIGH_CONFIDENCE_65_75,151,7.0,0.006920317777693318,0.0,0.004856920832874925,one-feature replacement diagnostic; not causal
+mean_toi_last10,CORRECT_HIGH_CONFIDENCE_65_75,151,17.255000000000003,-0.0016639916701005186,0.0,-0.002015239829353145,one-feature replacement diagnostic; not causal
+mean_pp_toi_last10,CORRECT_HIGH_CONFIDENCE_65_75,151,2.188,-2.791577092646629e-05,0.0,-2.6988169572994033e-05,one-feature replacement diagnostic; not causal
+team_d10_sf_per_game,CORRECT_HIGH_CONFIDENCE_65_75,151,15.3,0.0,0.0,0.0,one-feature replacement diagnostic; not causal
+last10_team_sog_share,CORRECT_HIGH_CONFIDENCE_65_75,151,0.065359477124183,0.01955020113708414,0.0,0.01310700768899841,one-feature replacement diagnostic; not causal
