@@ -1,40 +1,61 @@
-# NHL Points displayed EV / Edge reliability surface
+# NHL Points displayed EV / Edge reliability surface — corrected
 
-## Scope and formula contract
+## Correction and source trace
 
-This is a descriptive study only. Oct. 10–13 are `DISCOVERY_CONTEXT`; Oct. 14 is `FIRST_PROSPECTIVE_CONTEXT`; Oct. 15 is outcome-pending. Inspection of `nhl/site/index.html` shows that the visible Points table uses HGB `p_over` and the displayed Over price. It does not compute display values from the HGB selected side. Exact UI Edge is `p_over - implied(price_over)`; EV per unit is `p_over * (decimal_odds - 1) - (1 - p_over)`. American implied probability is `100/(A+100)` for plus prices and `-A/(-A+100)` for minus prices. Fair odds invert p_over and are rounded to an integer. Attached provider prices are medians. Historical values were joined to per-date retained `points_with_market.csv` files.
+The package from commit `90bf6a3b49ce28057f57d217444cd480951e859a` is superseded. Its root cause was unconditionally reading `p_over` and `price_over` while evaluating model-selected outcomes. The prior claim that positive Edge occurred in only two rows is invalid: it counted the Over-oriented tail, not the selected-side Edge population.
 
-## Primary population and results
+The retained export contains both sides (`p_over/p_under`, `price_over/price_under`, `fair_over/fair_under`, `edge_over/edge_under`). Funnel V1 selects OVER when model P(over) is at least 0.5 and UNDER otherwise; its selected production Edge is selected model probability minus raw American implied probability at the corresponding side price. The supplied six examples reproduce this side-normalized formula.
 
-Settled population: 714 Points 0.5 rows across Oct. 10–14. HGB-selected outcomes are 416–298; mean selected-side probability 70.1%, realized rate 58.3%, excess-loss rate 11.9%. HGB Brier/log loss 0.252/0.701; market 0.227/0.648.
+Repository trace (`source_trace.json`): the React board fetches `points_with_market.csv`, turns `p_over` into the line probability and puts `p_over_mkt` plus `price_over` in its market map. `bestEdgeCandidate/topPlayableEdgeRows` calculate `p_over - marketProbability`; the adapter labels the row `Over`, and does not switch to Under. The static table is also Over-oriented. Thus the correction fixtures establish the intended acceptance contract, while checked-in UI source does not implement that contract today. This study records that discrepancy and computes the requested corrected selected-side analysis; no UI source was changed.
 
-The displayed Over Edge and EV bands against selected-side outcomes:
+## Population and reproduction
 
-- Edge bands: < -15%: N=571, W-L=335-236, acc=58.7%; -15 to -10: N=297, W-L=224-73, acc=75.4%; -10 to -5: N=287, W-L=231-56, acc=80.5%; -5 to -3: N=53, W-L=46-7, acc=86.8%; -3 to -1: N=28, W-L=27-1, acc=96.4%; -1 to 0: N=12, W-L=8-4, acc=66.7%; 0 to +1: N=8, W-L=7-1, acc=87.5%; +1 to +3: N=8, W-L=4-4, acc=50.0%; +3 to +5: N=6, W-L=4-2, acc=66.7%; +5 to +10: N=10, W-L=10-0, acc=100.0%; +10 to +15: N=0, W-L=0-0, acc=0.0%; +15 to +20: N=0, W-L=0-0, acc=0.0%; +20%+: N=2, W-L=1-1, acc=50.0%
-- EV bands: < -30%: N=1013, W-L=718-295, acc=70.9%; -30 to -20: N=129, W-L=82-47, acc=63.6%; -20 to -10: N=81, W-L=52-29, acc=64.2%; -10 to -5: N=11, W-L=10-1, acc=90.9%; -5 to 0: N=14, W-L=9-5, acc=64.3%; 0 to +5: N=7, W-L=6-1, acc=85.7%; +5 to +10: N=9, W-L=5-4, acc=55.6%; +10 to +20: N=2, W-L=2-0, acc=100.0%; +20 to +30: N=8, W-L=6-2, acc=75.0%; +30 to +40: N=3, W-L=3-0, acc=100.0%; +40%+: N=5, W-L=4-1, acc=80.0%
+Historical finalized intersection: 1284 rows (714 settled 0.5 rows; 555 settled 1.5; 13 settled 2.5). At 0.5: 416–298, accuracy 58.3%, mean selected probability 70.1%, realized rate 58.3%; Edge positive/negative/zero: 585/129/0. Brier/log loss: model 0.2518/0.7012; no-vig market 0.2270/0.6477.
 
-Across all settled lines, Pearson/Spearman Edge-EV correlation is 0.282/0.287. This is low because the canonical display population pairs Over-side green metrics with selected-side outcomes and because offered prices vary widely; mathematically for an Over probability `p` and break-even `q`, `EV=(p-q)/q=Edge/q`. They are related transformations, not independent model evidence, though sorting can diverge with price. Exact formula reproduction: 1284 rows, max Edge error 0, max EV error 0, fair-price mismatches 0.
+All six supplied Cowan, Rielly, Power, Nylander, Matthews and Quinn arithmetic fixtures pass to the displayed 0.1 percentage point. Cowan Under: model probability 66.9967%, market -169, fair -203, Edge +4.2%, EV +6.6%. Historical selected-side reproduction: 1284 rows; maximum Edge error 0; maximum EV error 0; fair-price mismatches 0; orientation mismatches 0.
 
-Positive display regions are too sparse for monotonic claims: Edge >=10%, >=15%, and >=20% each have 2 settled rows (1–1); EV >=20% has 16 rows (13–3), EV >=30% 8 (7–1), EV >=40% 5 (4–1). These do not establish that more green improves accuracy. Across the Edge bands, performance is plainly non-monotonic; the positive extreme is especially sparse. EV also lacks stable monotonic evidence. Near-zero bands contain single-digit or low-double-digit samples. Line and date tables keep 0.5, 1.5, 2.5 separate and Oct. 14 separate.
+## Funnel V1 reconciliation
 
-Selected-side score comparisons, Under/Over splits, price bands, EV×Edge matrix, same/opposite-side breakouts, sort prefixes, and overlap are provided as fixed descriptive tables. Read `canonical_rows.csv` to distinguish Over display metrics from HGB-selected outcome probability. No sparse cell is promoted into a rule. Current Oct. 15 attachment contributes 490 quote-complete rows marked `PENDING_OUTCOME`.
+On the exact 658-row raw canonical 0.5 discovery population, corrected Edge < 0 matches frozen Funnel V1 negative-edge classification in 658/658 rows: 120 negative and 538 nonnegative; mismatches 0. Funnel V1 files and code were not modified. This reconciles 658 → 538 exactly.
 
-## Workflow interpretation
+## Corrected reliability surface
 
-1. More displayed Edge: not shown to be better; historical accuracy is non-monotonic and high-positive Edge has only 2 rows.
-2. More displayed EV: not shown to be better; the apparent positive tail has small samples and is price-sensitive.
-3. Where green stops helping: no stable breakpoint can be supported; do not infer one from these sparse tails.
-4. HGB overconfidence: aggregate 0.5 selected-side probability exceeds realized rate by 11.9%; interpret by fixed Edge/EV bands and date, not as a display cutoff.
-5. Under/Over and agreement: separated in `edge_by_side.csv` and `agreement_disagreement.csv`; the visible display itself is always Over-based.
-6. Price materially changes EV for a fixed Edge through `EV=Edge/q`.
-7. Both columns are related transformations, with price-dependent ranking differences.
-8. Edge/EV sorting results and top-set overlap are in `sort_prefix_metrics.csv` and `ranking_overlap.csv`.
-9. Near-zero has limited N and cannot be called more credible than extreme positive from this sample.
-10. Green should be read as model-versus-price difference under this display formula, not as validated strength.
-11. Next: continue frozen prospective collection and grade Oct. 15 after final reconciliation; do not alter UI or Funnel V1.
+| Selected-side Edge | N | W–L | Accuracy | Excess losses |
+|---|---:|---:|---:|---:|
+| < -15% | 12 | 9–3 | 75.0% | -2.6 |
+| -15 to -10 | 21 | 16–5 | 76.2% | -2.7 |
+| -10 to -5 | 34 | 24–10 | 70.6% | +0.8 |
+| -5 to -3 | 32 | 28–4 | 87.5% | -3.0 |
+| -3 to -1 | 72 | 59–13 | 81.9% | +1.9 |
+| -1 to 0 | 53 | 46–7 | 86.8% | +0.3 |
+| 0 to +1 | 73 | 57–16 | 78.1% | +7.7 |
+| +1 to +3 | 141 | 118–23 | 83.7% | +6.1 |
+| +3 to +5 | 117 | 97–20 | 82.9% | +3.5 |
+| +5 to +10 | 268 | 186–82 | 69.4% | +33.3 |
+| +10 to +15 | 212 | 134–78 | 63.2% | +30.9 |
+| +15 to +20 | 136 | 78–58 | 57.4% | +22.9 |
+| +20%+ | 111 | 45–66 | 40.5% | +35.5 |
 
-Decision classifications: displayed Edge `INSUFFICIENT_EVIDENCE`; displayed EV `INSUFFICIENT_EVIDENCE`; relationship `PARTIALLY_REDUNDANT` (same underlying probability/price pair, with price-driven rank changes). No maximum Edge/EV, preferred range, negative-edge inclusion, price requirement, confidence cap, or operational filter is created.
+| Selected-side EV | N | W–L | Accuracy | Excess losses |
+|---|---:|---:|---:|---:|
+| < -30% | 4 | 3–1 | 75.0% | -0.9 |
+| -30 to -20 | 11 | 9–2 | 81.8% | -3.1 |
+| -20 to -10 | 27 | 17–10 | 63.0% | +0.5 |
+| -10 to -5 | 39 | 31–8 | 79.5% | -2.5 |
+| -5 to 0 | 143 | 122–21 | 85.3% | +0.6 |
+| 0 to +5 | 272 | 227–45 | 83.5% | +16.8 |
+| +5 to +10 | 197 | 154–43 | 78.2% | +12.9 |
+| +10 to +20 | 265 | 163–102 | 61.5% | +48.8 |
+| +20 to +30 | 139 | 92–47 | 66.2% | +14.5 |
+| +30 to +40 | 72 | 41–31 | 56.9% | +9.7 |
+| +40%+ | 113 | 38–75 | 33.6% | +37.5 |
 
-## Guardrails and backlog
+Edge and EV are strongly related transforms of selected probability and price: overall Pearson/Spearman 0.945/0.991; 0.5 line 0.955/0.989. `EV = Edge / q`, where q is raw implied probability, so price alters ranking. Both surfaces are non-monotonic in realized accuracy, and high positive bands show poor calibration: Edge ≥20% is 96 rows; EV ≥20% is 279 rows. No threshold is supported.
 
-Funnel V1, Points production, UI behavior and filtering remain unchanged. Preserve Funnel V1 prospective validation, Oct. 15 funnel grading after final reconciliation, SOG structural-shadow grading, fixed-blend collection, official-TOI binding and deferred Puck Line work. Tier3 override remains unnecessary. Provider calls: 0; paid credits: 0; production DB mutations: 0.
+Under: 689 rows, 398–291, accuracy 57.8%; Over: 25 rows, 18–7, accuracy 72.0%. Same-side market/model agreement: 507 rows, 330–177; opposite-side: 207 rows, 86–121. These are descriptive, not promotion evidence.
+
+Price interaction appears in `price_band_metrics.csv`: accuracy declines from 80.5% at odds ≤-200 (n=816) to 17.6% at +176 or longer (n=17), with substantial confounding by selected probability and side. Top 10% Edge sort: 29–43; top 10% EV sort: 24–48. At top 20%, Edge 61–82 and EV 53–90; neither ranking improves outcomes. Top 10% Edge/EV overlap and Jaccard are in `ranking_overlap.csv`.
+
+Oct. 15 is pending: 213 quote-complete rows, 200 Under and 13 Over, no grading. All line/date, band, price, agreement and sort tables remain descriptive. The prior study’s Over-only edge/EV reliability, positive-tail scarcity, edge/EV relationship, and conclusions about where green helps are invalid; the selected-side outcomes and frozen Funnel V1 counts survive, but must be interpreted with the corrected columns. Funnel V1 is unchanged.
+
+Provider calls: 0. Paid credits: 0. Production DB mutations: 0. No operational rule or cutoff established.

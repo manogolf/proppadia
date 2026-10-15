@@ -28,6 +28,32 @@ class DisplayEVEdgeReliabilityTests(unittest.TestCase):
         self.assertAlmostEqual(study.ev_unit(p, price), edge/q)
         self.assertNotAlmostEqual(study.ev_unit(p, -250), study.ev_unit(p, 150))
 
+    def test_six_selected_side_ui_fixtures(self):
+        fixtures = [
+            (-169, -203, .066, .042), (-222, -254, .041, .028),
+            (-120, -117, -.012, -.006), (180, 142, .157, .056),
+            (-233, -177, -.087, -.061), (-130, 227, -.459, -.259),
+        ]
+        for market, fair, expected_ev, expected_edge in fixtures:
+            p = study.implied(fair)
+            self.assertEqual(study.fair_american(p), fair)
+            self.assertAlmostEqual(round(study.ev_unit(p, market) * 100, 1), round(expected_ev * 100, 1))
+            self.assertAlmostEqual(round((p-study.implied(market))*100, 1), round(expected_edge*100, 1))
+
+    def test_funnel_stage1_exact_reconciliation_and_unchanged(self):
+        result = json.loads((OUT/'funnel_stage1_reconciliation.json').read_text())
+        self.assertEqual((result['population_rows'], result['negative_edge_rows'], result['nonnegative_rows']), (658, 120, 538))
+        self.assertEqual(result['exact_matches'], 658)
+        self.assertEqual(result['mismatch_count'], 0)
+        self.assertFalse(result['funnel_v1_modified'])
+
+    def test_correction_notice_and_source_contract(self):
+        notice = (OUT/'CORRECTION_NOTICE.md').read_text()
+        self.assertIn('SUPERSEDED_DISPLAY_ORIENTATION_ERROR', notice)
+        contract = json.loads((OUT/'display_formula_contract.json').read_text())
+        self.assertIn('selected_probability', contract)
+        self.assertIn('selected_market_price', contract)
+
     def test_historical_display_formula_reproduction_passes(self):
         result = json.loads((OUT/'formula_reproduction.json').read_text())
         self.assertEqual(result['status'], 'PASS')

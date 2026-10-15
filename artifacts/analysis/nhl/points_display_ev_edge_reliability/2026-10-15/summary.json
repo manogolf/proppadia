@@ -1,11 +1,12 @@
 {
-  "schema_version": "NHL_POINTS_DISPLAY_EV_EDGE_RELIABILITY_V1",
-  "classification": "DESCRIPTIVE_CHARACTERIZATION_COMPLETE",
-  "display_contract": "The visible Points table computes Over-side values from p_over and price_over. Selected-side outcome metrics are paired with these exact displayed Over metrics; the UI itself does not switch side based on HGB favored side.",
+  "schema_version": "NHL_POINTS_DISPLAY_EV_EDGE_RELIABILITY_V2",
+  "classification": "CORRECTED_SELECTED_SIDE_DESCRIPTIVE_CHARACTERIZATION_COMPLETE",
+  "display_contract": "Research contract per correction fixtures: select p_over/price_over/fair_over/edge_over when HGB side OVER; p_under/price_under/fair_under/edge_under when UNDER. Checked-in frontend points edge cards currently read p_over and price_over; this implementation discrepancy is retained in source_trace.json.",
   "settled_rows": 1282,
   "settled_0_5": 714,
-  "settled_1_5": 555,
-  "pending_rows_oct15": 490,
+  "settled_0_5_positive_edge": 585,
+  "settled_0_5_negative_edge": 129,
+  "pending_rows_oct15": 213,
   "primary_0_5": {
     "n": 714,
     "settled_n": 714,
@@ -23,15 +24,17 @@
     "hgb_log_loss": 0.7011993815335352,
     "market_brier": 0.22698355750841512,
     "market_log_loss": 0.6477413345171266,
-    "average_display_ev": -0.22995175305144175,
-    "average_price": 51.07142857142857
+    "average_display_ev": 0.18302953848688663,
+    "average_price": -145.60994397759103
   },
   "ev_edge_correlation": {
     "group": "ALL",
     "n": 1282,
-    "pearson": 0.2818818156874841,
-    "spearman": 0.28685964771996203
+    "pearson": 0.9454630316975322,
+    "spearman": 0.9907460936474621
   },
+  "fixture_status": "PASS",
+  "historical_reproduction_status": "PASS",
   "provider_calls": 0,
   "paid_credits": 0,
   "production_db_mutations": 0

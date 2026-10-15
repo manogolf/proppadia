@@ -1,5 +1,5 @@
 {
-  "schema_version": "NHL_POINTS_DISPLAY_EV_EDGE_RELIABILITY_V1",
+  "schema_version": "NHL_POINTS_DISPLAY_EV_EDGE_RELIABILITY_V2",
   "sources": [
     {
       "path": "artifacts/analysis/nhl/points_model_market_intersection_map/2026-10-15/canonical_intersection_rows.csv",
@@ -36,6 +36,26 @@
     {
       "path": "backend/nhl/exports/odds_history/2026-10-14/points_with_market.csv",
       "sha256": "a964969cc39c394adb2ccc063c55fde56fb9556e0372de90a4d761e79a2ab0a1"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_consideration_funnel/2026-10-14/raw_canonical_population.csv",
+      "sha256": "f4dfe93e9aa418c0e41dbf5012c43a28d6edf3fda585ea7b07d24bf6f7c31320"
+    },
+    {
+      "path": "frontend/src/Pages/nhl/NHLPredictions.jsx",
+      "sha256": "c7c995de92789ba06576d553a463ec014109b52e3b7fbc6d77882dbfe7be10f9"
+    },
+    {
+      "path": "frontend/src/shared/predictionAdapters/nhlAdapter.js",
+      "sha256": "5b4eabb84ce16d0c812fe6439993eab45d7d7bc2e078b3f47d9691e4ac30526c"
+    },
+    {
+      "path": "nhl/site/known_working_index.html",
+      "sha256": "eaf34fb4a9fbf1e58e1ae0894d273c27f81c2b8f16599e808cb53a8fe8dd9d14"
+    },
+    {
+      "path": "backend/nhl/scripts/analyze_nhl_points_display_ev_edge_reliability.py",
+      "sha256": "c102204e37ae6122f4443886a7c4a5f0f328a84770edbc316fcaba5fc686c4a5"
     }
   ],
   "finalized_dates": [

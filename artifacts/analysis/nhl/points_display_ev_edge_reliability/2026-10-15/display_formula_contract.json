@@ -1,11 +1,13 @@
 {
-  "source_path": "nhl/site/index.html",
-  "price_source": "manual input > CSV price_over > median odds lookup; displayed Market Price uses CSV price_over > odds lookup and excludes manual input",
-  "market_american_to_implied": "positive: 100/(price+100); negative: -price/(-price+100)",
-  "fair_american": "round inverse odds from p_over; p>=0.5 gives negative price",
-  "edge": "p_over - implied_probability(price_for_calculation)",
-  "ev_per_unit": "p_over*(decimal_odds-1) - (1-p_over)",
-  "display_rounding": "edge to 1 decimal percentage point; EV to 3 decimals in units; fair price integer",
-  "market_aggregation": "retained price_over is provider-price median; p_over_mkt may be the builder attached probability",
-  "exact_selected_side_caveat": "UI uses Over fields, regardless of whether HGB favors Under."
+  "source_path": "backend/nhl/scripts/build_points_with_market.py -> points_with_market.csv -> frontend/src/Pages/nhl/NHLPredictions.jsx",
+  "selected_side": "OVER if p_over >= 0.5 else UNDER",
+  "selected_probability": "p_over for OVER; p_under for UNDER",
+  "selected_market_price": "price_over for OVER; price_under for UNDER",
+  "selected_fair_price": "fair_over/fair_under corresponding to side",
+  "edge": "selected_probability - raw_implied_probability(selected_market_price)",
+  "ev_per_unit": "selected_probability * decimal_odds(selected_market_price) - 1",
+  "fair_american": "inverse odds of selected_probability rounded to integer",
+  "fixture_display_rounding": "EV and Edge to one decimal percentage point; fair American integer",
+  "market_aggregation": "retained per-side prices are median provider prices",
+  "checked_in_ui_trace": "The React board edge cards currently build from p_over and market p_over_mkt, and only retain price_over; the checked-in static table also contains Over-oriented display calculations. Fixtures require selected-side semantics, so this study uses and reports that corrected semantic contract; the repository source discrepancy is documented."
 }

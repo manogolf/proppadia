@@ -1,0 +1,36 @@
+{
+  "data_path": [
+    {
+      "stage": "retained prediction and market attachment",
+      "fields": [
+        "p_over",
+        "p_under",
+        "price_over",
+        "price_under",
+        "fair_over",
+        "fair_under",
+        "edge_over",
+        "edge_under"
+      ],
+      "source": "backend/nhl/scripts/build_points_with_market.py"
+    },
+    {
+      "stage": "React board load",
+      "source": "frontend/src/Pages/nhl/NHLPredictions.jsx: matchedPointsRowsCsv, buildWideRowsFromMarketCsv, pointsMap",
+      "observed_fields": [
+        "p_over",
+        "price_over",
+        "p_over_mkt"
+      ]
+    },
+    {
+      "stage": "prediction side",
+      "source": "frontend/src/shared/predictionAdapters/nhlAdapter.js and render path",
+      "finding": "No selected-side display transformation found in checked-in React board edge calculation; bestEdgeCandidate uses p_over - marketProbability and priceOver."
+    }
+  ],
+  "fixture_contract": "Selected-side semantics required by supplied six fixtures; fields are side switched by model side. This differs from the checked-in React board calculation and should be resolved in product code separately.",
+  "stage1_formula": "selected_production_edge = model_selected_p - raw implied selected attached American price; negative_edge_flag iff selected_production_edge < 0.",
+  "stage1_source": "backend/nhl/scripts/analyze_nhl_points_consideration_funnel.py: enrich",
+  "funnel_changed": false
+}

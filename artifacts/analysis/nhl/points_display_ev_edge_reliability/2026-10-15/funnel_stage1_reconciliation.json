@@ -1,0 +1,9 @@
+{
+  "population_rows": 658,
+  "negative_edge_rows": 120,
+  "nonnegative_rows": 538,
+  "exact_matches": 658,
+  "mismatch_count": 0,
+  "funnel_v1_modified": false,
+  "mismatch_reasons": {}
+}

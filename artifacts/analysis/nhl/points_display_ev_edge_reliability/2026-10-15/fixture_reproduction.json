@@ -1,0 +1,77 @@
+{
+  "status": "PASS",
+  "fixtures": [
+    {
+      "player": "Easton Cowan",
+      "side": "UNDER",
+      "market_price": -169,
+      "fair_price": -203,
+      "model_probability": 0.66996699669967,
+      "ev": 0.0663971722616048,
+      "edge": 0.041714208595580726,
+      "expected_ev": 0.066,
+      "expected_edge": 0.042,
+      "pass": true
+    },
+    {
+      "player": "Morgan Rielly",
+      "side": "UNDER",
+      "market_price": -222,
+      "fair_price": -254,
+      "model_probability": 0.7175141242937854,
+      "ev": 0.040718684786481496,
+      "edge": 0.028073130504965516,
+      "expected_ev": 0.041,
+      "expected_edge": 0.028,
+      "pass": true
+    },
+    {
+      "player": "Owen Power",
+      "side": "UNDER",
+      "market_price": -120,
+      "fair_price": -117,
+      "model_probability": 0.5391705069124424,
+      "ev": -0.01152073732718889,
+      "edge": -0.006284038542103021,
+      "expected_ev": -0.012,
+      "expected_edge": -0.006,
+      "pass": true
+    },
+    {
+      "player": "William Nylander",
+      "side": "UNDER",
+      "market_price": 180,
+      "fair_price": 142,
+      "model_probability": 0.4132231404958678,
+      "ev": 0.15702479338842967,
+      "edge": 0.05608028335301063,
+      "expected_ev": 0.157,
+      "expected_edge": 0.056,
+      "pass": true
+    },
+    {
+      "player": "Auston Matthews",
+      "side": "OVER",
+      "market_price": -233,
+      "fair_price": -177,
+      "model_probability": 0.6389891696750902,
+      "ev": -0.08676655149439894,
+      "edge": -0.060710530024609466,
+      "expected_ev": -0.087,
+      "expected_edge": -0.061,
+      "pass": true
+    },
+    {
+      "player": "Jack Quinn",
+      "side": "OVER",
+      "market_price": -130,
+      "fair_price": 227,
+      "model_probability": 0.3058103975535168,
+      "ev": -0.45895083509762413,
+      "edge": -0.259406993750831,
+      "expected_ev": -0.459,
+      "expected_edge": -0.259,
+      "pass": true
+    }
+  ]
+}
