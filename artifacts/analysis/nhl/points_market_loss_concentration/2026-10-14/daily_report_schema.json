@@ -1,0 +1,41 @@
+{
+  "fields": [
+    "slate_date",
+    "game_id",
+    "player_id",
+    "line",
+    "expected_points",
+    "p_over",
+    "p_under",
+    "selected_side",
+    "selected_side_probability",
+    "consensus_no_vig_over",
+    "consensus_no_vig_under",
+    "selected_side_market_probability",
+    "model_minus_market_gap",
+    "selected_price_if_provider_bound",
+    "official_points_when_final",
+    "expected_loss_probability",
+    "historical_regime_n",
+    "historical_observed_loss_rate",
+    "historical_expected_loss_rate",
+    "historical_excess_losses",
+    "calibration_gap",
+    "regime_flag",
+    "season_points_per_game",
+    "season_point_game_hit_rate",
+    "last5_hit_rate",
+    "last10_hit_rate",
+    "toi_trend",
+    "pp_toi_trend"
+  ],
+  "guardrails": [
+    "No automated exclusions",
+    "Record quote provider and observation time or suppress price ROI",
+    "Show exact identity/hash binding and coverage",
+    "Separate live unresolved from final grade",
+    "Display sparse regime warning",
+    "Track history by date"
+  ],
+  "report_type": "read-only NHL Points model-market sanity report"
+}

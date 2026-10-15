@@ -1,0 +1,2 @@
+regime,definition,n,dates,share_predictions,share_losses,share_excess_losses,calibration_gap,model_minus_market_brier,status,validation
+all model-selected 0.5 rows,population baseline; not an exclusion candidate,658,2026-10-10|2026-10-11|2026-10-12|2026-10-13,1.0,1.0,1.0,-0.12239618213126569,0.02602148697818229,ONE_SLATE_OR_UNSTABLE,not available; four dates

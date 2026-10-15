@@ -1,0 +1,19 @@
+{
+  "discovery_dates": [
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13"
+  ],
+  "eligible_primary_dates": [
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13"
+  ],
+  "frozen_candidates": [],
+  "independent_unit": "slate_date",
+  "split_policy": "chronological 60/40, only if >=6 primary dates",
+  "status": "INSUFFICIENT_DATES_NO_CLAIM",
+  "validation_dates": []
+}
