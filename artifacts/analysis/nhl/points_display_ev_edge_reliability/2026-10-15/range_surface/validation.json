@@ -1,0 +1,27 @@
+{
+  "selected_side_edge_formula_max_abs_error": 0,
+  "selected_side_ev_formula_max_abs_error": 0,
+  "fixed_edge_and_ev_band_assignment": "PASS_ALL_ROWS",
+  "settled_0_5_rows": 714,
+  "wins_plus_losses": 714,
+  "under_plus_over": 714,
+  "same_plus_opposite": 714,
+  "date_counts": {
+    "2026-10-10": 198,
+    "2026-10-11": 73,
+    "2026-10-12": 36,
+    "2026-10-13": 351,
+    "2026-10-14": 56
+  },
+  "funnel_v1_reconciliation": {
+    "population_rows": 658,
+    "negative_edge_rows": 120,
+    "nonnegative_rows": 538,
+    "exact_matches": 658,
+    "mismatch_count": 0,
+    "funnel_v1_modified": false,
+    "mismatch_reasons": {}
+  },
+  "superseded_over_only_fields_used": false,
+  "status": "PASS"
+}

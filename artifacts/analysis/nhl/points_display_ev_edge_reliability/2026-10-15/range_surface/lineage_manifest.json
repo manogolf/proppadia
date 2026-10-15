@@ -1,0 +1,32 @@
+{
+  "source_commit": "93272d0c1e2538c470643ba4a34407218039c47c",
+  "sources": [
+    {
+      "path": "artifacts/analysis/nhl/points_display_ev_edge_reliability/2026-10-15/canonical_rows.csv",
+      "sha256": "7eca1d985054036ef03882875d25eabe2f6ff021b720e8d1aea20296aa5bda0f"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_display_ev_edge_reliability/2026-10-15/display_formula_contract.json",
+      "sha256": "aad52c76142150d1cefde4cedeab2f0c28756844103703ec466dd5f25a73dbad"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_display_ev_edge_reliability/2026-10-15/formula_reproduction.json",
+      "sha256": "26a8cd0e21d2af4205bd341a1bb51c2aae0b8239328f91880d6e7a8d0e0e4d01"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_display_ev_edge_reliability/2026-10-15/funnel_stage1_reconciliation.json",
+      "sha256": "690be91354dcd0360e717cf2d732fc5db757a36370fb7ed79f1819ddbdf8727b"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_display_ev_edge_reliability/2026-10-15/oct15_pending_map.csv",
+      "sha256": "6a8d1ccb7e6c6fbad93469378a8696f0988c8aedcb8f4b6cb290d07261a671aa"
+    },
+    {
+      "path": "backend/nhl/scripts/surface_nhl_points_ev_edge_ranges.py",
+      "sha256": "7e598a0a122a15f96136ed538827efcd870497283d00b53a33d03ec338c39711"
+    }
+  ],
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "production_db_mutations": 0
+}
