@@ -1,0 +1,12 @@
+{
+  "controlled_challenger_justified": true,
+  "corrected_matrix_can_preserve_other_columns": true,
+  "feature_rebuild_columns": [
+    "team_d10_sf_per_game"
+  ],
+  "frozen_incumbent_compatibility_established": false,
+  "other_training_features_changed": false,
+  "reason": "retained official team-game boxscores cover all 2023-24 and 2025 evaluation team-games used here; full historical NHL database is not needed to reconstruct this feature",
+  "source_database_rebuild_required": false,
+  "training_feature_defect_material": true
+}

@@ -1,0 +1,1276 @@
+{
+  "input_manifest_sha256": "bfadb8b1245403846e8dc7f9584d3c1a13c7974821af304674bc71636ee35d6f",
+  "manifest_summary": {
+    "completed_at_utc": "2026-10-15T22:57:21.684061+00:00",
+    "game_count": 53,
+    "game_ids": [
+      2026020053,
+      2026020054,
+      2026020055,
+      2026020056,
+      2026020057,
+      2026020058,
+      2026020059,
+      2026020060,
+      2026020061,
+      2026020062,
+      2026020063,
+      2026020064,
+      2026020065,
+      2026020066,
+      2026020067,
+      2026020068,
+      2026020069,
+      2026020070,
+      2026020071,
+      2026020072,
+      2026020073,
+      2026020074,
+      2026020075,
+      2026020076,
+      2026020077,
+      2026020078,
+      2026020079,
+      2026020080,
+      2026020081,
+      2026020082,
+      2026020083,
+      2026020084,
+      2026020085,
+      2026020086,
+      2026020087,
+      2026020088,
+      2026020089,
+      2026020090,
+      2026020091,
+      2026020092,
+      2026020093,
+      2026020094,
+      2026020095,
+      2026020096,
+      2026020097,
+      2026020098,
+      2026020099,
+      2026020100,
+      2026020101,
+      2026020102,
+      2026020103,
+      2026020104,
+      2026020105
+    ],
+    "paid_credits": 0,
+    "production_database_mutations": 0,
+    "provider": "NHL_OFFICIAL_GAMECENTER",
+    "responses": [
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 5,
+          "team_sog": 30
+        },
+        "bytes": 13280,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020053/boxscore",
+        "game_date": "2026-10-07",
+        "game_id": 2026020053,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 15,
+          "team_sog": 27
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020053/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:10.721409+00:00",
+        "sha256": "a5372e0317cf4287d5442ab5b612cdb9c5e8e1b5cd6b7e70932875a976a6f643",
+        "start_time_utc": "2026-10-07T23:30:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 21,
+          "team_sog": 34
+        },
+        "bytes": 13297,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020054/boxscore",
+        "game_date": "2026-10-07",
+        "game_id": 2026020054,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 52,
+          "team_sog": 19
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020054/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:11.059219+00:00",
+        "sha256": "1d80efe8403583cb98c2635e7a364b08a9b74aa9e1c48ee0633e8be6221fdc63",
+        "start_time_utc": "2026-10-07T23:30:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 22,
+          "team_sog": 19
+        },
+        "bytes": 13274,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020055/boxscore",
+        "game_date": "2026-10-07",
+        "game_id": 2026020055,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 24,
+          "team_sog": 31
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020055/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:11.388126+00:00",
+        "sha256": "afcc0603a8a2482e68ac427de6393845f35a3983cb1651945f08cd3d69e20b7f",
+        "start_time_utc": "2026-10-08T02:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 68,
+          "team_sog": 37
+        },
+        "bytes": 13448,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020056/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020056,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 6,
+          "team_sog": 22
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020056/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:11.536177+00:00",
+        "sha256": "cde879a8f59ef564d98330709f358693b7c0cf14adeb55fff0256b4def8ede75",
+        "start_time_utc": "2026-10-08T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 25,
+          "team_sog": 18
+        },
+        "bytes": 13062,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020057/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020057,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 7,
+          "team_sog": 26
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020057/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:11.862972+00:00",
+        "sha256": "d1c69006e00c77dab306347d3f14f6525ee851f746ccbbcd8eab8958f72880c8",
+        "start_time_utc": "2026-10-08T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 18,
+          "team_sog": 20
+        },
+        "bytes": 13332,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020058/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020058,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 8,
+          "team_sog": 33
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020058/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:12.211742+00:00",
+        "sha256": "b1c4a387d791017ab60b8337034a3cfd73c9f7c5493bef32772211a7a5ec2b01",
+        "start_time_utc": "2026-10-08T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 4,
+          "team_sog": 29
+        },
+        "bytes": 13327,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020059/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020059,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 9,
+          "team_sog": 26
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020059/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:12.433110+00:00",
+        "sha256": "423029173d0a1dda36b1d1293ca51aed3b67a656956341f425902397fcdccd25",
+        "start_time_utc": "2026-10-08T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 30,
+          "team_sog": 36
+        },
+        "bytes": 13458,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020060/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020060,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 14,
+          "team_sog": 35
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020060/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:12.849464+00:00",
+        "sha256": "bc4a8ec0ccb11aefe02b3f2d4dd36988f7524ee29b3185dbc73d29fa950b3aaa",
+        "start_time_utc": "2026-10-08T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 23,
+          "team_sog": 20
+        },
+        "bytes": 13377,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020061/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020061,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 12,
+          "team_sog": 33
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020061/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:13.197055+00:00",
+        "sha256": "ec00c0fadfccd8e0bac6a06dd7af9986dc295c4e2b012e26630f149cadb7f83e",
+        "start_time_utc": "2026-10-08T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 16,
+          "team_sog": 23
+        },
+        "bytes": 13275,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020062/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020062,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 2,
+          "team_sog": 19
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020062/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:13.350130+00:00",
+        "sha256": "61dc75161041773dd633300cd691d67ebe522589a2d9b1a0b9068106fa8cdd39",
+        "start_time_utc": "2026-10-08T23:30:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 28,
+          "team_sog": 27
+        },
+        "bytes": 13347,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020063/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020063,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 19,
+          "team_sog": 26
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020063/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:13.721000+00:00",
+        "sha256": "06ba41e973dbebfa4ad8047a22734757c25f4d6fd88325b5b8835407810265c8",
+        "start_time_utc": "2026-10-09T00:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 21,
+          "team_sog": 30
+        },
+        "bytes": 13340,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020064/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020064,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 20,
+          "team_sog": 29
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020064/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:14.055213+00:00",
+        "sha256": "1bbb3d5274e403be4c3dd0d148b4c3d864f6e3a8b7ed81e1c6f0f9e83fd8f5ab",
+        "start_time_utc": "2026-10-09T01:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 10,
+          "team_sog": 24
+        },
+        "bytes": 13297,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020065/boxscore",
+        "game_date": "2026-10-08",
+        "game_id": 2026020065,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 54,
+          "team_sog": 43
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020065/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:14.376912+00:00",
+        "sha256": "d1574dc9ebcf43797405f1e444eb759e47fe87225d0f2136bc6ced6169066ad0",
+        "start_time_utc": "2026-10-09T02:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 55,
+          "team_sog": 24
+        },
+        "bytes": 13286,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020066/boxscore",
+        "game_date": "2026-10-09",
+        "game_id": 2026020066,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 17,
+          "team_sog": 40
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020066/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:14.574904+00:00",
+        "sha256": "20a69e367f04b471ed83d4b4a19a6dcf5aa391a5063127f82f6003c27a32a2bd",
+        "start_time_utc": "2026-10-09T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 3,
+          "team_sog": 22
+        },
+        "bytes": 13420,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020067/boxscore",
+        "game_date": "2026-10-09",
+        "game_id": 2026020067,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 15,
+          "team_sog": 27
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020067/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:14.864500+00:00",
+        "sha256": "a66341d4f9a63ec60777af53338e937f28031e8a831422021cbc96d6b163d238",
+        "start_time_utc": "2026-10-09T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 5,
+          "team_sog": 22
+        },
+        "bytes": 13498,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020068/boxscore",
+        "game_date": "2026-10-09",
+        "game_id": 2026020068,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 29,
+          "team_sog": 47
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020068/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:15.014774+00:00",
+        "sha256": "dcd40857c9977ce4744d1100388e1fde966352aa311d39da1995a10676869494",
+        "start_time_utc": "2026-10-09T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 24,
+          "team_sog": 17
+        },
+        "bytes": 13524,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020069/boxscore",
+        "game_date": "2026-10-09",
+        "game_id": 2026020069,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 52,
+          "team_sog": 17
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020069/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:15.160413+00:00",
+        "sha256": "f8c5833ba040c453a0c75feb49819c323d43e2ffc6aa299ea90afdcda784db50",
+        "start_time_utc": "2026-10-10T00:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 4,
+          "team_sog": 15
+        },
+        "bytes": 13696,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020070/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020070,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 6,
+          "team_sog": 32
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020070/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:15.508573+00:00",
+        "sha256": "0c1f4490a272ef1790c328fed02bbe9a278800d3d1f96735d767cd89e17e981f",
+        "start_time_utc": "2026-10-10T17:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 23,
+          "team_sog": 21
+        },
+        "bytes": 13185,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020071/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020071,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 1,
+          "team_sog": 37
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020071/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:15.652259+00:00",
+        "sha256": "157300b0104e6122fd2e2fe4b1c0268c8545b077bf82068e8ca47990c3b59061",
+        "start_time_utc": "2026-10-10T19:30:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 22,
+          "team_sog": 20
+        },
+        "bytes": 13177,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020072/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020072,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 28,
+          "team_sog": 20
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020072/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:15.807994+00:00",
+        "sha256": "4586f8362360de77137537d10f77e64abdd265d7e4741251bfe56bb175abe2b8",
+        "start_time_utc": "2026-10-10T20:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 30,
+          "team_sog": 29
+        },
+        "bytes": 13405,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020073/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020073,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 13,
+          "team_sog": 30
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020073/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:15.965739+00:00",
+        "sha256": "e1d0feec429b5ca1f740be1a7135b18bf4145cf5f1b198c088d320635561eed8",
+        "start_time_utc": "2026-10-10T22:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 68,
+          "team_sog": 30
+        },
+        "bytes": 13196,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020074/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020074,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 7,
+          "team_sog": 24
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020074/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:16.116956+00:00",
+        "sha256": "acc37e391aad826101cd1a0b45a8b6e0edcb7fff4291fdded6051307f44ff4f7",
+        "start_time_utc": "2026-10-10T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 17,
+          "team_sog": 30
+        },
+        "bytes": 13172,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020075/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020075,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 8,
+          "team_sog": 30
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020075/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:16.262469+00:00",
+        "sha256": "72e8fbf81e8516f7dc8daa93857e79f8af72956242358fa16ac8fbfb96ae6ecf",
+        "start_time_utc": "2026-10-10T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 18,
+          "team_sog": 18
+        },
+        "bytes": 13339,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020076/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020076,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 9,
+          "team_sog": 20
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020076/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:16.435910+00:00",
+        "sha256": "2d35f54156dfcbfa853ce7062785eb11ec821b94b6cf780ab65927b461c98183",
+        "start_time_utc": "2026-10-10T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 25,
+          "team_sog": 25
+        },
+        "bytes": 13195,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020077/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020077,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 5,
+          "team_sog": 21
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020077/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:16.580872+00:00",
+        "sha256": "9b9d4a7d402cbede2e436921523a37eb2e0ec6d2cc7147c3530ae20c294e6cfb",
+        "start_time_utc": "2026-10-10T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 12,
+          "team_sog": 39
+        },
+        "bytes": 13447,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020078/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020078,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 16,
+          "team_sog": 26
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020078/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:16.731720+00:00",
+        "sha256": "a8d288a74d4e39e4ee383391dc446a7e154738b5cb31eacf2b8a53ee65de136a",
+        "start_time_utc": "2026-10-10T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 29,
+          "team_sog": 23
+        },
+        "bytes": 13402,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020079/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020079,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 19,
+          "team_sog": 27
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020079/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:16.870154+00:00",
+        "sha256": "a9d76ae804aee4704d72686f837532e79933d5dde0dd45da12a2ccf630fa59cd",
+        "start_time_utc": "2026-10-10T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 10,
+          "team_sog": 23
+        },
+        "bytes": 13350,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020080/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020080,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 21,
+          "team_sog": 33
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020080/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:17.006925+00:00",
+        "sha256": "e6c8f93fe082ada41617d02b62615d7d474d3d139253f824ba9caa9b5df76e5f",
+        "start_time_utc": "2026-10-10T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 14,
+          "team_sog": 26
+        },
+        "bytes": 13434,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020081/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020081,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 2,
+          "team_sog": 23
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020081/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:17.164364+00:00",
+        "sha256": "404fd5a1d2aa4d56514b83343d4e8a07e187700815854609ac8546dcb3b5e22b",
+        "start_time_utc": "2026-10-10T23:30:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 24,
+          "team_sog": 28
+        },
+        "bytes": 13456,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020082/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020082,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 20,
+          "team_sog": 29
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020082/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:17.326847+00:00",
+        "sha256": "b1778a6872fe55d2c1bb22fcf9f2fe04e01598648bc963a96484b1c705d5d223",
+        "start_time_utc": "2026-10-11T02:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 26,
+          "team_sog": 27
+        },
+        "bytes": 13133,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020083/boxscore",
+        "game_date": "2026-10-10",
+        "game_id": 2026020083,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 54,
+          "team_sog": 32
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020083/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:17.477518+00:00",
+        "sha256": "1022ec9b0b844808fce18507d9102515941b90f646a10f605694463684c778f8",
+        "start_time_utc": "2026-10-11T02:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 55,
+          "team_sog": 27
+        },
+        "bytes": 13428,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020084/boxscore",
+        "game_date": "2026-10-11",
+        "game_id": 2026020084,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 15,
+          "team_sog": 36
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020084/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:17.643297+00:00",
+        "sha256": "3cb0f3cadbd22cec4fa2305856cdfdd56c477dbe65d2a913d67b1b0102cd6ad3",
+        "start_time_utc": "2026-10-11T21:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 23,
+          "team_sog": 21
+        },
+        "bytes": 13238,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020085/boxscore",
+        "game_date": "2026-10-11",
+        "game_id": 2026020085,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 3,
+          "team_sog": 25
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020085/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:17.793125+00:00",
+        "sha256": "132e81ad7a60234a86963233084d3dc7ca8853b9f4669fc4e1bddc4da9f26013",
+        "start_time_utc": "2026-10-11T22:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 12,
+          "team_sog": 30
+        },
+        "bytes": 13791,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020086/boxscore",
+        "game_date": "2026-10-11",
+        "game_id": 2026020086,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 4,
+          "team_sog": 19
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020086/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:17.945005+00:00",
+        "sha256": "67b18e780186e9ed3fddad65e2ede0fb742214205d934ffef0d7a9d738861c28",
+        "start_time_utc": "2026-10-11T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 13,
+          "team_sog": 23
+        },
+        "bytes": 13372,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020087/boxscore",
+        "game_date": "2026-10-12",
+        "game_id": 2026020087,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 7,
+          "team_sog": 32
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020087/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:18.125798+00:00",
+        "sha256": "bdacf4446bb39b14c24817abdeb38be14edb2c5394afae524d440e8ef4eebcfa",
+        "start_time_utc": "2026-10-12T17:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 9,
+          "team_sog": 20
+        },
+        "bytes": 13268,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020088/boxscore",
+        "game_date": "2026-10-12",
+        "game_id": 2026020088,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 1,
+          "team_sog": 30
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020088/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:18.275271+00:00",
+        "sha256": "ecd4747832cb72e34e067566607eb021d009cce611a23597fa5da7076e19db19",
+        "start_time_utc": "2026-10-12T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 54,
+          "team_sog": 23
+        },
+        "bytes": 13344,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020089/boxscore",
+        "game_date": "2026-10-12",
+        "game_id": 2026020089,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 30,
+          "team_sog": 28
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020089/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:18.424059+00:00",
+        "sha256": "603f166b615c40b49389583af829938fd69c045f3bd50779c6dd3a53a6be19dc",
+        "start_time_utc": "2026-10-13T00:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 1,
+          "team_sog": 37
+        },
+        "bytes": 13125,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020090/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020090,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 17,
+          "team_sog": 27
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020090/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:18.574311+00:00",
+        "sha256": "a95de67ba0014bebb11e4b6a9b82ea67685680aaf96387e111c9e0ce3ff5ccc7",
+        "start_time_utc": "2026-10-13T22:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 13,
+          "team_sog": 28
+        },
+        "bytes": 13283,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020091/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020091,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 29,
+          "team_sog": 27
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020091/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:18.723501+00:00",
+        "sha256": "230456e81f920fdc2af8caec25e298e4405aaf9aec1d7f1bc02342d710b25528",
+        "start_time_utc": "2026-10-13T22:15:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 7,
+          "team_sog": 16
+        },
+        "bytes": 13158,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020092/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020092,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 8,
+          "team_sog": 38
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020092/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:18.868332+00:00",
+        "sha256": "ffdbcafedbcaf47fa1620bc6a5222dcd99e426ed7fdca7a7cf38c133eebb333d",
+        "start_time_utc": "2026-10-13T22:30:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 15,
+          "team_sog": 22
+        },
+        "bytes": 13364,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020093/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020093,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 12,
+          "team_sog": 35
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020093/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:19.016262+00:00",
+        "sha256": "064bf8b52bd5e92575a7b8c1d2e702e65837264dac86bc085525d6b296d84cf5",
+        "start_time_utc": "2026-10-13T22:45:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 55,
+          "team_sog": 31
+        },
+        "bytes": 13427,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020094/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020094,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 4,
+          "team_sog": 26
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020094/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:19.161506+00:00",
+        "sha256": "ab769b4da185e206485246169c1d70be73f06777506e639e758f491713ba6e60",
+        "start_time_utc": "2026-10-13T23:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 14,
+          "team_sog": 26
+        },
+        "bytes": 13429,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020095/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020095,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 3,
+          "team_sog": 23
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020095/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:19.320505+00:00",
+        "sha256": "ebd6fc425a245667c9e397dacebaee3b7ebd8d4a8c17a1f61b942d9f2fa7f3da",
+        "start_time_utc": "2026-10-13T23:15:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 19,
+          "team_sog": 26
+        },
+        "bytes": 13345,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020096/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020096,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 9,
+          "team_sog": 18
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020096/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:19.465950+00:00",
+        "sha256": "f6a610efa0be2a1ecfc1356a0476c4263a6f425e64e4736e182d9cabc250de7c",
+        "start_time_utc": "2026-10-13T23:30:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 23,
+          "team_sog": 26
+        },
+        "bytes": 13278,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020097/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020097,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 2,
+          "team_sog": 38
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020097/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:19.612691+00:00",
+        "sha256": "6b5079f03adbba123c9fb5508fa06bb10ac1b4b2336f30444590d60e8574de2b",
+        "start_time_utc": "2026-10-13T23:45:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 5,
+          "team_sog": 27
+        },
+        "bytes": 13357,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020098/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020098,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 16,
+          "team_sog": 20
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020098/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:19.763665+00:00",
+        "sha256": "cdf5032698f0fa447796542226682704be932d756a326f3ca85410b4d4c4fc1d",
+        "start_time_utc": "2026-10-14T00:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 30,
+          "team_sog": 21
+        },
+        "bytes": 13478,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020099/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020099,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 52,
+          "team_sog": 25
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020099/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:19.907381+00:00",
+        "sha256": "41e9402586817c097e90b1592f1e4be5ef3be9cb7d9c24ca2807b01f6b9e944c",
+        "start_time_utc": "2026-10-14T00:15:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 21,
+          "team_sog": 25
+        },
+        "bytes": 13189,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020100/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020100,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 25,
+          "team_sog": 26
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020100/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:20.056313+00:00",
+        "sha256": "dcfcd47729e8e063ccb7ae829b5e74cd2b50ab01656db13538dded6ecc994594",
+        "start_time_utc": "2026-10-14T00:30:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 54,
+          "team_sog": 25
+        },
+        "bytes": 13287,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020101/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020101,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 18,
+          "team_sog": 28
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020101/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:20.411484+00:00",
+        "sha256": "cdec46efa662ad6394326a104d564cdfba12c040015dbd7c4ff24beee2ec3722",
+        "start_time_utc": "2026-10-14T00:45:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 10,
+          "team_sog": 26
+        },
+        "bytes": 13391,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020102/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020102,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 68,
+          "team_sog": 28
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020102/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:20.729579+00:00",
+        "sha256": "422fb001ca0c86fa88720782d181f541930185ecb74ebb643f62f8ac4ed15af0",
+        "start_time_utc": "2026-10-14T01:00:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 20,
+          "team_sog": 36
+        },
+        "bytes": 13441,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020103/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020103,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 24,
+          "team_sog": 25
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020103/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:21.044824+00:00",
+        "sha256": "b5fdf861a154f371dc7a607eb9128524ad9f65c33326be9226bdbf016ff88d82",
+        "start_time_utc": "2026-10-14T01:45:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 22,
+          "team_sog": 17
+        },
+        "bytes": 13182,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020104/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020104,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 26,
+          "team_sog": 40
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020104/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:21.359545+00:00",
+        "sha256": "fff7dd97320b12e99c72ff926c67161041e294f52efa1dded47ea46442671ee0",
+        "start_time_utc": "2026-10-14T02:30:00Z"
+      },
+      {
+        "attempt": 1,
+        "away": {
+          "team_id": 6,
+          "team_sog": 26
+        },
+        "bytes": 13397,
+        "endpoint": "https://api-web.nhle.com/v1/gamecenter/2026020105/boxscore",
+        "game_date": "2026-10-13",
+        "game_id": 2026020105,
+        "game_state": "OFF",
+        "home": {
+          "team_id": 28,
+          "team_sog": 38
+        },
+        "http_status": 200,
+        "method": "OFFICIAL_FREE_NHL_GAMECENTER",
+        "raw_path": "artifacts/analysis/nhl/points_team_shots_two_sided_lineage_audit/2026-10-15/official_boxscore_reconciliation_raw/season=2026/game=2026020105/boxscore.json",
+        "request_timestamp_utc": "2026-10-15T22:57:21.521730+00:00",
+        "sha256": "909dab78889d6887a2d26b5e9223c5927ee17728767e0c6a51e7f3250396ab1b",
+        "start_time_utc": "2026-10-14T03:00:00Z"
+      }
+    ],
+    "schema_version": "NHL_POINTS_TEAM_SHOTS_OFFICIAL_BOXSCORE_ACQUISITION_V1",
+    "scope": "completed regular-season games 2026-10-07 through 2026-10-13",
+    "team_game_rows": 106
+  },
+  "official_completed_games_by_season": {
+    "2023": 1312,
+    "2024": 1312,
+    "2025": 1312,
+    "2026": 5
+  },
+  "official_source_game_date_range": {
+    "2023": {
+      "max": "2024-04-18",
+      "min": "2023-10-10"
+    },
+    "2024": {
+      "max": "2025-04-17",
+      "min": "2024-10-04"
+    },
+    "2025": {
+      "max": "2026-04-16",
+      "min": "2025-10-07"
+    },
+    "2026": {
+      "max": "2026-09-29",
+      "min": "2026-09-29"
+    }
+  },
+  "official_team_game_rows_by_season": {
+    "2023": 2624,
+    "2024": 2624,
+    "2025": 2624,
+    "2026": 10
+  },
+  "reconciliation_file_sha256": "b78609995e4d16ed95a69a31f21b6a5acbae346bb8d91423b7c36a31533c760b",
+  "reconstructed_training_rows_source_supported": 90486,
+  "retained_player_source_complete_team_games_by_period": {
+    "TRAIN_2023_2024": 5028
+  },
+  "retained_player_source_reconciliation_rows_by_period": {
+    "TRAIN_2023_2024": 5028
+  },
+  "source_file_sha256": "05221fe1a5fad7deee3396b9dadc9300e973ed984f3a12bcad24ba58423bd1dc",
+  "source_period_rule": "official completed regular-season team totals retained in audited boxscore source; source rows are per physical team and game"
+}

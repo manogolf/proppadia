@@ -1,0 +1,702 @@
+{
+  "evidence_preservation_status": "PREGAME_EVIDENCE_CAPTURE_DESIGNED_NOT_INSTALLED",
+  "historical_reconstruction_status": "HISTORICAL_FEATURE_DEFECT_MATERIAL",
+  "metrics": {
+    "2025_holdout": {
+      "changed_feature_rows_with_prior_skater_sum_difference": 16170,
+      "changed_feature_rows_without_identified_prior_skater_sum_difference": 0,
+      "changed_rows": 16170,
+      "exact_agreement_percentage": 65.76980884438706,
+      "feature_discrepancy_source_classes": {
+        "PRIOR_SKATER_SUM_DIFF_PRESENT": 16170,
+        "UNCHANGED": 31069
+      },
+      "maximum_absolute_difference": 4.5,
+      "mean_absolute_difference": 0.19953488794065438,
+      "original_feature_mean": 27.427951027147667,
+      "reconstructed_feature_mean": 27.59930580966695,
+      "rows": 47239,
+      "source_supported_rows": 47239,
+      "team_game_difference_classes": {
+        "INCOMPLETE_SKATER_COVERAGE": 203,
+        "PLAYER_POPULATION_EXCESS_UNEXPLAINED": 5,
+        "SOURCE_TOTAL_DIFFERENCE_UNEXPLAINED": 60
+      },
+      "team_game_total_difference_rate": 0.10260336906584992,
+      "team_game_total_differences": 268,
+      "unchanged_rows": 31069
+    },
+    "frozen_hgb_sensitivity": {
+      "deterministic_replay": "PASS",
+      "deterministic_replay_max_abs_error": 2.220446049250313e-16,
+      "holdout_2025_corrected_feature": {
+        "mean_count_residual_realized_minus_expected": 9.034773729534356e-05,
+        "mean_expected_points": 0.4601437808429032,
+        "mean_realized_points": 0.4602341285801986,
+        "n": 47239,
+        "over_0_5_brier": 0.20676949771538358,
+        "over_0_5_log_loss": 0.6015817415205742
+      },
+      "holdout_2025_discrepancy_bands": {
+        "(0,2]": {
+          "corrected_feature": {
+            "mean_count_residual_realized_minus_expected": 0.0003479056632347007,
+            "mean_expected_points": 0.45629601244194395,
+            "mean_realized_points": 0.4566439181051786,
+            "n": 14946,
+            "over_0_5_brier": 0.20669888112531298,
+            "over_0_5_log_loss": 0.601603588874412
+          },
+          "mean_abs_feature_difference": 0.39439649404522953,
+          "original": {
+            "mean_count_residual_realized_minus_expected": 0.0021733063501115997,
+            "mean_expected_points": 0.4544706117550671,
+            "mean_realized_points": 0.4566439181051786,
+            "n": 14946,
+            "over_0_5_brier": 0.20665786283531112,
+            "over_0_5_log_loss": 0.6015338472653329
+          },
+          "rows": 14946
+        },
+        "(2,5]": {
+          "corrected_feature": {
+            "mean_count_residual_realized_minus_expected": -0.04220235864391221,
+            "mean_expected_points": 0.4351762148530625,
+            "mean_realized_points": 0.3929738562091503,
+            "n": 1224,
+            "over_0_5_brier": 0.2133090358306856,
+            "over_0_5_log_loss": 0.616597136646118
+          },
+          "mean_abs_feature_difference": 2.884949813258636,
+          "original": {
+            "mean_count_residual_realized_minus_expected": -0.02310691824956314,
+            "mean_expected_points": 0.4160807744587135,
+            "mean_realized_points": 0.3929738562091503,
+            "n": 1224,
+            "over_0_5_brier": 0.21280281761192776,
+            "over_0_5_log_loss": 0.6157425949314023
+          },
+          "rows": 1224
+        },
+        "UNCHANGED": {
+          "corrected_feature": {
+            "mean_count_residual_realized_minus_expected": 0.0016326185490211276,
+            "mean_expected_points": 0.4629784085197613,
+            "mean_realized_points": 0.4646110270687824,
+            "n": 31069,
+            "over_0_5_brier": 0.20654583557312167,
+            "over_0_5_log_loss": 0.6009796824203739
+          },
+          "mean_abs_feature_difference": 0.0,
+          "original": {
+            "mean_count_residual_realized_minus_expected": 0.0016326185490211276,
+            "mean_expected_points": 0.4629784085197613,
+            "mean_realized_points": 0.4646110270687824,
+            "n": 31069,
+            "over_0_5_brier": 0.20654583557312167,
+            "over_0_5_log_loss": 0.6009796824203739
+          },
+          "rows": 31069
+        }
+      },
+      "holdout_2025_original": {
+        "mean_count_residual_realized_minus_expected": 0.0011626663238180324,
+        "mean_expected_points": 0.4590714622563805,
+        "mean_realized_points": 0.4602341285801986,
+        "n": 47239,
+        "over_0_5_brier": 0.20674340337676234,
+        "over_0_5_log_loss": 0.6015375340405661
+      },
+      "model_identity_sha256": "a53f43d5caea9a64ee8e6d48daf8072e0332b629998242639b2ba15be743e5c2",
+      "model_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+      "only_changed_feature": "team_d10_sf_per_game",
+      "scaler_identity_sha256": "611685ae22c0c0a5883c6deeee1897cad9de268d796071b57f1695376995562d",
+      "training_replay_role": "TRAINING_ROWS_MODEL_RESPONSE_INSPECTION_NOT_OUT_OF_TIME_EVALUATION"
+    },
+    "identity_2023": {
+      "conflicted_mapping_edge_count": 3,
+      "conflicted_raw_id_season_pairs": [
+        {
+          "canonical_team_id": 12,
+          "original_training_team_id": 5,
+          "resolution": "CONFLICTED_RAW_ID_TO_PHYSICAL_TEAM_MAPPING",
+          "rows": 1476
+        },
+        {
+          "canonical_team_id": 26,
+          "original_training_team_id": 14,
+          "resolution": "CONFLICTED_RAW_ID_TO_PHYSICAL_TEAM_MAPPING",
+          "rows": 1475
+        },
+        {
+          "canonical_team_id": 8,
+          "original_training_team_id": 16,
+          "resolution": "CONFLICTED_RAW_ID_TO_PHYSICAL_TEAM_MAPPING",
+          "rows": 1476
+        }
+      ],
+      "conflicted_raw_ids": [
+        5,
+        14,
+        16
+      ],
+      "minority_mapping_assignments": 54,
+      "missing_team_id_source_rows": 118,
+      "opening_week_cases": [
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8470613
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8473533
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8475200
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8475855
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8476474
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8476869
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8476882
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8476921
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8476958
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8477488
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8477950
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8478047
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8478427
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8478970
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8480039
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8480829
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8480835
+        },
+        {
+          "canonical_team_id": 12,
+          "game_date": "2023-10-11",
+          "game_id": 2023020004,
+          "original_team_d10_sf_per_game": 41.0,
+          "original_training_team_id": 5,
+          "player_id": 8482093
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8475233
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8475848
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8476871
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8476875
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8476981
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8477497
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8478133
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8480018
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8480192
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8480887
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8481058
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8481093
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8481523
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8481540
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8481618
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8482087
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8482964
+        },
+        {
+          "canonical_team_id": 8,
+          "game_date": "2023-10-11",
+          "game_id": 2023020005,
+          "original_team_d10_sf_per_game": 36.0,
+          "original_training_team_id": 16,
+          "player_id": 8483515
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8471685
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8473453
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8474563
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8476479
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8477942
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8477960
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8477971
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8478882
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8478911
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8479336
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8479400
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8479675
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8479998
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8481481
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8481600
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8482124
+        },
+        {
+          "canonical_team_id": 26,
+          "game_date": "2023-10-11",
+          "game_id": 2023020008,
+          "original_team_d10_sf_per_game": 34.0,
+          "original_training_team_id": 14,
+          "player_id": 8482155
+        }
+      ],
+      "opening_week_nonzero_without_prior_history": 53,
+      "prior_audit_source_log_numeric_id_checked": 8043,
+      "prior_audit_source_log_numeric_id_mismatches": 2194,
+      "rows_across_disputed_raw_ids": 4481,
+      "stable_alias_rows": 39634,
+      "training_frame_identifier_value_differences_not_assumed_corruption": 44179
+    },
+    "production_mutations": {
+      "authority_changes": 0,
+      "database_writes": 0,
+      "funnel_changes": 0,
+      "prediction_changes": 0,
+      "production_code_changes": 0
+    },
+    "providers": {
+      "additional_official_provider_requests": 0,
+      "paid_odds_credits": 0
+    },
+    "rebuild_scope": {
+      "controlled_challenger_justified": true,
+      "corrected_matrix_can_preserve_other_columns": true,
+      "feature_rebuild_columns": [
+        "team_d10_sf_per_game"
+      ],
+      "frozen_incumbent_compatibility_established": false,
+      "other_training_features_changed": false,
+      "reason": "retained official team-game boxscores cover all 2023-24 and 2025 evaluation team-games used here; full historical NHL database is not needed to reconstruct this feature",
+      "source_database_rebuild_required": false,
+      "training_feature_defect_material": true
+    },
+    "training_overall": {
+      "changed_dates": 328,
+      "changed_percentage": 33.7588135181133,
+      "changed_player_games": 30547,
+      "changed_rows": 30547,
+      "changed_teams": 32,
+      "early_vs_mature": {
+        "EARLY_FIRST_30_DAYS": {
+          "changed": 3473,
+          "rows": 13061
+        },
+        "MATURE_DAY_30_PLUS": {
+          "changed": 27074,
+          "rows": 77425
+        }
+      },
+      "feature_discrepancy_source_classes": {
+        "NO_PRIOR_SKATER_SUM_DIFF_IDENTIFIED": 14169,
+        "PRIOR_SKATER_SUM_DIFF_PRESENT": 16378,
+        "UNCHANGED": 59939
+      },
+      "history_depth": {
+        "0": {
+          "changed": 53,
+          "rows": 1094
+        },
+        "1-2": {
+          "changed": 468,
+          "rows": 2231
+        },
+        "10": {
+          "changed": 27669,
+          "rows": 79351
+        },
+        "3-5": {
+          "changed": 828,
+          "rows": 3348
+        },
+        "6-9": {
+          "changed": 1529,
+          "rows": 4462
+        }
+      },
+      "maximum_absolute_difference": 41.0,
+      "mean_absolute_difference": 0.3105497158378267,
+      "original_feature_mean": 28.970698904925747,
+      "reconstructed_feature_mean": 29.03298709894261,
+      "rows": 90486,
+      "source_supported_rows": 90486,
+      "unchanged_rows": 59939,
+      "unsupported_rows": 0
+    },
+    "training_rows": 90486,
+    "training_seasons": {
+      "2023": {
+        "changed_dates": 161,
+        "changed_percentage": 19.180025835962812,
+        "changed_rows": 9057,
+        "changed_teams": 25,
+        "maximum_absolute_difference": 41.0,
+        "mean_absolute_difference": 0.26980311759329567,
+        "opening_week_nonzero_without_prior_history": 53,
+        "original_feature_mean": 29.848668049559603,
+        "reconstructed_feature_mean": 29.990661371739705,
+        "rows": 47221,
+        "source_supported_rows": 47221,
+        "training_only_inspection_corrected_expected_mean": 0.45648493889054736,
+        "training_only_inspection_original_expected_mean": 0.4561921423146583,
+        "unchanged_rows": 38164,
+        "unsupported_rows": 0
+      },
+      "2024": {
+        "changed_dates": 167,
+        "changed_percentage": 49.67063446203629,
+        "changed_rows": 21490,
+        "changed_teams": 31,
+        "maximum_absolute_difference": 27.0,
+        "mean_absolute_difference": 0.35502204025028483,
+        "opening_week_nonzero_without_prior_history": 0,
+        "original_feature_mean": 28.01245133809909,
+        "reconstructed_feature_mean": 27.987746446319193,
+        "rows": 43265,
+        "source_supported_rows": 43265,
+        "training_only_inspection_corrected_expected_mean": 0.4505892419952127,
+        "training_only_inspection_original_expected_mean": 0.45071038647414696,
+        "unchanged_rows": 21775,
+        "unsupported_rows": 0
+      }
+    }
+  },
+  "official_source_request_counts": {
+    "additional_requests": 0,
+    "paid_credits": 0
+  },
+  "schema_version": "NHL_POINTS_HISTORICAL_TEAM_SHOTS_RECONSTRUCTION_V1",
+  "source_file_sha256": {
+    "frozen_model": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+    "official_source_reconciliation": "b78609995e4d16ed95a69a31f21b6a5acbae346bb8d91423b7c36a31533c760b",
+    "official_team_games": "05221fe1a5fad7deee3396b9dadc9300e973ed984f3a12bcad24ba58423bd1dc",
+    "training_frame": "45605af7f472481af4d5a33a103b679ab4284db5d043f82842757297a3534892"
+  }
+}

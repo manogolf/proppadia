@@ -5,6 +5,7 @@ Input rows must be independently sourced official team-game SOG records.
 """
 from __future__ import annotations
 
+from bisect import bisect_left
 from collections.abc import Mapping
 
 import pandas as pd
@@ -50,25 +51,40 @@ def reconstruct_team_shots(
         raise ValueError("NEGATIVE_OFFICIAL_TEAM_SOG")
     aliases = {int(k): int(v) for k, v in (team_aliases or {}).items()}
     games["canonical_team_id"] = games.team_id.map(lambda value: aliases.get(int(value), int(value)))
-    results: list[dict] = []
+    # Many players share a physical team and target date. Build the team/date
+    # reference once and map it back, avoiding a full source scan per player.
+    unique_targets = targets[["team_id", "game_date"]].drop_duplicates()
+    reference: dict[tuple[int, pd.Timestamp], dict] = {}
+    sources = {
+        int(team_id): group.sort_values(["game_date", "game_id"], kind="mergesort").reset_index(drop=True)
+        for team_id, group in games.groupby("canonical_team_id", sort=False)
+    }
+    for team_id, group in unique_targets.groupby("team_id", sort=False):
+        source = sources.get(int(team_id))
+        if source is None:
+            source = games.iloc[0:0]
+        source_dates = source.game_date.tolist()
+        for day in group.game_date:
+            upper = bisect_left(source_dates, day)  # strict-prior: excludes target date
+            lower = bisect_left(source_dates, day - pd.Timedelta(days=120))
+            prior = source.iloc[max(lower, upper - 10):upper]
+            reference[(int(team_id), day)] = {
+                "prior_game_ids": ";".join(str(int(v)) for v in prior.game_id),
+                "prior_game_dates": ";".join(v.date().isoformat() for v in prior.game_date),
+                "prior_team_sog_values": ";".join(format(float(v), ".17g") for v in prior.team_sog),
+                "valid_prior_game_count": int(len(prior)),
+                "team_d10_sf_per_game": float(prior.team_sog.mean()) if len(prior) else 0.0,
+            }
+    rows = []
     for target in targets.itertuples(index=False):
-        day = target.game_date
-        prior = games.loc[
-            games.canonical_team_id.eq(int(target.team_id))
-            & games.game_date.lt(day)
-            & games.game_date.ge(day - pd.Timedelta(days=120))
-        ].sort_values(["game_date", "game_id"], kind="mergesort").tail(10)
-        results.append({
+        values = reference[(int(target.team_id), target.game_date)]
+        rows.append({
             "game_id": int(target.game_id),
             "player_id": int(target.player_id),
             "team_id": int(target.team_id),
-            "game_date": day.date().isoformat(),
-            "prior_game_ids": ";".join(str(int(v)) for v in prior.game_id),
-            "prior_game_dates": ";".join(v.date().isoformat() for v in prior.game_date),
-            "prior_team_sog_values": ";".join(format(float(v), ".17g") for v in prior.team_sog),
-            "valid_prior_game_count": int(len(prior)),
-            "team_d10_sf_per_game": float(prior.team_sog.mean()) if len(prior) else 0.0,
+            "game_date": target.game_date.date().isoformat(),
+            **values,
             "source_supported": bool(source_complete),
             "evidence_source": "NHL_OFFICIAL_GAMECENTER_TEAM_BOXSCORE",
         })
-    return pd.DataFrame(results)
+    return pd.DataFrame(rows)

@@ -1,0 +1,59 @@
+{
+  "2025_holdout_population": 47239,
+  "contract_path": "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/shadow_contract.json",
+  "contract_sha256": "db308f4a9ced500d5a8b94e36423cb0aefa28b156942cafcfdba1724030ace91",
+  "frozen_feature_order": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "historical_source_tables": "not required for feature reconstruction; full official team-game boxscores are retained in source package",
+  "historical_target_labels": "realized_points in frozen frame; restoration package verifies original validation target binding",
+  "model_identity_sha256": "a53f43d5caea9a64ee8e6d48daf8072e0332b629998242639b2ba15be743e5c2",
+  "model_path": "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/nhl_points_count_hgb_v1.joblib",
+  "model_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+  "original_frozen_training_source_frame": "artifacts/analysis/nhl/points_official_outcome_restoration/2026-10-09/restored_v3/validation_input_2023_2025.csv.gz",
+  "raw historical skater log source": "source_to_official_team_game_reconciliation.csv summarizes retained historical skater rows; raw per-player rows are not a complete input to official reference reconstruction",
+  "scaler_artifact_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+  "scaler_identity_sha256": "611685ae22c0c0a5883c6deeee1897cad9de268d796071b57f1695376995562d",
+  "scaler_mean": [
+    0.4999778971332582,
+    5.809021168894313,
+    8.543563357085489,
+    0.44504742731402114,
+    15.780286453152973,
+    32.59454501248812,
+    16.15906648498461,
+    0.3268816372189822,
+    28.970698904925747,
+    0.05353917357037685
+  ],
+  "scaler_scale": [
+    0.49999999951146323,
+    2.9463405476419666,
+    3.968819618572145,
+    0.3664906315081208,
+    16.194331749753296,
+    21.587041506927143,
+    4.719715199546497,
+    0.17171025549464444,
+    4.715396483398032,
+    0.03125805583660171
+  ],
+  "scaler_type": "sklearn.preprocessing._data.StandardScaler",
+  "source_manifest_path": "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/manifest.json",
+  "training_population": {
+    "2023": 47221,
+    "2024": 43265,
+    "combined": 90486
+  },
+  "training_source_frame_hash_verified_against_manifest": true,
+  "training_source_frame_sha256": "45605af7f472481af4d5a33a103b679ab4284db5d043f82842757297a3534892"
+}

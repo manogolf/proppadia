@@ -1,0 +1,21 @@
+{
+  "capture_pipeline_integration": "NOT_INSTALLED",
+  "limitation": "A real daily run has not verified that the source query and feature export share one database snapshot; the standalone writer reports same_snapshot_as_feature_export=false.",
+  "real_future_daily_capture_required": true,
+  "same_repeatable_read_snapshot_as_production_export": false,
+  "status": "PASS_SYNTHETIC_STANDALONE_PACKAGE_VALIDATION",
+  "test_modules_passed": 2,
+  "tested_cases": [
+    "absent history",
+    "valid zero SOG",
+    "missing skater records",
+    "duplicate player-game records",
+    "team-ID alias normalization",
+    "strict target-date and 120-day boundary",
+    "incomplete source flag",
+    "run-ID create-only rerun",
+    "CSV and manifest SHA-256 verification"
+  ],
+  "tests_passed": 17,
+  "unit_test_command": "./bin/python -m unittest backend.nhl.tests.test_points_offline_team_shots backend.nhl.tests.test_points_team_shots_evidence"
+}

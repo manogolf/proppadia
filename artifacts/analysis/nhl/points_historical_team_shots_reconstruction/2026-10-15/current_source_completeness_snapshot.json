@@ -1,0 +1,16 @@
+{
+  "duplicate_player_game_rows": 0,
+  "first_game_date": "2026-09-29",
+  "games": 105,
+  "home_away_team_mismatches": 0,
+  "is_home_binding_mismatches": 0,
+  "last_game_date": "2026-10-13",
+  "missing_shot_attempt_rows": 3780,
+  "missing_sog_rows": 0,
+  "observed_utc_minute": "2026-10-15T23:44Z",
+  "player_game_rows": 3780,
+  "scope": "one bounded read-only snapshot of nhl.skater_game_logs_raw joined to nhl.games for canonical 2026 regular-season games dated 2026-09-29 through 2026-10-13",
+  "source_state_classification": "CURRENT_DATABASE_STATE_ONLY_NOT_CAPTURE_TIME_EVIDENCE",
+  "team_game_groups": 210,
+  "team_groups_not_18_rows": 0
+}

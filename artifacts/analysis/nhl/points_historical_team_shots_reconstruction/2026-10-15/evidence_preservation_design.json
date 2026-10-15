@@ -1,0 +1,55 @@
+{
+  "capture_path_template": "artifacts/operational/nhl/points_feature_evidence/season={season}/slate_date={slate_date}/run_id={parent_daily_run_id}/",
+  "daily_command_unchanged": "./bin/python -m backend.nhl.cli daily --with-odds",
+  "hgb_separate_path": [
+    "points_hgb_shadow",
+    "prepare_points_hgb_inputs",
+    "export_nhl_points_hgb_features.py",
+    "score_nhl_points_hgb_shadow.py"
+  ],
+  "insertion_point": "backend/nhl/cli.py daily() 4b independent saves/points feature exporter: replace only the points psql_stdout(export_points.sql) call with one read-only repeatable-read psql session that emits the exact feature CSV and a sidecar before points scoring starts.",
+  "production_path": [
+    "nhl.skater_game_logs_raw",
+    "backend/nhl/sql/export_points.sql",
+    "backend/nhl/exports/train_nhl_points_v2.csv",
+    "prepare_scoring_input",
+    "points_scoring_input.csv",
+    "score_nhl_points_with_lineage.py",
+    "score_points_phoenix.py"
+  ],
+  "prototype_module": "backend/nhl/points_team_shots_evidence.py",
+  "required_aggregates": [
+    "contributing_game_ids",
+    "raw_player_row_count",
+    "unique_player_count",
+    "missing_sog_count",
+    "missing_attempts_count",
+    "SOG_sum_with_exporter_null_policy",
+    "eligible_game_count",
+    "feature_value"
+  ],
+  "required_evidence_files": [
+    "exact_feature_export.csv",
+    "target_bindings.csv",
+    "raw_prior_player_game_rows.csv",
+    "prior_team_game_aggregation.csv",
+    "target_feature_values.csv",
+    "manifest.json",
+    "SHA256SUMS"
+  ],
+  "required_raw_fields": [
+    "player_id",
+    "game_id",
+    "game_date",
+    "game_start_utc",
+    "raw_team_id",
+    "home_team_id",
+    "away_team_id",
+    "shots_on_goal",
+    "shot_attempts",
+    "toi_minutes"
+  ],
+  "status": "PREGAME_EVIDENCE_CAPTURE_DESIGNED_NOT_INSTALLED",
+  "validation_gate": "derive each target feature from captured prior groups and require exact key set plus <=1e-12 value difference against exact feature export before allowing the Points lane to continue",
+  "why_not_installed": "A separate query would not prove it captured the exact feature-export database snapshot. Safe installation requires the live exporter and evidence query to share one read-only repeatable-read transaction and needs a real database integration validation; no production daily run was requested."
+}

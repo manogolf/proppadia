@@ -1,0 +1,87 @@
+{
+  "deterministic_replay": "PASS",
+  "deterministic_replay_max_abs_error": 2.220446049250313e-16,
+  "holdout_2025_corrected_feature": {
+    "mean_count_residual_realized_minus_expected": 9.034773729534356e-05,
+    "mean_expected_points": 0.4601437808429032,
+    "mean_realized_points": 0.4602341285801986,
+    "n": 47239,
+    "over_0_5_brier": 0.20676949771538358,
+    "over_0_5_log_loss": 0.6015817415205742
+  },
+  "holdout_2025_discrepancy_bands": {
+    "(0,2]": {
+      "corrected_feature": {
+        "mean_count_residual_realized_minus_expected": 0.0003479056632347007,
+        "mean_expected_points": 0.45629601244194395,
+        "mean_realized_points": 0.4566439181051786,
+        "n": 14946,
+        "over_0_5_brier": 0.20669888112531298,
+        "over_0_5_log_loss": 0.601603588874412
+      },
+      "mean_abs_feature_difference": 0.39439649404522953,
+      "original": {
+        "mean_count_residual_realized_minus_expected": 0.0021733063501115997,
+        "mean_expected_points": 0.4544706117550671,
+        "mean_realized_points": 0.4566439181051786,
+        "n": 14946,
+        "over_0_5_brier": 0.20665786283531112,
+        "over_0_5_log_loss": 0.6015338472653329
+      },
+      "rows": 14946
+    },
+    "(2,5]": {
+      "corrected_feature": {
+        "mean_count_residual_realized_minus_expected": -0.04220235864391221,
+        "mean_expected_points": 0.4351762148530625,
+        "mean_realized_points": 0.3929738562091503,
+        "n": 1224,
+        "over_0_5_brier": 0.2133090358306856,
+        "over_0_5_log_loss": 0.616597136646118
+      },
+      "mean_abs_feature_difference": 2.884949813258636,
+      "original": {
+        "mean_count_residual_realized_minus_expected": -0.02310691824956314,
+        "mean_expected_points": 0.4160807744587135,
+        "mean_realized_points": 0.3929738562091503,
+        "n": 1224,
+        "over_0_5_brier": 0.21280281761192776,
+        "over_0_5_log_loss": 0.6157425949314023
+      },
+      "rows": 1224
+    },
+    "UNCHANGED": {
+      "corrected_feature": {
+        "mean_count_residual_realized_minus_expected": 0.0016326185490211276,
+        "mean_expected_points": 0.4629784085197613,
+        "mean_realized_points": 0.4646110270687824,
+        "n": 31069,
+        "over_0_5_brier": 0.20654583557312167,
+        "over_0_5_log_loss": 0.6009796824203739
+      },
+      "mean_abs_feature_difference": 0.0,
+      "original": {
+        "mean_count_residual_realized_minus_expected": 0.0016326185490211276,
+        "mean_expected_points": 0.4629784085197613,
+        "mean_realized_points": 0.4646110270687824,
+        "n": 31069,
+        "over_0_5_brier": 0.20654583557312167,
+        "over_0_5_log_loss": 0.6009796824203739
+      },
+      "rows": 31069
+    }
+  },
+  "holdout_2025_original": {
+    "mean_count_residual_realized_minus_expected": 0.0011626663238180324,
+    "mean_expected_points": 0.4590714622563805,
+    "mean_realized_points": 0.4602341285801986,
+    "n": 47239,
+    "over_0_5_brier": 0.20674340337676234,
+    "over_0_5_log_loss": 0.6015375340405661
+  },
+  "model_identity_sha256": "a53f43d5caea9a64ee8e6d48daf8072e0332b629998242639b2ba15be743e5c2",
+  "model_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+  "only_changed_feature": "team_d10_sf_per_game",
+  "scaler_identity_sha256": "611685ae22c0c0a5883c6deeee1897cad9de268d796071b57f1695376995562d",
+  "training_replay_role": "TRAINING_ROWS_MODEL_RESPONSE_INSPECTION_NOT_OUT_OF_TIME_EVALUATION"
+}
