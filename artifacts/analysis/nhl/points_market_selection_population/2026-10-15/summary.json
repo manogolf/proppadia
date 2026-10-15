@@ -1,0 +1,432 @@
+{
+  "2025_quoted_like_high_confidence_under": {
+    "n": 0
+  },
+  "2025_quoted_like_metrics": {
+    "brier_0_5": 0.2353672298695885,
+    "calibration_gap_over": -0.05845129500025148,
+    "log_loss_0_5": 0.6633189029272781,
+    "mae": 0.7600542041421835,
+    "mean_p_under": 0.4334042848460582,
+    "mean_predicted_points": 0.8484261673727628,
+    "mean_realized_points": 0.9725460699511095,
+    "n": 2659,
+    "p_over_0_5": 0.5665957151539418,
+    "realized_point_game_rate": 0.6250470101541933,
+    "realized_under_rate": 0.3749529898458067,
+    "residual_realized_minus_predicted": 0.12411990257834661,
+    "rmse": 0.9808312255346486,
+    "two_plus_point_rate": 0.2515983452425724,
+    "under_brier": 0.2353672298695885,
+    "under_calibration_gap_pred_minus_realized": 0.05845129500025148,
+    "under_log_loss": 0.6633189029272781
+  },
+  "2025_quoted_like_n": 2659,
+  "2025_replay_parity_max_abs_error": 2.220446049250313e-16,
+  "2025_reweighting": {
+    "effective_sample_size": 43386.23721394749,
+    "method": "nearest 2026 quoted pregame feature state kernel, exp(-0.5*mean standardized squared distance)",
+    "n": 47239,
+    "outcome_blind_weights": true,
+    "weighted_brier_0_5": 0.20819919155983618,
+    "weighted_log_loss_0_5": 0.6048442336141031,
+    "weighted_mean_predicted": 0.4567771489142035,
+    "weighted_mean_realized": 0.4549645422214437,
+    "weighted_p_under": 0.6478496839201316,
+    "weighted_realized_under_rate": 0.6544097764968952,
+    "weighted_residual": -0.0018126066927598274,
+    "weighted_under_calibration_gap": -0.006560092576763599
+  },
+  "all_settled_metrics": {
+    "brier_0_5": 0.22115459798805734,
+    "calibration_gap_over": -0.08560562372545649,
+    "log_loss_0_5": 0.6347415596910473,
+    "mae": 0.527621360607634,
+    "mean_p_under": 0.7348480479678807,
+    "mean_predicted_points": 0.3167798550554382,
+    "mean_realized_points": 0.4659090909090909,
+    "n": 1320,
+    "p_over_0_5": 0.2651519520321193,
+    "realized_point_game_rate": 0.35075757575757577,
+    "realized_under_rate": 0.6492424242424243,
+    "residual_realized_minus_predicted": 0.14912923585365273,
+    "rmse": 0.722723009983008,
+    "two_plus_point_rate": 0.09318181818181819,
+    "under_brier": 0.22115459798805734,
+    "under_calibration_gap_pred_minus_realized": 0.08560562372545644,
+    "under_log_loss": 0.6347415596910473
+  },
+  "captures": [
+    {
+      "capture_rows": 197,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-09/run_id=nhldaily_20261009T195836812178Z_6d8ecbb3/phase=EARLY/captured_at=20261009T200143266929Z/features.csv",
+      "feature_sha256": "390075220066b14e114728ae5a7b406935cc2dcc26c34ec2c1d64c7a5e7d2655",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-09/run_id=nhldaily_20261009T195836812178Z_6d8ecbb3/phase=EARLY/captured_at=20261009T200143266929Z/predictions.csv",
+      "prediction_sha256": "12d1f467fdb451f32851271f3b08bbe3ad3d9e9c1bc9683932e4de07f84d02c6",
+      "slate_date": "2026-10-09"
+    },
+    {
+      "capture_rows": 478,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/phase=EARLY/captured_at=20261010T225535073250Z/features.csv",
+      "feature_sha256": "d54d7e0c949bf1506193e64f9f975f1fdcaa4a79928611e745d4294a94a7be0f",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/phase=EARLY/captured_at=20261010T225535073250Z/predictions.csv",
+      "prediction_sha256": "f36bbbc6e97217f8e2d719c1a5d66e51aee134f94915fae95ee9f1073d2d23b7",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "capture_rows": 147,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/phase=EARLY/captured_at=20261011T201553828041Z/features.csv",
+      "feature_sha256": "6913facf9c0d0543a6fbdf12c5b7679331e5a98c54ce6797f66cb7f60e5ee2f7",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/phase=EARLY/captured_at=20261011T201553828041Z/predictions.csv",
+      "prediction_sha256": "0b01fabd588e6552476d238a4e6a10ed9b0480310c92076c73008868b2f35159",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "capture_rows": 97,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/phase=EARLY/captured_at=20261012T220702076898Z/features.csv",
+      "feature_sha256": "9512115fca1395816155ad9a21e56004475a91fecdf8eb3b0663508d8b3bab1c",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/phase=EARLY/captured_at=20261012T220702076898Z/predictions.csv",
+      "prediction_sha256": "67b6ced5579c0b8f482d326ba2e37e15f43e4bdb4da9fc1613f9a4e0f3be6912",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "capture_rows": 786,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/phase=EARLY/captured_at=20261013T201812574041Z/features.csv",
+      "feature_sha256": "1e714f3a6660841a06c670e3c9a1b8acc0521a2bb0ddd70e7243b3a6665fac4c",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/phase=EARLY/captured_at=20261013T201812574041Z/predictions.csv",
+      "prediction_sha256": "cd86f4dafaa4272e23a8169d2c29965cb4f5b4be52e2c622dfd7036b76e5835a",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "capture_rows": 95,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-14/run_id=nhldaily_20261014T192554086407Z_2b980c9e/phase=EARLY/captured_at=20261014T192924786235Z/features.csv",
+      "feature_sha256": "d1c9d146799ea9f64ed77f6cf1fd5078e4a2bb471be32609428405bdc209d875",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-14/run_id=nhldaily_20261014T192554086407Z_2b980c9e/phase=EARLY/captured_at=20261014T192924786235Z/predictions.csv",
+      "prediction_sha256": "a047fe3c4004b153f4688c0bdf68af3ed3f9edf63fdcd7d3a12a57ef5b98957b",
+      "slate_date": "2026-10-14"
+    }
+  ],
+  "classification": "POSSIBLE_CONTRIBUTOR",
+  "final_nonparticipant": 0,
+  "full_population": 1800,
+  "full_population_status_counts": {
+    "SETTLED_PARTICIPATED": 1320,
+    "UNRESOLVED": 480
+  },
+  "global_gap_decomposition": {
+    "causal_interpretation": "DESCRIPTIVE_ONLY",
+    "composition_identity_residual": 0.14912923585365273,
+    "full_2026": {
+      "brier_0_5": 0.22115459798805734,
+      "calibration_gap_over": -0.08560562372545649,
+      "log_loss_0_5": 0.6347415596910473,
+      "mae": 0.527621360607634,
+      "mean_p_under": 0.7348480479678807,
+      "mean_predicted_points": 0.3167798550554382,
+      "mean_realized_points": 0.4659090909090909,
+      "n": 1320,
+      "p_over_0_5": 0.2651519520321193,
+      "realized_point_game_rate": 0.35075757575757577,
+      "realized_under_rate": 0.6492424242424243,
+      "residual_realized_minus_predicted": 0.14912923585365273,
+      "rmse": 0.722723009983008,
+      "two_plus_point_rate": 0.09318181818181819,
+      "under_brier": 0.22115459798805734,
+      "under_calibration_gap_pred_minus_realized": 0.08560562372545644,
+      "under_log_loss": 0.6347415596910473
+    },
+    "market_intersection_quoted": {
+      "brier_0_5": 0.2456982997644593,
+      "calibration_gap_over": -0.11881221902164407,
+      "log_loss_0_5": 0.6878450796377595,
+      "mae": 0.6056967319747683,
+      "mean_p_under": 0.7000396558447486,
+      "mean_predicted_points": 0.3664902315144705,
+      "mean_realized_points": 0.5776173285198556,
+      "n": 831,
+      "p_over_0_5": 0.29996034415525125,
+      "realized_point_game_rate": 0.4187725631768953,
+      "realized_under_rate": 0.5812274368231047,
+      "residual_realized_minus_predicted": 0.21112709700538512,
+      "rmse": 0.8120149198386655,
+      "two_plus_point_rate": 0.1263537906137184,
+      "under_brier": 0.2456982997644593,
+      "under_calibration_gap_pred_minus_realized": 0.11881221902164385,
+      "under_log_loss": 0.6878450796377595
+    },
+    "nonquoted": {
+      "brier_0_5": 0.1794453624539264,
+      "calibration_gap_over": -0.029174783866291132,
+      "log_loss_0_5": 0.5444981546282295,
+      "mae": 0.39494112828434447,
+      "mean_p_under": 0.7940009597354118,
+      "mean_predicted_points": 0.23230271223855503,
+      "mean_realized_points": 0.27607361963190186,
+      "n": 489,
+      "p_over_0_5": 0.2059990402645882,
+      "realized_point_game_rate": 0.23517382413087934,
+      "realized_under_rate": 0.7648261758691206,
+      "residual_realized_minus_predicted": 0.04377090739334682,
+      "rmse": 0.5380010827906119,
+      "two_plus_point_rate": 0.03680981595092025,
+      "under_brier": 0.1794453624539264,
+      "under_calibration_gap_pred_minus_realized": 0.029174783866291243,
+      "under_log_loss": 0.5444981546282295
+    },
+    "quoted_share_settled": 0.6295454545454545
+  },
+  "interpretation": {
+    "causal_claim": "Not established by this descriptive early-season study.",
+    "future_implication": "Evaluate market-eligible population separately and represent omitted player role/quality only in a controlled future experiment; no feature or training change made.",
+    "position": "Unavailable/omitted unless a clean identity-bound source is established.",
+    "team_diagnostics": "See per-game coverage; team IDs are carried only where official outcomes bind.",
+    "training_population": "Broad all-player HGB training/holdout versus market-selected operational intersection is a real denominator mismatch; do not infer this alone as cause."
+  },
+  "market_agreement": "Market favored side is not a production feature; comparison requires valid two-sided implied market probabilities.",
+  "matched_analysis": {
+    "matched_effective_pairs": 111,
+    "matched_predicted_difference": 0.006031845122262684,
+    "matched_realized_difference": 0.034870909870909864,
+    "matched_residual_difference": 0.028839064748647163,
+    "matched_strata": 86,
+    "outcome_blind": true,
+    "status": "COARSENED_EXACT_STRATA"
+  },
+  "nonquoted_all": 953,
+  "nonquoted_metrics": {
+    "brier_0_5": 0.1794453624539264,
+    "calibration_gap_over": -0.029174783866291132,
+    "log_loss_0_5": 0.5444981546282295,
+    "mae": 0.39494112828434447,
+    "mean_p_under": 0.7940009597354118,
+    "mean_predicted_points": 0.23230271223855503,
+    "mean_realized_points": 0.27607361963190186,
+    "n": 489,
+    "p_over_0_5": 0.2059990402645882,
+    "realized_point_game_rate": 0.23517382413087934,
+    "realized_under_rate": 0.7648261758691206,
+    "residual_realized_minus_predicted": 0.04377090739334682,
+    "rmse": 0.5380010827906119,
+    "two_plus_point_rate": 0.03680981595092025,
+    "under_brier": 0.1794453624539264,
+    "under_calibration_gap_pred_minus_realized": 0.029174783866291243,
+    "under_log_loss": 0.5444981546282295
+  },
+  "oct15_pending": {
+    "high_confidence_under_0_8_nonquoted": 181,
+    "high_confidence_under_0_8_quoted": 19,
+    "n": 547,
+    "nonquoted": 359,
+    "nonquoted_mean_expected": 0.23059303616687105,
+    "outcomes_joined": false,
+    "quote_rate": 0.3436928702010969,
+    "quoted": 188,
+    "quoted_mean_expected": 0.4190089718986803,
+    "status": "PENDING_OUTCOME"
+  },
+  "outcome_sources": [
+    {
+      "outcome_rows": 144,
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-09/reconciliation=9a697c482352d19f4cd0/canonical_skater_outcomes.csv",
+      "sha256": "90c072da3aadd298156987c0c94168682b119d6d2c8e4bfd55339f69cf84f782",
+      "slate_date": "2026-10-09"
+    },
+    {
+      "outcome_rows": 504,
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-10/reconciliation=fbe3605043e75c263b78/canonical_skater_outcomes.csv",
+      "sha256": "c33bc07ea82d4397260b386d05ac330636b9b9eb3613cdf0c0dc3a94ad9a5ffa",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "outcome_rows": 108,
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-11/reconciliation=e7da8655562d8ca577a9/canonical_skater_outcomes.csv",
+      "sha256": "7e69bf8612c7d12a451fa5d508490735b5079f9425ec1a387d6a5aa2c9d048fe",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "outcome_rows": 108,
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-12/reconciliation=3d69dd4ed0bce1fe9846/canonical_skater_outcomes.csv",
+      "sha256": "ac1b3b9992826f957e8dd817f12c9893aa49e63aacc92087a6c4828de06ca5d3",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "outcome_rows": 576,
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-13/reconciliation=ba0c2b3c3ef1bd1ddb99/canonical_skater_outcomes.csv",
+      "sha256": "96b5cf8df3e415f31eb16c992cbb3b6350657b1e50d71b66258212960fc0f0b9",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "outcome_rows": 72,
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/canonical_skater_outcomes.csv",
+      "sha256": "fe387ec8dde29efc6f63d46dcf2edd9a675629d7824066f67753c736cd01638c",
+      "slate_date": "2026-10-14"
+    }
+  ],
+  "paid_credits": 0,
+  "prior_market_intersection_comparison": {
+    "metrics": {
+      "brier_0_5": 0.2517982183351346,
+      "calibration_gap_over": -0.13062240689136484,
+      "log_loss_0_5": 0.7011993815335338,
+      "mae": 0.6219997212707231,
+      "mean_p_under": 0.6978492976476672,
+      "mean_predicted_points": 0.369843086196528,
+      "mean_realized_points": 0.6022408963585434,
+      "n": 714,
+      "p_over_0_5": 0.30215070235233266,
+      "realized_point_game_rate": 0.4327731092436975,
+      "realized_under_rate": 0.5672268907563025,
+      "residual_realized_minus_predicted": 0.2323978101620154,
+      "rmse": 0.8349921206563108,
+      "two_plus_point_rate": 0.13445378151260504,
+      "under_brier": 0.2517982183351346,
+      "under_calibration_gap_pred_minus_realized": 0.13062240689136473,
+      "under_log_loss": 0.7011993815335338
+    },
+    "population_n": 714,
+    "prior_reference": {
+      "existing_intersection_mean_predicted": 0.369843086196528,
+      "existing_intersection_mean_realized": 0.6022408963585434,
+      "existing_intersection_residual": 0.2323978101620154,
+      "existing_intersection_settled_n": 714,
+      "identity_overlap_n": 714,
+      "status": "RECONCILED"
+    },
+    "scope": "Oct10-14, exact two-sided 0.5 quotes, settled official outcomes"
+  },
+  "production_db_mutations": 0,
+  "production_model_changed": false,
+  "propensity": {
+    "cv_auc": 0.900338333802037,
+    "features": [
+      "is_home",
+      "d10_sog_per60",
+      "attempts_d10_per60",
+      "player_points_last10",
+      "current_season_points_prior",
+      "current_season_games_prior",
+      "mean_toi_last10",
+      "mean_pp_toi_last10",
+      "team_d10_sf_per_game",
+      "last10_team_sog_share"
+    ],
+    "n": 1800,
+    "outcome_blind": true,
+    "quote_rate": 0.47055555555555556,
+    "standardized_logit_coefficients": {
+      "attempts_d10_per60": 0.0,
+      "current_season_games_prior": 0.2849982191035477,
+      "current_season_points_prior": 0.30599379294109147,
+      "d10_sog_per60": -0.3171220860326786,
+      "is_home": -0.015675498853607,
+      "last10_team_sog_share": 0.8927956543982258,
+      "mean_pp_toi_last10": 0.7674721039721745,
+      "mean_toi_last10": 0.3970912827329793,
+      "player_points_last10": 0.06309720822918924,
+      "team_d10_sf_per_game": -0.057293063421935464
+    },
+    "status": "COMPLETE_DESCRIPTIVE_ONLY"
+  },
+  "provider_calls": 0,
+  "quote_sources": [
+    {
+      "attachment_0_5_rows": 197,
+      "partial": 0,
+      "path": "backend/nhl/exports/odds_history/2026-10-09/points_with_market.csv",
+      "rows_without_quote": 104,
+      "sha256": "f4a127dcfe1b22374fe8345188e3c97b99b5fe97754a7d482266ad90b0488198",
+      "slate_date": "2026-10-09",
+      "two_sided": 93
+    },
+    {
+      "attachment_0_5_rows": 478,
+      "partial": 1,
+      "path": "backend/nhl/exports/odds_history/2026-10-10/points_with_market.csv",
+      "rows_without_quote": 275,
+      "sha256": "10370ade6b0fd4d4bc4e3e1ced14cd7f81051f927345ebb8a78e4e009acf7d1f",
+      "slate_date": "2026-10-10",
+      "two_sided": 202
+    },
+    {
+      "attachment_0_5_rows": 147,
+      "partial": 6,
+      "path": "backend/nhl/exports/odds_history/2026-10-11/points_with_market.csv",
+      "rows_without_quote": 66,
+      "sha256": "47b329d803eb93fe11e5be547540bf15a8f18786603aacc1132c88199401ba6a",
+      "slate_date": "2026-10-11",
+      "two_sided": 75
+    },
+    {
+      "attachment_0_5_rows": 97,
+      "partial": 0,
+      "path": "backend/nhl/exports/odds_history/2026-10-12/points_with_market.csv",
+      "rows_without_quote": 61,
+      "sha256": "a8b4f79fae116cd55f467b7b418254c0e6342c96310695954eff8f58706bc6ec",
+      "slate_date": "2026-10-12",
+      "two_sided": 36
+    },
+    {
+      "attachment_0_5_rows": 786,
+      "partial": 18,
+      "path": "backend/nhl/exports/odds_history/2026-10-13/points_with_market.csv",
+      "rows_without_quote": 411,
+      "sha256": "81008106b675e0206630f98f7ac3816bd85e45bbf44405c29e91d36d9e9e7bb5",
+      "slate_date": "2026-10-13",
+      "two_sided": 357
+    },
+    {
+      "attachment_0_5_rows": 95,
+      "partial": 1,
+      "path": "backend/nhl/exports/odds_history/2026-10-14/points_with_market.csv",
+      "rows_without_quote": 36,
+      "sha256": "a964969cc39c394adb2ccc063c55fde56fb9556e0372de90a4d761e79a2ab0a1",
+      "slate_date": "2026-10-14",
+      "two_sided": 58
+    }
+  ],
+  "quote_status_counts": {
+    "ATTACHMENT_NO_QUOTE": 953,
+    "EXACT_TWO_SIDED": 821,
+    "ONE_SIDED_PARTIAL": 26
+  },
+  "quoted_all": 847,
+  "quoted_metrics": {
+    "brier_0_5": 0.2456982997644593,
+    "calibration_gap_over": -0.11881221902164407,
+    "log_loss_0_5": 0.6878450796377595,
+    "mae": 0.6056967319747683,
+    "mean_p_under": 0.7000396558447486,
+    "mean_predicted_points": 0.3664902315144705,
+    "mean_realized_points": 0.5776173285198556,
+    "n": 831,
+    "p_over_0_5": 0.29996034415525125,
+    "realized_point_game_rate": 0.4187725631768953,
+    "realized_under_rate": 0.5812274368231047,
+    "residual_realized_minus_predicted": 0.21112709700538512,
+    "rmse": 0.8120149198386655,
+    "two_plus_point_rate": 0.1263537906137184,
+    "under_brier": 0.2456982997644593,
+    "under_calibration_gap_pred_minus_realized": 0.11881221902164385,
+    "under_log_loss": 0.6878450796377595
+  },
+  "same_player_n": 123,
+  "same_player_similar_state_mean_realized_difference": 0.04807692307692308,
+  "same_player_similar_state_mean_residual_difference": 0.04531128724413735,
+  "same_player_similar_state_pair_n": 104,
+  "same_side_opposition": "See market_agreement_comparison.csv; based on retained normalized market probabilities.",
+  "selection_and_hgb_are_diagnostic_only": true,
+  "settled_participated": 1320,
+  "unresolved": 480
+}

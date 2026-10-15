@@ -1,0 +1,21 @@
+{
+  "definition": "STRICT_PRIOR_MEDIAN_GATES_V1",
+  "features": [
+    "season_ppg_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "player_points_last10",
+    "d10_sog_per60",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "outcome_blind": true,
+  "thresholds_from_2026_quoted_medians": {
+    "current_season_games_prior": 7.0,
+    "d10_sog_per60": 5.782241874928906,
+    "mean_pp_toi_last10": 2.23,
+    "mean_toi_last10": 17.479166666666664,
+    "player_points_last10": 0.5714285714285714,
+    "season_ppg_prior": 0.5714285714285714
+  }
+}

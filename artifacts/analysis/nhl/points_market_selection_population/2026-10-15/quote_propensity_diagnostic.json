@@ -1,0 +1,31 @@
+{
+  "cv_auc": 0.900338333802037,
+  "features": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "n": 1800,
+  "outcome_blind": true,
+  "quote_rate": 0.47055555555555556,
+  "standardized_logit_coefficients": {
+    "attempts_d10_per60": 0.0,
+    "current_season_games_prior": 0.2849982191035477,
+    "current_season_points_prior": 0.30599379294109147,
+    "d10_sog_per60": -0.3171220860326786,
+    "is_home": -0.015675498853607,
+    "last10_team_sog_share": 0.8927956543982258,
+    "mean_pp_toi_last10": 0.7674721039721745,
+    "mean_toi_last10": 0.3970912827329793,
+    "player_points_last10": 0.06309720822918924,
+    "team_d10_sf_per_game": -0.057293063421935464
+  },
+  "status": "COMPLETE_DESCRIPTIVE_ONLY"
+}

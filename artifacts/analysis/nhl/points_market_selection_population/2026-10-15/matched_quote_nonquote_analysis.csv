@@ -1,0 +1,2 @@
+status,matched_strata,matched_effective_pairs,matched_predicted_difference,matched_realized_difference,matched_residual_difference,outcome_blind
+COARSENED_EXACT_STRATA,86,111,0.0060318451222626836,0.034870909870909864,0.028839064748647163,True

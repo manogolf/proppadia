@@ -1,0 +1,14 @@
+{
+  "effective_sample_size": 43386.23721394749,
+  "method": "nearest 2026 quoted pregame feature state kernel, exp(-0.5*mean standardized squared distance)",
+  "n": 47239,
+  "outcome_blind_weights": true,
+  "weighted_brier_0_5": 0.20819919155983618,
+  "weighted_log_loss_0_5": 0.6048442336141031,
+  "weighted_mean_predicted": 0.4567771489142035,
+  "weighted_mean_realized": 0.4549645422214437,
+  "weighted_p_under": 0.6478496839201316,
+  "weighted_realized_under_rate": 0.6544097764968952,
+  "weighted_residual": -0.0018126066927598274,
+  "weighted_under_calibration_gap": -0.006560092576763599
+}
