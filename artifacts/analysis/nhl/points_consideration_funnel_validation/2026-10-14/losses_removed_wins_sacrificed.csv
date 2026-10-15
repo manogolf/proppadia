@@ -1,0 +1,4 @@
+cohort,rows,wins_removed,losses_removed,expected_losses,observed_losses,excess_losses
+Stage 1 incremental,9,8,1,2.6874839712073673,1,-1.6874839712073673
+Stage 2 incremental,24,14,10,7.0282053316132345,10,2.9717946683867655
+Stage 3 incremental,3,2,1,1.3233172848345625,1,-0.32331728483456246

@@ -1,0 +1,94 @@
+{
+  "contract": {
+    "amendment_policy": "Any change to order, edge, 15 pp threshold, signed/absolute gap, Stage 3 disagreement rule, or missing-value semantics requires a new explicit contract version (for example V2); V1 is immutable.",
+    "applicable_lines": [
+      0.5,
+      1.5,
+      2.5
+    ],
+    "classification_effect": "RESEARCH_CONSIDERATION_EXCLUSIONS only; predictions remain generated, exported, immutable and gradeable; no production authority changes.",
+    "contract_identity_sha256": "15763cff55314952489b7221eb20237cb2ed749cbe0b95891377c2c1338e99c4",
+    "contract_version": "NHL_POINTS_CONSIDERATION_FUNNEL_V1",
+    "discovery_window": {
+      "end": "2026-10-13",
+      "future_rule_changes_from_discovery": false,
+      "population": "finalized HGB Points x retained market evidence",
+      "start": "2026-10-10"
+    },
+    "first_exclusion_only": true,
+    "freeze_date": "2026-10-14",
+    "later_overlap_flags_diagnostic_only": true,
+    "missing_value_semantics": {
+      "edge": "EDGE_UNAVAILABLE; retain in Stage 1; continue to later screens if their inputs are available",
+      "gap": "GAP_UNAVAILABLE; do not exclude at Stage 2; continue to Stage 3 if sides are available",
+      "side": "SIDE_UNAVAILABLE; do not exclude at Stage 3"
+    },
+    "no_candidate_target": true,
+    "no_inclusion_rules": true,
+    "order": [
+      "STAGE_0",
+      "STAGE_1",
+      "STAGE_2",
+      "STAGE_3",
+      "SURVIVORS"
+    ],
+    "primary_line": 0.5,
+    "production_model": {
+      "model_version": "NHL_POINTS_LEADER_CORE_FEATURES_V1",
+      "name": "NHL_POINTS_COUNT_HGB_V1"
+    },
+    "prospective_start_date": "2026-10-14",
+    "research_limits": {
+      "manual_nhl_com_review": false,
+      "paid_credits": 0,
+      "production_db_mutations": 0,
+      "provider_calls": 0,
+      "stage_4_discovery": false
+    },
+    "source_commits": {
+      "discovery": "63dde3d091482e5fb9da3fb30a6665302bbf6f54",
+      "freeze_preparation": "63dde3d091482e5fb9da3fb30a6665302bbf6f54"
+    },
+    "stage_rules": {
+      "stage_0": {
+        "name": "ALL_MARKET_USABLE_PREDICTIONS",
+        "population": "Pregame HGB prediction matched to legitimate two-sided retained Points market evidence."
+      },
+      "stage_1": {
+        "discovery_rationale": "NONCOMPETITIVE_FOR_CONSIDERATION; not a validated failure region.",
+        "edge_definition": "Selected model-side probability minus raw American implied probability calculated from that side's separately aggregated median attachment price; raw probability includes vig.",
+        "missing": "EDGE_UNAVAILABLE remains classified and is not silently excluded.",
+        "name": "RESEARCH_EXCLUDE_NEGATIVE_EDGE",
+        "rule": "Exclude only when selected-side production edge < 0."
+      },
+      "stage_2": {
+        "diagnostic_cohorts": {
+          "OPPOSITE_SIDE": "model side differs from no-vig market side",
+          "OVER": "model-selected side is OVER",
+          "SAME_SIDE_CONFIDENCE_DISAGREEMENT": "model side equals no-vig market side within Stage 2; the >15pp signed selected-side gap is the confidence disagreement",
+          "UNDER": "model-selected side is UNDER"
+        },
+        "gap": "Signed positive selected-side probability gap; no absolute value. Strict > 0.15 (15 percentage points).",
+        "missing": "Unavailable gap is retained and separately identifiable; it is not treated as exceeding threshold.",
+        "name": "RESEARCH_EXCLUDE_EXTREME_MODEL_MARKET_GAP",
+        "no_vig_market": "Convert both side median American prices to raw implied probabilities, normalize each by their two-side sum, then select probability for the model-selected side.",
+        "rule": "Among Stage 1 survivors, exclude only when selected_side_model_probability - selected_side_no_vig_market_probability > 0.15."
+      },
+      "stage_3": {
+        "market_side": "OVER when normalized no-vig p_over >= 0.5, otherwise UNDER.",
+        "model_side": "OVER when model p_over >= 0.5, otherwise UNDER.",
+        "name": "PROVISIONAL_STAGE_3_OPPOSITE_SIDE_DISAGREEMENT",
+        "rule": "Among Stage 2 survivors only, exclude when model_side != market_side.",
+        "status": "Provisional, independently evaluated, not merged into Stage 2."
+      }
+    },
+    "status": "FROZEN_FOR_PROSPECTIVE_VALIDATION",
+    "validation_gate": {
+      "assessment": "directional consistency, material excess-loss reduction, acceptable wins sacrificed, no single-date domination, sufficient sample; no automatic production promotion",
+      "minimum_independent_finalized_hgb_dates": 6,
+      "minimum_is_not_proof": true
+    }
+  },
+  "contract_file_sha256": "f05001539537e715a57ec6a48af8948bde602e4eeb5503a0e23d82c405a1c328",
+  "contract_fingerprint": "eb0c7d140103edeefcb7680cce7bb5fb3ba1bd88d990cff1e53bf1dd689fe3a9"
+}

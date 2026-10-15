@@ -1,0 +1,51 @@
+{
+  "dates": [
+    "2026-10-14"
+  ],
+  "discovery_metrics_included": false,
+  "final_survivor_metrics": {
+    "accuracy": 0.6,
+    "brier": 0.2398061185702231,
+    "calibration_gap": 0.15762423593637387,
+    "cohort": "final_survivors",
+    "excess_losses": 3.1524847187274787,
+    "expected_losses": 4.847515281272521,
+    "log_loss": 0.6693744627239593,
+    "losses": 8,
+    "market_accuracy": 0.6,
+    "market_brier": 0.2257254516526191,
+    "market_calibration_gap": 0.05937609598546034,
+    "market_expected_losses": 6.812478080290791,
+    "market_log_loss": 0.6433492612863512,
+    "market_mean_selected_probability": 0.6593760959854603,
+    "mean_selected_model_probability": 0.7576242359363738,
+    "n": 20,
+    "observed_losses": 8,
+    "realized_win_rate": 0.6,
+    "wins": 12
+  },
+  "line_0_5_metrics": {
+    "accuracy": 0.6428571428571429,
+    "brier": 0.24003646469984238,
+    "calibration_gap": 0.07345496662629136,
+    "cohort": "stage0_raw",
+    "excess_losses": 4.113478131072309,
+    "expected_losses": 15.88652186892769,
+    "log_loss": 0.6775713716502293,
+    "losses": 20,
+    "market_accuracy": 0.5892857142857143,
+    "market_brier": 0.23442142957127676,
+    "market_calibration_gap": 0.040102808903097364,
+    "market_expected_losses": 20.75424270142655,
+    "market_log_loss": 0.6598123996730436,
+    "market_mean_selected_probability": 0.6293885231888117,
+    "mean_selected_model_probability": 0.7163121094834343,
+    "n": 56,
+    "observed_losses": 20,
+    "realized_win_rate": 0.6428571428571429,
+    "wins": 36
+  },
+  "minimum_independent_finalized_hgb_dates": 6,
+  "prospective_dates_finalized": 1,
+  "repeatability_gate": "NOT_MET"
+}

@@ -1,0 +1,8 @@
+{
+  "frozen_prediction_artifact_sha256": "71e2972de2d26791df0af03a8aa74a48972cd858bb7d1f82311068de9874816e",
+  "meaning": "Frozen classifications and all prediction/market bindings remain authoritative; the later reconciliation contributes only final official outcome/participation state.",
+  "mismatch_rows": 93,
+  "prediction_artifact_identity_match": false,
+  "reconciliation_prediction_sha256": "d3632cc4b1ea53f09d190fa153a23a2e8447d1e135634c3fc4a39c559bb6c6d5",
+  "status": "OUTCOME_JOIN_BY_CANONICAL_KEY"
+}

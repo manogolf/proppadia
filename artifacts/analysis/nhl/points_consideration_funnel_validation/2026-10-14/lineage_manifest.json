@@ -1,0 +1,41 @@
+{
+  "contract_fingerprint": "eb0c7d140103edeefcb7680cce7bb5fb3ba1bd88d990cff1e53bf1dd689fe3a9",
+  "contract_version": "NHL_POINTS_CONSIDERATION_FUNNEL_V1",
+  "daily_run_id": "nhldaily_20261015T140453183604Z_bfa01e59",
+  "inputs": {
+    "artifacts/analysis/nhl/points_consideration_funnel/2026-10-14/current_day_dry_view_2026-10-14.csv": "af9b53bcde7424d0182297dc712b09665289ed628a8ca7fe345c76cc0339f357",
+    "artifacts/analysis/nhl/points_consideration_funnel_freeze/2026-10-14/frozen_funnel_contract.json": "f05001539537e715a57ec6a48af8948bde602e4eeb5503a0e23d82c405a1c328",
+    "artifacts/analysis/nhl/points_consideration_funnel_freeze/2026-10-14/oct14_pre_outcome_classification_binding.json": "f8818379af161f0d9468878723f2b38d6b7797ca914949992ffe88daa851249b",
+    "artifacts/analysis/nhl/points_consideration_funnel_freeze/2026-10-14/prospective_ledger.csv": "3a1f097376590618a82e885da38797e7a1357ac8f8fb0d84a16830ce1f220969",
+    "artifacts/operational/nhl/points_market_attachments/season=2026/slate_date=2026-10-15/run_id=nhldaily_20261015T140453183604Z_bfa01e59/points_with_market.csv": "9c93efab3b19c33d9d047e19e94060acfb656cf6d901b9e505be2a9856894358",
+    "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/RUN_COMPLETE.json": "724cde83e421408f31b1a083154b5abbb5a45f29681f9b1e2e8ce05cf84c4858",
+    "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/canonical_skater_outcomes.csv": "fe387ec8dde29efc6f63d46dcf2edd9a675629d7824066f67753c736cd01638c",
+    "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/graded_points.csv": "74ac2f4d5bfb807abc5661b1a653e1f9cf16deb86a7494e52d01fc74febd6ab7",
+    "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/source_bindings.json": "379c0eb46fc259f8ad397e43b1fcb524435eb3eccad5dbc8233a6ca05cf40ba0",
+    "backend/nhl/scripts/grade_points_consideration_funnel_validation.py": "297f7e48501d76438a2caea9dbd68c7644d3934a150d9b2df7025b4457897730",
+    "backend/nhl/tests/test_points_consideration_funnel_validation.py": "90ad5222e2dfcbc7e74df869f435f568a59a969d6040f2b77fe18fb38db22e39"
+  },
+  "outputs": {
+    "canonical_key_outcome_join_audit.csv": "ceb1640c4a1d0c92e52f4214b69680cfb66bfb56b7a5f026b85544334270e7df",
+    "cumulative_prospective_summary.json": "f677cc513b3940b3a983d67a1da3bebb80616753a485254e1405ac2f0207ba98",
+    "cumulative_stage_metrics.csv": "b647623535d95e9a62ff046bd01da0972d506aeaf00505d6c5637c4484bd74e2",
+    "date_level_validation_summary.json": "bd7613a46a611e3c41457aa07cdd9b0fd083e6e626a8c535e4c46c46671a560c",
+    "excess_loss_change.csv": "36bff3280961e2eb75018f20c0ffa7726adc2977c2f40a99196b3c3e724fc777",
+    "frozen_contract_reference.json": "58f62b645625dcd6a2528f66885aefd397ba83eaf2789d9e414492cadd658ac1",
+    "losses_removed_wins_sacrificed.csv": "9d5f956274c9ff3053e513b89177b4c2e75c510ecf07f48ceb4e870c7ec9508c",
+    "market_comparison.csv": "6bc0a291d7eae9a1474f5aa541cbdfce2c8136077d9179ccc3208a91e4e9afa1",
+    "oct14_pre_outcome_classification_verification.csv": "f8ff57bc57b27e7a1c8e59e440a2fedd899ecb461318f707cad40aaee70b1413",
+    "oct15_pending_classifications.csv": "c3b6d692669887886a3b614990ca6513d6548c55f4565238da1caa52e2ecb887",
+    "other_line_results.csv": "61a057c4a649c56288daa53d211ceac91ab4bb5e814959eb811542a57020f316",
+    "prediction_identity_mismatch_note.json": "993f627d9c21f9f222440eae0fb132aea8a129485b1ed958ece08702f2d4755e",
+    "report.md": "78cf7c84f930d127e2e31aee39def63d5ef54282cef8b18ded468e405807e637",
+    "stage2_directional_diagnostics.csv": "3b9f6343e433b296ecc740f9714edfbf1dbb4c403cba4185c5bb3b8986f26f7a",
+    "stage_metrics.csv": "47fe06a6ab0a05caeee94b69cf54183e002e760c5253cc8a04f2c72335012343",
+    "summary.json": "f3fc3f30448289e57d048793e641147e5a56e410559d738db2fbefc448b936fb",
+    "unresolved_rows.csv": "5f5b9aafd1b36d972dcf9b1809cfa7b4fb9db053b48b86687b51261cb3da4e56",
+    "updated_prospective_ledger.csv": "671598a50a15599aadfcf22c28d4bfccb51b72b08e00a1fa00ffeffef6cadc69"
+  },
+  "prospective_date": "2026-10-14",
+  "schema_version": "NHL_POINTS_CONSIDERATION_FUNNEL_VALIDATION_LINEAGE_V1",
+  "status": "COMPLETE"
+}
