@@ -1,0 +1,8 @@
+{
+  "classification": "MULTIFACTOR",
+  "confidence": "PROVISIONAL",
+  "production_changes": false,
+  "calibration": false,
+  "retraining": false,
+  "market_as_feature": false
+}

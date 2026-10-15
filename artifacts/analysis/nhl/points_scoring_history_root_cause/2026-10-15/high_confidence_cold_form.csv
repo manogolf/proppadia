@@ -1,0 +1,5 @@
+recent_state_group,n,wrong_n,correct_n,mean_predicted_points,mean_realized_points,mean_count_residual_realized_minus_predicted,count_mae,mean_p_under,realized_under_rate,wins,losses,expected_losses,excess_losses,market_agreement_rate,market_opposition_n
+MATERIALLY_BELOW,0,0,0,,,,,,,,,,,,
+NEAR,514,200,314,0.29715165577256858,0.50583657587548636,0.20868492010291781,0.56050460396934787,0.74492664416492083,0.6108949416342413,314,200,131.10770489923067,68.892295100769331,0.8443579766536965,80
+ABOVE,0,0,0,,,,,,,,,,,,
+NO_SEASON_BASELINE,1,1,0,0.26068455926005613,1,0.73931544073994382,0.73931544073994382,0.77052393592493429,0,0,1,0.22947606407506571,0.77052393592493429,0,1

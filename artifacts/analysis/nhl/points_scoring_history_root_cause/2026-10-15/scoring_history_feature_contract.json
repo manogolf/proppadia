@@ -1,0 +1,77 @@
+{
+  "history_contract": "120_DAY_LEGACY_BOUND",
+  "training_builder": "backend/nhl/scripts/build_nhl_points_architecture_bakeoff.py",
+  "operational_exporter": "backend/nhl/scripts/export_nhl_points_hgb_features.py",
+  "2026_reconstruction_checks": {
+    "player_points_last10": {
+      "n": 714,
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 1.1102230246251565e-16
+    },
+    "current_season_points_prior": {
+      "n": 714,
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 0.0
+    },
+    "current_season_games_prior": {
+      "n": 714,
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 0.0
+    },
+    "mean_toi_last10": {
+      "n": 714,
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 3.552713678800501e-15
+    },
+    "mean_pp_toi_last10": {
+      "n": 714,
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 4.440892098500626e-16
+    }
+  },
+  "2025_reconstruction_checks": {
+    "holdout_prediction_replay_max_abs_error": 2.220446049250313e-16,
+    "holdout_rows": 47239,
+    "history_features_present": true,
+    "raw_per_game_history_available_for_independent_reconstruction": false
+  },
+  "scaler_type": "StandardScaler",
+  "feature_order": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "scaler_means": {
+    "is_home": 0.4999778971332582,
+    "d10_sog_per60": 5.809021168894313,
+    "attempts_d10_per60": 8.543563357085489,
+    "player_points_last10": 0.44504742731402114,
+    "current_season_points_prior": 15.780286453152973,
+    "current_season_games_prior": 32.59454501248812,
+    "mean_toi_last10": 16.15906648498461,
+    "mean_pp_toi_last10": 0.3268816372189822,
+    "team_d10_sf_per_game": 28.970698904925747,
+    "last10_team_sog_share": 0.05353917357037685
+  },
+  "scaler_scales": {
+    "is_home": 0.49999999951146323,
+    "d10_sog_per60": 2.9463405476419666,
+    "attempts_d10_per60": 3.968819618572145,
+    "player_points_last10": 0.3664906315081208,
+    "current_season_points_prior": 16.194331749753296,
+    "current_season_games_prior": 21.587041506927143,
+    "mean_toi_last10": 4.719715199546497,
+    "mean_pp_toi_last10": 0.17171025549464444,
+    "team_d10_sf_per_game": 4.715396483398032,
+    "last10_team_sog_share": 0.03125805583660171
+  },
+  "missing_pipeline": "nonnumeric->NaN; infinities->NaN; fill 0 before scaler.transform",
+  "silent_contract_drift": "NONE; retained outcome reconstructions exact for primary scoring-history fields"
+}

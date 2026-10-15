@@ -1,0 +1,85 @@
+{
+  "2025_rows": 47239,
+  "2025_scoring_history_reconstruction": {
+    "history_features_present": true,
+    "holdout_prediction_replay_max_abs_error": 2.220446049250313e-16,
+    "holdout_rows": 47239,
+    "raw_per_game_history_available_for_independent_reconstruction": false
+  },
+  "2026_capture_rows_reproduced": 6698,
+  "2026_metrics": {
+    "count_mae": 0.6219997212707231,
+    "excess_losses": 84.65016597344501,
+    "expected_losses": 213.349834026555,
+    "losses": 298,
+    "market_agreement_rate": 0.7100840336134454,
+    "market_opposition_n": 207,
+    "mean_count_residual_realized_minus_predicted": 0.2323978101620154,
+    "mean_p_under": 0.6978492976476672,
+    "mean_predicted_points": 0.369843086196528,
+    "mean_realized_points": 0.6022408963585434,
+    "n": 714,
+    "realized_under_rate": 0.5672268907563025,
+    "wins": 416
+  },
+  "2026_scoring_history_reconstruction": {
+    "current_season_games_prior": {
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 0.0,
+      "n": 714
+    },
+    "current_season_points_prior": {
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 0.0,
+      "n": 714
+    },
+    "mean_pp_toi_last10": {
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 4.440892098500626e-16,
+      "n": 714
+    },
+    "mean_toi_last10": {
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 3.552713678800501e-15,
+      "n": 714
+    },
+    "player_points_last10": {
+      "exact_match_rate": 1.0,
+      "max_abs_difference": 1.1102230246251565e-16,
+      "n": 714
+    }
+  },
+  "assist_matched_strata": 12,
+  "attempts_status": "CONFIRMED_DATA_QUALITY_DEFECT; CAUSAL_STATUS_INSUFFICIENT_EVIDENCE",
+  "calibration": false,
+  "correct_high_confidence_n": 314,
+  "market_feature_added": false,
+  "matched_recent_strata": 25,
+  "matched_season_strata": 25,
+  "max_reproduction_error": 2.220446049250313e-16,
+  "model": "NHL_POINTS_COUNT_HGB_V1",
+  "model_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+  "oct15_pending": {
+    "PENDING_OUTCOME": true,
+    "assist_heavy_low_sog": 0,
+    "high_confidence_under_65_plus": 125,
+    "high_under_and_recent_cold": 0,
+    "outcomes_joined": false,
+    "recent_cold_strong_season": 0,
+    "rising_pp_toi": 0,
+    "rising_toi": 0,
+    "rows": 213
+  },
+  "paid_credits": 0,
+  "player_points_last10_semantics": "already points per game: arithmetic mean of realized points over strict-prior latest up-to-10 appearances in prior 120 days; not a total",
+  "production_db_mutations": 0,
+  "production_or_funnel_changed": false,
+  "provider_calls": 0,
+  "repair_family": "MULTIFACTOR",
+  "reproduction_gate": "PASS",
+  "retraining": false,
+  "schema_version": "NHL_POINTS_SCORING_HISTORY_ROOT_CAUSE_V1",
+  "scorer_sha256": "3f0aadf2d28fce2790c7a7f89d8bfd57cb8fbf80e04bc15be44d7863918d6697",
+  "settled_2026_n": 714,
+  "wrong_high_confidence_n": 201
+}

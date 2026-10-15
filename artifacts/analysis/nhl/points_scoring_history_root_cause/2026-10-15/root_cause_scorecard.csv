@@ -1,0 +1,11 @@
+candidate,classification,evidence,limitation
+recent-points overreaction,INSUFFICIENT_EVIDENCE,"wrong-vs-correct standardized recent/season difference=0.08458074826492415; cold prevalence wrong=0.0, correct=0.0; 2025 replication included",observational cohort contrast; fixed-model perturbation is not causal
+cumulative season-stat representation,POSSIBLE,coarsened matched season-baseline strata=25; games-only and joint counterfactuals included,"synthetic feature states are model sensitivity, not validated counterfactual outcomes"
+early-season sample-size artifact,POSSIBLE,2025 strict-prior holdout and games-prior bands compared,2026 is early season and population size remains limited
+assist-heavy underrepresentation,INSUFFICIENT_EVIDENCE,assist-share standardized difference wrong minus correct=-0.0702351725103526; matched goal/assist and SOG surfaces included,share is based on retained strict-prior outcome coverage
+usage lag,INSUFFICIENT_EVIDENCE,strict-prior last5 vs last10 TOI/PP TOI comparisons included,all comparisons observational
+shot-proxy bias,POSSIBLE,predeclared assist-share x D10 SOG grid,D10 SOG is only a proxy for shot-generating context
+sparse-history behavior,NOT_SUPPORTED,residual by actual games-prior support and 2025 early-season replication,correlated with season timing and player selection
+training-distribution shift,POSSIBLE,"training-vs-2026 quantiles, out-of-support rates, and standardized mean shifts",distribution shift alone does not establish harmfulness
+attempts support defect,CONFIRMED_DATA_QUALITY_DEFECT; causal status INSUFFICIENT_EVIDENCE,"prior bounded study: all 3,852 retained raw 2026 rows have NULL shot_attempts; HGB exporter fills missing with zero",this task does not recover attempts or attribute the Points residual to the defect
+team-context suppression,INSUFFICIENT_EVIDENCE,team shots context and team SOG share are retained in the bounded interaction and leverage screens,single-slate regional comparisons have limited power
