@@ -1,0 +1,3 @@
+outcome,n,mean_delta_expected_points,median_delta_expected_points,status
+wrong,2,2.7755575615628914e-17,2.7755575615628914e-17,ELIGIBLE_SUBSET_ONLY; SMALL_N
+correct,1,2.7755575615628914e-17,2.7755575615628914e-17,ELIGIBLE_SUBSET_ONLY; SMALL_N

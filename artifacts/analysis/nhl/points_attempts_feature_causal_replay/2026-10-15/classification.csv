@@ -1,0 +1,3 @@
+dimension,classification,evidence
+feature support,UPSTREAM_DATA_GAP,"all 3,852 extracted 2026 regular-season rows have NULL shot_attempts; feature exporter fillna(0) creates zero-valued records"
+causal contribution,INSUFFICIENT_EVIDENCE,zero valid strict-prior attempts are available for the 714 settled rows; replay eligibility is zero

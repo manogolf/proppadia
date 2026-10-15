@@ -1,0 +1,2 @@
+rows,max_expected_count_abs_error,max_p_over_abs_error,max_p_under_abs_error,max_selected_side_mismatches,max_selected_probability_abs_error,tolerance,status
+714,1.1102230246251565e-16,1.1102230246251565e-16,2.2204460492503131e-16,0,2.2204460492503131e-16,9.9999999999999998e-13,PASS

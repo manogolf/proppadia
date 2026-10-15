@@ -1,0 +1,2 @@
+tag,rows,reconstruction_eligible_rows,excluded_source_gap_rows,mean_expected_count_delta,mean_p_over_delta,high_confidence_under_before,high_confidence_under_after,edge_10_plus_eligible,edge_15_plus_eligible,edge_20_plus_eligible,selected_side_flips,reason
+OUTCOME_BLIND_COUNTERFACTUAL,547,84,463,0,0,84,84,0,0,0,0,outcome-blind replay on source-supported no-exposure zeros only; remaining rows excluded due missing strict-prior attempts

@@ -1,0 +1,2 @@
+source,extracted_rows,nonmissing_values,missing_values,zero_values,positive_values,toi_nonmissing_rows,first_observed_game_date,last_observed_game_date,classification
+nhl.skater_game_logs_raw.shot_attempts,3852,0,3852,0,0,3852,2026-09-29,2026-10-14,RAW_SOURCE_MISSING; coalesced to zero downstream

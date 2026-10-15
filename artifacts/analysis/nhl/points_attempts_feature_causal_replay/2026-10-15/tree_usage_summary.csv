@@ -1,0 +1,2 @@
+total_trees,trees_using_attempts,fraction_trees_using_attempts,attempt_split_count,split_frequency_among_all_splits,status
+100,73,0.72999999999999998,119,0.085000000000000006,PRIVATE_SKLEARN_NODE_FIELDS_USED

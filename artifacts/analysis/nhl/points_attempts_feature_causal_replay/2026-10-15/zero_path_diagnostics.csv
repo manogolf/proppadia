@@ -1,0 +1,2 @@
+comparison,operational_zero_rows,training_attempt_q05,training_attempt_median,training_attempt_q95,2026_predicted_mean_at_zero,2026_predicted_mean_at_training_median,interpretation
+operational zero vs 2025 observed feature distribution,711,3.3931115722454557,8.3328744463409468,15.554124739870634,0.36984308619652811,0.47447623747239026,fixed other inputs; global model response only; not valid 2026 corrected input

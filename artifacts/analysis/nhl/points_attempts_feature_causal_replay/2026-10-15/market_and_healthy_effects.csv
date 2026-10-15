@@ -1,0 +1,4 @@
+cohort,n,counterfactual_eligible_n,mean_p_over_change,side_flips,brier_change,log_loss_change,excess_loss_change,status
+same_side,507,1,5.5511151231257827e-17,0,2.0816681711721685e-17,0,0,ELIGIBLE_SUBSET_ONLY; SMALL_N
+opposition,207,2,6.9388939039072284e-17,0,0,-4.4408920985006262e-16,-2.2204460492503131e-16,ELIGIBLE_SUBSET_ONLY; SMALL_N
+negative_edge_healthy,129,0,,0,,,,NO_ELIGIBLE_ROWS

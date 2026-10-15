@@ -1,0 +1,5 @@
+stage,observed,zero_created
+raw database field,all shot_attempts missing in retained 2026 extraction,False
+export_nhl_points_hgb_features.normalize_history,shot_attempts coerced numeric then fillna(0.0),True
+build_features,mean per-game attempts*60/positive TOI across strict-prior last-10 rows,False
+HGB scorer,input NaN/inf zero-filled; captured feature already zero,False

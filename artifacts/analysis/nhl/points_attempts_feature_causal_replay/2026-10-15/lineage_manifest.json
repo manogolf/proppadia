@@ -1,0 +1,62 @@
+{
+  "model_identity_sha256": "a53f43d5caea9a64ee8e6d48daf8072e0332b629998242639b2ba15be743e5c2",
+  "schema_version": "NHL_POINTS_ATTEMPTS_CAUSAL_LINEAGE_V1",
+  "sources": [
+    {
+      "path": "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/nhl_points_count_hgb_v1.joblib",
+      "sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9"
+    },
+    {
+      "path": "backend/nhl/scripts/score_nhl_points_hgb_shadow.py",
+      "sha256": "3f0aadf2d28fce2790c7a7f89d8bfd57cb8fbf80e04bc15be44d7863918d6697"
+    },
+    {
+      "path": "backend/nhl/scripts/export_nhl_points_hgb_features.py",
+      "sha256": "0c2e319508da5c03c57b4bf87c3ea7ea46952cf35f9412b1b425b8336fe617f6"
+    },
+    {
+      "path": "backend/nhl/scripts/seed_skater_logs_for_date.py",
+      "sha256": "47b927865dd540a59de3dc894bca79b4d213225d39a4123e2ebcce6321d43312"
+    },
+    {
+      "path": "backend/nhl/scripts/build_nhl_points_architecture_bakeoff.py",
+      "sha256": "84e671037e31b41c1c7c2cb19fe76c22f8787bc63535967a8176e91c8a3476ba"
+    },
+    {
+      "path": "backend/nhl/scripts/build_points_2025_validation_frame.py",
+      "sha256": "8086763bbe663de9218c953461e9fe66581564084bcb7c12c056329c35f997f3"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_architecture_bakeoff/2026-10-09/output/canonical_training_frame.csv.gz",
+      "sha256": "05ef1dc0a0e26fa96ea3c7218cebf8b8c77690fb83f7716f1cb220e565be8a68"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261015T140453183604Z_bfa01e59/points_scoring_input.csv",
+      "sha256": "e075425b2c36363459c8c0b5205f97f02091ce2b6e7d90ebce39c9dfc50a63e0"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_official_outcome_restoration/2026-10-09/restored_v3/skater_log_feature_source.csv.gz",
+      "sha256": "1e9ba8d5704f9cc1959bdcc3092fca215ca6ab89e23aded12314c8859ac48c81"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_official_outcome_restoration/2026-10-09/restored_v3/season_2025_strict_prior_features.csv.gz",
+      "sha256": "b315e7afef8ae1e2c89f443799d2c3e487082801904d35e1c01a791a511ffaee"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/hgb_poisson_season_holdout_predictions.csv.gz",
+      "sha256": "4ba1d12df3147e72f67745f5464549d2782d7b73d270e266d39c884e2886fa41"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_attempts_feature_causal_replay/2026-10-15/raw_strict_prior_log_export.csv",
+      "sha256": "da3e87bf495b833e91473c4b7487c473bb2cb416296976e11608792eea2219df"
+    },
+    {
+      "path": "artifacts/analysis/nhl/points_display_ev_edge_reliability/2026-10-15/canonical_rows.csv",
+      "sha256": "7eca1d985054036ef03882875d25eabe2f6ff021b720e8d1aea20296aa5bda0f"
+    },
+    {
+      "path": "artifacts/operational/nhl/points_market_attachments/season=2026/slate_date=2026-10-15/run_id=nhldaily_20261015T140453183604Z_bfa01e59/points_with_market.csv",
+      "sha256": "9c93efab3b19c33d9d047e19e94060acfb656cf6d901b9e505be2a9856894358"
+    }
+  ]
+}

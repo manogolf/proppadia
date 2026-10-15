@@ -1,0 +1,2 @@
+capture_feature_rows,unique_slate_game_player_keys,duplicate_binding_count,cross_game_or_player_binding_count,same_game_leakage_count,future_game_leakage_count,strict_cutoff,date_window,raw_game_rows,raw_rows_with_attempts,attempt_reconstruction_nonmissing_rows,classification
+2347,2347,0,0,0,0,history.game_date < target.game_date; same-day and later dates excluded,history.game_date >= target.game_date - 120 days,3852,0,393,IDENTITY_PASS; FEATURE_RECONSTRUCTION_BLOCKED_BY_RAW_SOURCE_MISSING

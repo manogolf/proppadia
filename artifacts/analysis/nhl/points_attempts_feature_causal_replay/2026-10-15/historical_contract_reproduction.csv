@@ -1,0 +1,2 @@
+rows,comparable_rows,exact_match_rate,max_abs_difference,mean,median,missing_rate,zero_rate,contract,history_count_exact_match_rate,reproduction_gate_pass
+47239,46008,1,3.5527136788005009e-15,6.0252532514509189,6.3299296999325492,0.026058976692986728,0.17174368636084592,"120-day strict-prior history, newest up-to-10 player appearances, mean(shot_attempts*60/TOI) across positive-TOI appearances; missing attempts coalesced to zero; no min-history gate",1,True
