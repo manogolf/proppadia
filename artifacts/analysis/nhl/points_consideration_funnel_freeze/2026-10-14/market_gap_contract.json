@@ -1,0 +1,13 @@
+{
+  "diagnostic_cohorts": {
+    "OPPOSITE_SIDE": "model side differs from no-vig market side",
+    "OVER": "model-selected side is OVER",
+    "SAME_SIDE_CONFIDENCE_DISAGREEMENT": "model side equals no-vig market side within Stage 2; the >15pp signed selected-side gap is the confidence disagreement",
+    "UNDER": "model-selected side is UNDER"
+  },
+  "gap": "Signed positive selected-side probability gap; no absolute value. Strict > 0.15 (15 percentage points).",
+  "missing": "Unavailable gap is retained and separately identifiable; it is not treated as exceeding threshold.",
+  "name": "RESEARCH_EXCLUDE_EXTREME_MODEL_MARKET_GAP",
+  "no_vig_market": "Convert both side median American prices to raw implied probabilities, normalize each by their two-side sum, then select probability for the model-selected side.",
+  "rule": "Among Stage 1 survivors, exclude only when selected_side_model_probability - selected_side_no_vig_market_probability > 0.15."
+}

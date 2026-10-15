@@ -1,0 +1,11 @@
+{
+  "counts": {
+    "stage_0": 658,
+    "stage_1_survivors": 538,
+    "stage_2_survivors": 263,
+    "stage_3_survivors": 227
+  },
+  "line": "0.5",
+  "population": "DISCOVERY",
+  "source": "Prior package, reproduced in its committed implementation; not recomputed into a changed definition."
+}

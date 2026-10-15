@@ -1,0 +1,7 @@
+{
+  "market_side": "OVER when normalized no-vig p_over >= 0.5, otherwise UNDER.",
+  "model_side": "OVER when model p_over >= 0.5, otherwise UNDER.",
+  "name": "PROVISIONAL_STAGE_3_OPPOSITE_SIDE_DISAGREEMENT",
+  "rule": "Among Stage 2 survivors only, exclude when model_side != market_side.",
+  "status": "Provisional, independently evaluated, not merged into Stage 2."
+}

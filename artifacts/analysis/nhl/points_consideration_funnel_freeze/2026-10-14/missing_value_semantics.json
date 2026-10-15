@@ -1,0 +1,5 @@
+{
+  "edge": "EDGE_UNAVAILABLE; retain in Stage 1; continue to later screens if their inputs are available",
+  "gap": "GAP_UNAVAILABLE; do not exclude at Stage 2; continue to Stage 3 if sides are available",
+  "side": "SIDE_UNAVAILABLE; do not exclude at Stage 3"
+}

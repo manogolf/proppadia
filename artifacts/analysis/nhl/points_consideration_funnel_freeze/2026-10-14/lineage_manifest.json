@@ -1,0 +1,37 @@
+{
+  "contract_version": "NHL_POINTS_CONSIDERATION_FUNNEL_V1",
+  "generation": "./bin/python -m backend.nhl.scripts.freeze_nhl_points_consideration_funnel",
+  "inputs": {
+    "artifacts/analysis/nhl/points_consideration_funnel/2026-10-14/current_day_dry_view_2026-10-14.csv": "af9b53bcde7424d0182297dc712b09665289ed628a8ca7fe345c76cc0339f357",
+    "artifacts/analysis/nhl/points_consideration_funnel/2026-10-14/lineage_manifest.json": "8fd933d97be8177709fafd49a14ae55a0276421893313fcb34553bd24591f721",
+    "artifacts/analysis/nhl/points_consideration_funnel/2026-10-14/summary.json": "5d84ff46d7d46c784572b7a729faedde553a8ad2a8c6a6bc6d55235fc0f174dd"
+  },
+  "official_reconciliation_inspected": "artifacts/operational/nhl/postgame_reconciliation/; no 2026-10-14 reconciliation package exists",
+  "outputs": {
+    "amendment_policy.json": "7261c21d9dbb0851e10ea2f3a8731ebd48034aa867f1aad7b4938051d40708ce",
+    "backlog_context.md": "6493ac83113ecb00ce8a18f2aa29ab496a36da1ea377f9356174ed4b21dcc072",
+    "cumulative_validation_summary.csv": "89ed220d3c01333fb2d3af0a0b4892f2001cebf1bc3b519ca767782cd3492f62",
+    "date_level_validation_summary.csv": "f3aad42e70bfe10fd7cac0d14b874fc715f85b694431f417561eb2d28823ddc5",
+    "discovery_window_manifest.json": "e775e577f37ff97d6e3b82c0250080dfae63a0507e015cd63af38aa41d3b43f2",
+    "edge_contract.json": "95d65a0327d422d2847313dbb91a6ee46c5a98070a2c86967747d55504b54d75",
+    "eventual_decision_state_options.json": "6b201f441af64004045d34208582b988505195ff6f640c406225febfdccbfbab",
+    "frozen_discovery_counts.json": "ccba4cbd5d64fe2003dbfe0052947d9191f368bae5885209cd11dfd7d2d15d12",
+    "frozen_funnel_contract.json": "f05001539537e715a57ec6a48af8948bde602e4eeb5503a0e23d82c405a1c328",
+    "losses_removed_wins_sacrificed.csv": "756975516c5ce17b3da16b53278e0ee1bbcf5e4a280532eb54efaf96a5ca317c",
+    "market_gap_contract.json": "cf4c2b274234a2cda48c92c6903bdb22759cf63a1be358bf1efe226ef7533566",
+    "missing_value_semantics.json": "ab23460d04af321a391c2a7789cbd47716efd601af571b014ea26efe03b6b6ae",
+    "oct14_pre_outcome_classification_binding.json": "f8818379af161f0d9468878723f2b38d6b7797ca914949992ffe88daa851249b",
+    "ordering_contract.json": "3e14421d71bde7e19f122ff5dea54341e6d497de286315f0a02b66ebaef22fba",
+    "primary_validation_questions.json": "fd1c69ba7700519e675e2010e4032d523324d21159877e6450f4428112ec5aad",
+    "prospective_ledger.csv": "3a1f097376590618a82e885da38797e7a1357ac8f8fb0d84a16830ce1f220969",
+    "prospective_ledger_schema.json": "e93c9918077bb5678dec976d34443070e6876e09c6e3617e7c59212a53837a77",
+    "report.md": "414659baca2f303b290f30345b5beaf47ad114f63f9e2fda9758e792774b167c",
+    "stage2_diagnostic_cohorts.csv": "84b6df923230136ab769ad6ffcdec87f50affb65081b1c9ed52c70a110de3ad1",
+    "stage_1_rule.json": "95d65a0327d422d2847313dbb91a6ee46c5a98070a2c86967747d55504b54d75",
+    "stage_2_rule.json": "cf4c2b274234a2cda48c92c6903bdb22759cf63a1be358bf1efe226ef7533566",
+    "stage_3_rule.json": "a61c7cacf8929673fcb0cc05a20ec296b70c4fd0c6521b7945479c3c3afd977d",
+    "summary.json": "44cd8dbe4143d47a514e42561f0e178595b38a2fcf4900f7d925908962e66d89",
+    "validation_gate_specification.json": "8bb398451bd300171ff3254782f4627ed8dff8eaf7879461fcbf6d66da2fba4e"
+  },
+  "source_commit": "63dde3d091482e5fb9da3fb30a6665302bbf6f54"
+}

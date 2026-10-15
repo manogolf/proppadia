@@ -1,0 +1,12 @@
+{
+  "diagnostic_overlap_flags": true,
+  "double_counting": "Prohibited; each row contributes to only its first exclusion cohort.",
+  "first_exclusion_only": true,
+  "order": [
+    "STAGE_0",
+    "STAGE_1",
+    "STAGE_2",
+    "STAGE_3",
+    "SURVIVORS"
+  ]
+}

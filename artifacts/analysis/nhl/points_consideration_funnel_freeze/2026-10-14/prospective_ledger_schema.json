@@ -1,0 +1,46 @@
+{
+  "key": [
+    "slate_date",
+    "game_id",
+    "player_id",
+    "line",
+    "record_type"
+  ],
+  "natural_prediction_key": [
+    "slate_date",
+    "game_id",
+    "player_id",
+    "line"
+  ],
+  "record_types": [
+    "CLASSIFICATION",
+    "OUTCOME_GRADE"
+  ],
+  "append_only": true,
+  "immutable_rows": true,
+  "columns": [
+    "record_type",
+    "slate_date",
+    "game_id",
+    "player_id",
+    "line",
+    "frozen_contract_version",
+    "prediction_identity",
+    "prediction_artifact_sha256",
+    "market_attachment_identity",
+    "odds_observation_manifest_sha256",
+    "selected_production_edge",
+    "signed_selected_model_minus_no_vig_market_gap",
+    "stage1_excluded",
+    "stage2_excluded",
+    "stage3_excluded",
+    "first_exclusion_stage",
+    "survivor",
+    "edge_status",
+    "classification_timestamp_utc",
+    "classification_source",
+    "official_points",
+    "grade_status"
+  ],
+  "outcome_join": "Only after pre-outcome classification is frozen. Add an OUTCOME_GRADE event; never edit a saved CLASSIFICATION event."
+}

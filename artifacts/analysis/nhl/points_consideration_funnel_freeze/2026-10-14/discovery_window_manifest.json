@@ -1,0 +1,13 @@
+{
+  "dates": [
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13"
+  ],
+  "population": "DISCOVERY",
+  "prohibited_for_post_freeze_rule_changes": true,
+  "retained_as_descriptive_reference_only": true,
+  "source_package": "artifacts/analysis/nhl/points_consideration_funnel/2026-10-14/",
+  "source_summary_sha256": "5d84ff46d7d46c784572b7a729faedde553a8ad2a8c6a6bc6d55235fc0f174dd"
+}

@@ -1,0 +1,53 @@
+{
+  "all_market_rows_predated_game_start": true,
+  "classification_derived_without_outcomes": true,
+  "classification_status": "FROZEN_PRE_OUTCOME",
+  "classification_timestamp_utc": "2026-10-14T19:29:25.340306Z",
+  "date": "2026-10-14",
+  "dry_view_path": "artifacts/analysis/nhl/points_consideration_funnel/2026-10-14/current_day_dry_view_2026-10-14.csv",
+  "dry_view_sha256": "af9b53bcde7424d0182297dc712b09665289ed628a8ca7fe345c76cc0339f357",
+  "integrity_artifact_sha256": "c5790e8e5e65177b32324c9d492497ebcb9bee3d414d0ff0f62c6e58848a1db3",
+  "lines": [
+    {
+      "line": "0.5",
+      "stage_0_market_usable": 58,
+      "stage_1_removed": 9,
+      "stage_1_survivors": 49,
+      "stage_2_removed_incremental": 26,
+      "stage_2_survivors": 23,
+      "stage_3_removed_incremental": 3,
+      "stage_3_survivors": 20,
+      "survivor_share": 0.3448275862068966
+    },
+    {
+      "line": "1.5",
+      "stage_0_market_usable": 31,
+      "stage_1_removed": 3,
+      "stage_1_survivors": 28,
+      "stage_2_removed_incremental": 9,
+      "stage_2_survivors": 19,
+      "stage_3_removed_incremental": 0,
+      "stage_3_survivors": 19,
+      "survivor_share": 0.6129032258064516
+    },
+    {
+      "line": "2.5",
+      "stage_0_market_usable": 4,
+      "stage_1_removed": 0,
+      "stage_1_survivors": 4,
+      "stage_2_removed_incremental": 0,
+      "stage_2_survivors": 4,
+      "stage_3_removed_incremental": 0,
+      "stage_3_survivors": 4,
+      "survivor_share": 1.0
+    }
+  ],
+  "market_attachment_sha256": "a964969cc39c394adb2ccc063c55fde56fb9556e0372de90a4d761e79a2ab0a1",
+  "market_usable_rows": 93,
+  "outcomes_included": false,
+  "parent_daily_run_id": "nhldaily_20261014T192554086407Z_2b980c9e",
+  "prediction_rows": 285,
+  "prediction_sha256": "71e2972de2d26791df0af03a8aa74a48972cd858bb7d1f82311068de9874816e",
+  "prior_integrity_status": "PASS",
+  "survivors_all_lines": 43
+}

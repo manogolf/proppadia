@@ -1,0 +1,5 @@
+{
+  "current_version": "NHL_POINTS_CONSIDERATION_FUNNEL_V1",
+  "policy": "Any change to order, edge, 15 pp threshold, signed/absolute gap, Stage 3 disagreement rule, or missing-value semantics requires a new explicit contract version (for example V2); V1 is immutable.",
+  "silent_mutation_allowed": false
+}

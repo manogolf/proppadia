@@ -1,0 +1,15 @@
+{
+  "definitions_frozen": true,
+  "questions": [
+    "A stage removals and survivor counts",
+    "B survivor performance",
+    "C excluded-row performance",
+    "D cohort wins/losses and scores",
+    "E whether Stage 2 removes disproportionately more losses than wins",
+    "F whether Stage 2 reduces excess losses",
+    "G whether Stage 3 adds separation beyond Stage 2",
+    "H survivor calibration versus raw population",
+    "I whether market outperforms HGB in large-disagreement rows",
+    "J where survivor losses accumulate"
+  ]
+}

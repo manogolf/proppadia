@@ -1,0 +1,7 @@
+{
+  "discovery_rationale": "NONCOMPETITIVE_FOR_CONSIDERATION; not a validated failure region.",
+  "edge_definition": "Selected model-side probability minus raw American implied probability calculated from that side's separately aggregated median attachment price; raw probability includes vig.",
+  "missing": "EDGE_UNAVAILABLE remains classified and is not silently excluded.",
+  "name": "RESEARCH_EXCLUDE_NEGATIVE_EDGE",
+  "rule": "Exclude only when selected-side production edge < 0."
+}

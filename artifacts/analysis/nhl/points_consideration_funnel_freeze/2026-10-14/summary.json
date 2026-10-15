@@ -1,0 +1,67 @@
+{
+  "contract_fingerprint": "15763cff55314952489b7221eb20237cb2ed749cbe0b95891377c2c1338e99c4",
+  "contract_version": "NHL_POINTS_CONSIDERATION_FUNNEL_V1",
+  "discovery_and_validation_separate": true,
+  "discovery_counts_0_5": {
+    "stage_0": 658,
+    "stage_1_survivors": 538,
+    "stage_2_survivors": 263,
+    "stage_3_survivors": 227
+  },
+  "discovery_dates": [
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13"
+  ],
+  "ledger_rows": 93,
+  "ledger_status": "PRE_OUTCOME_CLASSIFICATIONS_FROZEN_OUTCOMES_PENDING",
+  "minimum_independent_finalized_dates": 6,
+  "oct14": {
+    "final_outcomes_available": false,
+    "line_counts": [
+      {
+        "line": "0.5",
+        "stage_0_market_usable": 58,
+        "stage_1_removed": 9,
+        "stage_1_survivors": 49,
+        "stage_2_removed_incremental": 26,
+        "stage_2_survivors": 23,
+        "stage_3_removed_incremental": 3,
+        "stage_3_survivors": 20,
+        "survivor_share": 0.3448275862068966
+      },
+      {
+        "line": "1.5",
+        "stage_0_market_usable": 31,
+        "stage_1_removed": 3,
+        "stage_1_survivors": 28,
+        "stage_2_removed_incremental": 9,
+        "stage_2_survivors": 19,
+        "stage_3_removed_incremental": 0,
+        "stage_3_survivors": 19,
+        "survivor_share": 0.6129032258064516
+      },
+      {
+        "line": "2.5",
+        "stage_0_market_usable": 4,
+        "stage_1_removed": 0,
+        "stage_1_survivors": 4,
+        "stage_2_removed_incremental": 0,
+        "stage_2_survivors": 4,
+        "stage_3_removed_incremental": 0,
+        "stage_3_survivors": 4,
+        "survivor_share": 1.0
+      }
+    ],
+    "pre_outcome_market_usable": 93,
+    "pre_outcome_survivors": 43,
+    "validation_status": "AWAITING_FINAL_OUTCOMES"
+  },
+  "paid_credits": 0,
+  "production_db_mutations": 0,
+  "prospective_finalized_dates": 0,
+  "prospective_start_date": "2026-10-14",
+  "provider_calls": 0,
+  "status": "FROZEN_FOR_PROSPECTIVE_VALIDATION"
+}
