@@ -1,0 +1,55 @@
+{
+  "2025_rows": 47239,
+  "2025_unique_player_games": 47239,
+  "2026_capture_rows": 1800,
+  "2026_settled_rows": 1320,
+  "2026_unresolved_rows": 480,
+  "2026_unique_player_games": 1800,
+  "2026_dates": [
+    "2026-10-09",
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13",
+    "2026-10-14"
+  ],
+  "secondary_market_intersection_n": 714,
+  "outcome_sources": [
+    {
+      "date": "2026-10-09",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-09/reconciliation=9a697c482352d19f4cd0/canonical_skater_outcomes.csv",
+      "sha256": "90c072da3aadd298156987c0c94168682b119d6d2c8e4bfd55339f69cf84f782",
+      "rows": 144
+    },
+    {
+      "date": "2026-10-10",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-10/reconciliation=fbe3605043e75c263b78/canonical_skater_outcomes.csv",
+      "sha256": "c33bc07ea82d4397260b386d05ac330636b9b9eb3613cdf0c0dc3a94ad9a5ffa",
+      "rows": 504
+    },
+    {
+      "date": "2026-10-11",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-11/reconciliation=e7da8655562d8ca577a9/canonical_skater_outcomes.csv",
+      "sha256": "7e69bf8612c7d12a451fa5d508490735b5079f9425ec1a387d6a5aa2c9d048fe",
+      "rows": 108
+    },
+    {
+      "date": "2026-10-12",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-12/reconciliation=3d69dd4ed0bce1fe9846/canonical_skater_outcomes.csv",
+      "sha256": "ac1b3b9992826f957e8dd817f12c9893aa49e63aacc92087a6c4828de06ca5d3",
+      "rows": 108
+    },
+    {
+      "date": "2026-10-13",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-13/reconciliation=ba0c2b3c3ef1bd1ddb99/canonical_skater_outcomes.csv",
+      "sha256": "96b5cf8df3e415f31eb16c992cbb3b6350657b1e50d71b66258212960fc0f0b9",
+      "rows": 576
+    },
+    {
+      "date": "2026-10-14",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/canonical_skater_outcomes.csv",
+      "sha256": "fe387ec8dde29efc6f63d46dcf2edd9a675629d7824066f67753c736cd01638c",
+      "rows": 72
+    }
+  ]
+}

@@ -1,0 +1,411 @@
+{
+  "attempts_causal_replay_existing_result": [
+    {
+      "baseline": "{'n': 47239, 'mean_predicted_points': 0.4590714622563805, 'mean_realized_points': 0.4602341285801986, 'mean_count_residual_realized_minus_predicted': 0.0011626663238180324, 'count_mae': 0.5372499471627954, 'count_rmse': 0.6865336544368746, 'over_brier': 0.20674340337676234, 'over_log_loss': 0.6015375340405661, 'over_calibration_gap': 0.004951665513870149, 'selected_side_accuracy': 0.6843497957196384, 'expected_losses': 15489.331481168021, 'observed_losses': 14911, 'excess_losses': -578.3314811680211, 'mean_p_over': 0.3522706180742545}",
+      "diagnostic": "same frozen HGB/scaler/Poisson; one feature set to zero; descriptive counterfactual",
+      "known_attempt_feature_rows": 46008,
+      "known_nonzero_attempt_rows": 39126,
+      "known_zero_attempt_rows": 6882,
+      "mean_expected_points_delta_zero_minus_correct": -0.0020219469819306,
+      "mean_p_over_delta_zero_minus_correct": -0.0029498474960463,
+      "replayed_correct_feature": "{'n': 47239, 'mean_predicted_points': 0.4590714622563805, 'mean_realized_points': 0.4602341285801986, 'mean_count_residual_realized_minus_predicted': 0.0011626663238180324, 'count_mae': 0.5372499471627954, 'count_rmse': 0.6865336544368746, 'over_brier': 0.20674340337676234, 'over_log_loss': 0.6015375340405661, 'over_calibration_gap': 0.004951665513870172, 'selected_side_accuracy': 0.6843497957196384, 'expected_losses': 15489.331481168021, 'observed_losses': 14911, 'excess_losses': -578.3314811680211, 'mean_p_over': 0.35227061807425464}",
+      "rows": 47239,
+      "zeroed_attempt_feature": "{'n': 47239, 'mean_predicted_points': 0.4570495152744498, 'mean_realized_points': 0.4602341285801986, 'mean_count_residual_realized_minus_predicted': 0.0031846133057487278, 'count_mae': 0.5347949163440002, 'count_rmse': 0.687285380282071, 'over_brier': 0.20698113915748623, 'over_log_loss': 0.6018915416699131, 'over_calibration_gap': 0.002001818017823858, 'selected_side_accuracy': 0.6813438049069624, 'expected_losses': 15157.46249083595, 'observed_losses': 15053, 'excess_losses': -104.46249083594921, 'mean_p_over': 0.34932077057820826}"
+    }
+  ],
+  "backlog": [
+    "Points shot-attempts data-quality defect",
+    "Points Funnel V1 prospective validation",
+    "Points full-range prospective collection",
+    "Points HGB root-cause work \u2014 CURRENT",
+    "SOG cross-market review after Points root-cause decision",
+    "Saves cross-market review",
+    "Moneyline cross-market review",
+    "Puck Line cross-market review",
+    "SOG structural/divergence/fixed-blend grading",
+    "historical SOG official-TOI binding",
+    "deferred Puck Line framework research",
+    "Tier3 override currently unnecessary"
+  ],
+  "common_support": {
+    "2025": {
+      "brier_0_5": 0.14940807881645177,
+      "log_loss_0_5": 0.47695660504358145,
+      "mean_predicted_points": 0.29492364010038147,
+      "mean_realized_points": 0.2,
+      "n": 30,
+      "p_over_0_5": 0.25209756616350837,
+      "point_game_rate": 0.16666666666666666,
+      "residual_realized_minus_predicted": -0.0949236401003815
+    },
+    "2025_matched_metrics": {
+      "brier_0_5": 0.14940807881645177,
+      "log_loss_0_5": 0.47695660504358145,
+      "mean_predicted_points": 0.29492364010038147,
+      "mean_realized_points": 0.2,
+      "n": 30,
+      "p_over_0_5": 0.25209756616350837,
+      "point_game_rate": 0.16666666666666666,
+      "residual_realized_minus_predicted": -0.0949236401003815
+    },
+    "2026": {
+      "brier_0_5": 0.3133264214017691,
+      "log_loss_0_5": 0.8561676857042605,
+      "mean_predicted_points": 0.24084892384059545,
+      "mean_realized_points": 0.5666666666666667,
+      "n": 30,
+      "p_over_0_5": 0.2131048539008474,
+      "point_game_rate": 0.4666666666666667,
+      "residual_realized_minus_predicted": 0.32581774282607123
+    },
+    "2026_matched_metrics": {
+      "brier_0_5": 0.3133264214017691,
+      "log_loss_0_5": 0.8561676857042605,
+      "mean_predicted_points": 0.24084892384059545,
+      "mean_realized_points": 0.5666666666666667,
+      "n": 30,
+      "p_over_0_5": 0.2131048539008474,
+      "point_game_rate": 0.4666666666666667,
+      "residual_realized_minus_predicted": 0.32581774282607123
+    },
+    "balance_status": "INADEQUATE_MULTIVARIATE_OVERLAP",
+    "balance_threshold_smd": 0.1,
+    "caliper_distance_max": 2.5,
+    "candidate_features": [
+      "current_season_games_prior",
+      "player_points_last10",
+      "season_ppg_prior",
+      "mean_toi_last10",
+      "mean_pp_toi_last10",
+      "d10_sog_per60",
+      "team_d10_sf_per_game",
+      "last10_team_sog_share"
+    ],
+    "effective_sample_size_each_season": 30,
+    "max_abs_postmatch_smd": 1.0498694337707477,
+    "n_pairs": 30,
+    "outcome_blind": true,
+    "raw_calipers": {
+      "d10_sog_per60": 2,
+      "games_prior": 2,
+      "last10_points": 0.25,
+      "pp_toi_minutes": 1,
+      "season_ppg": 0.35,
+      "team_shots_per_game": 2,
+      "team_sog_share": 0.01,
+      "toi_minutes": 2
+    },
+    "residual_difference_2026_minus_2025": 0.42074138292645274,
+    "season_ppg_gap_max": 0.35,
+    "status": "OUTCOME_BLIND_GREEDY_1_TO_1"
+  },
+  "date_game_cluster_bootstrap": {
+    "cluster_bootstrap_95pct_ci": [
+      0.09194650734944135,
+      0.20685704735980573
+    ],
+    "clusters": 37,
+    "mean_residual": 0.14912923585365276,
+    "replicates": 1000,
+    "seed": 20261015
+  },
+  "distribution_reweighting_reused": {
+    "effective_sample_size": 43386.23721394749,
+    "method": "nearest 2026 quoted pregame feature state kernel, exp(-0.5*mean standardized squared distance)",
+    "n": 47239,
+    "outcome_blind_weights": true,
+    "weighted_brier_0_5": 0.20819919155983618,
+    "weighted_log_loss_0_5": 0.6048442336141031,
+    "weighted_mean_predicted": 0.4567771489142035,
+    "weighted_mean_realized": 0.4549645422214437,
+    "weighted_p_under": 0.6478496839201316,
+    "weighted_realized_under_rate": 0.6544097764968952,
+    "weighted_residual": -0.0018126066927598274,
+    "weighted_under_calibration_gap": -0.006560092576763599
+  },
+  "early_season_control": {
+    "0": {
+      "2025": {
+        "brier_0_5": 0.19187638741753427,
+        "log_loss_0_5": 0.5717385075992961,
+        "mean_predicted_points": 0.3408138341643447,
+        "mean_realized_points": 0.34574468085106386,
+        "n": 940,
+        "p_over_0_5": 0.28730089112248036,
+        "point_game_rate": 0.25851063829787235,
+        "residual_realized_minus_predicted": 0.004930846686719145
+      },
+      "2026": {
+        "brier_0_5": 0.2322069121158102,
+        "log_loss_0_5": 0.6621563797786855,
+        "mean_predicted_points": 0.25839904923538665,
+        "mean_realized_points": 0.3333333333333333,
+        "n": 3,
+        "p_over_0_5": 0.2277089727607614,
+        "point_game_rate": 0.3333333333333333,
+        "residual_realized_minus_predicted": 0.07493428409794671
+      },
+      "residual_gap_2026_minus_2025": 0.07000343741122757
+    },
+    "1-2": {
+      "2025": {
+        "brier_0_5": 0.20352648964183093,
+        "log_loss_0_5": 0.595379327606934,
+        "mean_predicted_points": 0.3486871929981869,
+        "mean_realized_points": 0.3933147632311978,
+        "n": 1795,
+        "p_over_0_5": 0.28200525093407175,
+        "point_game_rate": 0.3136490250696379,
+        "residual_realized_minus_predicted": 0.04462757023301081
+      },
+      "2026": {
+        "brier_0_5": 0.1943347783708618,
+        "log_loss_0_5": 0.5864728892056511,
+        "mean_predicted_points": 0.21207853756656897,
+        "mean_realized_points": 0.27586206896551724,
+        "n": 29,
+        "p_over_0_5": 0.18997518048251172,
+        "point_game_rate": 0.2413793103448276,
+        "residual_realized_minus_predicted": 0.0637835313989483
+      },
+      "residual_gap_2026_minus_2025": 0.019155961165937485
+    },
+    "3-5": {
+      "2025": {
+        "brier_0_5": 0.1983898607608048,
+        "log_loss_0_5": 0.5832753943492163,
+        "mean_predicted_points": 0.3883985058717133,
+        "mean_realized_points": 0.3955074207781789,
+        "n": 2493,
+        "p_over_0_5": 0.30691580051427464,
+        "point_game_rate": 0.31247492980344965,
+        "residual_realized_minus_predicted": 0.00710891490646563
+      },
+      "2026": {
+        "brier_0_5": 0.20223083781477277,
+        "log_loss_0_5": 0.5938201603574685,
+        "mean_predicted_points": 0.27365908872623756,
+        "mean_realized_points": 0.36771300448430494,
+        "n": 223,
+        "p_over_0_5": 0.23415701295629043,
+        "point_game_rate": 0.3094170403587444,
+        "residual_realized_minus_predicted": 0.09405391575806733
+      },
+      "residual_gap_2026_minus_2025": 0.0869450008516017
+    },
+    "6-10": {
+      "2025": {
+        "brier_0_5": 0.2007512686909828,
+        "log_loss_0_5": 0.5881947396406959,
+        "mean_predicted_points": 0.41435095538298117,
+        "mean_realized_points": 0.43697692112604614,
+        "n": 3943,
+        "p_over_0_5": 0.32437821951255624,
+        "point_game_rate": 0.3329951813340096,
+        "residual_realized_minus_predicted": 0.02262596574306504
+      },
+      "2026": {
+        "brier_0_5": 0.2259974508784873,
+        "log_loss_0_5": 0.6449646489146553,
+        "mean_predicted_points": 0.328945078467215,
+        "mean_realized_points": 0.4924812030075188,
+        "n": 1064,
+        "p_over_0_5": 0.2738811693186396,
+        "point_game_rate": 0.36278195488721804,
+        "residual_realized_minus_predicted": 0.16353612454030372
+      },
+      "residual_gap_2026_minus_2025": 0.14091015879723867
+    }
+  },
+  "funnel_v1_modified": false,
+  "model_target_parity": {
+    "2025_out_of_time": true,
+    "2025_replay_max_abs_error": 2.220446049250313e-16,
+    "2025_training_seasons": [
+      2023,
+      2024
+    ],
+    "2026_capture_replay_gate": "PASS",
+    "2026_capture_replay_max_abs_error": 1.1102230246251565e-16,
+    "feature_order": [
+      "is_home",
+      "d10_sog_per60",
+      "attempts_d10_per60",
+      "player_points_last10",
+      "current_season_points_prior",
+      "current_season_games_prior",
+      "mean_toi_last10",
+      "mean_pp_toi_last10",
+      "team_d10_sf_per_game",
+      "last10_team_sog_share"
+    ],
+    "model_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+    "no_same_game_leakage": true,
+    "official_points_definition": "official points=goals+assists, final participated only",
+    "regular_season_only": true,
+    "transformation": "frozen scaler + HistGradientBoostingRegressor expected count; Poisson survival for thresholds"
+  },
+  "oct15_pending": {
+    "attempts_zero_n": 463,
+    "capture_feature_sha256": "6f9380b914d4e11de91973b65ff66241c82c205c7231f70ebd2fe6117afbbfaa",
+    "capture_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-15/run_id=nhldaily_20261015T140453183604Z_bfa01e59/phase=EARLY/captured_at=20261015T140800076538Z",
+    "expected_points_mean": 0.29535024991016195,
+    "expected_points_q10_q50_q90": [
+      0.1777225215485972,
+      0.2538280291860476,
+      0.4751522323141341
+    ],
+    "failure_region_candidate_n": 175,
+    "games_prior_counts": {
+      "0": 63,
+      "1-2": 24,
+      "11+": 8,
+      "3-5": 66,
+      "6-10": 386
+    },
+    "n": 547,
+    "outcome_status": "PENDING_OUTCOME",
+    "outcomes_joined": false
+  },
+  "outcome_composition": [
+    {
+      "assists_per_game": 0.2890620038527488,
+      "goals_per_game": 0.17117212472744978,
+      "n": 47239,
+      "one_point_rate": 0.25781663456042675,
+      "points_per_game": 0.4602341285801986,
+      "season": 2025,
+      "two_plus_point_rate": 0.08950231799995766,
+      "zero_point_rate": 0.6526810474396155
+    },
+    {
+      "assists_per_game": 0.29393939393939394,
+      "goals_per_game": 0.17196969696969697,
+      "n": 1320,
+      "one_point_rate": 0.25757575757575757,
+      "points_per_game": 0.4659090909090909,
+      "season": 2026,
+      "two_plus_point_rate": 0.09318181818181819,
+      "zero_point_rate": 0.6492424242424243
+    }
+  ],
+  "paid_credits": 0,
+  "populations": {
+    "2025": {
+      "brier_0_5": 0.20674340337676234,
+      "log_loss_0_5": 0.6015375340405661,
+      "mean_predicted_points": 0.4590714622563805,
+      "mean_realized_points": 0.4602341285801986,
+      "n": 47239,
+      "p_over_0_5": 0.3522706180742545,
+      "point_game_rate": 0.3473189525603844,
+      "residual_realized_minus_predicted": 0.0011626663238180528,
+      "settled_regular_season": true
+    },
+    "2026": {
+      "brier_0_5": 0.22115459798805734,
+      "dates": [
+        "2026-10-09",
+        "2026-10-10",
+        "2026-10-11",
+        "2026-10-12",
+        "2026-10-13",
+        "2026-10-14"
+      ],
+      "log_loss_0_5": 0.6347415596910473,
+      "mean_predicted_points": 0.31677985505543815,
+      "mean_realized_points": 0.4659090909090909,
+      "n": 1320,
+      "n_full_capture": 1800,
+      "n_settled_participated": 1320,
+      "n_unresolved": 480,
+      "p_over_0_5": 0.2651519520321193,
+      "point_game_rate": 0.35075757575757577,
+      "residual_realized_minus_predicted": 0.14912923585365276
+    },
+    "2026_market_intersection_secondary": {
+      "metrics": {
+        "brier_0_5": 0.2517982183351346,
+        "calibration_gap_over": -0.13062240689136484,
+        "log_loss_0_5": 0.7011993815335338,
+        "mae": 0.6219997212707231,
+        "mean_p_under": 0.6978492976476672,
+        "mean_predicted_points": 0.369843086196528,
+        "mean_realized_points": 0.6022408963585434,
+        "n": 714,
+        "p_over_0_5": 0.30215070235233266,
+        "realized_point_game_rate": 0.4327731092436975,
+        "realized_under_rate": 0.5672268907563025,
+        "residual_realized_minus_predicted": 0.2323978101620154,
+        "rmse": 0.8349921206563108,
+        "two_plus_point_rate": 0.13445378151260504,
+        "under_brier": 0.2517982183351346,
+        "under_calibration_gap_pred_minus_realized": 0.13062240689136473,
+        "under_log_loss": 0.7011993815335338
+      },
+      "n": 714
+    }
+  },
+  "production_changes": false,
+  "production_db_mutations": 0,
+  "provider_calls": 0,
+  "repair_decision": {
+    "next_bounded_experiment": "Source-bind prior team-game SOG coverage and attempts availability offline, then prospectively test one pre-registered season-volume \u00d7 recent-scoring \u00d7 TOI regime while protecting a healthy reference stratum.",
+    "reason": "Confirmed attempts missingness and a major team-context support shift are measurable, but source integrity and isolated effects are unresolved; conditional outcome residual remains across six slates.",
+    "status": "NO_SINGLE_REPAIR_JUSTIFIED"
+  },
+  "root_cause_scorecard": [
+    {
+      "classification": "FEATURE_CONSTRUCTION_DRIFT",
+      "evidence": "attempts_d10_per60 is absent in 2026 raw history and scorer input is zero; existing heldout one-feature zeroing changes expected points by only about -0.002 on average.",
+      "scope": "confirmed but insufficient to explain aggregate +0.149",
+      "status": "SUPPORTED_BOUNDED"
+    },
+    {
+      "classification": "FEATURE_SUPPORT_SHIFT",
+      "evidence": "2026 is early season; several season-volume and team context distributions differ from full 2025, but common support and maturity controls determine residual contribution.",
+      "status": "SUPPORTED"
+    },
+    {
+      "classification": "FEATURE_TO_OUTCOME_RELATIONSHIP_SHIFT",
+      "evidence": "within shared expected-count bands 2026 residuals are higher than 2025; strict raw-unit common-support and one-to-one within-player comparisons also retain positive residual gaps. Six slates limit generalization.",
+      "status": "IN_SAMPLE_SIGNAL_SUPPORTED; MECHANISM_UNRESOLVED"
+    },
+    {
+      "classification": "MODEL_RESPONSE_TO_UNUSUAL_FEATURE_COMBINATION",
+      "evidence": "bounded interactions and frozen perturbations identify sensitivity regimes; one season does not establish a repairable mechanism.",
+      "status": "POSSIBLE_CONTRIBUTOR"
+    },
+    {
+      "classification": "PLAYER_POPULATION_COMPOSITION",
+      "evidence": "season/game player mix differs; within-player supported pairs quantify remaining difference.",
+      "status": "POSSIBLE_CONTRIBUTOR"
+    },
+    {
+      "classification": "TARGET_OR_OUTCOME_COMPOSITION_SHIFT",
+      "evidence": "goals, assists, points and zero/one/2+ rates are close between the full 2025 and 2026 participated/final cohorts.",
+      "status": "NOT_SUPPORTED_AS_PRIMARY_EXPLANATION"
+    },
+    {
+      "classification": "NO_REPRODUCIBLE_SHIFT",
+      "evidence": "aggregate residual shift reproduces; conditional regime interpretation needs more slates.",
+      "status": "NOT_ESTABLISHED"
+    },
+    {
+      "classification": "INSUFFICIENT_EVIDENCE",
+      "evidence": "no single feature mechanism yet meets the stipulated causal and healthy-row protection bar.",
+      "status": "SUPPORTED_FOR_REPAIR_DECISION"
+    }
+  ],
+  "schema_version": "NHL_POINTS_CROSS_SEASON_FEATURE_RESPONSE_V1",
+  "status": "NO_SINGLE_REPAIR_JUSTIFIED",
+  "within_player": {
+    "common_player_count": 585,
+    "mean_paired_residual_difference_2026_minus_2025": 0.05949260054639673,
+    "mean_realized_points_2025": 0.37122969837587005,
+    "mean_realized_points_2026": 0.3874709976798144,
+    "mean_residual_2025": 0.05602742316577874,
+    "mean_residual_2026": 0.11552002371217546,
+    "supported_pairs": 431
+  }
+}

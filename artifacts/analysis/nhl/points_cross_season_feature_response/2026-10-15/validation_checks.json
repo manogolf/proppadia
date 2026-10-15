@@ -1,0 +1,17 @@
+{
+  "A_2025_denominator_and_model_identity": "PASS: 47,239 strict-prior rows; frozen model SHA bound",
+  "B_2026_full_settled_denominator": "PASS: 1,320 participated/final outcomes among 1,800 capture identities",
+  "C_one_player_game_per_evaluation_row": "PASS: uniqueness asserted on canonical season/date/game/player key",
+  "D_matching_outcome_blind": "PASS: candidate search reads only declared pregame feature covariates; outcome-blind invariant tested",
+  "E_same_feature_units_and_bin_boundaries": "PASS: units documented; same 2025-derived edges applied in both seasons",
+  "F_early_season_control": "PASS: fixed 0, 1-2, 3-5, 6-10 bands; later 2025 separate",
+  "G_residual_arithmetic": "PASS: residual defined as official realized points minus frozen expected points",
+  "H_source_feature_comparison": "PASS: ten feature construction records, source hashes and status classifications emitted",
+  "I_bounded_interaction_reproducibility": "PASS: seven prespecified interaction tables deterministically regenerated",
+  "J_no_market_feature_in_HGB": "PASS: scorer receives only frozen ten-feature contract; quote status only secondary analysis",
+  "K_oct15_outcome_blind": "PASS: 547 immutable feature rows; no outcome files joined; PENDING_OUTCOME",
+  "L_production_funnel_unchanged": "PASS: no production/Funnel source files modified by this study",
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "production_db_mutations": 0
+}

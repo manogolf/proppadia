@@ -1,0 +1,255 @@
+{
+  "2025_replay_max_abs_error": 2.220446049250313e-16,
+  "2026_capture_lineage": [
+    {
+      "capture_rows": 197,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-09/run_id=nhldaily_20261009T195836812178Z_6d8ecbb3/phase=EARLY/captured_at=20261009T200143266929Z/features.csv",
+      "feature_sha256": "390075220066b14e114728ae5a7b406935cc2dcc26c34ec2c1d64c7a5e7d2655",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-09/run_id=nhldaily_20261009T195836812178Z_6d8ecbb3/phase=EARLY/captured_at=20261009T200143266929Z/predictions.csv",
+      "prediction_sha256": "12d1f467fdb451f32851271f3b08bbe3ad3d9e9c1bc9683932e4de07f84d02c6",
+      "slate_date": "2026-10-09"
+    },
+    {
+      "capture_rows": 478,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/phase=EARLY/captured_at=20261010T225535073250Z/features.csv",
+      "feature_sha256": "d54d7e0c949bf1506193e64f9f975f1fdcaa4a79928611e745d4294a94a7be0f",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/phase=EARLY/captured_at=20261010T225535073250Z/predictions.csv",
+      "prediction_sha256": "f36bbbc6e97217f8e2d719c1a5d66e51aee134f94915fae95ee9f1073d2d23b7",
+      "slate_date": "2026-10-10"
+    },
+    {
+      "capture_rows": 147,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/phase=EARLY/captured_at=20261011T201553828041Z/features.csv",
+      "feature_sha256": "6913facf9c0d0543a6fbdf12c5b7679331e5a98c54ce6797f66cb7f60e5ee2f7",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/phase=EARLY/captured_at=20261011T201553828041Z/predictions.csv",
+      "prediction_sha256": "0b01fabd588e6552476d238a4e6a10ed9b0480310c92076c73008868b2f35159",
+      "slate_date": "2026-10-11"
+    },
+    {
+      "capture_rows": 97,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/phase=EARLY/captured_at=20261012T220702076898Z/features.csv",
+      "feature_sha256": "9512115fca1395816155ad9a21e56004475a91fecdf8eb3b0663508d8b3bab1c",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/phase=EARLY/captured_at=20261012T220702076898Z/predictions.csv",
+      "prediction_sha256": "67b6ced5579c0b8f482d326ba2e37e15f43e4bdb4da9fc1613f9a4e0f3be6912",
+      "slate_date": "2026-10-12"
+    },
+    {
+      "capture_rows": 786,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/phase=EARLY/captured_at=20261013T201812574041Z/features.csv",
+      "feature_sha256": "1e714f3a6660841a06c670e3c9a1b8acc0521a2bb0ddd70e7243b3a6665fac4c",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/phase=EARLY/captured_at=20261013T201812574041Z/predictions.csv",
+      "prediction_sha256": "cd86f4dafaa4272e23a8169d2c29965cb4f5b4be52e2c622dfd7036b76e5835a",
+      "slate_date": "2026-10-13"
+    },
+    {
+      "capture_rows": 95,
+      "deterministic_replay": "PASS",
+      "feature_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-14/run_id=nhldaily_20261014T192554086407Z_2b980c9e/phase=EARLY/captured_at=20261014T192924786235Z/features.csv",
+      "feature_sha256": "d1c9d146799ea9f64ed77f6cf1fd5078e4a2bb471be32609428405bdc209d875",
+      "prediction_max_abs_error": 1.1102230246251565e-16,
+      "prediction_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-14/run_id=nhldaily_20261014T192554086407Z_2b980c9e/phase=EARLY/captured_at=20261014T192924786235Z/predictions.csv",
+      "prediction_sha256": "a047fe3c4004b153f4688c0bdf68af3ed3f9edf63fdcd7d3a12a57ef5b98957b",
+      "slate_date": "2026-10-14"
+    }
+  ],
+  "2026_capture_replay_gate": "PASS",
+  "2026_capture_replay_max_abs_error": 1.1102230246251565e-16,
+  "attempts_evidence_source": "artifacts/analysis/nhl/points_attempts_feature_causal_replay/2026-10-15/2025_zeroing_experiment.csv",
+  "created_utc": "2026-10-15",
+  "feature_bin_edges_derived_only_from_2025": {
+    "attempts_d10_per60": [
+      "-inf",
+      3.3556600408944552,
+      6.329929699932549,
+      8.676275238193728,
+      10.704021852001775,
+      "inf"
+    ],
+    "current_season_games_prior": [
+      "-inf",
+      5.0,
+      14.0,
+      31.0,
+      50.0,
+      65.0,
+      "inf"
+    ],
+    "current_season_points_prior": [
+      "-inf",
+      1.0,
+      4.0,
+      11.0,
+      23.0,
+      38.0,
+      "inf"
+    ],
+    "d10_sog_per60": [
+      "-inf",
+      2.4793412657522813,
+      3.6764251417271305,
+      5.352044075715918,
+      7.236468609100333,
+      9.15770716829425,
+      "inf"
+    ],
+    "is_home": [
+      "-inf",
+      0.5,
+      "inf"
+    ],
+    "last10_team_sog_share": [
+      "-inf",
+      0.0174825174825174,
+      0.03125,
+      0.0488599348534201,
+      0.07195607150643116,
+      0.0960264900662251,
+      "inf"
+    ],
+    "mean_pp_toi_last10": [
+      "-inf",
+      0.192,
+      0.358,
+      0.963,
+      1.836666666666667,
+      2.7712250000000007,
+      "inf"
+    ],
+    "mean_toi_last10": [
+      "-inf",
+      11.038,
+      13.553250000000002,
+      16.576999999999998,
+      19.533,
+      21.901300000000006,
+      "inf"
+    ],
+    "player_points_last10": [
+      "-inf",
+      0.1,
+      0.2,
+      0.4,
+      0.6666666666666666,
+      1.0,
+      "inf"
+    ],
+    "team_d10_sf_per_game": [
+      "-inf",
+      23.75,
+      25.7,
+      27.7,
+      29.571428571428573,
+      31.6,
+      "inf"
+    ]
+  },
+  "input_hashes": {
+    "artifacts/analysis/nhl/points_attempts_feature_causal_replay/2026-10-15/2025_zeroing_experiment.csv": "82f8953aa2f1ffda7c05555156bcd6dbe4c32c7802a0493e2cacc48546e7558b",
+    "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/nhl_points_count_hgb_v1.joblib": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+    "artifacts/analysis/nhl/points_market_selection_population/2026-10-15/full_2026_operational_population.csv": "90783af3bb6c87690a5feabda1e1920a9ab301d268a4ae0bf188a44740efe144",
+    "backend/nhl/scripts/build_nhl_points_architecture_bakeoff.py": "84e671037e31b41c1c7c2cb19fe76c22f8787bc63535967a8176e91c8a3476ba",
+    "backend/nhl/scripts/export_nhl_points_hgb_features.py": "0c2e319508da5c03c57b4bf87c3ea7ea46952cf35f9412b1b425b8336fe617f6",
+    "backend/nhl/scripts/score_nhl_points_hgb_shadow.py": "3f0aadf2d28fce2790c7a7f89d8bfd57cb8fbf80e04bc15be44d7863918d6697"
+  },
+  "matching_features": [
+    "current_season_games_prior",
+    "player_points_last10",
+    "season_ppg_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "d10_sog_per60",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "matching_outcome_blind": true,
+  "model_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+  "official_outcome_sources": [
+    {
+      "date": "2026-10-09",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-09/reconciliation=9a697c482352d19f4cd0/canonical_skater_outcomes.csv",
+      "rows": 144,
+      "sha256": "90c072da3aadd298156987c0c94168682b119d6d2c8e4bfd55339f69cf84f782"
+    },
+    {
+      "date": "2026-10-10",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-10/reconciliation=fbe3605043e75c263b78/canonical_skater_outcomes.csv",
+      "rows": 504,
+      "sha256": "c33bc07ea82d4397260b386d05ac330636b9b9eb3613cdf0c0dc3a94ad9a5ffa"
+    },
+    {
+      "date": "2026-10-11",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-11/reconciliation=e7da8655562d8ca577a9/canonical_skater_outcomes.csv",
+      "rows": 108,
+      "sha256": "7e69bf8612c7d12a451fa5d508490735b5079f9425ec1a387d6a5aa2c9d048fe"
+    },
+    {
+      "date": "2026-10-12",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-12/reconciliation=3d69dd4ed0bce1fe9846/canonical_skater_outcomes.csv",
+      "rows": 108,
+      "sha256": "ac1b3b9992826f957e8dd817f12c9893aa49e63aacc92087a6c4828de06ca5d3"
+    },
+    {
+      "date": "2026-10-13",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-13/reconciliation=ba0c2b3c3ef1bd1ddb99/canonical_skater_outcomes.csv",
+      "rows": 576,
+      "sha256": "96b5cf8df3e415f31eb16c992cbb3b6350657b1e50d71b66258212960fc0f0b9"
+    },
+    {
+      "date": "2026-10-14",
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/canonical_skater_outcomes.csv",
+      "rows": 72,
+      "sha256": "fe387ec8dde29efc6f63d46dcf2edd9a675629d7824066f67753c736cd01638c"
+    }
+  ],
+  "output_hashes_sha256": {
+    "attempts_zeroing_existing_evidence.csv": "5b78bb8faa181d0f1455cbb764fa08954480f34130216852e04552ea08a44672",
+    "backlog_context.md": "6911e6e8c4390a85d70b32c84c411ad3a91f181161c4e6e8e40bf8df00f45605",
+    "bounded_interaction_comparisons.csv": "489523c5861eac8653a1c7149289ead78a7302448b60411ac82bd156ce977482",
+    "bounded_interaction_residual_differences.csv": "d710a2998f3f30ad6ad04bfe529ecbd91476c27cb24771eca7c8196a279994e4",
+    "common_support_balance.csv": "647476e4d854b2180f67301f93cd67bec8a15f1455c699def71314e4506e079d",
+    "common_support_matches.csv": "f579a87bc86c3bd80a63ff63a84c1718ead6849191b2208f62a76ad852c63072",
+    "conditional_single_feature_residual_differences.csv": "c255e08509b9f8b3776ea238b31138d012f3db6945f44014a34c5f8c50b543a6",
+    "conditional_single_feature_residual_maps.csv": "4e64e99c32f8b97a66684d6d2a028708ffe8badeadc2a169d219b76f1447cbaa",
+    "date_game_stability.csv": "077941038d50778a4b6c6f7183aadd4d68d319d9d3ace3c292c52067c712f9aa",
+    "early_season_historical_control.csv": "b6bfbd58bceac915eba75a79c2ac266b9db80aadd6364d3eab16c5f1982f27fd",
+    "feature_construction_comparison.csv": "43f652c222daaa0a4c71c4a45931195e72aad86aa75997a593b849d8796563cb",
+    "feature_distribution_bridge.csv": "526bb86d085a9c4afe60e3387760ea8d650555e7598ff299d91b11f0ece4cd13",
+    "feature_distribution_comparison.csv": "05f72f7b938a4c896637cec359681e7dfc15d864819bba27d9efdce3e80a1bd9",
+    "frozen_model_feature_sensitivity.csv": "ba22ea4b0cf5aa6c562e5afab20f1fca336c1f230c6d4fa955062b39d90fdf08",
+    "global_error_concentration.csv": "dcf8cb32a281c710d3d533d690283a071a5e8afc11dd1d14648161fc1f647760",
+    "market_quoted_status_secondary.csv": "4e7e403066888e12aa7bccff7fcfa1ac1934906f3f4553cde01add25cf98a65d",
+    "matched_expected_count_residual_differences.csv": "4398c9600c2b212b2a895f52bcdf231a45c799f31ae01aecc4e3019169a5893d",
+    "matched_expected_count_residuals.csv": "a82beab1de190caec570e1de86396bb97835c5428c41d3f7298b920c70d5f9db",
+    "model_target_parity_audit.json": "c22fda5f735d97c59390404c3231f778c800a76f069107ad565a4167b6cb5bc8",
+    "oct15_pending_feature_exposure.csv": "1218767655dce607d6fb45f018e8eb2645143e103aae22357198e47834103183",
+    "oct15_pending_feature_exposure_summary.json": "9be9de9159afc5e05f849edf08223c44865846fbe3d2da9557db1735bce0f48d",
+    "opportunity_player_strength_summary.json": "4bba7a83d882569d18aa2b78c80303008e76adf29c9e3bbb2afb666cdf0b3cea",
+    "population_denominator_manifest.json": "41bababbc77f3bece00206dbc7626240abe67e298fa6d536ee45e1123c797fcc",
+    "primary_repair_decision.json": "67986b0a9d5dbc099256c7130d0f7b5383fe71663aefe240eb612dfe095549b2",
+    "report.md": "dc237068b83d485772574a865555621636ce3b5caa9b2206c86797a2ed8dd085",
+    "root_cause_scorecard.json": "0cce1180cf13ea8f4a35646f802b997daa6c820ab090e90aa1cb38c066bc2f75",
+    "scoring_outcome_decomposition.csv": "8b285d78d91535bfe81570144522cb7b5bff58bf9ef8e2ca26fe29a53983ad84",
+    "shared_upstream_diagnostic.json": "efc60b5791adb9d2bdd08304255d38ad32eab3f1cfb0cd96127299649b5ce3dc",
+    "summary.json": "1d4c83a3fb6857dc97c6b1507e23ff901eecf26ad1c0fc43e8b94845ba4db426",
+    "team_context_audit.json": "c12b51b442e7ae402d9e7ed8945aaf8724f055e7a487baac0972613705731f8a",
+    "team_context_opportunity_comparison.csv": "3bcdd13109bebc3f7f11652870fbcead6be9e8c56363f8c07cd889ccf922182e",
+    "validation_checks.json": "7dfe3aabac925a2cdc0a13e780026b40753974321049bb5e061cf93638628b0e",
+    "within_player_comparison.csv": "b8dc8f00ed80ae780bcebec11659441384b110e636ca36558fb9972e450b8abb"
+  },
+  "paid_credits": 0,
+  "production_db_mutations": 0,
+  "production_or_funnel_changes": 0,
+  "provider_calls": 0,
+  "schema_version": "NHL_POINTS_CROSS_SEASON_FEATURE_RESPONSE_V1",
+  "scorer_sha256": "3f0aadf2d28fce2790c7a7f89d8bfd57cb8fbf80e04bc15be44d7863918d6697"
+}

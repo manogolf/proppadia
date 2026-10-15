@@ -1,0 +1,27 @@
+{
+  "model_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+  "feature_order": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "transformation": "frozen scaler + HistGradientBoostingRegressor expected count; Poisson survival for thresholds",
+  "2025_replay_max_abs_error": 2.220446049250313e-16,
+  "2026_capture_replay_gate": "PASS",
+  "2026_capture_replay_max_abs_error": 1.1102230246251565e-16,
+  "2025_out_of_time": true,
+  "2025_training_seasons": [
+    2023,
+    2024
+  ],
+  "official_points_definition": "official points=goals+assists, final participated only",
+  "regular_season_only": true,
+  "no_same_game_leakage": true
+}

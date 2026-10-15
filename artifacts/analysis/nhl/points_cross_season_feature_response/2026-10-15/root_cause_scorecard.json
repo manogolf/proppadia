@@ -1,0 +1,43 @@
+[
+  {
+    "classification": "FEATURE_CONSTRUCTION_DRIFT",
+    "status": "SUPPORTED_BOUNDED",
+    "evidence": "attempts_d10_per60 is absent in 2026 raw history and scorer input is zero; existing heldout one-feature zeroing changes expected points by only about -0.002 on average.",
+    "scope": "confirmed but insufficient to explain aggregate +0.149"
+  },
+  {
+    "classification": "FEATURE_SUPPORT_SHIFT",
+    "status": "SUPPORTED",
+    "evidence": "2026 is early season; several season-volume and team context distributions differ from full 2025, but common support and maturity controls determine residual contribution."
+  },
+  {
+    "classification": "FEATURE_TO_OUTCOME_RELATIONSHIP_SHIFT",
+    "status": "IN_SAMPLE_SIGNAL_SUPPORTED; MECHANISM_UNRESOLVED",
+    "evidence": "within shared expected-count bands 2026 residuals are higher than 2025; strict raw-unit common-support and one-to-one within-player comparisons also retain positive residual gaps. Six slates limit generalization."
+  },
+  {
+    "classification": "MODEL_RESPONSE_TO_UNUSUAL_FEATURE_COMBINATION",
+    "status": "POSSIBLE_CONTRIBUTOR",
+    "evidence": "bounded interactions and frozen perturbations identify sensitivity regimes; one season does not establish a repairable mechanism."
+  },
+  {
+    "classification": "PLAYER_POPULATION_COMPOSITION",
+    "status": "POSSIBLE_CONTRIBUTOR",
+    "evidence": "season/game player mix differs; within-player supported pairs quantify remaining difference."
+  },
+  {
+    "classification": "TARGET_OR_OUTCOME_COMPOSITION_SHIFT",
+    "status": "NOT_SUPPORTED_AS_PRIMARY_EXPLANATION",
+    "evidence": "goals, assists, points and zero/one/2+ rates are close between the full 2025 and 2026 participated/final cohorts."
+  },
+  {
+    "classification": "NO_REPRODUCIBLE_SHIFT",
+    "status": "NOT_ESTABLISHED",
+    "evidence": "aggregate residual shift reproduces; conditional regime interpretation needs more slates."
+  },
+  {
+    "classification": "INSUFFICIENT_EVIDENCE",
+    "status": "SUPPORTED_FOR_REPAIR_DECISION",
+    "evidence": "no single feature mechanism yet meets the stipulated causal and healthy-row protection bar."
+  }
+]

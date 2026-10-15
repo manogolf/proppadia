@@ -1,0 +1,20 @@
+{
+  "team_d10_sf_per_game": {
+    "units": "team shots on goal per prior team game",
+    "mean_2025": 27.427951027147667,
+    "mean_2026": 14.907161195286195,
+    "standardized_shift": -2.6633891280043405,
+    "scaler_mean": 28.970698904925747,
+    "operational_below_20_pct": 0.9590909090909091,
+    "algorithm_parity": "same team_id/game_id aggregation, strict-prior date and 120-day latest-ten team-game window in retained training and operational source",
+    "source_level_plausibility": "UNRESOLVED: frozen feature captures do not retain underlying per-team prior-game SOG rows needed to reconcile low values against official team shots"
+  },
+  "last10_team_sog_share": {
+    "units": "player prior-ten SOG / team prior-ten SOG",
+    "mean_2025": 0.053415178031493274,
+    "mean_2026": 0.052145589688202584,
+    "standardized_shift": -0.040486726905553265,
+    "algorithm_parity": "same player numerator / team denominator construction; zero if denominator is zero"
+  },
+  "conclusion": "team context has a large observed support shift and frozen-model sensitivity; feature values alone do not establish a source defect"
+}

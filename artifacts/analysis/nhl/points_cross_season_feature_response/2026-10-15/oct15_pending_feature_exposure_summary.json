@@ -1,0 +1,22 @@
+{
+  "n": 547,
+  "outcome_status": "PENDING_OUTCOME",
+  "outcomes_joined": false,
+  "expected_points_mean": 0.29535024991016195,
+  "expected_points_q10_q50_q90": [
+    0.1777225215485972,
+    0.2538280291860476,
+    0.4751522323141341
+  ],
+  "games_prior_counts": {
+    "6-10": 386,
+    "3-5": 66,
+    "0": 63,
+    "1-2": 24,
+    "11+": 8
+  },
+  "failure_region_candidate_n": 175,
+  "attempts_zero_n": 463,
+  "capture_path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-15/run_id=nhldaily_20261015T140453183604Z_bfa01e59/phase=EARLY/captured_at=20261015T140800076538Z",
+  "capture_feature_sha256": "6f9380b914d4e11de91973b65ff66241c82c205c7231f70ebd2fe6117afbbfaa"
+}

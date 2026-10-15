@@ -1,0 +1,20 @@
+{
+  "features": [
+    "player_points_last10",
+    "season_ppg_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "d10_sog_per60"
+  ],
+  "conditional_feature_maps": "conditional_single_feature_residual_maps.csv",
+  "within_player_summary": {
+    "common_player_count": 585,
+    "supported_pairs": 431,
+    "mean_residual_2025": 0.05602742316577874,
+    "mean_residual_2026": 0.11552002371217546,
+    "mean_paired_residual_difference_2026_minus_2025": 0.05949260054639673,
+    "mean_realized_points_2025": 0.37122969837587005,
+    "mean_realized_points_2026": 0.3874709976798144
+  },
+  "same_expected_count_comparison": "matched_expected_count_residual_differences.csv"
+}

@@ -1,0 +1,10 @@
+{
+  "classification": "SHARED_SKATER_LOG_UPSTREAM_POSSIBLE",
+  "evidence": [
+    "D10 SOG, attempts/60, TOI and team shots context depend on retained skater-game log coverage.",
+    "2026 attempts/60 is zero for all scored rows; this is confirmed missing raw shot-attempt history and separately backlogged.",
+    "Team D10 shot context averages 14.91 in 2026 versus 27.43 in 2025; operational source uses the same aggregation algorithm, but captures do not retain source team-game rows to audit completeness."
+  ],
+  "bounded_scope": "the two retained HGB feature builders and immutable feature captures only",
+  "determination": "potential common upstream log coverage issue; team context source completeness is unresolved; no production DB query or acquisition run performed"
+}
