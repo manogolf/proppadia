@@ -1,0 +1,164 @@
+{
+  "status": "PENDING_OUTCOME",
+  "row_count": 210,
+  "hgb_over_probability_band_counts": {
+    "40-45%": 15,
+    "20-30%": 69,
+    "<20%": 38,
+    "55-60%": 2,
+    "30-35%": 41,
+    "60-65%": 1,
+    "45-50%": 20,
+    "35-40%": 17,
+    "50-55%": 6,
+    "65-70%": 1
+  },
+  "market_over_probability_band_counts": {
+    "55-60%": 17,
+    "35-40%": 38,
+    "60-65%": 14,
+    "30-35%": 31,
+    "50-55%": 23,
+    "40-45%": 39,
+    "65-70%": 11,
+    "20-30%": 9,
+    "45-50%": 25,
+    "70-80%": 1,
+    "<20%": 2
+  },
+  "same_side_count": 154,
+  "opposite_side_count": 56,
+  "crossing_counts": {
+    "HGB_LT50_MARKET_GE50": 56,
+    "NO_CROSSING": 154
+  },
+  "near_boundary_counts": {
+    "NEITHER_NEAR_50": 146,
+    "MARKET_NEAR_HGB_DECISIVE": 38,
+    "HGB_NEAR_MARKET_DECISIVE": 16,
+    "BOTH_NEAR_50": 10
+  },
+  "signed_gap_band_counts": {
+    "-15--10pp": 45,
+    "-10--5pp": 39,
+    "<-20pp": 50,
+    "-20--15pp": 55,
+    "-3--1pp": 6,
+    "0-+1pp": 2,
+    "+1-+3pp": 4,
+    "-5--3pp": 6,
+    ">+20pp": 1,
+    "+10-+15pp": 1,
+    "-1-0pp": 1
+  },
+  "by_line": {
+    "0.5": {
+      "row_count": 185,
+      "hgb_over_probability_band_counts": {
+        "40-45%": 15,
+        "20-30%": 65,
+        "<20%": 19,
+        "55-60%": 2,
+        "30-35%": 39,
+        "60-65%": 1,
+        "45-50%": 20,
+        "35-40%": 17,
+        "50-55%": 6,
+        "65-70%": 1
+      },
+      "market_over_probability_band_counts": {
+        "55-60%": 17,
+        "35-40%": 33,
+        "60-65%": 14,
+        "50-55%": 22,
+        "40-45%": 38,
+        "65-70%": 11,
+        "45-50%": 24,
+        "30-35%": 22,
+        "70-80%": 1,
+        "<20%": 1,
+        "20-30%": 2
+      },
+      "same_side_count": 130,
+      "opposite_side_count": 55,
+      "crossing_counts": {
+        "HGB_LT50_MARKET_GE50": 55,
+        "NO_CROSSING": 130
+      },
+      "near_boundary_counts": {
+        "NEITHER_NEAR_50": 123,
+        "MARKET_NEAR_HGB_DECISIVE": 36,
+        "HGB_NEAR_MARKET_DECISIVE": 16,
+        "BOTH_NEAR_50": 10
+      },
+      "signed_gap_band_counts": {
+        "-15--10pp": 40,
+        "-10--5pp": 37,
+        "<-20pp": 40,
+        "-20--15pp": 48,
+        "-3--1pp": 6,
+        "0-+1pp": 2,
+        "+1-+3pp": 4,
+        "-5--3pp": 5,
+        ">+20pp": 1,
+        "+10-+15pp": 1,
+        "-1-0pp": 1
+      }
+    },
+    "1.5": {
+      "row_count": 23,
+      "hgb_over_probability_band_counts": {
+        "20-30%": 4,
+        "<20%": 17,
+        "30-35%": 2
+      },
+      "market_over_probability_band_counts": {
+        "30-35%": 9,
+        "20-30%": 6,
+        "45-50%": 1,
+        "35-40%": 5,
+        "40-45%": 1,
+        "50-55%": 1
+      },
+      "same_side_count": 22,
+      "opposite_side_count": 1,
+      "crossing_counts": {
+        "NO_CROSSING": 22,
+        "HGB_LT50_MARKET_GE50": 1
+      },
+      "near_boundary_counts": {
+        "NEITHER_NEAR_50": 21,
+        "MARKET_NEAR_HGB_DECISIVE": 2
+      },
+      "signed_gap_band_counts": {
+        "-10--5pp": 2,
+        "-15--10pp": 4,
+        "<-20pp": 10,
+        "-20--15pp": 6,
+        "-5--3pp": 1
+      }
+    },
+    "2.5": {
+      "row_count": 2,
+      "hgb_over_probability_band_counts": {
+        "<20%": 2
+      },
+      "market_over_probability_band_counts": {
+        "20-30%": 1,
+        "<20%": 1
+      },
+      "same_side_count": 2,
+      "opposite_side_count": 0,
+      "crossing_counts": {
+        "NO_CROSSING": 2
+      },
+      "near_boundary_counts": {
+        "NEITHER_NEAR_50": 2
+      },
+      "signed_gap_band_counts": {
+        "-20--15pp": 1,
+        "-15--10pp": 1
+      }
+    }
+  }
+}

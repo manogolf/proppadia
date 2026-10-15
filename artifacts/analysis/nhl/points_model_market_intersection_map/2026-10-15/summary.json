@@ -1,0 +1,367 @@
+{
+  "classification": "DESCRIPTIVE_COMPLEMENTARITY_MAP_COMPLETE",
+  "finalized_dates": [
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13",
+    "2026-10-14"
+  ],
+  "pending_date": "2026-10-15",
+  "row_count_all_lines": 1284,
+  "settled_rows_all_lines": 1282,
+  "settled_0_5_rows": 714,
+  "settled_1_5_rows": 555,
+  "unresolved_rows": 2,
+  "primary_0_5": {
+    "n": 714,
+    "settled_n": 714,
+    "hgb_wins": 416,
+    "hgb_losses": 298,
+    "market_wins": 451,
+    "market_losses": 263,
+    "hgb_accuracy": 0.5826330532212884,
+    "market_accuracy": 0.6316526610644257,
+    "hgb_brier": 0.2517982183351345,
+    "market_brier": 0.22698355750841512,
+    "brier_advantage_hgb": -0.02481466082671946,
+    "hgb_log_loss": 0.7011993815335352,
+    "market_log_loss": 0.6477413345171266,
+    "log_loss_advantage_hgb": -0.053458047016407245,
+    "hgb_expected_losses": 213.3498340265547,
+    "hgb_excess_losses": 84.65016597344508
+  },
+  "quadrants": {
+    "BOTH_CORRECT": {
+      "n": 330,
+      "settled_n": 330,
+      "hgb_wins": 330,
+      "hgb_losses": 0,
+      "market_wins": 330,
+      "market_losses": 0,
+      "hgb_accuracy": 1.0,
+      "market_accuracy": 1.0,
+      "hgb_brier": 0.07791448955427753,
+      "market_brier": 0.13335407126940663,
+      "brier_advantage_hgb": 0.055439581715129194,
+      "hgb_log_loss": 0.31751897392807443,
+      "market_log_loss": 0.44790584374388154,
+      "log_loss_advantage_hgb": 0.130386869815807,
+      "hgb_expected_losses": 88.18550467210376,
+      "hgb_excess_losses": -88.18550467210376
+    },
+    "BOTH_WRONG": {
+      "n": 177,
+      "settled_n": 177,
+      "hgb_wins": 0,
+      "hgb_losses": 177,
+      "market_wins": 0,
+      "market_losses": 177,
+      "hgb_accuracy": 0.0,
+      "market_accuracy": 0.0,
+      "hgb_brier": 0.5262672154704806,
+      "market_brier": 0.3908254214932846,
+      "brier_advantage_hgb": -0.1354417939771965,
+      "hgb_log_loss": 1.3119877302535303,
+      "market_log_loss": 1.0004618128765344,
+      "log_loss_advantage_hgb": -0.3115259173769957,
+      "hgb_expected_losses": 49.21059715288083,
+      "hgb_excess_losses": 127.7894028471192
+    },
+    "HGB_CORRECT_MARKET_WRONG": {
+      "n": 86,
+      "settled_n": 86,
+      "hgb_wins": 86,
+      "hgb_losses": 0,
+      "market_wins": 0,
+      "market_losses": 86,
+      "hgb_accuracy": 1.0,
+      "market_accuracy": 0.0,
+      "hgb_brier": 0.1374163523915168,
+      "market_brier": 0.3213710384246577,
+      "brier_advantage_hgb": 0.1839546860331409,
+      "hgb_log_loss": 0.4599329615677734,
+      "market_log_loss": 0.8385857745511663,
+      "log_loss_advantage_hgb": 0.37865281298339326,
+      "hgb_expected_losses": 31.46510343405529,
+      "hgb_excess_losses": -31.46510343405529
+    },
+    "MARKET_CORRECT_HGB_WRONG": {
+      "n": 121,
+      "settled_n": 121,
+      "hgb_wins": 0,
+      "hgb_losses": 121,
+      "market_wins": 121,
+      "market_losses": 0,
+      "hgb_accuracy": 0.0,
+      "market_accuracy": 1.0,
+      "hgb_brier": 0.40582680078040445,
+      "market_brier": 0.1755818812667132,
+      "brier_advantage_hgb": -0.23024491951369153,
+      "hgb_log_loss": 1.0256118518097128,
+      "market_log_loss": 0.5411427018115755,
+      "log_loss_advantage_hgb": -0.4844691499981376,
+      "hgb_expected_losses": 44.48862876751504,
+      "hgb_excess_losses": 76.51137123248495
+    }
+  },
+  "side_relation": {
+    "SAME_SIDE": {
+      "n": 507,
+      "settled_n": 507,
+      "hgb_wins": 330,
+      "hgb_losses": 177,
+      "market_wins": 330,
+      "market_losses": 177,
+      "hgb_accuracy": 0.650887573964497,
+      "market_accuracy": 0.650887573964497,
+      "hgb_brier": 0.23443999741851404,
+      "market_brier": 0.22324051898070152,
+      "brier_advantage_hgb": -0.011199478437812887,
+      "hgb_log_loss": 0.6647003740653638,
+      "market_log_loss": 0.6408099986481798,
+      "log_loss_advantage_hgb": -0.023890375417183293,
+      "hgb_expected_losses": 137.39610182498453,
+      "hgb_excess_losses": 39.603898175015374
+    },
+    "OPPOSITE_SIDE": {
+      "n": 207,
+      "settled_n": 207,
+      "hgb_wins": 86,
+      "hgb_losses": 121,
+      "market_wins": 121,
+      "market_losses": 86,
+      "hgb_accuracy": 0.4154589371980676,
+      "market_accuracy": 0.5845410628019323,
+      "hgb_brier": 0.2943132811599004,
+      "market_brier": 0.23615128955455497,
+      "brier_advantage_hgb": -0.058161991605345666,
+      "hgb_log_loss": 0.790595501274414,
+      "market_log_loss": 0.6647180846888932,
+      "log_loss_advantage_hgb": -0.12587741658552096,
+      "hgb_expected_losses": 75.95373220157039,
+      "hgb_excess_losses": 45.04626779842968
+    }
+  },
+  "directional_disagreement_wins": {
+    "hgb_correct_market_wrong": 86,
+    "market_correct_hgb_wrong": 121
+  },
+  "sub50": {
+    "n": 689,
+    "settled_n": 689,
+    "hgb_wins": 398,
+    "hgb_losses": 291,
+    "market_wins": 433,
+    "market_losses": 256,
+    "hgb_accuracy": 0.5776487663280117,
+    "market_accuracy": 0.6284470246734397,
+    "hgb_brier": 0.25220685460159714,
+    "market_brier": 0.2272508810705914,
+    "brier_advantage_hgb": -0.024955973531005846,
+    "hgb_log_loss": 0.7021759274206736,
+    "market_log_loss": 0.6482390248612878,
+    "log_loss_advantage_hgb": -0.05393690255938464,
+    "hgb_expected_losses": 202.04271775306006,
+    "hgb_excess_losses": 88.95728224693981
+  },
+  "execution": {
+    "provider_calls": 0,
+    "paid_credits": 0,
+    "production_db_mutations": 0
+  },
+  "oct15_pending": {
+    "status": "PENDING_OUTCOME",
+    "row_count": 210,
+    "hgb_over_probability_band_counts": {
+      "40-45%": 15,
+      "20-30%": 69,
+      "<20%": 38,
+      "55-60%": 2,
+      "30-35%": 41,
+      "60-65%": 1,
+      "45-50%": 20,
+      "35-40%": 17,
+      "50-55%": 6,
+      "65-70%": 1
+    },
+    "market_over_probability_band_counts": {
+      "55-60%": 17,
+      "35-40%": 38,
+      "60-65%": 14,
+      "30-35%": 31,
+      "50-55%": 23,
+      "40-45%": 39,
+      "65-70%": 11,
+      "20-30%": 9,
+      "45-50%": 25,
+      "70-80%": 1,
+      "<20%": 2
+    },
+    "same_side_count": 154,
+    "opposite_side_count": 56,
+    "crossing_counts": {
+      "HGB_LT50_MARKET_GE50": 56,
+      "NO_CROSSING": 154
+    },
+    "near_boundary_counts": {
+      "NEITHER_NEAR_50": 146,
+      "MARKET_NEAR_HGB_DECISIVE": 38,
+      "HGB_NEAR_MARKET_DECISIVE": 16,
+      "BOTH_NEAR_50": 10
+    },
+    "signed_gap_band_counts": {
+      "-15--10pp": 45,
+      "-10--5pp": 39,
+      "<-20pp": 50,
+      "-20--15pp": 55,
+      "-3--1pp": 6,
+      "0-+1pp": 2,
+      "+1-+3pp": 4,
+      "-5--3pp": 6,
+      ">+20pp": 1,
+      "+10-+15pp": 1,
+      "-1-0pp": 1
+    },
+    "by_line": {
+      "0.5": {
+        "row_count": 185,
+        "hgb_over_probability_band_counts": {
+          "40-45%": 15,
+          "20-30%": 65,
+          "<20%": 19,
+          "55-60%": 2,
+          "30-35%": 39,
+          "60-65%": 1,
+          "45-50%": 20,
+          "35-40%": 17,
+          "50-55%": 6,
+          "65-70%": 1
+        },
+        "market_over_probability_band_counts": {
+          "55-60%": 17,
+          "35-40%": 33,
+          "60-65%": 14,
+          "50-55%": 22,
+          "40-45%": 38,
+          "65-70%": 11,
+          "45-50%": 24,
+          "30-35%": 22,
+          "70-80%": 1,
+          "<20%": 1,
+          "20-30%": 2
+        },
+        "same_side_count": 130,
+        "opposite_side_count": 55,
+        "crossing_counts": {
+          "HGB_LT50_MARKET_GE50": 55,
+          "NO_CROSSING": 130
+        },
+        "near_boundary_counts": {
+          "NEITHER_NEAR_50": 123,
+          "MARKET_NEAR_HGB_DECISIVE": 36,
+          "HGB_NEAR_MARKET_DECISIVE": 16,
+          "BOTH_NEAR_50": 10
+        },
+        "signed_gap_band_counts": {
+          "-15--10pp": 40,
+          "-10--5pp": 37,
+          "<-20pp": 40,
+          "-20--15pp": 48,
+          "-3--1pp": 6,
+          "0-+1pp": 2,
+          "+1-+3pp": 4,
+          "-5--3pp": 5,
+          ">+20pp": 1,
+          "+10-+15pp": 1,
+          "-1-0pp": 1
+        }
+      },
+      "1.5": {
+        "row_count": 23,
+        "hgb_over_probability_band_counts": {
+          "20-30%": 4,
+          "<20%": 17,
+          "30-35%": 2
+        },
+        "market_over_probability_band_counts": {
+          "30-35%": 9,
+          "20-30%": 6,
+          "45-50%": 1,
+          "35-40%": 5,
+          "40-45%": 1,
+          "50-55%": 1
+        },
+        "same_side_count": 22,
+        "opposite_side_count": 1,
+        "crossing_counts": {
+          "NO_CROSSING": 22,
+          "HGB_LT50_MARKET_GE50": 1
+        },
+        "near_boundary_counts": {
+          "NEITHER_NEAR_50": 21,
+          "MARKET_NEAR_HGB_DECISIVE": 2
+        },
+        "signed_gap_band_counts": {
+          "-10--5pp": 2,
+          "-15--10pp": 4,
+          "<-20pp": 10,
+          "-20--15pp": 6,
+          "-5--3pp": 1
+        }
+      },
+      "2.5": {
+        "row_count": 2,
+        "hgb_over_probability_band_counts": {
+          "<20%": 2
+        },
+        "market_over_probability_band_counts": {
+          "20-30%": 1,
+          "<20%": 1
+        },
+        "same_side_count": 2,
+        "opposite_side_count": 0,
+        "crossing_counts": {
+          "NO_CROSSING": 2
+        },
+        "near_boundary_counts": {
+          "NEITHER_NEAR_50": 2
+        },
+        "signed_gap_band_counts": {
+          "-20--15pp": 1,
+          "-15--10pp": 1
+        }
+      }
+    }
+  },
+  "sources": [
+    {
+      "path": "artifacts/analysis/nhl/points_market_loss_concentration/2026-10-14/canonical_market_intersection.csv",
+      "sha256": "3eef9ac165811b7a815426284db887ba653cc777155162c2262bb2099c53db1d"
+    },
+    {
+      "path": "artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261015T140453183604Z_bfa01e59/parent_receipt.json",
+      "sha256": "cf4b3f832793b69d2fa2fac29fe8a64c309d5b1dca9ee1906d3ee2f51c4efd58"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/canonical_skater_outcomes.csv",
+      "sha256": "fe387ec8dde29efc6f63d46dcf2edd9a675629d7824066f67753c736cd01638c"
+    },
+    {
+      "path": "artifacts/operational/nhl/points_market_attachments/season=2026/slate_date=2026-10-14/run_id=nhldaily_20261014T192554086407Z_2b980c9e/points_with_market.csv",
+      "sha256": "a964969cc39c394adb2ccc063c55fde56fb9556e0372de90a4d761e79a2ab0a1"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261014T192554086407Z_2b980c9e/points_predictions.csv",
+      "sha256": "71e2972de2d26791df0af03a8aa74a48972cd858bb7d1f82311068de9874816e"
+    },
+    {
+      "path": "nhl/site/data/points_with_market.csv",
+      "sha256": "9c93efab3b19c33d9d047e19e94060acfb656cf6d901b9e505be2a9856894358"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261015T140453183604Z_bfa01e59/points_predictions.csv",
+      "sha256": "b283cc7b5e4def7ca90ea3c1a8f1a1cb84b202d17e3ccd1391987d52bc6bcb17"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "schema_version": "NHL_POINTS_MODEL_MARKET_INTERSECTION_MAP_V1",
+  "dates": [
+    "2026-10-10",
+    "2026-10-11",
+    "2026-10-12",
+    "2026-10-13",
+    "2026-10-14"
+  ],
+  "pending_date": "2026-10-15",
+  "primary_market": "attached consensus no-vig P(Over), one row per prediction identity",
+  "provider_calls": 0,
+  "paid_credits": 0,
+  "production_db_mutations": 0,
+  "sources": [
+    {
+      "path": "artifacts/analysis/nhl/points_market_loss_concentration/2026-10-14/canonical_market_intersection.csv",
+      "sha256": "3eef9ac165811b7a815426284db887ba653cc777155162c2262bb2099c53db1d"
+    },
+    {
+      "path": "artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261015T140453183604Z_bfa01e59/parent_receipt.json",
+      "sha256": "cf4b3f832793b69d2fa2fac29fe8a64c309d5b1dca9ee1906d3ee2f51c4efd58"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/canonical_skater_outcomes.csv",
+      "sha256": "fe387ec8dde29efc6f63d46dcf2edd9a675629d7824066f67753c736cd01638c"
+    },
+    {
+      "path": "artifacts/operational/nhl/points_market_attachments/season=2026/slate_date=2026-10-14/run_id=nhldaily_20261014T192554086407Z_2b980c9e/points_with_market.csv",
+      "sha256": "a964969cc39c394adb2ccc063c55fde56fb9556e0372de90a4d761e79a2ab0a1"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261014T192554086407Z_2b980c9e/points_predictions.csv",
+      "sha256": "71e2972de2d26791df0af03a8aa74a48972cd858bb7d1f82311068de9874816e"
+    },
+    {
+      "path": "nhl/site/data/points_with_market.csv",
+      "sha256": "9c93efab3b19c33d9d047e19e94060acfb656cf6d901b9e505be2a9856894358"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261015T140453183604Z_bfa01e59/points_predictions.csv",
+      "sha256": "b283cc7b5e4def7ca90ea3c1a8f1a1cb84b202d17e3ccd1391987d52bc6bcb17"
+    }
+  ],
+  "row_count": 1284,
+  "settled_rows": 1282,
+  "settled_0_5_rows": 714
+}
