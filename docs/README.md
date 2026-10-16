@@ -28,7 +28,9 @@ If the question is “what is the active runtime path right now?”:
 ## Architecture
 
 - `docs/PROJECT_DOCTRINE.md`: permanent engineering doctrine for durable features, backfills, daily sustainability, visibility, and regression monitoring.
+- `docs/CANONICAL_IDENTITY_DOCTRINE.md`: official numeric identity, namespace mapping, and auditable resolution rules.
 - `docs/contracts/missingness_and_zero_semantics.md`: authoritative cross-sport contract for source missingness, verified zeros, aggregation denominators, and model-layer imputation.
+- `docs/contracts/database_write_isolation_plan.md`: read-only permission findings and proposed staged separation of research, ingestion, and correction access; no production grants have been applied.
 - `docs/FEATURE_COMPLETION_CHECKLIST.md`: copyable checklist for marking any feature complete.
 - `docs/model_development/champion_challenger_experiment_specification.md`: cross-sport governance spec for freezing champion baselines, proposing challengers, evaluating results, and classifying promotion decisions.
 - `docs/Architecture Reset Plan.md`: reset goals, phases, progress snapshot.

@@ -59,6 +59,34 @@ Backfill work must include:
 
 The project-wide rule is `0` = verified observed zero and `NULL` = unknown, missing, unobserved, or unavailable. Source completeness must be proven before an absent event is counted as zero. Follow the authoritative [Missingness and Zero Semantics Contract](contracts/missingness_and_zero_semantics.md) for ingestion, SQL, aggregation, model imputation, and repair requirements.
 
+## Official Source Verification and Data Authority
+
+This mandatory policy applies to MLB and NHL acquisition, features, research,
+and production paths. New statistical features and acquisition methods must be
+verified against official external source observations before adoption. Make
+official API requests when needed; speed, convenience, or the presence of a
+database value is not a reason to skip source verification. Reuse retained
+database observations only when their source and validation evidence establish
+their authority; a populated value alone does not.
+
+Verify derived calculations against representative official records, including
+verified positives, genuine zeros, and missing or incomplete observations.
+Preserve original provider responses, official numeric identities, source
+provenance, and reconciliation evidence. Never invent a measurement or
+substitute an approximation to complete a feature. Provider or network failure
+must remain visible; it must not silently switch the pipeline to an unsupported
+local assumption. Correct source data only through controlled ingestion or a
+separately authorized correction procedure, never as a side effect of model
+development. Before calling an implementation operationally complete, verify
+the real source-to-feature path with retained or newly acquired official
+records.
+
+Follow the [Canonical Identity Doctrine](CANONICAL_IDENTITY_DOCTRINE.md) for
+identity and the [Missingness and Zero Semantics Contract](contracts/missingness_and_zero_semantics.md)
+for source completeness and value semantics. The source-to-feature and
+permission cutover plan is documented in
+[Database Write Isolation Plan](contracts/database_write_isolation_plan.md).
+
 ## Daily Sustainability Rule
 
 Any derived field, feature column, review board, score, report, or artifact that will be used after today must have a daily sustainability path.
@@ -203,9 +231,10 @@ must retain auditable source and mapping evidence.
 
 Codex tasks involving ingestion, identity mapping, feature joins, or
 reconciliation must inspect this doctrine and the linked
-`docs/CANONICAL_IDENTITY_DOCTRINE.md` before editing. Review the
-Missingness and Zero Semantics Contract when source fields or completeness are
-in scope.
+`docs/CANONICAL_IDENTITY_DOCTRINE.md` before editing. Review the Official
+Source Verification and Data Authority policy and the Missingness and Zero
+Semantics Contract whenever source acquisition, source fields, or completeness
+are in scope.
 
 When reviewing any change that adds or modifies one of these:
 

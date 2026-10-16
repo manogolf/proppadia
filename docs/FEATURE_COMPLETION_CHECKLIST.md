@@ -2,7 +2,7 @@
 
 Use this checklist for every new durable feature across Proppadia.
 
-References: `docs/PROJECT_DOCTRINE.md`; [Missingness and Zero Semantics Contract](contracts/missingness_and_zero_semantics.md)
+References: [Project Doctrine](PROJECT_DOCTRINE.md), including its Official Source Verification and Data Authority policy; [Canonical Identity Doctrine](CANONICAL_IDENTITY_DOCTRINE.md); [Missingness and Zero Semantics Contract](contracts/missingness_and_zero_semantics.md); [Database Write Isolation Plan](contracts/database_write_isolation_plan.md)
 
 ## Required Answer
 
@@ -30,6 +30,9 @@ Use `[x]` only when the item is actually implemented and validated.
 - [ ] Daily Index visibility exists for artifacts Jerry may need to open.
 - [ ] Regression detection exists for stale, missing, zero-row, low-coverage, duplicate, or future-leak cases.
 - [ ] NULL and zero semantics are field-specific, source completeness is established, and any model-layer imputation is explicit and consistent between training and scoring.
+- [ ] New acquisition and statistical features were checked against representative official external source records, including positive, zero, and missing/incomplete cases; raw responses and reconciliation evidence are retained.
+- [ ] Existing database observations are reused only with source verification evidence; populated values alone are not treated as authoritative.
+- [ ] Source-to-feature integration follows the real acquisition/normalization/promotion path, and source failures remain visible rather than falling back silently to unverified values.
 - [ ] Canonical identity fields are present where available.
 - [ ] Identity provenance/fallback fields are present when canonical IDs are unavailable.
 - [ ] Invariant considered.
