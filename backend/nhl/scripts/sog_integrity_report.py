@@ -26,6 +26,7 @@ from typing import Any
 from datetime import date, datetime
 from datetime import date, timedelta
 import pandas as pd
+from backend.nhl.database_access import database_url, restricted_mode
 
 
 # ---------- helpers ----------
@@ -1198,7 +1199,12 @@ def main() -> None:
         )
 
     # ---- DB checks ----
-    db_url = args.db_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+    try:
+        db_url = database_url("research", legacy_url=args.db_url)
+    except RuntimeError as error:
+        if restricted_mode():
+            die(str(error))
+        db_url = None
     if db_url:
         db_checks(db_url, slate)
         db_pp_role_coverage_check(db_url, slate)

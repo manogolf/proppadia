@@ -17,6 +17,7 @@ from typing import Optional, Any
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
 
 import psycopg
+from backend.nhl.database_access import database_url
 from psycopg.rows import dict_row
 import requests
 
@@ -61,8 +62,9 @@ from backend.nhl.points_attempts_source import (
 )
 
 # ---------------- Env / args ----------------
-DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-if not DB_URL:
+try:
+    DB_URL = database_url("ingestion")
+except RuntimeError:
     print("Set SUPABASE_DB_URL or DATABASE_URL", file=sys.stderr); sys.exit(2)
 
 SLATE_DATE = os.environ.get("SLATE_DATE")

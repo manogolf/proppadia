@@ -38,6 +38,7 @@ from typing import Any, Dict, Iterable, Optional, Tuple, List
 
 import psycopg
 import requests
+from backend.nhl.database_access import database_url
 
 from backend.nhl.pp_toi_source import pp_toi_conflict, write_pp_toi_conflict_diagnostic
 
@@ -372,8 +373,9 @@ def main() -> None:
     if not slate_date:
         die("Provide --date YYYY-MM-DD or set SLATE_DATE.")
 
-    db_url = args.db_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-    if not db_url:
+    try:
+        db_url = database_url("ingestion", legacy_url=args.db_url)
+    except RuntimeError:
         die("Set SUPABASE_DB_URL (or DATABASE_URL) or pass --db-url")
 
     commit = bool(args.commit)

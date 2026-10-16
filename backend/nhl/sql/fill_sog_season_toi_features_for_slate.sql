@@ -31,13 +31,8 @@
 BEGIN;
 
 -- (Columns should already exist, but keep idempotent adds if you want)
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS szn_toi_per_game_5on5 numeric,
-  ADD COLUMN IF NOT EXISTS szn_toi_per_game_pp   numeric,
-  ADD COLUMN IF NOT EXISTS szn_toi_per_game_pk   numeric,
-  ADD COLUMN IF NOT EXISTS season_5on5_icetime_per_game numeric,
-  ADD COLUMN IF NOT EXISTS season_5on4_icetime_per_game numeric,
-  ADD COLUMN IF NOT EXISTS season_4on5_icetime_per_game numeric;
+-- Feature columns are provisioned by the owner migration.
+
 
 WITH params AS (
   SELECT (:'slate_date')::date AS slate_date

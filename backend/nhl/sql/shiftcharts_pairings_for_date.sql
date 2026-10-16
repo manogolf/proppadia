@@ -24,58 +24,7 @@
 
 
 -- ----------------------------
--- 0) Tables + indexes (idempotent)
--- ----------------------------
-CREATE TABLE IF NOT EXISTS nhl.shiftcharts_shifts (
-  game_id      bigint  NOT NULL,
-  shift_id     bigint  NOT NULL,
-  player_id    bigint  NOT NULL,
-  team_id      int     NOT NULL,
-  period       int     NOT NULL,
-
-  start_time   text    NULL,
-  end_time     text    NULL,
-  duration     text    NULL,
-
-  start_sec    int     NOT NULL,
-  end_sec      int     NOT NULL,
-  dur_sec      int     NOT NULL,
-
-  ingested_at  timestamptz NOT NULL DEFAULT now(),
-
-  PRIMARY KEY (game_id, shift_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_shiftcharts_shifts_game_team
-  ON nhl.shiftcharts_shifts (game_id, team_id);
-
-CREATE INDEX IF NOT EXISTS idx_shiftcharts_shifts_game_player
-  ON nhl.shiftcharts_shifts (game_id, player_id);
-
-CREATE TABLE IF NOT EXISTS nhl.shiftcharts_pairings_game (
-  game_id                    bigint NOT NULL,
-  player_id                  bigint NOT NULL,
-  team_id                    int    NOT NULL,
-
-  toi_sec                    int    NOT NULL,
-
-  top_mate_player_id         bigint NULL,
-  top_mate_overlap_sec       int    NOT NULL DEFAULT 0,
-  top_mate_overlap_share     numeric NULL,
-
-  top3_overlap_share_avg     numeric NULL,
-  top3_overlap_share_std     numeric NULL,
-
-  computed_at                timestamptz NOT NULL DEFAULT now(),
-
-  PRIMARY KEY (game_id, player_id)
-);
-
-CREATE INDEX IF NOT EXISTS idx_shiftcharts_pairings_game_team
-  ON nhl.shiftcharts_pairings_game (game_id, team_id);
-
--- ----------------------------
--- 1) Normalize shifts for :game_date into nhl.shiftcharts_shifts
+-- 0) Normalize shifts for :game_date into preprovisioned nhl.shiftcharts_shifts
 -- ----------------------------
 WITH games AS (
   SELECT g.game_id::bigint AS game_id

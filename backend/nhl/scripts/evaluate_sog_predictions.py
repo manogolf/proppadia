@@ -11,6 +11,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 import psycopg
 from sklearn.metrics import roc_auc_score, log_loss
+from backend.nhl.database_access import database_url
 
 
 LINES = [1.5, 2.5, 3.5]
@@ -18,10 +19,7 @@ PROP = "shots_on_goal"
 
 
 def require_db_url() -> str:
-    db = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-    if not db:
-        raise RuntimeError("Missing SUPABASE_DB_URL (or DATABASE_URL).")
-    return db
+    return database_url("operations")
 
 
 def pick_latest_truth_date(conn) -> Optional[str]:

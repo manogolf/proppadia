@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import psycopg
+from backend.nhl.database_access import database_url
 
 from backend.nhl.sog_cold_start.core import build_predictions, sha256_file
 from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
@@ -119,5 +120,5 @@ def observe(*,slate:str,requested:str,dsn:str,root:Path,now:datetime|None=None)-
     except Exception as error:result.update(status="FAILED_WARN_ONLY",failure=f"{type(error).__name__}:{error}")
     durable_json(status_path,result);return status_path
 def main()->int:
-    ap=argparse.ArgumentParser();ap.add_argument("--slate-date",default="today");ap.add_argument("--phase",choices=["AUTO","MIDDAY","FINAL_PREGAME"],default="AUTO");ap.add_argument("--env-file",type=Path,default=ROOT/"backend/.env");ap.add_argument("--output-root",type=Path,default=DEFAULT_ROOT);a=ap.parse_args();load_env(a.env_file);now=utc_now();slate=now.astimezone(ZoneInfo("America/New_York")).date().isoformat() if a.slate_date=="today" else a.slate_date;path=observe(slate=slate,requested=a.phase,dsn=os.environ.get("SUPABASE_DB_URL","").strip(),root=a.output_root,now=now);print(path);return 0
+    ap=argparse.ArgumentParser();ap.add_argument("--slate-date",default="today");ap.add_argument("--phase",choices=["AUTO","MIDDAY","FINAL_PREGAME"],default="AUTO");ap.add_argument("--env-file",type=Path,default=ROOT/"backend/.env");ap.add_argument("--output-root",type=Path,default=DEFAULT_ROOT);a=ap.parse_args();load_env(a.env_file);now=utc_now();slate=now.astimezone(ZoneInfo("America/New_York")).date().isoformat() if a.slate_date=="today" else a.slate_date;path=observe(slate=slate,requested=a.phase,dsn=database_url("research"),root=a.output_root,now=now);print(path);return 0
 if __name__=="__main__":raise SystemExit(main())

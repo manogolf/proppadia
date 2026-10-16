@@ -1,8 +1,8 @@
 """NHL database connection routing with an opt-in, fail-closed restricted mode.
 
 Legacy mode deliberately preserves today's SUPABASE_DB_URL/DATABASE_URL
-behavior. Restricted mode requires separate low-privilege read and ingestion
-DSNs and never falls back to either legacy variable.
+behavior. Restricted mode requires separate research, ingestion, and
+operations-result DSNs and never falls back to a legacy variable.
 """
 
 from __future__ import annotations
@@ -16,6 +16,8 @@ _MODE_KEY = "NHL_DB_ACCESS_MODE"
 _ACCESS = {
     "research": ("NHL_RESEARCH_DATABASE_URL", "proppadia_nhl_research_login"),
     "ingestion": ("NHL_INGEST_DATABASE_URL", "proppadia_nhl_daily_login"),
+    # Operational results are writable, but this login has no raw-source DML.
+    "operations": ("NHL_OPERATIONS_DATABASE_URL", "proppadia_nhl_operations_login"),
 }
 
 

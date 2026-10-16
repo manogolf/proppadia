@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 import psycopg
+from backend.nhl.database_access import database_url
 import requests
 
 from backend.nhl.official_request_journal import (
@@ -1562,8 +1563,9 @@ def main() -> int:
             }, indent=2, sort_keys=True))
             return 5
         load_env(args.env_file)
-        dsn = (os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL") or "").strip()
-        if not dsn:
+        try:
+            dsn = database_url("ingestion")
+        except RuntimeError:
             print(json.dumps({
                 "status": "FAILED_CLOSED_STAGING_DATABASE_CONFIGURATION",
                 "failure": "DATABASE_URL_MISSING", "request_run_created": False,
@@ -1907,8 +1909,9 @@ def main() -> int:
                              indent=2, sort_keys=True))
         return 0
     load_env(args.env_file)
-    dsn = (os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL") or "").strip()
-    if not dsn:
+    try:
+        dsn = database_url("ingestion")
+    except RuntimeError:
         print(json.dumps({"status": "FAILED", "failure": "DATABASE_URL_MISSING"}))
         return 3
     identity_partition = None

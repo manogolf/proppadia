@@ -11,6 +11,7 @@ from typing import Dict, Iterator, List, Tuple
 
 import psycopg
 import requests
+from backend.nhl.database_access import database_url
 from psycopg.rows import dict_row
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -23,9 +24,10 @@ except Exception:
     pass
 
 
-DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-if not DB_URL:
-    raise SystemExit("Set SUPABASE_DB_URL or DATABASE_URL")
+try:
+    DB_URL = database_url("ingestion")
+except RuntimeError as error:
+    raise SystemExit(str(error)) from None
 
 if "?sslmode=" not in DB_URL and "&sslmode=" not in DB_URL:
     DB_URL += ("&" if "?" in DB_URL else "?") + "sslmode=require"

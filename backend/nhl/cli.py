@@ -543,7 +543,7 @@ def assert_sog_rollups_present(db_url: str, slate_date: str, *, min_ok_frac: flo
             f"frac_ok={frac_ok:.3f} (n={n}, n_d10_ok={n_d10_ok})"
         )
 
-_DATABASE_WRITE_CAPABLE_SCRIPTS = {
+_DATABASE_INGESTION_SCRIPTS = {
     "refresh_all_team_rosters.py",
     "seed_goalie_logs_for_date.py",
     "refresh_players_and_roster_today.py",
@@ -553,6 +553,11 @@ _DATABASE_WRITE_CAPABLE_SCRIPTS = {
     "fill_pp_toi_minutes_for_date.py",
     "import_schedule_today.py",
     "import_roster_today.py",
+    "backfill_blocked_shot_events_from_pbp.py",
+    "backfill_shot_on_goal_events_from_pbp.py",
+    "backfill_skater_blocks_from_boxscore.py",
+}
+_DATABASE_OPERATIONS_SCRIPTS = {
     "evaluate_sog_predictions.py",
     "load_nhl_predictions_generic.py",
     "load_sog_predictions_denali.py",
@@ -560,7 +565,8 @@ _DATABASE_WRITE_CAPABLE_SCRIPTS = {
 
 
 def _command_is_database_write_capable(cmd: Sequence[str]) -> bool:
-    if any(Path(token).name in _DATABASE_WRITE_CAPABLE_SCRIPTS for token in cmd):
+    if any(Path(token).name in (_DATABASE_INGESTION_SCRIPTS | _DATABASE_OPERATIONS_SCRIPTS)
+           for token in cmd):
         return True
     if cmd and Path(cmd[0]).name == "psql":
         if "-f" in cmd:
@@ -572,6 +578,38 @@ def _command_is_database_write_capable(cmd: Sequence[str]) -> bool:
         )
         return any(mutation.search(sql) for sql in sql_parts)
     return False
+
+
+def _command_database_access(cmd: Sequence[str], *, write_capable: bool) -> str:
+    """Choose the narrow DB role for a known daily command."""
+    if not write_capable:
+        return "research"
+    names = {Path(token).name for token in cmd}
+    if names & _DATABASE_INGESTION_SCRIPTS:
+        return "ingestion"
+    if "run_nhl_postgame_reconciliation.py" in names:
+        return "ingestion"
+    if cmd and Path(cmd[0]).name == "psql":
+        if "-f" in cmd and any(
+                Path(cmd[index + 1]).name == "shiftcharts_pairings_for_date.sql"
+                for index, token in enumerate(cmd[:-1]) if token == "-f"):
+            return "ingestion"
+        sql = " ".join(cmd[index + 1] for index, token in enumerate(cmd[:-1]) if token == "-c")
+        targets = set(re.findall(
+            r"\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM|TRUNCATE(?:\s+TABLE)?)\s+(?:ONLY\s+)?(?:nhl\.)?([a-z_][a-z0-9_]*)",
+            sql, re.I))
+        source_write_targets = {
+            "games", "teams", "players", "roster_status", "team_external_ids",
+            "player_external_ids", "skater_game_logs_raw", "goalie_game_logs_raw",
+            "import_players_stage", "import_skater_logs_stage", "import_goalie_logs_stage",
+            "shiftcharts_raw", "shiftcharts_shifts", "game_manpower_segments",
+            "shiftcharts_pairings_game",
+        }
+        if {target.lower() for target in targets} & source_write_targets:
+            return "ingestion"
+    # Predictions, evaluations, and feature-table writes are operational
+    # results; they do not need source-table write privileges.
+    return "operations"
 
 
 def _structured_child_summary(stdout: str | None) -> dict[str, Any]:
@@ -587,7 +625,7 @@ def _structured_child_summary(stdout: str | None) -> dict[str, Any]:
 
 def run(
     cmd, *, cwd: Path = ROOT, env: dict | None = None, check: bool = True,
-    database_write_capable: bool | None = None,
+    database_write_capable: bool | None = None, database_access: str | None = None,
 ):
     cmd = [str(c) for c in cmd]
     write_capable = (
@@ -601,11 +639,19 @@ def run(
     # a role-specific DSN. Unknown child commands receive research access and
     # therefore fail closed if they attempt writes.
     if nhl_restricted_mode(e):
-        access = "ingestion" if write_capable else "research"
+        access = database_access or _command_database_access(cmd, write_capable=write_capable)
         db_env = nhl_routed_database_environment(access, environ=e)
-        # Do not disclose the other capability's credential to a child.
-        e.pop("NHL_RESEARCH_DATABASE_URL", None)
-        e.pop("NHL_INGEST_DATABASE_URL", None)
+        # Strip every alternate libpq/legacy route before adding the selected
+        # role alias; a standalone child must not inherit an owner fallback.
+        for key in tuple(e):
+            if (key in {
+                    "NHL_RESEARCH_DATABASE_URL", "NHL_INGEST_DATABASE_URL",
+                    "NHL_OPERATIONS_DATABASE_URL", "SUPABASE_DB_URL",
+                    "DATABASE_URL", "DB", "PGSERVICE", "PGSERVICEFILE",
+                    "PGPASSFILE", "PGPASSWORD", "PGUSER", "PGHOST",
+                    "PGHOSTADDR", "PGPORT", "PGDATABASE", "PGOPTIONS",
+                } or key.startswith("PG") and key != "PGAPPNAME"):
+                e.pop(key, None)
         e.update(db_env)
         if cmd and Path(cmd[0]).name == "psql":
             replaced_dsn = False
@@ -714,8 +760,11 @@ def require_db_url(access: str = "ingestion") -> str:
         print(f"FATAL: {error}", file=sys.stderr)
         raise SystemExit(2) from None
 
-def run_psql_file(sql_file: Path, *, vars: dict[str, str] | None = None):
-    db = require_db_url()
+def run_psql_file(
+    sql_file: Path, *, vars: dict[str, str] | None = None,
+    access: str = "operations",
+):
+    db = require_db_url(access)
     cmd = ["psql", "--no-psqlrc", "--pset", "pager=off", "-v", "ON_ERROR_STOP=1", db]
 
     if vars:
@@ -2455,7 +2504,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                     reuse_roster_observation: Path | None = None,
                     reuse_odds_observation: Path | None = None):
     global _ACTIVE_DAILY_LANE
-    db = require_db_url()
+    db = require_db_url("ingestion")
     odds_phase = str(odds_phase).upper()
     if odds_phase not in PHASES:
         raise ValueError(f"unsupported daily phase: {odds_phase}")
@@ -2666,7 +2715,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     })
 
     # A4) Pairings artifacts for yday (built ONCE)
-    run_psql_file(SQL_DIR / "shiftcharts_pairings_for_date.sql", vars={"game_date": yday})
+    run_psql_file(
+        SQL_DIR / "shiftcharts_pairings_for_date.sql", vars={"game_date": yday},
+        access="ingestion")
 
     # A5) Refresh views/materializations now that yday raw/pp_toi/pairings are updated
     refresh_sql = SCRIPTS_DIR / "refresh.sql"

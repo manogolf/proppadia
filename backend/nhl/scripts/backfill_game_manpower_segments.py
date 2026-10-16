@@ -41,6 +41,7 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import psycopg
 import requests
+from backend.nhl.database_access import database_url, restricted_mode
 
 from backend.nhl.official_request_journal import ENV_REQUIRED, official_get
 
@@ -321,7 +322,12 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="do not write to DB")
     args = ap.parse_args()
 
-    dsn = os.environ.get("SUPABASE_DB_URL")
+    try:
+        dsn = database_url("ingestion")
+    except RuntimeError as exc:
+        if restricted_mode():
+            raise SystemExit(str(exc)) from None
+        dsn = None
     needs_db_for_game_list = (not args.game_ids)
 
     # In date-range mode we need DB access even in --dry-run to discover game_ids.
@@ -338,7 +344,8 @@ def main() -> None:
 
     # Only ensure/create table when we will write.
     if conn is not None and (not args.dry_run):
-        ensure_table(conn)
+        if not restricted_mode():
+            ensure_table(conn)
 
     game_ids: List[int]
     if args.game_ids:

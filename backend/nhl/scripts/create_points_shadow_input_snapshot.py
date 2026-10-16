@@ -13,6 +13,7 @@ from pathlib import Path
 import pandas as pd
 import psycopg
 
+from backend.nhl.database_access import database_url
 from backend.nhl.points_quote_capture.core import sha256_file, write_manifest
 from backend.nhl.points_shadow.core import frozen_identity
 
@@ -54,9 +55,10 @@ def main() -> int:
         raise SystemExit("GAME_SPINE_IDENTITY_FAILURE")
     if features.empty or features.duplicated(["game_id", "player_id"]).any():
         raise SystemExit("POINTS_FEATURE_IDENTITY_FAILURE")
-    database = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
-    if not database:
-        raise SystemExit("MISSING_DATABASE_CREDENTIAL")
+    try:
+        database = database_url("research")
+    except RuntimeError as error:
+        raise SystemExit(str(error)) from None
     game_ids = [int(value) for value in games.game_id]
     with psycopg.connect(database) as connection, connection.cursor() as cursor:
         cursor.execute(

@@ -12,14 +12,8 @@
 BEGIN;
 
 -- 1) Ensure columns exist (idempotent)
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d3_toi_min_avg numeric,
-  ADD COLUMN IF NOT EXISTS d5_toi_min_avg numeric,
-  ADD COLUMN IF NOT EXISTS d10_toi_min_avg numeric,
-  ADD COLUMN IF NOT EXISTS d20_toi_min_avg numeric,
-  ADD COLUMN IF NOT EXISTS d10_toi_min_sd  numeric,
-  ADD COLUMN IF NOT EXISTS d10_toi_cv      numeric,
-  ADD COLUMN IF NOT EXISTS toi_trend_3v10  numeric;
+-- Feature columns are provisioned by the owner migration.
+
 
 -- 2) Compute rolling TOI exposure from all realized history before the slate.
 -- Unlike season-to-date situation features, rolling game exposure spans the

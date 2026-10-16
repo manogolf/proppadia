@@ -32,6 +32,7 @@ import os
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
 
 import psycopg
+from backend.nhl.database_access import database_url
 from psycopg.rows import dict_row
 
 # Force every cursor.execute(...) to use simple execution (no PREPARE)
@@ -85,8 +86,9 @@ from backend.nhl.daily_orchestration import verify_roster_observation_reuse
 EASTERN = ZoneInfo("America/New_York")
 SLATE_DATE = os.environ.get("SLATE_DATE") or dt.datetime.now(EASTERN).date().isoformat()
 
-DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-if not DB_URL:
+try:
+    DB_URL = database_url("ingestion")
+except RuntimeError:
     sys.exit("Missing SUPABASE_DB_URL / DATABASE_URL")
 if "?sslmode=" not in DB_URL and "&sslmode=" not in DB_URL:
     DB_URL += ("&" if "?" in DB_URL else "?") + "sslmode=require"

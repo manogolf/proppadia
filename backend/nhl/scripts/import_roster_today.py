@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
 
 import psycopg
+from backend.nhl.database_access import database_url
 from psycopg.rows import dict_row  # ok to keep
 from psycopg import errors as pg_errors  # noqa: F401
 
@@ -39,8 +40,9 @@ def _flag(name: str, default: str = "0") -> bool:
 SKIP_PLAYERS = _flag("SKIP_PLAYERS", "0")          # gate writes to nhl.players / nhl.player_external_ids
 SKIP_ROSTER_STATUS = _flag("SKIP_ROSTER_STATUS", "1")
 
-DB = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
-if not DB:
+try:
+    DB = database_url("ingestion")
+except RuntimeError:
     sys.exit("Missing SUPABASE_DB_URL / DATABASE_URL")
 if "?sslmode=" not in DB and "&sslmode=" not in DB:
     DB += ("&" if "?" in DB else "?") + "sslmode=require"

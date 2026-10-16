@@ -10,9 +10,8 @@
 
 \set pregame_table nhl.training_features_nhl_sog_enriched_pregame_v2
 
-ALTER TABLE :pregame_table
-  ADD COLUMN IF NOT EXISTS pp_role_share_final numeric,
-  ADD COLUMN IF NOT EXISTS pp_role_source text;
+-- Feature columns are provisioned by the owner migration.
+
 
 WITH
 p AS (

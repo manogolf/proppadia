@@ -14,16 +14,8 @@
 BEGIN;
 
 -- 1) Ensure the columns exist (idempotent)
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS num_sog_last5 numeric,
-  ADD COLUMN IF NOT EXISTS num_sog_last10 numeric,
-  ADD COLUMN IF NOT EXISTS num_sog_szn_to_date numeric,
-  ADD COLUMN IF NOT EXISTS num_event_last5 numeric,
-  ADD COLUMN IF NOT EXISTS num_event_last10 numeric,
-  ADD COLUMN IF NOT EXISTS num_event_szn_to_date numeric,
-  ADD COLUMN IF NOT EXISTS team_num_sog_last10 numeric,
-  ADD COLUMN IF NOT EXISTS team_num_event_last10 numeric,
-  ADD COLUMN IF NOT EXISTS pace_index numeric;
+-- Feature columns are provisioned by the owner migration.
+
 
 -- 2) Always keep pace_index aligned (cheap + deterministic)
 UPDATE nhl.training_features_nhl_sog_enriched_pregame_v2 t

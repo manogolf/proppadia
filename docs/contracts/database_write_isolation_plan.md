@@ -257,3 +257,117 @@ command and must remain off.
   ignored `backend/.env`; no credential value belongs in Git or a report.
 - No database permission, credential, workflow, or production code change was
   made for this plan. Production enforcement remains unauthorized.
+
+## NHL readiness update — 2026-10-16
+
+This section supersedes earlier statements above that described NHL routing as
+limited to two roles or the permission migration as only a raw/stage slice.
+The staged work is still inactive and has not changed production permissions.
+
+The central `./bin/python -m backend.nhl.cli daily --with-odds` command uses
+three distinct connection classes in restricted mode:
+
+| Login | Permission group | Daily use |
+| --- | --- | --- |
+| `proppadia_nhl_research_login` | `proppadia_research_ro` | Read-only source/feature queries and scoring inputs |
+| `proppadia_nhl_daily_login` | `proppadia_nhl_ingest` | Official schedule, roster, log, shift, manpower, and postgame source acquisition/promotion |
+| `proppadia_nhl_operations_login` | `proppadia_nhl_ops_writer` | Feature construction, evaluation, team context, and prediction persistence |
+| Controlled operator session | `proppadia_nhl_source_correction` | Explicitly authorized field-scoped historical correction only |
+
+`backend/nhl/database_access.py` validates the expected login role in
+restricted mode and does not use `SUPABASE_DB_URL`, `DATABASE_URL`, or an
+explicit legacy fallback. The central CLI strips alternate role DSNs, legacy
+aliases, and libpq connection settings from each child, then provides only the
+selected role DSN through the aliases expected by existing scripts. Existing
+unrestricted mode remains unchanged. No production dotenv or credential was
+changed.
+
+The CLI maps source acquisition/reconciliation subprocesses to ingestion,
+feature/export reads to research, and feature/evaluation/prediction result
+writes to operations. The prediction loaders and evaluator have explicit
+operations routing. Postgame reconciliation and raw promotion use ingestion.
+Market attachment is file-only. No NHL GitHub daily workflow was found in
+this checkout; the actual local daily entry point is the Python CLI. External
+launch agents and schedulers remain to be confirmed by the operator.
+
+The staged migration
+[`20261016_prepare_nhl_write_roles.sql`](../../backend/nhl/sql/migrations/20261016_prepare_nhl_write_roles.sql)
+defines the four `NOLOGIN` groups and grants enumerated access. Research gets
+SELECT on approved relations only. Ingestion gets schedule/roster/source and
+staging DML, narrow column-level skater raw writes, goalie raw writes, audit
+sequence access, and shift/manpower DML. Operations gets SELECT plus DML on
+feature/context/evaluation/prediction outputs and the prediction sequence; it
+gets no foundational raw-source DML. Correction gets SELECT and UPDATE only on
+`shot_attempts` and `pp_toi_minutes`. None gets schema CREATE or table
+ownership. Runtime feature/shift table `CREATE`/`ALTER` was moved to the
+owner-run migration. The migration aborts if an NHL SECURITY DEFINER function
+is present, because such functions need an explicit privilege review.
+
+The live catalog inspection found no NHL SECURITY DEFINER functions, no
+`PUBLIC` table-write grants on `skater_game_logs_raw`, and no RLS on that raw
+table. RLS therefore is not a control here; table ACLs are. NHL custom
+functions were invoker-security and had PUBLIC EXECUTE, but their current
+bodies do not provide a privilege escalation path. The existing application
+connection is still the privileged `postgres` owner session, so the proposed
+boundary is not active.
+
+An actual Supabase transaction-scoped permission probe was performed with
+temporary roles and rolled back. The complete staged migration and
+`nhl_write_role_permission_assertions.sql` both ran in one transaction against
+the current PostgreSQL catalog; the assertions passed and a post-rollback
+catalog check found zero preparation roles. A second no-row SQL probe
+demonstrated research SELECT with raw INSERT/UPDATE/DELETE/CREATE denied,
+ingestion raw/stage INSERT/UPDATE privileges, operations feature/evaluation
+writes with raw UPDATE denied, and correction attempts/PP-TOI column update
+with SOG update denied. Both probes rolled back. These verify current catalog
+ACL enforcement and migration syntax, but do not test actual provisioned login
+credentials or a restricted full daily run.
+
+Several older research/archive scripts still read legacy DSN aliases directly.
+They are not safe to launch with the owner credential. Before activation, run
+them only in an environment where those aliases contain the research login and
+the ingestion, operations, and owner credentials are absent, or migrate them
+to the resolver. The daily CLI provides the correct single selected DSN to
+its children. Keep the owner credential out of local scheduler/application
+environments; application routing cannot prevent a caller who is separately
+given that credential from using it directly.
+
+For compatibility with those remaining legacy readers, activation must set
+`SUPABASE_DB_URL` and `DATABASE_URL` in research/scoring shells to the research
+login DSN. The same aliases may be set to the research DSN in the daily parent
+environment; the CLI replaces them per child with the selected class. Never
+leave the prior owner DSN in `.env`, shell startup files, or scheduler
+environment after cutover. The standalone source backfills identified in this
+pass use the restricted resolver and ingestion route; historical repair SQL
+remains a separately controlled operator procedure, not a daily subprocess.
+
+### Remaining activation sequence
+
+1. Confirm the external scheduler/launch-agent inventory and verify each
+   daily-invoked command remains classified to the intended access class.
+2. Review and apply the staged migration through the approved owner migration
+   path. Provision the three login roles separately, grant each exactly one
+   matching `NOLOGIN` group, and leave the correction group unassigned.
+3. Set passwords interactively with `psql \password`; deliver the DSNs to the
+   local ignored `backend/.env` or the confirmed scheduler secret store. Set
+   local file mode to `600`; never place owner credentials in those
+   application environments. Provide the research alias to standalone
+   read-only tools.
+4. Run `backend/nhl/sql/tests/nhl_write_role_permission_assertions.sql` and
+   login-based probes for research SELECT/denied DML, ingestion source and
+   stage operations, and operations result writes/source-write denial. Add
+   non-mutating functional checks for the daily SQL and prediction loaders.
+5. Only after those checks are recorded, separately authorize setting
+   `NHL_DB_ACCESS_MODE=restricted` for the daily process. Run the ordinary
+   daily pipeline and inspect lane receipts, row counts, and role identities.
+6. If activation fails, stop new launches, unset restricted mode, restore the
+   prior ignored environment file from a protected backup, and use the
+   existing legacy route only for recovery. Keep the new roles/grants in place
+   until diagnosis; do not revoke or change permissions as part of a config
+   rollback.
+
+No persistent roles/grants, passwords, connection configuration, full daily
+run, or production permission change was performed for this readiness work.
+The prior owner-based workflow remains unchanged. The migration and live
+permission assertions require separately authorized provisioning; the normal
+restricted daily run is also still a required live verification gate.

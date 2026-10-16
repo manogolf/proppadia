@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
+from backend.nhl.database_access import database_url
 
 
 LINEAGE_FIELDS = (
@@ -76,10 +77,14 @@ def persistence_model_params(model_params: Dict[str, Any], row: Dict[str, Any],
 
 
 def require_db_url() -> str:
-    db = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL") or os.environ.get("DB")
-    if not db:
-        raise SystemExit("Missing DB URL. Set SUPABASE_DB_URL (preferred) or DATABASE_URL or DB.")
-    return db
+    try:
+        return database_url(
+            "operations",
+            legacy_url=(os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+                        or os.environ.get("DB")),
+        )
+    except RuntimeError as error:
+        raise SystemExit(str(error)) from None
 
 
 def sha256_file(path: Path) -> str:

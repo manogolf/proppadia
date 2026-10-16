@@ -28,84 +28,84 @@ SET statement_timeout = 0;
 -- ------------------------------------------------------------
 -- 0) Ensure destination columns exist on the BASE TABLE
 -- ------------------------------------------------------------
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top_mate_player_id bigint;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top_mate_overlap_sec integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top_mate_overlap_share numeric;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top3_overlap_share_avg numeric;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d0_top3_overlap_share_std numeric;
+-- Feature columns are provisioned by the owner migration.
 
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS pairings_source text;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS pairings_updated_at timestamptz;
+-- Feature columns are provisioned by the owner migration.
 
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_overlap_share_avg double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_overlap_share_std double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top3_mates_overlap_share_avg double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top3_mates_overlap_share_std double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_games_in_window integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_shiftcharts_games integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_shiftcharts_coverage_rate double precision;
+-- Feature columns are provisioned by the owner migration.
 
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_overlap_share_avg double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_overlap_share_std double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top3_mates_overlap_share_avg double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top3_mates_overlap_share_std double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_games_in_window integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_shiftcharts_games integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_shiftcharts_coverage_rate double precision;
+-- Feature columns are provisioned by the owner migration.
 
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_repeat_rate double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_distinct_count integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_top_mate_games_with_shiftcharts integer;
+-- Feature columns are provisioned by the owner migration.
 
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_repeat_rate double precision;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_distinct_count integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_top_mate_games_with_shiftcharts integer;
 
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS mate_stability_source text;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS mate_stability_updated_at timestamptz;
+-- Feature columns are provisioned by the owner migration.
 
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_pairings_missing_flag integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_pairings_cov_bucket text;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_pairings_available boolean;
+-- Feature columns are provisioned by the owner migration.
 
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_pairings_missing_flag integer;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_pairings_cov_bucket text;
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d20_pairings_available boolean;
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
+-- Feature columns are provisioned by the owner migration.
+
 
 -- ------------------------------------------------------------
 -- 1) Compute and write pairings for slate_date

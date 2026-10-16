@@ -27,13 +27,15 @@ from requests.adapters import HTTPAdapter
 import psycopg
 
 from backend.nhl.official_request_journal import RequestContext, official_get
+from backend.nhl.database_access import database_url
 
 EASTERN = ZoneInfo("America/New_York")
 DATE = os.getenv("SLATE_DATE") or dt.datetime.now(EASTERN).date().isoformat()
 
-DB = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
-if not DB:
-    sys.exit("Missing SUPABASE_DB_URL / DATABASE_URL")
+try:
+    DB = database_url("ingestion")
+except RuntimeError as error:
+    sys.exit(str(error))
 if "?sslmode=" not in DB and "&sslmode=" not in DB:
     DB += ("&" if "?" in DB else "?") + "sslmode=require"
 if "?gssencmode=" not in DB and "&gssencmode=" not in DB:

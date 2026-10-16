@@ -33,12 +33,13 @@ from pathlib import Path
 
 import pandas as pd
 import psycopg
+from backend.nhl.database_access import database_url
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pred-csv", required=True)
-    ap.add_argument("--db-url", required=False, default=os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL"))
+    ap.add_argument("--db-url", required=False, default=None)
     ap.add_argument("--prop-type", default="sog")
     ap.add_argument("--project", default="nhl")
     ap.add_argument("--slate-date", default=None)
@@ -49,7 +50,9 @@ def main():
                     help="Bind this observation to its immutable daily run")
     args = ap.parse_args()
 
-    if not args.db_url:
+    try:
+        args.db_url = database_url("operations", legacy_url=args.db_url)
+    except RuntimeError:
         raise SystemExit("FATAL: --db-url or SUPABASE_DB_URL/DATABASE_URL is required")
     if not args.parent_run_id:
         raise SystemExit("FATAL: --parent-run-id is required for run-scoped SOG persistence")

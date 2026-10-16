@@ -25,8 +25,8 @@ BEGIN
 END $$;
 
 -- Ensure start_prob column exists
-ALTER TABLE nhl.training_features_goalie_saves_v2
-  ADD COLUMN IF NOT EXISTS start_prob numeric;
+-- Feature columns are provisioned by the owner migration.
+
 
 -- ---------- discover goalie-log column names ----------
 SELECT column_name AS g_shotscol

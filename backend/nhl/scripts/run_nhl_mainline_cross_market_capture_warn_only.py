@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import psycopg
+from backend.nhl.database_access import database_url
 
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
 from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canonical_slate
@@ -709,14 +710,14 @@ def main() -> int:
         # a market-snapshot mode, not a new scoring/prediction phase.
         observer_phase = "AUTO" if args.phase == "REFRESH" else args.phase
         observe_prediction_only_lanes(
-            slate, observer_phase, os.environ.get("SUPABASE_DB_URL", "").strip(), now,
+            slate, observer_phase, database_url("research"), now,
         )
         ready, reason = morning_capture_allowed(slate)
         if not ready:
             status_path = record_morning_not_ready(args.output_root, slate, reason)
         else:
             status_path = observe(args.output_root, slate, args.phase, args.force,
-                                  os.environ.get("SUPABASE_DB_URL", "").strip(),
+                                  database_url("research"),
                                   args.canonical_slate_raw, args.canonical_slate_health)
         print(status_path)
     except Exception as error:

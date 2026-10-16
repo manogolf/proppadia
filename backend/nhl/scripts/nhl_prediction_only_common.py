@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pandas as pd
 import psycopg
+from backend.nhl.database_access import database_url, restricted_mode
 
 from backend.nhl.prediction_only.core import (
     PROSPECTIVE_NOT_BEFORE,
@@ -33,6 +34,8 @@ def utc_now() -> datetime:
 
 def load_database_env(path: Path) -> str:
     """Read only database settings; never inspect or load bookmaker credentials."""
+    if restricted_mode():
+        return database_url("research")
     values = {key: os.environ.get(key, "").strip() for key in ("SUPABASE_DB_URL", "DATABASE_URL")}
     if path.is_file() and not any(values.values()):
         for raw in path.read_text().splitlines():

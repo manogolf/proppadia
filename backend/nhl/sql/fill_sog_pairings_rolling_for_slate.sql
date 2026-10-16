@@ -14,30 +14,8 @@
 SET statement_timeout = 0;
 
 -- Ensure columns exist (idempotent)
-ALTER TABLE nhl.training_features_nhl_sog_enriched_pregame_v2
-  ADD COLUMN IF NOT EXISTS d10_shiftcharts_games              int NULL,
-  ADD COLUMN IF NOT EXISTS d10_shiftcharts_coverage_rate       double precision NULL,
-  ADD COLUMN IF NOT EXISTS d10_top_mate_overlap_share_avg      double precision NULL,
-  ADD COLUMN IF NOT EXISTS d10_top_mate_overlap_share_std      double precision NULL,
-  ADD COLUMN IF NOT EXISTS d10_top3_mates_overlap_share_avg    double precision NULL,
-  ADD COLUMN IF NOT EXISTS d10_top3_mates_overlap_share_std    double precision NULL,
-  ADD COLUMN IF NOT EXISTS d10_games_in_window                int NULL,
+-- Feature columns are provisioned by the owner migration.
 
-  ADD COLUMN IF NOT EXISTS d20_shiftcharts_games              int NULL,
-  ADD COLUMN IF NOT EXISTS d20_shiftcharts_coverage_rate       double precision NULL,
-  ADD COLUMN IF NOT EXISTS d20_top_mate_overlap_share_avg      double precision NULL,
-  ADD COLUMN IF NOT EXISTS d20_top_mate_overlap_share_std      double precision NULL,
-  ADD COLUMN IF NOT EXISTS d20_top3_mates_overlap_share_avg    double precision NULL,
-  ADD COLUMN IF NOT EXISTS d20_top3_mates_overlap_share_std    double precision NULL,
-  ADD COLUMN IF NOT EXISTS d20_games_in_window                int NULL,
-
-  ADD COLUMN IF NOT EXISTS d10_pairings_available             boolean NULL,
-  ADD COLUMN IF NOT EXISTS d20_pairings_available             boolean NULL,
-  ADD COLUMN IF NOT EXISTS d10_pairings_cov_bucket            smallint NULL,
-  ADD COLUMN IF NOT EXISTS d20_pairings_cov_bucket            smallint NULL,
-
-  ADD COLUMN IF NOT EXISTS pairings_source                    text NULL,
-  ADD COLUMN IF NOT EXISTS pairings_updated_at                timestamptz NULL;
 
 WITH
 params AS (

@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg
 import requests
+from backend.nhl.database_access import database_url, restricted_mode
 
 from backend.nhl.official_request_journal import ENV_REQUIRED, official_get
 
@@ -41,7 +42,16 @@ def _executemany(cur, sql: str, rows: List[tuple], *, page_size: int = 5000) -> 
         cur.executemany(sql, rows[i : i + page_size])
 
 def require_db_url() -> str:
-    return os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL") or ""
+    try:
+        # Preserve the historical DATABASE_URL-first order when unrestricted.
+        return database_url(
+            "ingestion",
+            legacy_url=os.environ.get("DATABASE_URL") or os.environ.get("SUPABASE_DB_URL"),
+        )
+    except RuntimeError as exc:
+        if restricted_mode():
+            raise SystemExit(str(exc)) from None
+        return ""
 
 def die(msg: str) -> None:
     raise SystemExit(msg)
@@ -357,7 +367,10 @@ def main() -> None:
         pass
     conn.autocommit = False
 
-    ensure_table(conn)
+    # DDL and index maintenance belong to the owner migration. Restricted
+    # ingestion uses the preprovisioned tables and has no schema CREATE right.
+    if not restricted_mode():
+        ensure_table(conn)
 
     game_ids = fetch_game_ids_for_date(conn, game_date)
     if not game_ids:

@@ -28,6 +28,7 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from backend.nhl.player_external_identity import localized_text, resolve_player_external_identity
+from backend.nhl.database_access import database_url
 
 EASTERN = ZoneInfo("America/New_York")
 DATE = os.getenv("SLATE_DATE") or dt.datetime.now(EASTERN).date().isoformat()
@@ -36,9 +37,7 @@ PLACEHOLDER_RE = re.compile(r"^\s*(?:player|unknown)\s+\d+\s*$", re.IGNORECASE)
 
 
 def _db_url() -> str:
-    db = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
-    if not db:
-        raise RuntimeError("Missing SUPABASE_DB_URL / DATABASE_URL")
+    db = database_url("ingestion")
     if "?sslmode=" not in db and "&sslmode=" not in db:
         db += ("&" if "?" in db else "?") + "sslmode=require"
     if "?gssencmode=" not in db and "&gssencmode=" not in db:

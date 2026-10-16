@@ -20,12 +20,14 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 import psycopg
+from backend.nhl.database_access import database_url
 
 from backend.nhl.official_request_journal import ENV_REQUIRED, RequestContext, official_get
 
 # ---------------- Env & date ----------------
-DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-if not DB_URL:
+try:
+    DB_URL = database_url("ingestion")
+except RuntimeError:
     print("Set SUPABASE_DB_URL or DATABASE_URL", file=sys.stderr); sys.exit(2)
 
 SLATE_DATE = os.environ.get("SLATE_DATE")

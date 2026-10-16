@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 import psycopg
+from backend.nhl.database_access import database_url
 
 LABELS = {1: "PRESEASON", 2: "REGULAR_SEASON", 3: "POSTSEASON"}
 FIELDS = ["canonical_season", "slate_date", "game_id", "game_date",
@@ -28,9 +29,10 @@ def main() -> None:
     health = json.loads((args.health_root / args.slate_date / "slate_health.json").read_text())
     if health.get("slate_date") != args.slate_date or not health.get("downstream_ready"):
         raise SystemExit("SLATE_NOT_DOWNSTREAM_READY")
-    db = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
-    if not db:
-        raise SystemExit("Missing SUPABASE_DB_URL / DATABASE_URL")
+    try:
+        db = database_url("research")
+    except RuntimeError as error:
+        raise SystemExit(str(error)) from None
     with psycopg.connect(db) as conn, conn.cursor() as cur:
         cur.execute("""
           SELECT season, game_date, game_id, game_date, start_time_utc,
