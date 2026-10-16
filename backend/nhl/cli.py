@@ -29,6 +29,7 @@ from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
 from backend.nhl.odds_markets import NHL_COMPREHENSIVE_PROP_MARKETS_CSV
 from backend.nhl.database_access import (
     database_url as nhl_database_url,
+    psql_dsn_without_password as nhl_psql_dsn_without_password,
     restricted_mode as nhl_restricted_mode,
     routed_database_environment as nhl_routed_database_environment,
 )
@@ -657,7 +658,12 @@ def run(
             replaced_dsn = False
             for index, token in enumerate(cmd[1:], start=1):
                 if token.startswith(("postgres://", "postgresql://")):
-                    cmd[index] = db_env["SUPABASE_DB_URL"]
+                    psql_dsn, password = nhl_psql_dsn_without_password(
+                        db_env["SUPABASE_DB_URL"]
+                    )
+                    cmd[index] = psql_dsn
+                    if password:
+                        e["PGPASSWORD"] = password
                     replaced_dsn = True
                     break
             if not replaced_dsn:

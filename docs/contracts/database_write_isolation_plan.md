@@ -1,12 +1,16 @@
 # Database Write Isolation Plan
 
-**Status: PLAN ONLY. No production permissions or credentials were changed.**
+**Status: NHL restricted connections active and daily-verified (2026-10-16).**
+The deployment record below describes the NHL cutover. MLB remains unchanged.
 
 This plan pairs the Official Source Verification and Data Authority policy in
 [Project Doctrine](../PROJECT_DOCTRINE.md) with the canonical identity and
 NULL/zero contracts. Its scope is source-table write isolation for NHL and MLB.
-The current codebase and database do not yet have a safe separation between
-daily ingestion, research/scoring, and historical correction.
+The NHL local application paths now use separate restricted logins for daily
+ingestion, research/scoring, and operational-result writes. The owner role and
+its database privileges remain unchanged; the correction group remains
+`NOLOGIN` and separately controlled. This is application connection isolation,
+not a revocation of owner or Supabase administrative authority.
 
 ## Read-only assessment
 
@@ -123,22 +127,19 @@ GRANT UPDATE (shot_attempts, pp_toi_minutes)
   ON nhl.skater_game_logs_raw TO proppadia_nhl_source_correction;
 ```
 
-The committed NHL preparation migration is executable SQL, but it is only a
-preparation slice and is not a complete production grant set. It creates the
-three `NOLOGIN` NHL permission groups and grants the skater-log raw/stage slice
-shown above. The
-login roles `proppadia_nhl_research_login` and `proppadia_nhl_daily_login` are
-intentionally not created by that file; their membership and secrets are a
-later, separately authorized provisioning step. This prevents accidentally
-creating an unusable passwordless login or placing credentials in SQL.
+The reviewed NHL migration creates four `NOLOGIN` permission groups and grants
+the enumerated NHL application permissions. It was applied during the
+authorized 2026-10-16 cutover. Three login roles were provisioned separately;
+no correction login or correction membership was created.
 
-Before this shape can be enforced, direct raw writers in NHL CLI and
-`run_nhl_postgame_reconciliation.py`, PP-TOI/attempt promoters, and MLB source
-ingesters must be migrated to the restricted role and safe promotion entry
-points. Research, feature exporters, model fitting/scoring, and analysis tools
-must receive the read-only login. Staging `TRUNCATE`, sequence access, function
-`EXECUTE`, schema `CREATE`, and views/materialized views require per-command
-review; do not grant them by schema-wide default. Review and remove broad
+Before activation, direct raw writers in the NHL CLI,
+`run_nhl_postgame_reconciliation.py`, and PP-TOI/attempt promoters were
+identified for restricted routing; the daily command now exercises those
+paths under the ingestion login. Research, feature exporters, model
+fitting/scoring, and analysis tools use the read-only login. Staging
+`TRUNCATE`, sequence access, function `EXECUTE`, schema `CREATE`, and
+views/materialized views require per-command review; do not grant them by
+schema-wide default. Review and remove broad
 `anon`/`authenticated`/`service_role` grants from MLB base source tables only
 after confirming that no API consumer relies on them. No `ALTER DEFAULT
 PRIVILEGES` is proposed until object owners are moved off application roles.
@@ -217,52 +218,105 @@ query/export and HGB/Phoenix input-snapshot calls select the research login;
 registered ingestion scripts and SQL mutations select the daily login. The
 evaluator that writes `nhl.eval_sog_daily` is classified as a writer. Each
 spawned child receives only its selected role DSN; the other restricted DSN is
-removed from its environment. This routing is inactive until the explicit mode
-is set; no dotenv or production connection configuration was changed.
+removed from its environment. This routing is active in the local ignored
+`backend/.env`; no credential values are recorded in this document or
+repository.
 
-The current restricted writer classification is deliberately a staging aid,
-not a complete daily permission manifest. It covers the existing central CLI
-writer registry and SQL mutations, but the migration only grants the raw
-skater-log/stage slice. Complete table/function/sequence privileges for games,
-players, rosters, goalie logs, shift data, feature stores, predictions,
-receipts, and any other write targets must be enumerated and added before a
-full daily cutover. Until then, restricted mode is not ready for the daily
-command and must remain off.
+The restricted permissions cover the current central CLI writer registry and
+the daily/operations tables required by the ordinary NHL command. The
+successful daily run below is an integration check of the current workflow,
+not a guarantee for unenumerated future scripts or external schedulers. Any
+new writer must be assigned a role and tested before it is added to the
+restricted command registry.
 
-## Required code and operator actions
+## Prior cutover requirements (historical notes)
 
-- **Code cutover is required:** current Python and SQL commands use a shared
-  owner DSN and several write directly with `psycopg`/`psql`; grants alone
-  cannot distinguish those commands. For this first stage, raw writes remain
-  limited to the dedicated ingestion identity and explicitly granted columns;
-  research/scoring identities have no source DML. A later move to function-only
-  raw promotion would require separately validated procedures and cutover.
-  Model/research readers must use the read-only DSN.
-- **Standalone script limitation:** scripts launched outside the central NHL
-  CLI that read `SUPABASE_DB_URL` directly do not all consult the restricted
-  resolver yet. At activation, research/scoring shell and scheduler
-  environments must contain only the read-only connection alias, with owner
-  and ingestion URLs absent. Inventory and migrate any standalone database
-  writer before that environment cutover.
-- **Review API exposure:** the live MLB grants include broad API-role DML, and
-  `mlb.game_info` has RLS disabled. Confirm exposed schemas and current API
+- The following requirements were identified before activation. Current
+  deployment state is recorded in the activation record below.
+
+## NHL activation record — 2026-10-16
+
+The operator authorized applying the reviewed NHL role migration, provisioning
+the restricted logins, storing their URLs in the ignored local environment,
+and running the ordinary daily command. The following actions were completed:
+
+- Applied `backend/nhl/sql/migrations/20261016_prepare_nhl_write_roles.sql`.
+- Provisioned `proppadia_nhl_research_login`,
+  `proppadia_nhl_daily_login`, and `proppadia_nhl_operations_login`, each
+  with membership in only its matching role group. The source-correction
+  group remains `NOLOGIN` with no application login membership.
+- Set `NHL_DB_ACCESS_MODE=restricted` in the ignored local `backend/.env`;
+  the file is mode `0600`. Its shared aliases resolve to the research login.
+  No owner DSN is in the active application environment. The owner rollback
+  configuration is retained outside the repository with restrictive file and
+  directory permissions; it was not rotated.
+- The local morning-orchestration and cross-market-shadow LaunchAgents load
+  `backend/.env`. The latter uses research access. No NHL GitHub Actions
+  workflow or crontab entry was found. Other external schedulers remain
+  outside this host/repository inspection.
+- The read-only SQL assertions in
+  `backend/nhl/sql/tests/nhl_write_role_permission_assertions.sql` passed
+  against the live database. Restricted login probes confirmed research can
+  read raw observations and cannot modify them; ingestion can perform its
+  permitted raw/staging writes; operations can write operational results but
+  cannot modify raw source observations. The logins have no owner,
+  `service_role`, or `BYPASSRLS` membership. The source-correction role was not
+  activated.
+- The first daily attempt failed before scoring because central child routing
+  did not pass the selected role-specific URL to child scripts that resolve
+  their own access class. `backend/nhl/database_access.py` now passes only the
+  selected restricted URL alongside the aliases. A focused test covers this.
+  The subsequent ordinary command completed `READY`:
+  `nhldaily_20261016T181234521393Z_3a7102d4`.
+- The successful receipt records all scoring/attachment lanes complete,
+  odds `CAPTURED_NONEMPTY` (42 credits; 3 network attempts), committed
+  database writes, 324 verified shot-attempt observations, 8 confirmed
+  attempts conflicts, and 72 unknown attempt rows left unknown. Promotion
+  preserved 324 existing values and filled 0 NULLs. PP-TOI filling recorded
+  214 conflicts and 0 fills; its unknown values remained NULL. The receipt and
+  diagnostic paths are under
+  `artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261016T181234521393Z_3a7102d4/`
+  and the run-bound source-diagnostic directories referenced by that receipt.
+- The restricted login passwords were reset after a local diagnostic exposed
+  them in a process argument. All three persisted login URLs then authenticated
+  as their intended roles. Passwords and connection URLs are not retained in
+  Git or this record.
+
+The role assertions verify the installed ACLs and memberships; they do not
+prove that every external scheduler or uninspected host has stopped using an
+owner credential. The owner credential was not rotated or revoked. The focused
+local verification passed 29 tests across database routing, PP-TOI zero
+semantics, and shot-attempt source handling. A real `psql` child identity check
+also passed through the password-free argv routing.
+
+An earlier failed local test diagnostic printed environment values. The
+variable names exposed were `SUPABASE_SECRET_KEY`, `ODDS_API_KEY`, and
+`OPS_API_TOKEN`; these are not database passwords. Rotate them through their
+respective provider/secret-management interfaces and update the local secret
+store. Do not put replacement values in this repository or its receipts.
+
+## Remaining implementation notes
+- **Standalone script limitation:** older scripts launched outside the central
+  NHL CLI that read `SUPABASE_DB_URL` directly do not all consult the restricted
+  resolver. The active local aliases contain the research login, not the owner
+  credential. Such a standalone script therefore receives read-only access and
+  may fail if it attempts a write. Keep owner and ingestion URLs out of
+  research/scoring shells; add standalone writers to reviewed role routing
+  before relying on them operationally.
+- **Review API exposure:** the earlier live MLB assessment found broad
+  API-role DML, and `mlb.game_info` has RLS disabled. Confirm exposed schemas
+  and current API
   consumers before revoking access; `service_role` remains privileged and
   bypasses RLS by design.
-- **One separately authorized database-owner execution is required** to create
-  roles/grants and later revoke existing access. This can be performed through
-  the established PostgreSQL migration path; a manual Supabase dashboard
-  operation is not technically required. A human with Supabase project-owner
-  access must approve the provisioning and provide each credential directly
-  to its secret store. The local operator must place the local secrets in the
-  ignored `backend/.env`; no credential value belongs in Git or a report.
-- No database permission, credential, workflow, or production code change was
-  made for this plan. Production enforcement remains unauthorized.
+- A database-owner execution and local credential setup were required and were
+  completed under the activation authorization documented above. Owner
+  privileges were not revoked and the owner credential was not rotated.
 
-## NHL readiness update — 2026-10-16
+## NHL pre-activation readiness snapshot — 2026-10-16 (superseded)
 
-This section supersedes earlier statements above that described NHL routing as
-limited to two roles or the permission migration as only a raw/stage slice.
-The staged work is still inactive and has not changed production permissions.
+This section records the state immediately before the authorized cutover. Its
+inactive/staged status is historical; see the activation record above for the
+current state.
 
 The central `./bin/python -m backend.nhl.cli daily --with-odds` command uses
 three distinct connection classes in restricted mode:
@@ -278,9 +332,10 @@ three distinct connection classes in restricted mode:
 restricted mode and does not use `SUPABASE_DB_URL`, `DATABASE_URL`, or an
 explicit legacy fallback. The central CLI strips alternate role DSNs, legacy
 aliases, and libpq connection settings from each child, then provides only the
-selected role DSN through the aliases expected by existing scripts. Existing
-unrestricted mode remains unchanged. No production dotenv or credential was
-changed.
+selected role DSN through the aliases expected by existing scripts plus the
+selected role-specific setting needed by child scripts that resolve access
+again. For `psql`, the CLI removes the password from argv and passes it through
+`PGPASSWORD`. Existing unrestricted mode remains unchanged.
 
 The CLI maps source acquisition/reconciliation subprocesses to ingestion,
 feature/export reads to research, and feature/evaluation/prediction result
@@ -303,13 +358,14 @@ ownership. Runtime feature/shift table `CREATE`/`ALTER` was moved to the
 owner-run migration. The migration aborts if an NHL SECURITY DEFINER function
 is present, because such functions need an explicit privilege review.
 
-The live catalog inspection found no NHL SECURITY DEFINER functions, no
+The pre-activation catalog inspection found no NHL SECURITY DEFINER functions, no
 `PUBLIC` table-write grants on `skater_game_logs_raw`, and no RLS on that raw
 table. RLS therefore is not a control here; table ACLs are. NHL custom
 functions were invoker-security and had PUBLIC EXECUTE, but their current
 bodies do not provide a privilege escalation path. The existing application
-connection is still the privileged `postgres` owner session, so the proposed
-boundary is not active.
+connection was the privileged `postgres` owner session at that inspection
+point; local NHL application paths were switched during the authorized
+activation.
 
 An actual Supabase transaction-scoped permission probe was performed with
 temporary roles and rolled back. The complete staged migration and
@@ -324,24 +380,23 @@ ACL enforcement and migration syntax, but do not test actual provisioned login
 credentials or a restricted full daily run.
 
 Several older research/archive scripts still read legacy DSN aliases directly.
-They are not safe to launch with the owner credential. Before activation, run
-them only in an environment where those aliases contain the research login and
-the ingestion, operations, and owner credentials are absent, or migrate them
-to the resolver. The daily CLI provides the correct single selected DSN to
-its children. Keep the owner credential out of local scheduler/application
-environments; application routing cannot prevent a caller who is separately
-given that credential from using it directly.
+The active aliases now contain the research login, so those scripts cannot
+write through that route. They must be migrated to the resolver if they need
+authorized writes. Keep owner credentials out of local scheduler/application
+environments; application routing cannot constrain a caller who is separately
+given an owner credential.
 
-For compatibility with those remaining legacy readers, activation must set
-`SUPABASE_DB_URL` and `DATABASE_URL` in research/scoring shells to the research
-login DSN. The same aliases may be set to the research DSN in the daily parent
-environment; the CLI replaces them per child with the selected class. Never
-leave the prior owner DSN in `.env`, shell startup files, or scheduler
-environment after cutover. The standalone source backfills identified in this
-pass use the restricted resolver and ingestion route; historical repair SQL
-remains a separately controlled operator procedure, not a daily subprocess.
+The active local aliases are set to the research login. The daily parent also
+uses that alias; the CLI replaces it per child with the selected class. Never
+place the owner DSN in `.env`, shell startup files, or scheduler environment.
+The standalone source backfills identified in this pass use the restricted
+resolver and ingestion route; historical repair SQL remains a separately
+controlled operator procedure, not a daily subprocess.
 
-### Remaining activation sequence
+### Cutover sequence used; rollback reference
+
+The five provisioning and verification steps below were completed during the
+authorized cutover. The last step remains rollback guidance.
 
 1. Confirm the external scheduler/launch-agent inventory and verify each
    daily-invoked command remains classified to the intended access class.
@@ -366,8 +421,6 @@ remains a separately controlled operator procedure, not a daily subprocess.
    until diagnosis; do not revoke or change permissions as part of a config
    rollback.
 
-No persistent roles/grants, passwords, connection configuration, full daily
-run, or production permission change was performed for this readiness work.
-The prior owner-based workflow remains unchanged. The migration and live
-permission assertions require separately authorized provisioning; the normal
-restricted daily run is also still a required live verification gate.
+The sequence above was completed under the activation authorization. The
+ordinary restricted daily verification passed as recorded in the activation
+record above. MLB permission/configuration and the owner role remain unchanged.

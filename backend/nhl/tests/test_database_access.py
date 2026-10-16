@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from backend.nhl.database_access import (
     database_url,
+    psql_dsn_without_password,
     restricted_mode,
     routed_database_environment,
 )
@@ -33,6 +34,16 @@ class NHLDatabaseAccessTests(unittest.TestCase):
             "NHL_INGEST_DATABASE_URL": "postgresql://proppadia_nhl_daily_login.projectref:secret@pool.invalid/postgres",
         }
         self.assertEqual(database_url("ingestion", environ=env), env["NHL_INGEST_DATABASE_URL"])
+
+    def test_psql_argv_dsn_does_not_contain_password(self):
+        safe_url, password = psql_dsn_without_password(
+            "postgresql://role.projectref:p%40ssword@pool.invalid:5432/postgres?sslmode=require"
+        )
+        self.assertEqual(password, "p@ssword")
+        self.assertEqual(
+            safe_url,
+            "postgresql://role.projectref@pool.invalid:5432/postgres?sslmode=require",
+        )
 
     def test_restricted_mode_never_falls_back_to_legacy_owner_url(self):
         env = {
@@ -97,12 +108,17 @@ class NHLDatabaseAccessTests(unittest.TestCase):
             cli.run(["psql", env["SUPABASE_DB_URL"], "-c", "SELECT 1"], database_write_capable=False)
         command = runner.call_args.args[0]
         child_env = runner.call_args.kwargs["env"]
-        self.assertEqual(command[1], research)
+        self.assertEqual(
+            command[1],
+            "postgresql://proppadia_nhl_research_login@db.invalid/postgres",
+        )
         self.assertEqual(child_env["SUPABASE_DB_URL"], research)
         self.assertEqual(child_env["DATABASE_URL"], research)
+        self.assertEqual(child_env["NHL_RESEARCH_DATABASE_URL"], research)
+        self.assertEqual(child_env["PGPASSWORD"], "secret")
+        self.assertNotIn(":secret@", command[1])
         self.assertNotIn("DB", child_env)
         self.assertNotIn("PGUSER", child_env)
-        self.assertNotIn("PGPASSWORD", child_env)
         self.assertNotIn("PGHOST", child_env)
         self.assertNotIn("PGSERVICE", child_env)
         self.assertNotIn("PGSERVICEFILE", child_env)
@@ -127,6 +143,7 @@ class NHLDatabaseAccessTests(unittest.TestCase):
         child_env = runner.call_args.kwargs["env"]
         self.assertEqual(child_env["SUPABASE_DB_URL"], ingest)
         self.assertEqual(child_env["DATABASE_URL"], ingest)
+        self.assertEqual(child_env["NHL_INGEST_DATABASE_URL"], ingest)
         self.assertNotIn("NHL_RESEARCH_DATABASE_URL", child_env)
         self.assertNotIn("NHL_OPERATIONS_DATABASE_URL", child_env)
 
@@ -149,6 +166,7 @@ class NHLDatabaseAccessTests(unittest.TestCase):
             cli.run(["./bin/python", "load_nhl_predictions_generic.py"])
         child_env = runner.call_args.kwargs["env"]
         self.assertEqual(child_env["SUPABASE_DB_URL"], operations)
+        self.assertEqual(child_env["NHL_OPERATIONS_DATABASE_URL"], operations)
         self.assertNotIn("NHL_INGEST_DATABASE_URL", child_env)
 
     def test_daily_evaluator_is_classified_as_a_database_writer(self):
