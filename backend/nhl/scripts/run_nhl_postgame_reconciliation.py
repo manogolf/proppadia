@@ -75,7 +75,10 @@ from backend.nhl.player_external_identity import (
     resolve_player_external_identity,
 )
 from backend.nhl.points_attempts_source import preserve_existing_attempts_conflict_assignment
-from backend.nhl.pp_toi_source import preserve_existing_pp_toi_conflict_assignment
+from backend.nhl.pp_toi_source import (
+    capture_stage_pp_toi_conflicts,
+    preserve_existing_pp_toi_conflict_assignment,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -1414,6 +1417,17 @@ def governed_collectors(
         verify_staging_completeness(
             dsn, slate_date=slate_date, games=games, skaters=skaters, goalies=goalies)
     _run([python, str(SCRIPTS / "ingest_shiftcharts_for_date.py"), "--date", slate_date], slate_date, dsn)
+    run_id = os.environ.get("NHL_RECONCILIATION_RUN_ID")
+    if not run_id:
+        raise RuntimeError("PP_TOI_CONFLICT_DIAGNOSTIC_RUN_ID_MISSING")
+    pp_toi_conflicts = capture_stage_pp_toi_conflicts(
+        dsn, slate_date=slate_date, run_id=run_id, stage="postgame_promotion")
+    print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({
+        "schema_version": "NHL_PP_TOI_SOURCE_SUMMARY_V1",
+        "slate_date": slate_date,
+        "confirmed_discrepancy_count": pp_toi_conflicts["conflict_count"],
+        "diagnostic_artifact": pp_toi_conflicts,
+    }, sort_keys=True))
     _promote_stage(dsn, slate_date)
     _run([python, str(SCRIPTS / "backfill_game_manpower_segments.py"), "--start-date", slate_date,
           "--end-date", slate_date, "--season", "2026"], slate_date, dsn)

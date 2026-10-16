@@ -74,7 +74,10 @@ from backend.nhl.prediction_lineage import (
 )
 from backend.nhl.model_identity import fitted_model_identity
 from backend.nhl.points_attempts_source import preserve_existing_attempts_conflict_assignment
-from backend.nhl.pp_toi_source import preserve_existing_pp_toi_conflict_assignment
+from backend.nhl.pp_toi_source import (
+    capture_stage_pp_toi_conflicts,
+    preserve_existing_pp_toi_conflict_assignment,
+)
 from backend.nhl.sog_feature_input import begin_capture as begin_sog_feature_capture
 from backend.nhl.sog_feature_input import finalize_capture as finalize_sog_feature_capture
 from backend.nhl.sog_fixed_blend import capture as capture_sog_fixed_blends
@@ -2596,13 +2599,36 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     FROM upserted u
     LEFT JOIN raw_before b USING (player_id, game_id);
     """
+    pp_toi_conflicts = capture_stage_pp_toi_conflicts(
+        db, slate_date=yday, run_id=daily_run_id, stage="daily_promotion")
+    pp_toi_summary = {
+        "lane": _ACTIVE_DAILY_LANE,
+        "command_identity": "daily PP-TOI source conflict comparison",
+        "exit_status": 0,
+        "duration_ms": 0,
+        "status": "COMPLETE",
+        "database_write_capable": False,
+        "schema_version": "NHL_PP_TOI_SOURCE_SUMMARY_V1",
+        "slate_date": yday,
+        "confirmed_discrepancy_count": pp_toi_conflicts["conflict_count"],
+        "diagnostic_artifact": pp_toi_conflicts,
+        "promotion_preview": {
+            "existing_value_policy": "PRESERVE_POPULATED_RAW",
+            "null_policy": "FILL_ONLY_WHEN_SOURCE_VALUE_PRESENT",
+        },
+    }
+    if _ACTIVE_DAILY_RECORDER is not None:
+        _ACTIVE_DAILY_RECORDER.record_child(pp_toi_summary)
+    print("NHL_PP_TOI_PROMOTION_CONFLICTS=" + json.dumps(pp_toi_summary, sort_keys=True))
     run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
 
     # A3a) Build manpower segments (PP/PK windows) for this slate date (required for PP TOI)
     run([PY, SCRIPTS_DIR / "backfill_game_manpower_segments.py", "--start-date", yday, "--end-date", yday, "--season", str(season)])
 
     # A3b) Fill PP TOI minutes (depends on manpower segments)
-    run([PY, SCRIPTS_DIR / "fill_pp_toi_minutes_for_date.py", "--date", yday, "--commit"])
+    run([PY, SCRIPTS_DIR / "fill_pp_toi_minutes_for_date.py", "--date", yday, "--commit"], env={
+        "NHL_DAILY_RUN_ID": daily_run_id,
+    })
 
     # A4) Pairings artifacts for yday (built ONCE)
     run_psql_file(SQL_DIR / "shiftcharts_pairings_for_date.sql", vars={"game_date": yday})

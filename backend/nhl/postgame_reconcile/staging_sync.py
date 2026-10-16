@@ -564,8 +564,7 @@ def _upsert_expected_rows(connection: Any) -> int:
                 shot_attempts=COALESCE(EXCLUDED.shot_attempts,
                     nhl.import_skater_logs_stage.shot_attempts),
                 toi_minutes=EXCLUDED.toi_minutes,
-                pp_toi_minutes=COALESCE(EXCLUDED.pp_toi_minutes,
-                    nhl.import_skater_logs_stage.pp_toi_minutes),
+                pp_toi_minutes=EXCLUDED.pp_toi_minutes,
                 goals=EXCLUDED.goals,
                 assists=EXCLUDED.assists,
                 blocks=EXCLUDED.blocks

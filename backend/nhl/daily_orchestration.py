@@ -258,6 +258,8 @@ class DailyRunRecorder:
             "confirmed_discrepancy_count", "diagnostic_artifact",
             "promoted_rows", "preserved_existing_values", "filled_nulls",
             "inserted_known_values", "unknown_after_promotion",
+            "source_reconstructed_positive_count", "unknown_source_remains_null",
+            "populated_zero_preserved",
         }
         child = {key: value[key] for key in allowed if key in value}
         status = self._classify_child_database_write(child)

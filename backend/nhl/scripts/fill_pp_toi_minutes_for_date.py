@@ -6,9 +6,10 @@ Canonical daily fixer for nhl.skater_game_logs_raw.pp_toi_minutes.
 
 - Reads SLATE_DATE (ET) or --date
 - Finds regular-season games (game_type=2) on that date
-- For each game, fetches api-web.nhle.com gamecenter boxscore JSON
-- Extracts per-skater PP TOI
-- Updates skater_game_logs_raw.pp_toi_minutes ONLY where current value is NULL or 0
+- For each game, reconstructs positive PP overlap from official-derived
+  manpower segments and player shiftcharts
+- Fills skater_game_logs_raw.pp_toi_minutes only where current value is NULL
+- Preserves populated values, including verified zero, and records disagreements
 - Then enforces an invariant:
     For each (game_id, team_id) on that date, if SUM(toi_minutes)>0 and SUM(pp_toi_minutes)=0 -> FAIL
 
@@ -26,14 +27,19 @@ Env:
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 import sys
 import time
+import uuid
 from typing import Any, Dict, Iterable, Optional, Tuple, List
 
 import psycopg
 import requests
+
+from backend.nhl.pp_toi_source import pp_toi_conflict, write_pp_toi_conflict_diagnostic
 
 from backend.nhl.official_request_journal import RequestContext, official_get
 
@@ -208,14 +214,21 @@ def get_games_for_date(cur, slate_date: str) -> List[int]:
     return [int(r[0]) for r in cur.fetchall()]
 
 
-def update_game(cur, game_id: int, pp_map: Dict[int, float]) -> Tuple[int, int, int]:
+def update_game(
+    cur, game_id: int, pp_map: Dict[int, float], *,
+    target_relation: str = "nhl.skater_game_logs_raw",
+) -> Tuple[int, int, int]:
     """
     Returns:
-      (db_rows, overlap_players, updated_statements)
-    Only updates where pp_toi_minutes IS NULL OR 0.
+      (db_rows, overlap_players, rows_updated)
+    Only fills NULL values. Populated values, including zero, are preserved.
     """
+    parts = target_relation.split(".")
+    if len(parts) not in (1, 2) or not all(part.isidentifier() for part in parts):
+        raise ValueError("INVALID_PP_TOI_FILL_TARGET")
+    target = target_relation
     cur.execute(
-        "SELECT player_id::bigint FROM nhl.skater_game_logs_raw WHERE game_id = %s;",
+        f"SELECT player_id::bigint FROM {target} WHERE game_id = %s;",
         (game_id,),
     )
     db_players = {int(r[0]) for r in cur.fetchall()}
@@ -226,16 +239,16 @@ def update_game(cur, game_id: int, pp_map: Dict[int, float]) -> Tuple[int, int, 
     rows = [(pp_map[pid], game_id, pid) for pid in overlap]
 
     cur.executemany(
-        """
-        UPDATE nhl.skater_game_logs_raw
+        f"""
+        UPDATE {target}
            SET pp_toi_minutes = %s
          WHERE game_id = %s
            AND player_id = %s
-           AND (pp_toi_minutes IS NULL OR pp_toi_minutes = 0);
+           AND pp_toi_minutes IS NULL;
         """,
         rows,
     )
-    return (len(db_players), len(overlap), len(rows))
+    return (len(db_players), len(overlap), max(0, int(cur.rowcount)))
 
 
 def assert_no_bad_team_games(cur, slate_date: str) -> int:
@@ -382,7 +395,9 @@ def main() -> None:
 
     print(f"PP TOI canonical fill for {slate_date}: games={len(game_ids)} mode={'COMMIT' if commit else 'DRY-RUN'}")
 
-    total_updates = 0
+    total_updated_rows = 0
+    conflicts: list[dict[str, Any]] = []
+    source_values: list[tuple[int, int, float]] = []
     for game_id in game_ids:
         # --- PP TOI source is DB overlap (segments + shiftcharts), not boxscore JSON ---
         try:
@@ -403,6 +418,36 @@ def main() -> None:
             time.sleep(args.sleep)
             continue
 
+        source_values.extend((int(game_id), int(pid), float(value))
+                             for pid, value in sorted(pp_map.items()))
+        cur.execute(
+            """
+            SELECT l.player_id::bigint, r.team_id::bigint, l.pp_toi_minutes
+            FROM nhl.skater_game_logs_raw l
+            LEFT JOIN LATERAL (
+              SELECT team_id FROM nhl.roster_status rs
+              WHERE rs.game_id=l.game_id AND rs.player_id=l.player_id
+              ORDER BY rs.asof_ts DESC LIMIT 1
+            ) r ON TRUE
+            WHERE l.game_id = %s AND l.player_id = ANY(%s)
+              AND l.pp_toi_minutes IS NOT NULL
+            ORDER BY l.player_id;
+            """,
+            (game_id, list(pp_map)),
+        )
+        for player_id, team_id, current_value in cur.fetchall():
+            conflict = pp_toi_conflict(
+                game_id=game_id, player_id=player_id, team_id=team_id,
+                existing_value=current_value, incoming_value=pp_map.get(int(player_id)),
+                source_kind="RECONSTRUCTED_SHIFT_OVERLAP",
+                source_reference=(
+                    "nhl.game_manpower_segments + nhl.shiftcharts_raw; "
+                    "extract_pp_toi_minutes_from_db"
+                ),
+            )
+            if conflict:
+                conflicts.append(conflict)
+
         # Apply updates (only where pp_toi_minutes is NULL or 0)
         try:
             db_rows, overlap, upd = update_game(cur, game_id, pp_map)
@@ -411,7 +456,7 @@ def main() -> None:
             conn.rollback()
             continue
 
-        total_updates += upd
+        total_updated_rows += upd
         print(f"game_id={game_id}: db_rows={db_rows} overlap={overlap} update_statements={upd}")
 
         if commit:
@@ -436,7 +481,28 @@ def main() -> None:
         conn.rollback()
 
     conn.close()
-    print(f"DONE. total_update_statements={total_updates} bad_team_games={bad} mode={'COMMIT' if commit else 'DRY-RUN'}")
+    source_body = json.dumps(source_values, separators=(",", ":")).encode()
+    run_id = (os.environ.get("NHL_DAILY_RUN_ID")
+              or os.environ.get("NHL_RECONCILIATION_RUN_ID")
+              or f"nhl_pp_toi_fill_{slate_date}_{uuid.uuid4().hex[:12]}")
+    diagnostic = write_pp_toi_conflict_diagnostic(
+        run_id=run_id, slate_date=slate_date, stage="fill",
+        conflicts=conflicts,
+        source_reference="nhl.game_manpower_segments + nhl.shiftcharts_raw",
+        source_observation_set_sha256=hashlib.sha256(source_body).hexdigest(),
+    )
+    print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({
+        "schema_version": "NHL_PP_TOI_SOURCE_SUMMARY_V1",
+        "run_id": run_id,
+        "slate_date": slate_date,
+        "source_reconstructed_positive_count": len(source_values),
+        "filled_nulls": total_updated_rows,
+        "confirmed_discrepancy_count": len(conflicts),
+        "diagnostic_artifact": diagnostic,
+        "unknown_source_remains_null": True,
+        "populated_zero_preserved": True,
+    }, sort_keys=True))
+    print(f"DONE. total_updated_rows={total_updated_rows} bad_team_games={bad} mode={'COMMIT' if commit else 'DRY-RUN'}")
 
 
 if __name__ == "__main__":
