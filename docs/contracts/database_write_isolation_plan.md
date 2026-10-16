@@ -311,6 +311,40 @@ headers as curl arguments. They now write headers to short-lived mode-600 files
 and remove them on exit. Database-routing tests also use isolated environment
 fixtures so assertion failures cannot dump the caller's dotenv values.
 
+## Operator-only NHL source corrections
+
+Historical source repairs use the existing `proppadia_nhl_source_correction`
+group; do not add this group to a daily, research, or operations login. The
+group is `NOLOGIN` and grants `SELECT` plus column-level `UPDATE` on
+`nhl.skater_game_logs_raw.shot_attempts` and `pp_toi_minutes` only. A live
+catalog check on 2026-10-16 found that the administrative `postgres` role can
+assume this group, while the three application logins cannot. An already
+authorized administrative session can therefore execute a repair under the
+restricted effective role without changing role grants or running the repair
+as the owner.
+
+Use a controlled operator session whose connection is obtained from the
+approved secure credential store. Do not put that connection in
+`backend/.env`, the daily process environment, shell history, command
+arguments, or receipts. Before opening a repair file, run
+`SET ROLE proppadia_nhl_source_correction` and verify `current_user` is exactly
+that role and `session_user` is the expected operator login. Verify the
+effective role can update the two approved columns but cannot update
+`shots_on_goal`, `team_id`, or other raw fields. If any check fails, stop.
+Then execute only the separately authorized, guarded repair SQL in that same
+session. Finish with `RESET ROLE` and close the session. Never execute repair
+SQL before `SET ROLE`, and never treat a successful connection as sufficient
+proof of the effective role.
+
+The restricted logins were rechecked on 2026-10-16: `postgres` can assume the
+correction group; research, ingestion, and operations logins cannot. No
+administrative connection was available in the local application environment
+or the inspected protected local connection-file locations during that check.
+The procedure is documented, but the approved administrative connection must
+be made available from its secure store before a repair can run. Do not
+provision a new correction login or grant a routine application login
+membership as a workaround.
+
 ## Remaining implementation notes
 - **Standalone script limitation:** older scripts launched outside the central
   NHL CLI that read `SUPABASE_DB_URL` directly do not all consult the restricted
