@@ -316,6 +316,11 @@ def _cross_market_final_runs(operational_root: Path, slate_date: str) -> list[Pa
     return sorted(pattern.parent.glob(pattern.name))
 
 
+def _read_immutable_puck_predictions(path: Path) -> pd.DataFrame:
+    """Read hash-bound CSV floats without changing their binary values."""
+    return pd.read_csv(path, float_precision="round_trip")
+
+
 def _verify_cross_market_identities(
     moneyline: pd.DataFrame,
     puck: pd.DataFrame,
@@ -477,7 +482,11 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
             pd.read_csv(moneyline_provenance_path)
             if provenance_name in cross_manifest and moneyline_provenance_path.is_file() else None
         )
-        puck = pd.read_csv(cross / "puck_line_v1_immutable_predictions.csv")
+        # These immutable rows hash the original in-memory float values.
+        # pandas' default CSV parser can shift the last bit for a small subset
+        # of decimals, causing valid stored identities to fail verification.
+        puck = _read_immutable_puck_predictions(
+            cross / "puck_line_v1_immutable_predictions.csv")
         common = {"canonical_season", "slate_date", "game_id", "scheduled_start_time_utc",
                   "home_team_id", "away_team_id", "home_team", "away_team",
                   "prediction_creation_time_utc", "substantive_prediction_sha256"} | set(CROSS_MARKET_FEATURES)
