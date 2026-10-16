@@ -1,0 +1,113 @@
+{
+  "authorization_scope": {
+    "candidate_count": 46379,
+    "column": "shot_attempts",
+    "game_id_prefixes": [
+      "202302",
+      "202402"
+    ],
+    "table": "nhl.skater_game_logs_raw"
+  },
+  "candidate_counts": {
+    "false_zero": 5460,
+    "false_zeros_corrected_to_positive": 5460,
+    "incorrect_populated": 40919,
+    "official_identities_without_raw_rows_excluded": 228,
+    "source_positive_replacements": 46367,
+    "source_zero_replacements": 12,
+    "unresolved_games_unchanged": 218,
+    "unresolved_raw_rows_unchanged": 7829,
+    "verified_matches_excluded": 37040
+  },
+  "database_transaction": {
+    "commit_observed": true,
+    "forward_sql_path": "backend/nhl/sql/repairs/repair_nhl_2023_2024_shot_attempts_from_official_pbp.sql",
+    "forward_sql_sha256": "e89625667428a9833d79c2632bd00aecb73bc7b2112ea4bf5e03499e8abeb09c",
+    "reported_changed_rows": 46379,
+    "transaction_log_path": "artifacts/operational/nhl/shot_attempts_recovery_execution/run_id=shot_attempts_recovery_20261016T163636Z/forward_transaction.log",
+    "transaction_log_sha256": "8af5b1dcac1277e8ce6bda2ea2df115f2e8edd621717fc4dbdeca29a8965c108"
+  },
+  "database_verification": {
+    "after_snapshot_path": "artifacts/operational/nhl/shot_attempts_recovery_execution/run_id=shot_attempts_recovery_20261016T163636Z/after_raw_table.csv",
+    "after_snapshot_sha256": "88cda7128b22387ba14bdf26276a15e7c2fe9a5c2eac584e63446b0aef1f4dc8",
+    "all_values_equal_official_candidate": true,
+    "before_snapshot_path": "artifacts/operational/nhl/shot_attempts_recovery_execution/run_id=shot_attempts_recovery_20261016T163636Z/before_raw_table.csv",
+    "before_snapshot_sha256": "a02157e6cd449a8163e55bd2261a0bc8fece30119a1af89d4297be76618d9476",
+    "changed_column_counts": {
+      "shot_attempts": 46379
+    },
+    "changed_identity_count": 46379,
+    "changed_rows_path": "artifacts/operational/nhl/shot_attempts_recovery_execution/run_id=shot_attempts_recovery_20261016T163636Z/changed_rows.csv",
+    "changed_rows_sha256": "7876a58bb402edc1000c249aadba4d27a44c6782220b99d5f317f98d2e1cf955",
+    "missing_raw_identities_inserted": 0,
+    "prior_2025_2026_recoveries": [
+      {
+        "before_after_changes": 0,
+        "official_value_mismatches": 0,
+        "path": "artifacts/analysis/nhl/points_attempts_2025_full_recovery_2026-10-16/recovery_candidate.csv",
+        "verified_rows": 34108
+      },
+      {
+        "before_after_changes": 0,
+        "official_value_mismatches": 0,
+        "path": "artifacts/analysis/nhl/points_attempts_source_validation/2026-10-15/full_recovery/shot_attempts_2026_recovery_candidates.csv",
+        "verified_rows": 3204
+      }
+    ],
+    "raw_rows_after": 153260,
+    "raw_rows_before": 153260,
+    "unresolved_rows_unchanged": 7829,
+    "verified_matches_unchanged": 37040
+  },
+  "evidence_hashes": {
+    "forward_sql_sha256": "e89625667428a9833d79c2632bd00aecb73bc7b2112ea4bf5e03499e8abeb09c",
+    "post_commit_verification_json_sha256": "d909837d8841ff64b3fe5504a02fcc3c0871879fe8c40f2e6d5a2789a29d0ece",
+    "preflight_json_sha256": "d0e07d54adb5f0da9a49b7756db8447a66817f76ef53c3adec796e808cc7d1f2",
+    "rollback_sql_sha256": "97d05ce01280a344642f198029f7862206f074f1c8be97dd671d0221ebb77653",
+    "trigger_constraints_sha256": "90547767907e18417afd36b9340383654c53ea3bc8793fc257f047cd25223b76"
+  },
+  "preparation_commit": "659bb7ed6fd7f7bd0b0d66de9758711609a2e1f6",
+  "retry": {
+    "diff_from_committed_snapshot_rows": 0,
+    "post_retry_snapshot_path": "artifacts/operational/nhl/shot_attempts_recovery_execution/run_id=shot_attempts_recovery_20261016T163636Z/after_retry_raw_table.csv",
+    "post_retry_snapshot_sha256": "88cda7128b22387ba14bdf26276a15e7c2fe9a5c2eac584e63446b0aef1f4dc8",
+    "reported_changed_rows": 0,
+    "sql_path": "backend/nhl/sql/repairs/repair_nhl_2023_2024_shot_attempts_from_official_pbp.sql",
+    "transaction_log_path": "artifacts/operational/nhl/shot_attempts_recovery_execution/run_id=shot_attempts_recovery_20261016T163636Z/retry_transaction.log",
+    "transaction_log_sha256": "509ce31056cbb82a81a94ef12ce6fcda87a258e2f8831f8fb0381a10ff11e359"
+  },
+  "rollback_validation": {
+    "candidate_rows": 46379,
+    "candidate_rows_equal_forward": true,
+    "executed": false,
+    "guarded_inverse_only_shot_attempts": true,
+    "rollback_sql_path": "backend/nhl/sql/repairs/rollback_nhl_2023_2024_shot_attempts_from_official_pbp.sql",
+    "rollback_sql_sha256": "97d05ce01280a344642f198029f7862206f074f1c8be97dd671d0221ebb77653"
+  },
+  "run_id": "shot_attempts_recovery_20261016T163636Z",
+  "schema_version": "NHL_SHOT_ATTEMPTS_RECOVERY_EXECUTION_V1",
+  "scope_safety": {
+    "basis": "Prepared SQL updates only the raw table shot_attempts column; PostgreSQL reports no non-internal triggers on the table.",
+    "predictions_or_model_artifacts_written": false,
+    "raw_table_changed_columns_only": [
+      "shot_attempts"
+    ],
+    "raw_table_noninternal_triggers": 0
+  },
+  "source_validation": {
+    "candidate_sha256": "6bf0944d5c0e31e4302902ef466fc20ad79c0071bcd65b0e410970a4d3e7d091",
+    "numeric_identity_crosswalk": "EXPLICIT_LEGACY_CROSSWALK_MATCH_ALL_TARGETS",
+    "source_body_files_verified": 4648,
+    "source_body_hash_mismatches": 0,
+    "source_manifest_file_sha256": "625f59f6d29fd7a54a2b4a5df7a630c2968f6e8bab36ad2f0b6bf88c6b7e22f2",
+    "source_manifest_internal_sha256": "e7f9117810e6d40e0a9b791a3936f04cd827c57e6fcb54c11c0b1d3a1e694034",
+    "validated_games": 2324
+  },
+  "status": "COMMITTED_AND_VERIFIED",
+  "tests": {
+    "command": "./bin/python -m pytest backend/nhl/tests/test_points_attempts_source.py backend/nhl/tests/test_prepare_nhl_2025_attempts_repair.py backend/nhl/tests/test_points_hgb_official_team_shots_capture.py",
+    "log_path": "artifacts/operational/nhl/shot_attempts_recovery_execution/run_id=shot_attempts_recovery_20261016T163636Z/focused_pytest.log",
+    "log_sha256": "94f65d8a9cdf37803e3799309fbc02c8dcf399f36fba76418c2afec96aab6385",
+    "result": "16 passed, 1 environment warning"
+  }
+}
