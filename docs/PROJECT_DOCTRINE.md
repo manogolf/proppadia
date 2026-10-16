@@ -55,6 +55,10 @@ Backfill work must include:
 - daily generation command or automation hook;
 - regression health check.
 
+## Missingness and Zero Semantics
+
+The project-wide rule is `0` = verified observed zero and `NULL` = unknown, missing, unobserved, or unavailable. Source completeness must be proven before an absent event is counted as zero. Follow the authoritative [Missingness and Zero Semantics Contract](contracts/missingness_and_zero_semantics.md) for ingestion, SQL, aggregation, model imputation, and repair requirements.
+
 ## Daily Sustainability Rule
 
 Any derived field, feature column, review board, score, report, or artifact that will be used after today must have a daily sustainability path.

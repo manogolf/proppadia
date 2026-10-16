@@ -2,7 +2,7 @@
 
 Use this checklist for every new durable feature across Proppadia.
 
-Reference: `docs/PROJECT_DOCTRINE.md`
+References: `docs/PROJECT_DOCTRINE.md`; [Missingness and Zero Semantics Contract](contracts/missingness_and_zero_semantics.md)
 
 ## Required Answer
 
@@ -29,6 +29,7 @@ Use `[x]` only when the item is actually implemented and validated.
 - [ ] Ops Brief visibility exists if daily interpretation depends on the feature.
 - [ ] Daily Index visibility exists for artifacts Jerry may need to open.
 - [ ] Regression detection exists for stale, missing, zero-row, low-coverage, duplicate, or future-leak cases.
+- [ ] NULL and zero semantics are field-specific, source completeness is established, and any model-layer imputation is explicit and consistent between training and scoring.
 - [ ] Canonical identity fields are present where available.
 - [ ] Identity provenance/fallback fields are present when canonical IDs are unavailable.
 - [ ] Invariant considered.
