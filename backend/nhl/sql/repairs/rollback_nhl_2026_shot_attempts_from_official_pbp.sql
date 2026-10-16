@@ -3219,8 +3219,19 @@ BEGIN
   WHERE t.shot_attempts = c.official_attempts;
   IF eligible <> 3204 THEN RAISE EXCEPTION 'ROLLBACK_GUARD_FAILED:%', eligible; END IF;
 END $$;
-UPDATE nhl.skater_game_logs_raw t SET shot_attempts = NULL
-FROM attempt_recovery_rollback c
-WHERE t.game_id = c.game_id AND t.player_id = c.player_id
-  AND t.shot_attempts = c.official_attempts;
+DO $$
+DECLARE changed_rows bigint; unresolved bigint;
+BEGIN
+  UPDATE nhl.skater_game_logs_raw t SET shot_attempts = NULL
+  FROM attempt_recovery_rollback c
+  WHERE t.game_id = c.game_id AND t.player_id = c.player_id
+    AND t.shot_attempts = c.official_attempts;
+  GET DIAGNOSTICS changed_rows = ROW_COUNT;
+  IF changed_rows <> 3204 THEN RAISE EXCEPTION 'ROLLBACK_UPDATED_ROW_COUNT:%', changed_rows; END IF;
+  SELECT count(*) INTO unresolved
+  FROM attempt_recovery_rollback c
+  JOIN nhl.skater_game_logs_raw t USING (game_id, player_id)
+  WHERE t.shot_attempts IS NOT NULL;
+  IF unresolved <> 0 THEN RAISE EXCEPTION 'ROLLBACK_POSTCHECK_FAILED:%', unresolved; END IF;
+END $$;
 COMMIT;

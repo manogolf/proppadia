@@ -1,4 +1,4 @@
--- PREPARED PLAN ONLY. DO NOT EXECUTE without separate database-rewrite authorization.
+-- Authorized one-time recovery; fail closed unless this exact candidate set is safe.
 -- Candidate SHA-256: 086e434935294a735e8327372ab9c573929a7cdb6644f6cf4f10be4e16468661
 -- Source manifest SHA-256: a8177fa0eef0a7735ad3695e4a45a3bdb89bf9bcb833555aa31d08161ad66d5f
 -- Reconciled candidates: 3,204 (2,905 positive; 299 verified zero); unresolved rows excluded: 648.
@@ -3229,9 +3229,18 @@ BEGIN
   WHERE t.shot_attempts IS NOT NULL AND t.shot_attempts <> c.official_attempts;
   IF conflicting_rows <> 0 THEN RAISE EXCEPTION 'TARGET_VALUES_CONFLICT:%', conflicting_rows; END IF;
 END $$;
-UPDATE nhl.skater_game_logs_raw t SET shot_attempts = c.official_attempts
-FROM attempt_recovery_candidates c
-WHERE t.game_id = c.game_id AND t.player_id = c.player_id AND t.shot_attempts IS NULL;
+DO $$
+DECLARE changed_rows bigint;
+BEGIN
+  UPDATE nhl.skater_game_logs_raw t SET shot_attempts = c.official_attempts
+  FROM attempt_recovery_candidates c
+  WHERE t.game_id = c.game_id AND t.player_id = c.player_id AND t.shot_attempts IS NULL;
+  GET DIAGNOSTICS changed_rows = ROW_COUNT;
+  IF changed_rows NOT IN (0, 3204) THEN
+    RAISE EXCEPTION 'UNEXPECTED_UPDATED_ROW_COUNT:%', changed_rows;
+  END IF;
+  RAISE NOTICE 'SHOT_ATTEMPTS_RECOVERY_UPDATED_ROWS:%', changed_rows;
+END $$;
 DO $$
 DECLARE unresolved bigint;
 BEGIN

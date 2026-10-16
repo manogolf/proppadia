@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import unittest
+import importlib
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
 from backend.nhl.points_attempts_source import derive_attempts_from_final_pbp
 from backend.nhl.scripts import build_nhl_points_architecture_bakeoff as bakeoff
 from backend.nhl.scripts import export_nhl_points_hgb_features as hgb_exporter
+with patch.dict(os.environ, {"SUPABASE_DB_URL": "postgresql://test", "SLATE_DATE": "2026-01-01"}):
+    skater_importer = importlib.import_module("backend.nhl.scripts.seed_skater_logs_for_date")
 
 
 def source_payloads():
@@ -51,6 +56,20 @@ class PointsAttemptsSourceTests(unittest.TestCase):
         boxscore, pbp = source_payloads()
         self.assertEqual(derive_attempts_from_final_pbp(boxscore, pbp, game_id=2026020001),
                          {10: 3, 11: 0, 20: 1})
+
+    def test_daily_source_summary_distinguishes_explicit_pbp_and_unknown(self):
+        boxscore, _pbp = source_payloads()
+        boxscore["playerByGameStats"]["homeTeam"]["forwards"][0]["shotAttempts"] = 0
+        boxscore["playerByGameStats"]["homeTeam"]["forwards"][1]["shotAttempts"] = None
+        counts = skater_importer.summarize_shot_attempt_sources(
+            boxscore, {10: 3, 11: 0, 20: 2})
+        self.assertEqual(counts, {
+            "boxscore_explicit": 1, "validated_pbp": 2, "unknown": 0,
+            "observed_positive": 1, "observed_zero": 2,
+        })
+        counts = skater_importer.summarize_shot_attempt_sources(boxscore, None)
+        self.assertEqual(counts["unknown"], 2)
+        self.assertEqual(counts["observed_zero"], 1)
 
     def test_partial_or_nonfinal_pbp_is_unknown_not_zero(self):
         boxscore, pbp = source_payloads()

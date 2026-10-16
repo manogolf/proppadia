@@ -7,7 +7,7 @@
 
 #  python backend/nhl/scripts/seed_skater_logs_for_date.py
 
-import os, sys, datetime as dt
+import os, sys, datetime as dt, json
 from zoneinfo import ZoneInfo
 import re, unicodedata
 from typing import Optional, Any
@@ -735,6 +735,34 @@ def _box_needs_attempt_source(box: dict) -> bool:
     return False
 
 
+def summarize_shot_attempt_sources(box: dict, attempts_by_player: dict | None) -> dict[str, int]:
+    """Count observed attempts by source without treating missing as zero."""
+    counts = {"boxscore_explicit": 0, "validated_pbp": 0, "unknown": 0,
+              "observed_positive": 0, "observed_zero": 0}
+    stats = box.get("playerByGameStats") or {}
+    for side in ("homeTeam", "awayTeam"):
+        team = stats.get(side) or {}
+        defense = team.get("defense") or team.get("defensemen") or []
+        for row in [*(team.get("forwards") or []), *defense]:
+            raw_attempts = row.get("shotAttempts")
+            player_id = row.get("playerId") or row.get("id")
+            if raw_attempts is not None:
+                attempts = int(raw_attempts)
+                counts["boxscore_explicit"] += 1
+            elif (attempts_by_player is not None and player_id is not None
+                  and int(player_id) in attempts_by_player):
+                attempts = int(attempts_by_player[int(player_id)])
+                counts["validated_pbp"] += 1
+            else:
+                counts["unknown"] += 1
+                continue
+            if attempts > 0:
+                counts["observed_positive"] += 1
+            elif attempts == 0:
+                counts["observed_zero"] += 1
+    return counts
+
+
 # ---------------- Main ----------------
 def main():
     games = get_schedule(SLATE_DATE)
@@ -744,6 +772,20 @@ def main():
 
     inserted_total = 0
     skipped_no_map_total = 0
+    attempt_summary = {
+        "schema_version": "NHL_SHOT_ATTEMPTS_SOURCE_SUMMARY_V1",
+        "slate_date": SLATE_DATE,
+        "scheduled_games": len(games),
+        "boxscores_seen": 0,
+        "pbp_required_games": 0,
+        "pbp_reconciled_games": 0,
+        "pbp_failure_reasons": {},
+        "boxscore_explicit_rows": 0,
+        "validated_pbp_rows": 0,
+        "unknown_rows": 0,
+        "observed_positive_rows": 0,
+        "observed_zero_rows": 0,
+    }
 
     with psycopg.connect(DB_URL, autocommit=False, row_factory=dict_row, prepare_threshold=None) as conn:
         try:
@@ -762,21 +804,38 @@ def main():
                     print(f"[{gpk}] boxscore 404/empty; skipping")
                     conn.rollback()
                     continue
+                attempt_summary["boxscores_seen"] += 1
 
                 roster_map = roster_name_map(conn, gpk)  # {norm_full_name -> (player_id, team_id)}
 
                 attempts_by_player = None
                 if _box_needs_attempt_source(box):
+                    attempt_summary["pbp_required_games"] += 1
                     try:
                         pbp = get_play_by_play(gpk)
                         if pbp is not None:
                             attempts_by_player = derive_attempts_from_final_pbp(
                                 box, pbp, game_id=gpk)
+                            attempt_summary["pbp_reconciled_games"] += 1
+                        else:
+                            raise ValueError("ATTEMPTS_PBP_RESPONSE_EMPTY")
                     except Exception as error:
                         # A partial or unreconciled PBP response is unavailable
                         # evidence, never a reason to manufacture zero attempts.
                         print(f"[{gpk}] shot-attempt source unavailable: {error}")
+                        reason = str(error).split(":", 1)[0] or type(error).__name__
+                        reasons = attempt_summary["pbp_failure_reasons"]
+                        reasons[reason] = reasons.get(reason, 0) + 1
                 skaters = list(_iter_skaters_from_box(box, attempts_by_player))
+                source_counts = summarize_shot_attempt_sources(box, attempts_by_player)
+                for source_key, summary_key in (
+                    ("boxscore_explicit", "boxscore_explicit_rows"),
+                    ("validated_pbp", "validated_pbp_rows"),
+                    ("unknown", "unknown_rows"),
+                    ("observed_positive", "observed_positive_rows"),
+                    ("observed_zero", "observed_zero_rows"),
+                ):
+                    attempt_summary[summary_key] += source_counts[source_key]
                 nhl_ids = [s["nhl_id"] for s in skaters if s["nhl_id"] is not None]
                 ext_map = external_map(conn, nhl_ids)
 
@@ -881,6 +940,7 @@ def main():
                     raise
 
     print(f"Done. Upserted total {inserted_total} skater rows for {SLATE_DATE}; skipped_no_map={skipped_no_map_total}")
+    print("NHL_CHILD_SUMMARY_JSON=" + json.dumps(attempt_summary, sort_keys=True))
 
 if __name__ == "__main__":
     main()
