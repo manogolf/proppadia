@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+case "$-" in *x*) set +x ;; esac
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/curl_auth_headers.sh"
 
 _trim() {
   printf '%s' "${1:-}" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
@@ -22,6 +25,9 @@ if [[ ! "${PROPPADIA_BACKEND_URL}" =~ ^https?://[^[:space:]]+$ ]]; then
 fi
 
 tail_lines="${1:-80}"
+proppadia_curl_auth_headers_create "X-Ops-Token: ${OPS_API_TOKEN}"
+unset OPS_API_TOKEN
+trap proppadia_curl_auth_headers_cleanup EXIT
 
 curl -fsS \
   --http1.1 \
@@ -29,6 +35,6 @@ curl -fsS \
   --retry-delay 2 \
   --retry-all-errors \
   --max-time 45 \
-  -H "X-Ops-Token: ${OPS_API_TOKEN}" \
+  -H "@${PROPPADIA_CURL_AUTH_HEADERS_FILE}" \
   "${PROPPADIA_BACKEND_URL%/}/api/ops/mlb/prod12/status?tail_lines=${tail_lines}"
 echo

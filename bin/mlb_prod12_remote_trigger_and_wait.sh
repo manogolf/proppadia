@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+case "$-" in *x*) set +x ;; esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/curl_auth_headers.sh"
 
 timeout_sec="${1:-2400}"
 poll_sec="${2:-10}"
@@ -44,6 +46,9 @@ else
   echo "mlb_prod12_remote_trigger_and_wait: missing python3/python" >&2
   exit 2
 fi
+
+proppadia_curl_auth_headers_create "X-Ops-Token: ${OPS_API_TOKEN}"
+trap proppadia_curl_auth_headers_cleanup EXIT
 
 download_remote_artifact() {
   local kind="${1:-}"
@@ -102,7 +107,7 @@ download_remote_artifact() {
       --retry 4 \
       --retry-delay 2 \
       --max-time 90 \
-      -H "X-Ops-Token: ${OPS_API_TOKEN}" \
+      -H "@${PROPPADIA_CURL_AUTH_HEADERS_FILE}" \
       -w "%{http_code}" \
       "${endpoint}" \
       -o "${tmp_out}" || printf '000'
@@ -135,6 +140,7 @@ set +e
 trigger_json="$("${SCRIPT_DIR}/mlb_prod12_remote_trigger.sh" 2>&1)"
 trigger_rc=$?
 set -e
+unset OPS_API_TOKEN
 if [[ "${trigger_rc}" -ne 0 ]]; then
   if printf '%s' "${trigger_json}" | grep -Eq 'error: 409|already_running|409'; then
     echo "[prod12-remote] INFO trigger returned 409 (already running); will attach to current run" >&2

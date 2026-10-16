@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
+case "$-" in *x*) set +x ;; esac
 
 # Download the latest prod12 model bundle and persist it on the service disk.
 # This script is intended for weekly execution (or manual repair), not daily.
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_DIR}"
+source "${REPO_DIR}/bin/curl_auth_headers.sh"
 
 : "${SUPABASE_URL:?mlb_prod12_model_bundle_sync requires SUPABASE_URL}"
 : "${SUPABASE_SECRET_KEY:?mlb_prod12_model_bundle_sync requires SUPABASE_SECRET_KEY}"
+proppadia_curl_auth_headers_create \
+  "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
+  "apikey: ${SUPABASE_SECRET_KEY}"
+unset SUPABASE_SECRET_KEY
+trap proppadia_curl_auth_headers_cleanup EXIT
 
 MLB_MODELS_OBJECT_PATH="${MLB_MODELS_OBJECT_PATH:-mlb/prod12/latest.tgz}"
 MODEL_DIR="${MODEL_DIR:-/var/data/proppadia/models}"
@@ -22,8 +29,7 @@ rm -rf "${MODEL_STAGING_DIR}" "${MODEL_TARBALL}"
 mkdir -p "${MODEL_STAGING_DIR}" "${MODEL_DIR}/latest"
 
 if ! curl -fsSL \
-  -H "Authorization: Bearer ${SUPABASE_SECRET_KEY}" \
-  -H "apikey: ${SUPABASE_SECRET_KEY}" \
+  -H "@${PROPPADIA_CURL_AUTH_HEADERS_FILE}" \
   "${SUPABASE_URL}/storage/v1/object/models/${MLB_MODELS_OBJECT_PATH}" \
   -o "${MODEL_TARBALL}"; then
   echo "[prod12-model-sync] ERROR: unable to download models/${MLB_MODELS_OBJECT_PATH}" >&2

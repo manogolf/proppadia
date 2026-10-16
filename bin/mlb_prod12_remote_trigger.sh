@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+case "$-" in *x*) set +x ;; esac
+
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/curl_auth_headers.sh"
 
 _trim() {
   printf '%s' "${1:-}" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//'
@@ -149,6 +152,10 @@ else
   payload="$(_json_payload_from_env)"
 fi
 
+proppadia_curl_auth_headers_create "X-Ops-Token: ${OPS_API_TOKEN}"
+unset OPS_API_TOKEN
+trap proppadia_curl_auth_headers_cleanup EXIT
+
 curl -fsS \
   --http1.1 \
   --retry 4 \
@@ -157,7 +164,7 @@ curl -fsS \
   --max-time 45 \
   -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Ops-Token: ${OPS_API_TOKEN}" \
+  -H "@${PROPPADIA_CURL_AUTH_HEADERS_FILE}" \
   "${PROPPADIA_BACKEND_URL%/}/api/ops/mlb/prod12/trigger" \
   -d "${payload}"
 echo

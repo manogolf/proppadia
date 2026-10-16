@@ -104,7 +104,9 @@ class NHLDatabaseAccessTests(unittest.TestCase):
             "DATABASE_URL": "postgresql://postgres:secret@db.invalid/postgres",
         }
         result = SimpleNamespace(returncode=0, stdout="", stderr="")
-        with patch.dict(os.environ, env, clear=False), patch.object(cli.sp, "run", return_value=result) as runner:
+        # Keep the real process environment (which may contain credentials)
+        # out of assertion representations if a routing check fails.
+        with patch.dict(os.environ, env, clear=True), patch.object(cli.sp, "run", return_value=result) as runner:
             cli.run(["psql", env["SUPABASE_DB_URL"], "-c", "SELECT 1"], database_write_capable=False)
         command = runner.call_args.args[0]
         child_env = runner.call_args.kwargs["env"]
@@ -138,7 +140,7 @@ class NHLDatabaseAccessTests(unittest.TestCase):
             "DATABASE_URL": "postgresql://postgres:secret@db.invalid/postgres",
         }
         result = SimpleNamespace(returncode=0, stdout="", stderr="")
-        with patch.dict(os.environ, env, clear=False), patch.object(cli.sp, "run", return_value=result) as runner:
+        with patch.dict(os.environ, env, clear=True), patch.object(cli.sp, "run", return_value=result) as runner:
             cli.run(["./bin/python", "seed_skater_logs_for_date.py"], database_write_capable=True)
         child_env = runner.call_args.kwargs["env"]
         self.assertEqual(child_env["SUPABASE_DB_URL"], ingest)
@@ -162,7 +164,7 @@ class NHLDatabaseAccessTests(unittest.TestCase):
             "DATABASE_URL": "postgresql://postgres:secret@db.invalid/postgres",
         }
         result = SimpleNamespace(returncode=0, stdout="", stderr="")
-        with patch.dict(os.environ, env, clear=False), patch.object(cli.sp, "run", return_value=result) as runner:
+        with patch.dict(os.environ, env, clear=True), patch.object(cli.sp, "run", return_value=result) as runner:
             cli.run(["./bin/python", "load_nhl_predictions_generic.py"])
         child_env = runner.call_args.kwargs["env"]
         self.assertEqual(child_env["SUPABASE_DB_URL"], operations)

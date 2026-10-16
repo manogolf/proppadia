@@ -290,10 +290,26 @@ semantics, and shot-attempt source handling. A real `psql` child identity check
 also passed through the password-free argv routing.
 
 An earlier failed local test diagnostic printed environment values. The
-variable names exposed were `SUPABASE_SECRET_KEY`, `ODDS_API_KEY`, and
-`OPS_API_TOKEN`; these are not database passwords. Rotate them through their
-respective provider/secret-management interfaces and update the local secret
-store. Do not put replacement values in this repository or its receipts.
+exposure was a failed `test_daily_cli_routes_read_query_to_research_role`
+assertion rendering the mocked child environment. Its `patch.dict(...,
+clear=False)` inherited the real dotenv environment. The test now clears that
+environment; the failing test's mocked subprocess did not make a network
+request. The values present were for `SUPABASE_SECRET_KEY`, `ODDS_API_KEY`, and
+`OPS_API_TOKEN` (no values are recorded here). An exact-value scan found no
+matches in tracked files or 33,115 retained operational text files across
+artifacts, tmp, and logs. This does not inspect provider-side accounts or
+unavailable external deployment secret stores.
+
+The Supabase, Odds API, and Ops credentials have not yet been rotated. Provider
+account access is required for Supabase and Odds API rotation; the Ops token
+must be changed in the deployed API service and synchronized to the local
+environment. After replacement, verify consumers before revoking old keys.
+Do not put replacement values in this repository or its receipts.
+
+Active MLB curl upload/sync and remote-ops helpers previously passed secret
+headers as curl arguments. They now write headers to short-lived mode-600 files
+and remove them on exit. Database-routing tests also use isolated environment
+fixtures so assertion failures cannot dump the caller's dotenv values.
 
 ## Remaining implementation notes
 - **Standalone script limitation:** older scripts launched outside the central

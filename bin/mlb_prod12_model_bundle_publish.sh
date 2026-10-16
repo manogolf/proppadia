@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+case "$-" in *x*) set +x ;; esac
 
 # Package and publish prod12 models to Supabase Storage.
 # Writes both:
@@ -8,6 +9,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${REPO_DIR}"
+source "${REPO_DIR}/bin/curl_auth_headers.sh"
 
 derive_supabase_url_from_db_url() {
   local db_url="$1"
@@ -38,6 +40,11 @@ if [[ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" && -z "${SUPABASE_SECRET_KEY:-}" ]]; t
   exit 2
 fi
 SUPABASE_API_KEY="${SUPABASE_SERVICE_ROLE_KEY:-${SUPABASE_SECRET_KEY:-}}"
+proppadia_curl_auth_headers_create \
+  "Authorization: Bearer ${SUPABASE_API_KEY}" \
+  "apikey: ${SUPABASE_API_KEY}"
+unset SUPABASE_API_KEY SUPABASE_SECRET_KEY SUPABASE_SERVICE_ROLE_KEY
+trap proppadia_curl_auth_headers_cleanup EXIT
 
 MODELS_DIR="${MODELS_DIR:-/var/data/proppadia/models}"
 MODELS_BUCKET="${MODELS_BUCKET:-models}"
@@ -68,8 +75,7 @@ upload_object() {
   # Stream large bundle from disk; avoids macOS curl OOM seen with --data-binary @file on ~1GB payloads.
   curl -fS -X POST \
     "${SUPABASE_URL}/storage/v1/object/${MODELS_BUCKET}/${object_path}" \
-    -H "Authorization: Bearer ${SUPABASE_API_KEY}" \
-    -H "apikey: ${SUPABASE_API_KEY}" \
+    -H "@${PROPPADIA_CURL_AUTH_HEADERS_FILE}" \
     -H "x-upsert: true" \
     -H "Content-Type: application/gzip" \
     --connect-timeout "${UPLOAD_CONNECT_TIMEOUT}" \
@@ -95,8 +101,7 @@ upload_manifest() {
     "${BUNDLE_LATEST_OBJECT}")"
   curl -fS -X POST \
     "${SUPABASE_URL}/storage/v1/object/${MODELS_BUCKET}/${MANIFEST_OBJECT}" \
-    -H "Authorization: Bearer ${SUPABASE_API_KEY}" \
-    -H "apikey: ${SUPABASE_API_KEY}" \
+    -H "@${PROPPADIA_CURL_AUTH_HEADERS_FILE}" \
     -H "x-upsert: true" \
     -H "Content-Type: application/json" \
     --connect-timeout "${UPLOAD_CONNECT_TIMEOUT}" \
