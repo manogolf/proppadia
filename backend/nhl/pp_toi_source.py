@@ -31,6 +31,8 @@ def pp_toi_conflict(
     *, game_id: int, player_id: int, team_id: int | None,
     existing_value: float | None, incoming_value: float | None,
     source_kind: str, source_reference: str,
+    official_team_id: int | None = None,
+    official_team_mapping_count: int = 0,
 ) -> dict[str, Any] | None:
     """Return a conflict only when both observations are known and differ."""
     if existing_value is None or incoming_value is None:
@@ -41,6 +43,12 @@ def pp_toi_conflict(
         "game_id": int(game_id),
         "player_id": int(player_id),
         "team_id": None if team_id is None else int(team_id),
+        "team_id_namespace": "NHL_DATABASE_TEAM_ID",
+        "official_team_id": None if official_team_id is None else int(official_team_id),
+        "official_team_mapping_status": (
+            "VERIFIED_UNIQUE_CROSSWALK" if int(official_team_mapping_count) == 1
+            else "UNRESOLVED_CROSSWALK"
+        ),
         "existing_pp_toi_minutes": float(existing_value),
         "incoming_pp_toi_minutes": float(incoming_value),
         "status": "PRESERVED_EXISTING_VALUE_CONFLICT_REQUIRES_SOURCE_REVIEW",
@@ -104,11 +112,22 @@ def capture_stage_pp_toi_conflicts(
             )
             SELECT s.game_id::bigint, s.player_id::bigint,
                    COALESCE(rs.team_id, s.team_id)::bigint AS team_id,
+                   team_map.official_team_id, team_map.mapping_count,
                    r.pp_toi_minutes, s.pp_toi_minutes
             FROM nhl.import_skater_logs_stage s
             JOIN nhl.skater_game_logs_raw r
               ON r.game_id = s.game_id AND r.player_id = s.player_id
-            LEFT JOIN latest_roster rs USING (game_id, player_id)
+            LEFT JOIN latest_roster rs
+              ON rs.game_id = s.game_id AND rs.player_id = s.player_id
+            LEFT JOIN LATERAL (
+              SELECT
+                CASE WHEN COUNT(DISTINCT e.provider_team_id::bigint) = 1
+                     THEN MIN(e.provider_team_id::bigint) END AS official_team_id,
+                COUNT(DISTINCT e.provider_team_id::bigint) AS mapping_count
+              FROM nhl.team_external_ids e
+              WHERE e.team_id = COALESCE(rs.team_id, s.team_id)
+                AND e.provider = 'nhl'
+            ) team_map ON TRUE
             WHERE s.game_date = %s::date
               AND r.pp_toi_minutes IS NOT NULL
               AND s.pp_toi_minutes IS NOT NULL
@@ -127,17 +146,20 @@ def capture_stage_pp_toi_conflicts(
     if journal_path:
         source_ref += f"; request_journal={journal_path}"
     conflicts = [
-        item for game_id, player_id, team_id, existing, incoming in rows
+        item for game_id, player_id, team_id, official_team_id, mapping_count, existing, incoming in rows
         if (item := pp_toi_conflict(
             game_id=game_id, player_id=player_id, team_id=team_id,
+            official_team_id=official_team_id,
+            official_team_mapping_count=mapping_count,
             existing_value=existing, incoming_value=incoming,
             source_kind="OFFICIAL_BOX_SCORE_STAGE",
             source_reference=source_ref,
         )) is not None
     ]
     observation_digest = hashlib.sha256(json.dumps(
-        [[int(g), int(p), None if t is None else int(t), float(old), float(new)]
-         for g, p, t, old, new in rows], separators=(",", ":")
+        [[int(g), int(p), None if t is None else int(t),
+          None if ot is None else int(ot), int(mc), float(old), float(new)]
+         for g, p, t, ot, mc, old, new in rows], separators=(",", ":")
     ).encode()).hexdigest()
     return write_pp_toi_conflict_diagnostic(
         run_id=run_id, slate_date=slate_date, stage=stage,

@@ -422,22 +422,36 @@ def main() -> None:
                              for pid, value in sorted(pp_map.items()))
         cur.execute(
             """
-            SELECT l.player_id::bigint, r.team_id::bigint, l.pp_toi_minutes
+            SELECT l.player_id::bigint,
+                   COALESCE(r.team_id, l.team_id)::bigint AS team_id,
+                   team_map.official_team_id, team_map.mapping_count,
+                   l.pp_toi_minutes
             FROM nhl.skater_game_logs_raw l
             LEFT JOIN LATERAL (
               SELECT team_id FROM nhl.roster_status rs
               WHERE rs.game_id=l.game_id AND rs.player_id=l.player_id
               ORDER BY rs.asof_ts DESC LIMIT 1
             ) r ON TRUE
+            LEFT JOIN LATERAL (
+              SELECT
+                CASE WHEN COUNT(DISTINCT e.provider_team_id::bigint) = 1
+                     THEN MIN(e.provider_team_id::bigint) END AS official_team_id,
+                COUNT(DISTINCT e.provider_team_id::bigint) AS mapping_count
+              FROM nhl.team_external_ids e
+              WHERE e.team_id = COALESCE(r.team_id, l.team_id)
+                AND e.provider = 'nhl'
+            ) team_map ON TRUE
             WHERE l.game_id = %s AND l.player_id = ANY(%s)
               AND l.pp_toi_minutes IS NOT NULL
             ORDER BY l.player_id;
             """,
             (game_id, list(pp_map)),
         )
-        for player_id, team_id, current_value in cur.fetchall():
+        for player_id, team_id, official_team_id, mapping_count, current_value in cur.fetchall():
             conflict = pp_toi_conflict(
                 game_id=game_id, player_id=player_id, team_id=team_id,
+                official_team_id=official_team_id,
+                official_team_mapping_count=mapping_count,
                 existing_value=current_value, incoming_value=pp_map.get(int(player_id)),
                 source_kind="RECONSTRUCTED_SHIFT_OVERLAP",
                 source_reference=(
