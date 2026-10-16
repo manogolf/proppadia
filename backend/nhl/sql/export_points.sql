@@ -66,7 +66,7 @@ COPY (
         g2.game_date,
         g2.start_time_utc,
         COALESCE(l.shots_on_goal, 0)::float AS shots_on_goal,
-        COALESCE(l.shot_attempts, 0)::float AS shot_attempts,
+        l.shot_attempts::float AS shot_attempts,
         NULLIF(l.toi_minutes, 0)::float AS toi_minutes
       FROM nhl.skater_game_logs_raw l
       JOIN nhl.games g2 ON g2.game_id = l.game_id
@@ -87,12 +87,14 @@ COPY (
                THEN shots_on_goal * 60.0 / toi_minutes END)::float AS d5_sog_per60,
       AVG(CASE WHEN rn_desc <= 10 AND toi_minutes > 0
                THEN shots_on_goal * 60.0 / toi_minutes END)::float AS d10_sog_per60,
-      AVG(CASE WHEN rn_desc <= 10 AND toi_minutes > 0
+      -- AVG's denominator contains only strict-prior rows with an observed
+      -- attempt count and positive TOI. Unknown source values are not zeros.
+      AVG(CASE WHEN rn_desc <= 10 AND toi_minutes > 0 AND shot_attempts IS NOT NULL
                THEN shot_attempts * 60.0 / toi_minutes END)::float AS attempts_d10_per60,
       SUM(CASE WHEN rn_desc <= 5 THEN shots_on_goal ELSE 0 END)::float AS num_shotwasongoal_last5,
       SUM(CASE WHEN rn_desc <= 10 THEN shots_on_goal ELSE 0 END)::float AS num_shotwasongoal_last10,
-      SUM(CASE WHEN rn_desc <= 5 THEN shot_attempts ELSE 0 END)::float AS num_event_shot_last5,
-      SUM(CASE WHEN rn_desc <= 10 THEN shot_attempts ELSE 0 END)::float AS num_event_shot_last10,
+      SUM(CASE WHEN rn_desc <= 5 THEN shot_attempts END)::float AS num_event_shot_last5,
+      SUM(CASE WHEN rn_desc <= 10 THEN shot_attempts END)::float AS num_event_shot_last10,
       CASE WHEN SUM(CASE WHEN rn_desc <= 5 THEN shots_on_goal ELSE 0 END) >= 15
            THEN 1 ELSE 0 END AS hot_last5_flag
     FROM player_window_rows
@@ -111,7 +113,7 @@ COPY (
     LEFT JOIN LATERAL (
       SELECT
         SUM(COALESCE(l.shots_on_goal, 0)) AS num_shotwasongoal_season_to_date,
-        SUM(COALESCE(l.shot_attempts, 0)) AS num_event_shot_season_to_date
+        SUM(l.shot_attempts) AS num_event_shot_season_to_date
       FROM nhl.skater_game_logs_raw l
       JOIN nhl.games gh ON gh.game_id = l.game_id
       WHERE l.player_id = b.player_id
@@ -129,7 +131,7 @@ COPY (
       l.game_id,
       g.game_date,
       SUM(COALESCE(l.shots_on_goal, 0))::float AS team_sog,
-      SUM(COALESCE(l.shot_attempts, 0))::float AS team_attempts
+      SUM(l.shot_attempts)::float AS team_attempts
     FROM nhl.skater_game_logs_raw l
     JOIN nhl.games g ON g.game_id = l.game_id
     WHERE substring(g.game_id::text, 5, 2) = '02'  -- regular season
@@ -145,6 +147,8 @@ COPY (
     (b.is_home)::int AS is_home,
     COALESCE(pwf.d5_sog_per60, 0.0) AS d5_sog_per60,
     COALESCE(pwf.d10_sog_per60, 0.0) AS d10_sog_per60,
+    -- Frozen model input default: emit 0 only when the entire derived feature
+    -- is unavailable. Individual unknown history rows were excluded above.
     COALESCE(pwf.attempts_d10_per60, 0.0) AS attempts_d10_per60,
 
     -- Team d10 remains based on the existing bounded team history.
@@ -188,6 +192,8 @@ COPY (
     COALESCE(pwf.num_shotwasongoal_last5, 0.0) AS num_shotwasongoal_last5,
     COALESCE(pwf.num_shotwasongoal_last10, 0.0) AS num_shotwasongoal_last10,
     COALESCE(pstd.num_shotwasongoal_season_to_date, 0.0) AS num_shotwasongoal_season_to_date,
+    -- Frozen Phoenix model-input defaults apply after nullable attempt rows
+    -- have been aggregated; individual unknown attempt rows remain excluded.
     COALESCE(pwf.num_event_shot_last5, 0.0) AS num_event_shot_last5,
     COALESCE(pwf.num_event_shot_last10, 0.0) AS num_event_shot_last10,
     COALESCE(pstd.num_event_shot_season_to_date, 0.0) AS num_event_shot_season_to_date,

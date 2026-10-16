@@ -96,10 +96,12 @@ def normalize_history(logs: pd.DataFrame, outcomes: pd.DataFrame) -> pd.DataFram
         raise ValueError("NEGATIVE_OFFICIAL_SOG")
     for c in ("toi_minutes", "pp_toi_minutes"):
         hist[c] = pd.to_numeric(hist[c], errors="coerce")
-    # This is the bakeoff export rule: missing SOG/attempt logs become zero;
-    # TOI remains missing and zero TOI is excluded from rate means.
-    for c in ("shots_on_goal", "shot_attempts"):
-        hist[c] = pd.to_numeric(hist[c], errors="coerce").fillna(0.0)
+    # SOG retains its frozen source treatment. Attempts remain nullable here:
+    # build_features' rolling mean skips unknown source rows while retaining
+    # verified zeros. The scorer applies the existing model-matrix imputation
+    # only if the entire derived feature is unavailable.
+    hist["shots_on_goal"] = pd.to_numeric(hist["shots_on_goal"], errors="coerce").fillna(0.0)
+    hist["shot_attempts"] = pd.to_numeric(hist["shot_attempts"], errors="coerce")
     return hist.sort_values(["game_date", "start_time_utc", "game_id", "player_id"], kind="mergesort").reset_index(drop=True)
 
 

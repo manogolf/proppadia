@@ -56,7 +56,10 @@ def build(outcomes_csv: Path, logs_csv: Path, output_dir: Path) -> dict:
     for col in ("toi_minutes", "pp_toi_minutes"):
         src[col] = pd.to_numeric(src[col], errors="coerce")
     src["shots_on_goal"] = pd.to_numeric(src.shots_on_goal, errors="coerce").fillna(0)
-    src["shot_attempts"] = pd.to_numeric(src.shot_attempts, errors="coerce").fillna(0)
+    # Keep unmatched or unavailable source attempts unknown. build_frame's
+    # rolling rate excludes null attempts and therefore retains the observed
+    # attempt denominator.
+    src["shot_attempts"] = pd.to_numeric(src.shot_attempts, errors="coerce")
     built = build_frame(src)
     oot = built[built.history_contract.eq(ARMS[2])].copy()
     prior = pd.read_csv(FROZEN_FRAME, parse_dates=["game_date"])

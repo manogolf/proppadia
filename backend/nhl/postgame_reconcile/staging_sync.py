@@ -305,8 +305,6 @@ def build_authoritative_staging_set(
                     except (TypeError, ValueError) as error:
                         raise RuntimeError(f"AUTHORITATIVE_STAGING_PLAYER_ID_MALFORMED:{game_id}") from error
                     attempts = row.get("shotAttempts")
-                    if attempts is None and row.get("missedShots") is not None:
-                        attempts = int(row.get("sog") or 0) + int(row["missedShots"])
                     game_skaters.append({
                         "game_id": game_id,
                         "player_id": player_id,

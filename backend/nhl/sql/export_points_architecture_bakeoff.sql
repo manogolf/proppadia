@@ -11,7 +11,7 @@ COPY (
     l.toi_minutes::float AS toi_minutes,
     l.pp_toi_minutes::float AS pp_toi_minutes,
     COALESCE(l.shots_on_goal, 0)::float AS shots_on_goal,
-    COALESCE(l.shot_attempts, 0)::float AS shot_attempts
+    l.shot_attempts::float AS shot_attempts
   FROM nhl.skater_points_raw p
   JOIN nhl.games g ON g.game_id = p.game_id
   LEFT JOIN nhl.skater_game_logs_raw l

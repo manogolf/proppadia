@@ -161,6 +161,11 @@ def verify_payload_identity(family: str, identity: dict[str, Any], body: bytes) 
         raw = payload.get("id") or payload.get("gameId") or payload.get("gamePk")
         if raw is None or int(raw) != expected:
             raise RuntimeError("OFFICIAL_RESPONSE_BOXSCORE_GAME_MISMATCH")
+    elif family == "PLAY_BY_PLAY":
+        expected = int(identity["game_id"])
+        raw = payload.get("id") or payload.get("gameId") or payload.get("gamePk")
+        if raw is None or int(raw) != expected:
+            raise RuntimeError("OFFICIAL_RESPONSE_PLAY_BY_PLAY_GAME_MISMATCH")
     elif family == "PLAYER_LANDING":
         expected = int(identity["player_id"])
         raw = payload.get("playerId") or payload.get("id")

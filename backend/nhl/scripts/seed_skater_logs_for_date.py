@@ -53,6 +53,7 @@ from backend.nhl.player_external_identity import (
     localized_text,
     resolve_player_external_identity,
 )
+from backend.nhl.points_attempts_source import derive_attempts_from_final_pbp
 
 # ---------------- Env / args ----------------
 DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
@@ -222,6 +223,24 @@ def get_boxscore(game_pk: int):
         return None
     r.raise_for_status()
     return r.json()
+
+
+def get_play_by_play(game_pk: int):
+    """Fetch retained official PBP for source-validated shot attempts."""
+    url = f"{BASE_BOXSCORE}/{int(game_pk)}/play-by-play"
+    context = RequestContext.from_env()
+    identity = {"slate_date": SLATE_DATE, "game_id": int(game_pk)}
+    reuse = bool(context and context.has_declared_response("PLAY_BY_PLAY", identity))
+    response = official_get(
+        url, timeout=25, session=S, stage="SKATER_COLLECTION",
+        endpoint_family="PLAY_BY_PLAY", identity=identity,
+        max_attempts=6, retry_statuses={429, 500, 502, 503, 504},
+        backoff_seconds=0.5, preserve_response=True, reuse_preserved=reuse,
+    )
+    if response.status_code == 404:
+        return None
+    response.raise_for_status()
+    return response.json()
 
 # ---------------- DB helpers ----------------
 
@@ -632,7 +651,7 @@ def refresh_roster_status_from_box(conn, gpk: int):
 # =========================
 # 1) REPLACE _iter_skaters_from_box WITH THIS
 # =========================
-def _iter_skaters_from_box(box: dict):
+def _iter_skaters_from_box(box: dict, attempts_by_player: dict[int, int] | None = None):
     """
     Parse skaters from api-web.nhle.com gamecenter/{gamePk}/boxscore.
     Yields dicts including team_id + full_name so downstream mapping/ensure_player_exists can work.
@@ -669,15 +688,12 @@ def _iter_skaters_from_box(box: dict):
                 toi_s = p.get("toi")  # "MM:SS"
                 sog = p.get("sog")
 
-                # NHL boxscore `blockedShots` is defensive blocks by this skater, not the
-                # offensive player's own attempts that were blocked. Only use explicit
-                # shot-attempt fields for attempts; otherwise leave attempts unknown here.
+                # blockedShots is defensive blocks and is not a shot attempt by
+                # this skater. Prefer an explicit official field; otherwise use
+                # the separately validated final PBP count, or preserve unknown.
                 attempts = p.get("shotAttempts")
-                if attempts is None and p.get("missedShots") is not None:
-                    try:
-                        attempts = int(p.get("sog") or 0) + int(p.get("missedShots") or 0)
-                    except Exception:
-                        attempts = None
+                if attempts is None and attempts_by_player is not None and nhl_id is not None:
+                    attempts = attempts_by_player.get(nhl_id)
                 blocks = p.get("blockedShots")
 
                 toi_min = toi_to_minutes(toi_s)
@@ -706,6 +722,19 @@ def _iter_skaters_from_box(box: dict):
                     "toi_min": toi_min,
                     "pp_min": pp_min,
                 }                
+
+
+def _box_needs_attempt_source(box: dict) -> bool:
+    stats = box.get("playerByGameStats") or {}
+    for side in ("homeTeam", "awayTeam"):
+        team = stats.get(side) or {}
+        defense = team.get("defense") or team.get("defensemen") or []
+        for row in [*(team.get("forwards") or []), *defense]:
+            if row.get("shotAttempts") is None:
+                return True
+    return False
+
+
 # ---------------- Main ----------------
 def main():
     games = get_schedule(SLATE_DATE)
@@ -736,7 +765,18 @@ def main():
 
                 roster_map = roster_name_map(conn, gpk)  # {norm_full_name -> (player_id, team_id)}
 
-                skaters = list(_iter_skaters_from_box(box))
+                attempts_by_player = None
+                if _box_needs_attempt_source(box):
+                    try:
+                        pbp = get_play_by_play(gpk)
+                        if pbp is not None:
+                            attempts_by_player = derive_attempts_from_final_pbp(
+                                box, pbp, game_id=gpk)
+                    except Exception as error:
+                        # A partial or unreconciled PBP response is unavailable
+                        # evidence, never a reason to manufacture zero attempts.
+                        print(f"[{gpk}] shot-attempt source unavailable: {error}")
+                skaters = list(_iter_skaters_from_box(box, attempts_by_player))
                 nhl_ids = [s["nhl_id"] for s in skaters if s["nhl_id"] is not None]
                 ext_map = external_map(conn, nhl_ids)
 

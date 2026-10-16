@@ -68,7 +68,8 @@ def build_frame(src: pd.DataFrame) -> pd.DataFrame:
     # Team history is fixed at the current contract: same-date strict exclusion,
     # regular season only, 120 calendar days, newest 10 team games.
     teamgames = (src.groupby(["team_id", "game_id", "game_date"], as_index=False)
-                 .agg(team_sog=("shots_on_goal", "sum"), team_attempts=("shot_attempts", "sum")))
+                 .agg(team_sog=("shots_on_goal", "sum"),
+                      team_attempts=("shot_attempts", lambda values: values.sum(min_count=1))))
     teamgames = teamgames.sort_values(["team_id", "game_date", "game_id"])
     teamhist = {int(t): g.reset_index(drop=True) for t, g in teamgames.groupby("team_id") if int(t) >= 0}
     players = {int(p): g.reset_index(drop=True) for p, g in src.groupby("player_id", sort=False)}
