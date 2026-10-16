@@ -112,12 +112,54 @@ BEGIN
 
   IF NOT has_column_privilege(correction_role, raw_table, 'shot_attempts', 'UPDATE')
      OR NOT has_column_privilege(correction_role, raw_table, 'pp_toi_minutes', 'UPDATE')
-     OR has_column_privilege(correction_role, raw_table, 'shots_on_goal', 'UPDATE')
-     OR has_column_privilege(correction_role, raw_table, 'player_id', 'UPDATE')
+     OR has_table_privilege(correction_role, raw_table, 'INSERT')
+     OR has_table_privilege(correction_role, raw_table, 'UPDATE')
      OR has_table_privilege(correction_role, raw_table, 'DELETE')
      OR has_table_privilege(correction_role, raw_table, 'TRUNCATE') THEN
     RAISE EXCEPTION 'NHL_CORRECTION_PRIVILEGE_MISMATCH';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_roles r
+    WHERE r.rolname = correction_role
+      AND NOT r.rolcanlogin AND NOT r.rolsuper AND NOT r.rolcreatedb
+      AND NOT r.rolcreaterole AND NOT r.rolreplication AND NOT r.rolbypassrls
+  ) THEN
+    RAISE EXCEPTION 'NHL_CORRECTION_ROLE_ATTRIBUTES_MISMATCH';
+  END IF;
+  IF has_database_privilege(correction_role, current_database(), 'CREATE')
+     OR has_schema_privilege(correction_role, 'nhl', 'CREATE')
+     OR NOT has_database_privilege(correction_role, current_database(), 'CONNECT')
+     OR NOT has_schema_privilege(correction_role, 'nhl', 'USAGE')
+     OR NOT has_table_privilege(correction_role, raw_table, 'SELECT') THEN
+    RAISE EXCEPTION 'NHL_CORRECTION_DATABASE_OR_SCHEMA_PRIVILEGE_MISMATCH';
+  END IF;
+  IF (
+    SELECT COALESCE(array_agg(a.attname::text ORDER BY a.attname::text), ARRAY[]::text[])
+    FROM pg_attribute a
+    WHERE a.attrelid = raw_table::regclass AND a.attnum > 0 AND NOT a.attisdropped
+      AND has_column_privilege(correction_role, raw_table, a.attname, 'UPDATE')
+  ) <> ARRAY['pp_toi_minutes', 'shot_attempts']::text[] THEN
+    RAISE EXCEPTION 'NHL_CORRECTION_UPDATE_COLUMN_SET_MISMATCH';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'nhl' AND c.relkind IN ('r','p','v','m','f')
+      AND c.oid <> raw_table::regclass
+      AND (has_table_privilege(correction_role, c.oid, 'SELECT')
+        OR has_table_privilege(correction_role, c.oid, 'INSERT')
+        OR has_table_privilege(correction_role, c.oid, 'UPDATE')
+        OR has_table_privilege(correction_role, c.oid, 'DELETE')
+        OR has_table_privilege(correction_role, c.oid, 'TRUNCATE')
+        OR has_table_privilege(correction_role, c.oid, 'REFERENCES')
+        OR has_table_privilege(correction_role, c.oid, 'TRIGGER'))
+  ) THEN
+    RAISE EXCEPTION 'NHL_CORRECTION_UNEXPECTED_RELATION_PRIVILEGE';
+  END IF;
+
+  -- Runtime activation is verified by the execution procedure: only the
+  -- approved postgres operator session may temporarily join this NOLOGIN
+  -- role, SET ROLE, and then remove its membership in the same transaction.
 
   RAISE NOTICE 'NHL_WRITE_ROLE_PERMISSION_ASSERTIONS=PASS';
 END

@@ -329,18 +329,57 @@ This supersedes the earlier statement in this section that `postgres` could
 already assume the group. The documented operator path is therefore not yet
 usable without a separately authorized, temporary membership grant.
 
-Use a controlled operator session whose connection is obtained from the
-approved secure credential store. Do not put that connection in
-`backend/.env`, the daily process environment, shell history, command
-arguments, or receipts. Before opening a repair file, run
-`SET ROLE proppadia_nhl_source_correction` and verify `current_user` is exactly
-that role and `session_user` is the expected operator login. Verify the
-effective role can update the two approved columns but cannot update
-`shots_on_goal`, `team_id`, or other raw fields. If any check fails, stop.
-Then execute only the separately authorized, guarded repair SQL in that same
-session. Finish with `RESET ROLE` and close the session. Never execute repair
-SQL before `SET ROLE`, and never treat a successful connection as sufficient
-proof of the effective role.
+The reusable execution entry point is
+`backend/nhl/scripts/execute_nhl_source_correction.py`. It retrieves the
+approved TLS PostgreSQL URL from the macOS Keychain item with service
+`proppadia.nhl.source-correction.admin-dsn` and account `postgres`. Store that
+item through Keychain Access; do not place its value in `backend/.env`, shell
+environment, shell history, command arguments, source files, or receipts. The
+program refuses an environment-supplied admin URL, an absent Keychain item, a
+non-`postgres` login/database, non-TLS configuration, or a server version
+other than the verified PostgreSQL 15.8. It reports stable failure codes and
+never prints the URL or provider exception details.
+
+The metadata-only Keychain lookup for this service/account was unavailable
+during the 2026-10-16 implementation check. No secret was retrieved and no
+administrative database connection was attempted. Until the approved item is
+provisioned, execution stops before opening a database connection.
+The expanded read-only SQL role assertions and the executor's ACL preflight
+both passed through the configured restricted research login. Offline unit
+tests cover success ordering, failed correction rollback, pre-existing
+membership rejection, SQL scope, digest binding, and unavailable credentials;
+they do not substitute for a real administrative `SET ROLE` execution.
+
+After separate owner authorization, pass the reviewed SQL file, its SHA-256,
+and the authorization reference to the command with
+`--execute-authorized-correction`. The accepted SQL is exactly one
+`UPDATE nhl.skater_game_logs_raw` statement with a `WHERE` clause and `SET`
+assignments limited to `shot_attempts` and/or `pp_toi_minutes`; the digest
+binds the execution to the reviewed file. The command verifies the baseline
+role and exact ACLs, then performs temporary membership grant, verified
+`SET ROLE`, correction SQL, verified `RESET ROLE`, membership revoke, and an
+in-transaction absence check in one transaction. A correction or activation
+failure rolls the transaction back. A fresh independent connection verifies
+membership absence after both success and failure; if it finds membership,
+it revokes it through a separate connection and verifies again. Any failure
+to clean up or independently verify returns a failure status.
+
+For a future authorized run, calculate the digest from the exact reviewed file
+with `shasum -a 256 <sql-file>`, then pass that digest to:
+
+```text
+./bin/python backend/nhl/scripts/execute_nhl_source_correction.py \
+  --sql-file <sql-file> \
+  --sql-sha256 <sha256-from-shasum> \
+  --authorization-reference <owner-approval-reference> \
+  --execute-authorized-correction
+```
+
+The owner must authorize the specific correction and exact SQL separately;
+the command-line switch and reference are audit gates, not owner approval by
+themselves. Never execute repair SQL before verified role activation, and
+never treat a successful connection as sufficient proof of the effective
+role.
 
 The read-only check used the configured restricted research connection; no
 administrative connection was attempted. No administrative connection is
@@ -350,20 +389,14 @@ assessment did not establish that such a store entry or operator session is
 available. Do not provision a new correction login or grant a routine
 application login membership as a workaround.
 
-Smallest safe completion path: after separate authorization, the operator
-uses the intended `postgres` login from the approved secure credential store.
-The live catalog shows PostgreSQL 15.8 and `postgres` has `CREATEROLE`, so
-that session can grant temporary correction-group membership to itself. Verify
-membership, run `SET ROLE proppadia_nhl_source_correction`, and check both
-`session_user` and `current_user` before opening any repair file. Perform only
-a separately authorized guarded correction, then `RESET ROLE`, revoke the
-temporary membership from `postgres`, and verify it is absent before closing
-the session. Do not use an application login or the routine local research
-connection for this path. The existing SQL permission assertions check the
-correction column scope and exclude some unrelated writes, but do not assert
-the role's `NOLOGIN` state, explicitly exclude `team_id`/all other raw-column
-updates, or exercise an operator `SET ROLE` session; add those checks before
-treating the procedure as end-to-end verified.
+The read-only check also confirmed the existing `postgres` role has
+`CREATEROLE`, which is sufficient on PostgreSQL 15.8 to grant this non-superuser
+group membership to itself. This is used only inside the transactional
+procedure above; it does not create a login or a standing membership. Do not
+use an application login or the routine local research connection. SQL
+assertions cover the static permission contract; the execution command checks
+the runtime role switch and revocation without requiring a separate
+administrative operation.
 
 ## Remaining implementation notes
 - **Standalone script limitation:** older scripts launched outside the central
