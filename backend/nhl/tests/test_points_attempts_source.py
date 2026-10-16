@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import unittest
 import importlib
+import json
 import os
 import sqlite3
+import tempfile
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pandas as pd
 
 from backend.nhl.points_attempts_source import (
+    compare_reconciled_attempts,
     derive_attempts_from_final_pbp,
     preserve_existing_attempts_conflict_assignment,
     replace_staged_attempts_conflict_assignment,
@@ -62,6 +65,52 @@ class PointsAttemptsSourceTests(unittest.TestCase):
         self.assertEqual(derive_attempts_from_final_pbp(boxscore, pbp, game_id=2026020001),
                          {10: 3, 11: 0, 20: 1})
 
+    def test_reconciled_source_comparison_distinguishes_match_conflict_and_unknown(self):
+        match = compare_reconciled_attempts(
+            game_id=2025020001, player_id=8473419,
+            raw_attempts=7, official_attempts=7, raw_row_present=True)
+        zero = compare_reconciled_attempts(
+            game_id=2025020001, player_id=8473422,
+            raw_attempts=0, official_attempts=0, raw_row_present=True)
+        conflict = compare_reconciled_attempts(
+            game_id=2025020001, player_id=8473419,
+            raw_attempts=4, official_attempts=7, raw_row_present=True)
+        null_fill = compare_reconciled_attempts(
+            game_id=2025020001, player_id=8473507,
+            raw_attempts=None, official_attempts=3, raw_row_present=True)
+        unknown = compare_reconciled_attempts(
+            game_id=2025020001, player_id=8473507,
+            raw_attempts=3, official_attempts=None, raw_row_present=True)
+        self.assertEqual(match["status"], "MATCHES_RECONCILED_OFFICIAL_SOURCE")
+        self.assertEqual(zero["status"], "MATCHES_RECONCILED_OFFICIAL_SOURCE")
+        self.assertEqual(conflict["status"], "CONFLICT_PRESERVE_RAW_PENDING_CORRECTION")
+        self.assertEqual((conflict["raw_attempts"], conflict["official_attempts"]), (4, 7))
+        self.assertEqual(null_fill["status"], "NULL_FILL_CANDIDATE")
+        self.assertEqual(unknown["status"], "OFFICIAL_SOURCE_UNKNOWN")
+
+    def test_conflict_diagnostic_is_durable_and_run_bound(self):
+        conflict = compare_reconciled_attempts(
+            game_id=2025020001, player_id=8473419,
+            raw_attempts=4, official_attempts=7, raw_row_present=True)
+        conflict["pbp_response_sha256"] = "a" * 64
+        summary = {
+            "schema_version": "NHL_SHOT_ATTEMPTS_SOURCE_SUMMARY_V1",
+            "conflicts": [conflict],
+            "pbp_response_sha256_by_game": {"2025020001": "a" * 64},
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.dict(os.environ, {"NHL_DAILY_RUN_ID": "nhldaily_test_run"}):
+                artifact = skater_importer._persist_attempt_diagnostic(
+                    summary, diagnostic_root=Path(temporary))
+                persisted = json.loads(Path(artifact["path"]).read_text())
+                digest = __import__("hashlib").sha256(
+                    Path(artifact["path"]).read_bytes()).hexdigest()
+        self.assertEqual(persisted["parent_run_id"], "nhldaily_test_run")
+        self.assertEqual(persisted["conflicts"][0]["game_id"], 2025020001)
+        self.assertEqual(persisted["conflicts"][0]["raw_attempts"], 4)
+        self.assertEqual(persisted["conflicts"][0]["official_attempts"], 7)
+        self.assertEqual(artifact["sha256"], digest)
+
     def test_daily_source_summary_distinguishes_explicit_pbp_and_unknown(self):
         boxscore, _pbp = source_payloads()
         boxscore["playerByGameStats"]["homeTeam"]["forwards"][0]["shotAttempts"] = 0
@@ -69,12 +118,25 @@ class PointsAttemptsSourceTests(unittest.TestCase):
         counts = skater_importer.summarize_shot_attempt_sources(
             boxscore, {10: 3, 11: 0, 20: 2})
         self.assertEqual(counts, {
-            "boxscore_explicit": 1, "validated_pbp": 2, "unknown": 0,
-            "observed_positive": 1, "observed_zero": 2,
+            "boxscore_explicit": 0, "validated_pbp": 3, "unknown": 0,
+            "observed_positive": 2, "observed_zero": 1,
         })
         counts = skater_importer.summarize_shot_attempt_sources(boxscore, None)
         self.assertEqual(counts["unknown"], 2)
         self.assertEqual(counts["observed_zero"], 1)
+
+    def test_reconciled_pbp_precedes_boxscore_and_unknown_stays_unknown(self):
+        boxscore, _pbp = source_payloads()
+        boxscore["playerByGameStats"]["homeTeam"]["forwards"][0]["shotAttempts"] = 99
+        parsed = list(skater_importer._iter_skaters_from_box(boxscore, {10: 3, 11: 0, 20: 1}))
+        self.assertEqual(parsed[0]["attempts"], 3)
+        self.assertEqual(parsed[0]["attempts_source"], "VALIDATED_FINAL_PBP")
+        summary = skater_importer.summarize_shot_attempt_sources(
+            boxscore, {10: 3, 11: 0, 20: 1})
+        self.assertEqual(summary["validated_pbp"], 3)
+        unknown = list(skater_importer._iter_skaters_from_box(boxscore, None))
+        self.assertEqual(unknown[1]["attempts"], None)
+        self.assertEqual(unknown[1]["attempts_source"], "UNKNOWN")
 
     def test_partial_or_nonfinal_pbp_is_unknown_not_zero(self):
         boxscore, pbp = source_payloads()
@@ -195,6 +257,7 @@ class PointsAttemptsSourceTests(unittest.TestCase):
         self.assertNotIn("shot_attempts  = COALESCE(EXCLUDED.shot_attempts", cli_source)
         self.assertNotIn("shot_attempts=coalesce(excluded.shot_attempts", postgame_source)
         self.assertIn("COALESCE(nhl.skater_game_logs_raw.shot_attempts, EXCLUDED.shot_attempts)", expected)
+        self.assertIn("NHL_SHOT_ATTEMPTS_PROMOTION_SUMMARY_V1", cli_source)
 
     def test_hgb_training_builder_excludes_missing_attempts_but_keeps_zero(self):
         rows = []

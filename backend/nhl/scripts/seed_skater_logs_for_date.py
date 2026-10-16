@@ -7,7 +7,8 @@
 
 #  python backend/nhl/scripts/seed_skater_logs_for_date.py
 
-import os, sys, datetime as dt, json
+import os, sys, datetime as dt, json, hashlib, uuid
+from pathlib import Path
 from zoneinfo import ZoneInfo
 import re, unicodedata
 from typing import Optional, Any
@@ -54,6 +55,7 @@ from backend.nhl.player_external_identity import (
     resolve_player_external_identity,
 )
 from backend.nhl.points_attempts_source import (
+    compare_reconciled_attempts,
     derive_attempts_from_final_pbp,
     replace_staged_attempts_conflict_assignment,
 )
@@ -241,9 +243,9 @@ def get_play_by_play(game_pk: int):
         backoff_seconds=0.5, preserve_response=True, reuse_preserved=reuse,
     )
     if response.status_code == 404:
-        return None
+        return None, None
     response.raise_for_status()
-    return response.json()
+    return response.json(), hashlib.sha256(response.content).hexdigest()
 
 # ---------------- DB helpers ----------------
 
@@ -693,12 +695,18 @@ def _iter_skaters_from_box(box: dict, attempts_by_player: dict[int, int] | None 
                 toi_s = p.get("toi")  # "MM:SS"
                 sog = p.get("sog")
 
-                # blockedShots is defensive blocks and is not a shot attempt by
-                # this skater. Prefer an explicit official field; otherwise use
-                # the separately validated final PBP count, or preserve unknown.
-                attempts = p.get("shotAttempts")
-                if attempts is None and attempts_by_player is not None and nhl_id is not None:
-                    attempts = attempts_by_player.get(nhl_id)
+                # A complete, SOG-reconciled PBP observation takes precedence
+                # over the boxscore field. Otherwise preserve explicit boxscore
+                # data, and leave unavailable values unknown.
+                if (attempts_by_player is not None and nhl_id is not None
+                        and nhl_id in attempts_by_player):
+                    attempts = attempts_by_player[nhl_id]
+                    attempts_source = "VALIDATED_FINAL_PBP"
+                else:
+                    attempts = p.get("shotAttempts")
+                    attempts_source = (
+                        "BOXSCORE_EXPLICIT" if attempts is not None else "UNKNOWN"
+                    )
                 blocks = p.get("blockedShots")
 
                 toi_min = toi_to_minutes(toi_s)
@@ -723,21 +731,11 @@ def _iter_skaters_from_box(box: dict, attempts_by_player: dict[int, int] | None 
                     "team_id": team_id,
                     "sog": int(sog) if sog is not None else None,
                     "attempts": int(attempts) if attempts is not None else None,
+                    "attempts_source": attempts_source,
                     "blocks": int(blocks) if blocks is not None else None,
                     "toi_min": toi_min,
                     "pp_min": pp_min,
                 }                
-
-
-def _box_needs_attempt_source(box: dict) -> bool:
-    stats = box.get("playerByGameStats") or {}
-    for side in ("homeTeam", "awayTeam"):
-        team = stats.get(side) or {}
-        defense = team.get("defense") or team.get("defensemen") or []
-        for row in [*(team.get("forwards") or []), *defense]:
-            if row.get("shotAttempts") is None:
-                return True
-    return False
 
 
 def summarize_shot_attempt_sources(box: dict, attempts_by_player: dict | None) -> dict[str, int]:
@@ -751,13 +749,13 @@ def summarize_shot_attempt_sources(box: dict, attempts_by_player: dict | None) -
         for row in [*(team.get("forwards") or []), *defense]:
             raw_attempts = row.get("shotAttempts")
             player_id = row.get("playerId") or row.get("id")
-            if raw_attempts is not None:
-                attempts = int(raw_attempts)
-                counts["boxscore_explicit"] += 1
-            elif (attempts_by_player is not None and player_id is not None
-                  and int(player_id) in attempts_by_player):
+            if (attempts_by_player is not None and player_id is not None
+                    and int(player_id) in attempts_by_player):
                 attempts = int(attempts_by_player[int(player_id)])
                 counts["validated_pbp"] += 1
+            elif raw_attempts is not None:
+                attempts = int(raw_attempts)
+                counts["boxscore_explicit"] += 1
             else:
                 counts["unknown"] += 1
                 continue
@@ -766,6 +764,63 @@ def summarize_shot_attempt_sources(box: dict, attempts_by_player: dict | None) -
             elif attempts == 0:
                 counts["observed_zero"] += 1
     return counts
+
+
+def _read_existing_attempts(conn, game_id: int, player_ids: list[int]) -> dict[int, dict[str, Any]]:
+    if not player_ids:
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT player_id::bigint AS player_id, shot_attempts
+            FROM nhl.skater_game_logs_raw
+            WHERE game_id = %s AND player_id = ANY(%s)
+            """,
+            (int(game_id), [int(player_id) for player_id in player_ids]),
+        )
+        result = {}
+        for row in cur.fetchall() or []:
+            if isinstance(row, dict):
+                result[int(row["player_id"])] = {
+                    "shot_attempts": row.get("shot_attempts"), "row_present": True,
+                }
+            else:
+                result[int(row[0])] = {"shot_attempts": row[1], "row_present": True}
+        return result
+
+
+def _persist_attempt_diagnostic(
+    summary: dict[str, Any], *, diagnostic_root: Path | None = None,
+) -> dict[str, Any]:
+    run_id = (os.environ.get("NHL_DAILY_RUN_ID")
+              or os.environ.get("NHL_RECONCILIATION_RUN_ID")
+              or f"standalone_{dt.datetime.now(dt.timezone.utc):%Y%m%dT%H%M%S%fZ}_{uuid.uuid4().hex[:8]}")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+", run_id):
+        raise ValueError("INVALID_ATTEMPTS_DIAGNOSTIC_RUN_ID")
+    root = diagnostic_root
+    if root is None:
+        root = (Path(__file__).resolve().parents[3] / "artifacts" / "operational" / "nhl"
+                / "shot_attempts_source_diagnostics")
+    root = root / f"slate_date={SLATE_DATE}" / f"run_id={run_id}"
+    root.mkdir(parents=True, exist_ok=False)
+    path = root / "attempt_source_diagnostic.json"
+    payload = {
+        "schema_version": "NHL_SHOT_ATTEMPTS_SOURCE_DIAGNOSTIC_V1",
+        "parent_run_id": run_id,
+        "slate_date": SLATE_DATE,
+        "source_summary": summary,
+        "conflicts": summary.get("conflicts", []),
+        "pbp_response_sha256_by_game": summary.get("pbp_response_sha256_by_game", {}),
+    }
+    temporary = path.with_suffix(".json.tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    os.replace(temporary, path)
+    return {
+        "path": str(path.resolve()),
+        "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+        "bytes": path.stat().st_size,
+        "parent_run_id": run_id,
+    }
 
 
 # ---------------- Main ----------------
@@ -790,6 +845,18 @@ def main():
         "unknown_rows": 0,
         "observed_positive_rows": 0,
         "observed_zero_rows": 0,
+        "verified_observations": 0,
+        "promotion_preview": {
+            "preserved_existing_values": 0,
+            "fillable_nulls": 0,
+            "new_rows_with_known_counts": 0,
+            "unknown_source_rows": 0,
+            "existing_nulls_remain_unknown": 0,
+        },
+        "matched_existing_official_pbp_observations": 0,
+        "confirmed_discrepancy_count": 0,
+        "conflicts": [],
+        "pbp_response_sha256_by_game": {},
     }
 
     with psycopg.connect(DB_URL, autocommit=False, row_factory=dict_row, prepare_threshold=None) as conn:
@@ -814,23 +881,27 @@ def main():
                 roster_map = roster_name_map(conn, gpk)  # {norm_full_name -> (player_id, team_id)}
 
                 attempts_by_player = None
-                if _box_needs_attempt_source(box):
-                    attempt_summary["pbp_required_games"] += 1
-                    try:
-                        pbp = get_play_by_play(gpk)
-                        if pbp is not None:
-                            attempts_by_player = derive_attempts_from_final_pbp(
-                                box, pbp, game_id=gpk)
-                            attempt_summary["pbp_reconciled_games"] += 1
-                        else:
-                            raise ValueError("ATTEMPTS_PBP_RESPONSE_EMPTY")
-                    except Exception as error:
-                        # A partial or unreconciled PBP response is unavailable
-                        # evidence, never a reason to manufacture zero attempts.
-                        print(f"[{gpk}] shot-attempt source unavailable: {error}")
-                        reason = str(error).split(":", 1)[0] or type(error).__name__
-                        reasons = attempt_summary["pbp_failure_reasons"]
-                        reasons[reason] = reasons.get(reason, 0) + 1
+                pbp_sha256 = None
+                # Check every completed game's official PBP, even when the
+                # boxscore is populated, so an incorrect raw value cannot hide
+                # behind a non-NULL source field.
+                attempt_summary["pbp_required_games"] += 1
+                try:
+                    pbp, pbp_sha256 = get_play_by_play(gpk)
+                    if pbp is not None:
+                        attempts_by_player = derive_attempts_from_final_pbp(
+                            box, pbp, game_id=gpk)
+                        attempt_summary["pbp_reconciled_games"] += 1
+                        attempt_summary["pbp_response_sha256_by_game"][str(gpk)] = pbp_sha256
+                    else:
+                        raise ValueError("ATTEMPTS_PBP_RESPONSE_EMPTY")
+                except Exception as error:
+                    # A partial or unreconciled PBP response is unavailable
+                    # evidence, never a reason to manufacture zero attempts.
+                    print(f"[{gpk}] shot-attempt source unavailable: {error}")
+                    reason = str(error).split(":", 1)[0] or type(error).__name__
+                    reasons = attempt_summary["pbp_failure_reasons"]
+                    reasons[reason] = reasons.get(reason, 0) + 1
                 skaters = list(_iter_skaters_from_box(box, attempts_by_player))
                 source_counts = summarize_shot_attempt_sources(box, attempts_by_player)
                 for source_key, summary_key in (
@@ -845,6 +916,7 @@ def main():
                 ext_map = external_map(conn, nhl_ids)
 
                 rows = []
+                attempt_source_by_player: dict[int, str] = {}
                 for s in skaters:
                     pid = None
                     learned_from_roster = False
@@ -915,6 +987,8 @@ def main():
                     if learned_from_roster and s["nhl_id"] is not None:
                         upsert_external_id(conn, pid, s["nhl_id"])
 
+                    attempt_source_by_player[int(pid)] = str(s["attempts_source"])
+
                     rows.append(
                         (
                             int(pid),
@@ -928,6 +1002,36 @@ def main():
                             s["blocks"],
                         )
                     )
+
+                existing_attempts = _read_existing_attempts(
+                    conn, int(gpk), [int(row[0]) for row in rows])
+                for row in rows:
+                    pid, staged_attempts = int(row[0]), row[5]
+                    previous = existing_attempts.get(pid)
+                    previous_value = previous.get("shot_attempts") if previous else None
+                    if previous_value is not None:
+                        attempt_summary["promotion_preview"]["preserved_existing_values"] += 1
+                    elif staged_attempts is not None:
+                        count_key = ("new_rows_with_known_counts" if previous is None
+                                     else "fillable_nulls")
+                        attempt_summary["promotion_preview"][count_key] += 1
+                    else:
+                        count_key = ("unknown_source_rows" if previous is None
+                                     else "existing_nulls_remain_unknown")
+                        attempt_summary["promotion_preview"][count_key] += 1
+
+                    if attempt_source_by_player.get(pid) == "VALIDATED_FINAL_PBP":
+                        comparison = compare_reconciled_attempts(
+                            game_id=int(gpk), player_id=pid,
+                            raw_attempts=previous_value,
+                            official_attempts=int(staged_attempts),
+                            raw_row_present=previous is not None,
+                        )
+                        if comparison["status"] == "MATCHES_RECONCILED_OFFICIAL_SOURCE":
+                            attempt_summary["matched_existing_official_pbp_observations"] += 1
+                        elif comparison["status"] == "CONFLICT_PRESERVE_RAW_PENDING_CORRECTION":
+                            comparison["pbp_response_sha256"] = pbp_sha256
+                            attempt_summary["conflicts"].append(comparison)
 
                 inserted = upsert_rows(conn, rows)
                 conn.commit()
@@ -944,6 +1048,13 @@ def main():
                 if os.environ.get(ENV_REQUIRED) == "1":
                     raise
 
+    attempt_summary["verified_observations"] = int(attempt_summary["validated_pbp_rows"])
+    attempt_summary["confirmed_discrepancy_count"] = len(attempt_summary["conflicts"])
+    attempt_summary["promotion_preview"]["semantics"] = (
+        "Pre-promotion read-only counts; actual promotion results are separately "
+        "reported by NHL_SHOT_ATTEMPTS_PROMOTION_SUMMARY_V1."
+    )
+    attempt_summary["diagnostic_artifact"] = _persist_attempt_diagnostic(attempt_summary)
     print(f"Done. Upserted total {inserted_total} skater rows for {SLATE_DATE}; skipped_no_map={skipped_no_map_total}")
     print("NHL_CHILD_SUMMARY_JSON=" + json.dumps(attempt_summary, sort_keys=True))
 

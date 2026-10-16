@@ -38,6 +38,35 @@ def replace_staged_attempts_conflict_assignment() -> str:
     return "shot_attempts = EXCLUDED.shot_attempts"
 
 
+def compare_reconciled_attempts(
+    *, game_id: int, player_id: int, raw_attempts: int | None,
+    official_attempts: int | None, raw_row_present: bool,
+) -> dict[str, Any]:
+    """Compare a reconciled PBP observation with raw state without mutation.
+
+    A non-NULL raw value is not presumed verified. Unknown official input is
+    explicitly classified as unavailable and never creates a discrepancy.
+    """
+    if official_attempts is None:
+        status = "OFFICIAL_SOURCE_UNKNOWN"
+    elif raw_attempts is None:
+        status = "NULL_FILL_CANDIDATE"
+    elif int(raw_attempts) == int(official_attempts):
+        status = "MATCHES_RECONCILED_OFFICIAL_SOURCE"
+    else:
+        status = "CONFLICT_PRESERVE_RAW_PENDING_CORRECTION"
+    return {
+        "game_id": int(game_id),
+        "player_id": int(player_id),
+        "raw_row_present": bool(raw_row_present),
+        "raw_attempts": None if raw_attempts is None else int(raw_attempts),
+        "official_attempts": (
+            None if official_attempts is None else int(official_attempts)
+        ),
+        "status": status,
+    }
+
+
 ATTEMPT_TYPES = frozenset({"goal", "shot-on-goal", "missed-shot", "blocked-shot"})
 ON_GOAL_TYPES = frozenset({"goal", "shot-on-goal"})
 

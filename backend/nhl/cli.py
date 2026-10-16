@@ -2497,7 +2497,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         env=_roster_refresh_environment(
             slate_date=yday, reuse_roster_observation=reuse_roster_observation),
     )
-    run([PY, SCRIPTS_DIR / "seed_skater_logs_for_date.py"],        env={"SLATE_DATE": yday})
+    run([PY, SCRIPTS_DIR / "seed_skater_logs_for_date.py"], env={
+        "SLATE_DATE": yday, "NHL_DAILY_RUN_ID": daily_run_id,
+    })
     run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"],      env={"SLATE_DATE": yday})
 
     # A2) Promote stage → raw for yday (idempotent upsert)
@@ -2551,7 +2553,12 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
       FROM src
       JOIN rs ON rs.game_id = src.game_id AND rs.player_id = src.player_id
       JOIN g  ON g.game_id  = src.game_id
-    )
+    ), raw_before AS MATERIALIZED (
+      SELECT r.player_id, r.game_id, r.shot_attempts
+      FROM nhl.skater_game_logs_raw r
+      JOIN joined j USING (player_id, game_id)
+      WHERE j.opponent_id IS NOT NULL
+    ), upserted AS (
     INSERT INTO nhl.skater_game_logs_raw
       (player_id, game_id, team_id, opponent_id, is_home, game_date,
        shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes{insert_blocks})
@@ -2568,9 +2575,25 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
       shots_on_goal  = EXCLUDED.shots_on_goal,
       {preserve_existing_attempts_conflict_assignment()},
       toi_minutes    = EXCLUDED.toi_minutes,
-      pp_toi_minutes = COALESCE(NULLIF(EXCLUDED.pp_toi_minutes, 0), nhl.skater_game_logs_raw.pp_toi_minutes){update_blocks};
+      pp_toi_minutes = COALESCE(NULLIF(EXCLUDED.pp_toi_minutes, 0), nhl.skater_game_logs_raw.pp_toi_minutes){update_blocks}
+    RETURNING player_id, game_id, shot_attempts
+    )
+    SELECT 'NHL_CHILD_SUMMARY_JSON=' || json_build_object(
+      'schema_version', 'NHL_SHOT_ATTEMPTS_PROMOTION_SUMMARY_V1',
+      'slate_date', '{yday}',
+      'promoted_rows', COUNT(*),
+      'preserved_existing_values', COUNT(*) FILTER (WHERE b.shot_attempts IS NOT NULL),
+      'filled_nulls', COUNT(*) FILTER (
+        WHERE b.player_id IS NOT NULL AND b.shot_attempts IS NULL
+          AND u.shot_attempts IS NOT NULL),
+      'inserted_known_values', COUNT(*) FILTER (
+        WHERE b.player_id IS NULL AND u.shot_attempts IS NOT NULL),
+      'unknown_after_promotion', COUNT(*) FILTER (WHERE u.shot_attempts IS NULL)
+    )::text
+    FROM upserted u
+    LEFT JOIN raw_before b USING (player_id, game_id);
     """
-    run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
+    run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
 
     # A3a) Build manpower segments (PP/PK windows) for this slate date (required for PP TOI)
     run([PY, SCRIPTS_DIR / "backfill_game_manpower_segments.py", "--start-date", yday, "--end-date", yday, "--season", str(season)])
