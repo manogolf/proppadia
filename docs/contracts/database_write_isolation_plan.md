@@ -315,13 +315,19 @@ fixtures so assertion failures cannot dump the caller's dotenv values.
 
 Historical source repairs use the existing `proppadia_nhl_source_correction`
 group; do not add this group to a daily, research, or operations login. The
-group is `NOLOGIN` and grants `SELECT` plus column-level `UPDATE` on
+group is `NOLOGIN` and grants `CONNECT`, `USAGE` on `nhl`, `SELECT` on
+`nhl.skater_game_logs_raw`, and column-level `UPDATE` on
 `nhl.skater_game_logs_raw.shot_attempts` and `pp_toi_minutes` only. A live
-catalog check on 2026-10-16 found that the administrative `postgres` role can
-assume this group, while the three application logins cannot. An already
-authorized administrative session can therefore execute a repair under the
-restricted effective role without changing role grants or running the repair
-as the owner.
+read-only catalog check on 2026-10-16 confirmed those attributes and found no
+effective privileges on other NHL relations, no other raw-column `UPDATE`,
+and no table-level `INSERT`, `UPDATE`, `DELETE`, or `TRUNCATE`.
+
+That same check found no membership in the correction group. In particular,
+`postgres` is not currently a member and is not eligible to `SET ROLE` to the
+group; the research, ingestion, and operations logins are also not members.
+This supersedes the earlier statement in this section that `postgres` could
+already assume the group. The documented operator path is therefore not yet
+usable without a separately authorized, temporary membership grant.
 
 Use a controlled operator session whose connection is obtained from the
 approved secure credential store. Do not put that connection in
@@ -336,14 +342,28 @@ session. Finish with `RESET ROLE` and close the session. Never execute repair
 SQL before `SET ROLE`, and never treat a successful connection as sufficient
 proof of the effective role.
 
-The restricted logins were rechecked on 2026-10-16: `postgres` can assume the
-correction group; research, ingestion, and operations logins cannot. No
-administrative connection was available in the local application environment
-or the inspected protected local connection-file locations during that check.
-The procedure is documented, but the approved administrative connection must
-be made available from its secure store before a repair can run. Do not
-provision a new correction login or grant a routine application login
-membership as a workaround.
+The read-only check used the configured restricted research connection; no
+administrative connection was attempted. No administrative connection is
+configured in `backend/.env`. The repository specifies that the operator
+connection must come from the approved secure credential store, but this
+assessment did not establish that such a store entry or operator session is
+available. Do not provision a new correction login or grant a routine
+application login membership as a workaround.
+
+Smallest safe completion path: after separate authorization, the operator
+uses the intended `postgres` login from the approved secure credential store.
+The live catalog shows PostgreSQL 15.8 and `postgres` has `CREATEROLE`, so
+that session can grant temporary correction-group membership to itself. Verify
+membership, run `SET ROLE proppadia_nhl_source_correction`, and check both
+`session_user` and `current_user` before opening any repair file. Perform only
+a separately authorized guarded correction, then `RESET ROLE`, revoke the
+temporary membership from `postgres`, and verify it is absent before closing
+the session. Do not use an application login or the routine local research
+connection for this path. The existing SQL permission assertions check the
+correction column scope and exclude some unrelated writes, but do not assert
+the role's `NOLOGIN` state, explicitly exclude `team_id`/all other raw-column
+updates, or exercise an operator `SET ROLE` session; add those checks before
+treating the procedure as end-to-end verified.
 
 ## Remaining implementation notes
 - **Standalone script limitation:** older scripts launched outside the central
