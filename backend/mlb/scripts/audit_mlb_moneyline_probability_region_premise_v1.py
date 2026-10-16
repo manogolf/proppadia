@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -18,7 +19,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import spearmanr
 
-from backend.app.deps import pg_connect
+from backend.app.deps import pg_connect as _shared_pg_connect
 from backend.mlb.public_game_predictions.phase_gating_v1 import (
     POSTSEASON,
     REGULAR_SEASON,
@@ -47,6 +48,25 @@ MIN_BOOK_MATCHES = 50
 BOOTSTRAP_REPS = 4000
 SEED = 20260909
 SPARSE_N = 30
+AUDIT_DATABASE_URL_ENV = "MLB_MONEYLINE_AUDIT_DATABASE_URL"
+_CLI_DATABASE_URL_OVERRIDE: str | None = None
+
+
+def pg_connect():
+    """Use an audit-only DSN when supplied; preserve the shared default otherwise."""
+    database_url = _CLI_DATABASE_URL_OVERRIDE
+    if not database_url:
+        return _shared_pg_connect()
+
+    import psycopg
+    import psycopg.rows
+
+    return psycopg.connect(
+        database_url,
+        row_factory=psycopg.rows.dict_row,
+        prepare_threshold=None,
+        options="-c search_path=mlb,public",
+    )
 
 PROBABILITY_BANDS = [
     (-math.inf, .40, "BELOW_40"),
@@ -141,22 +161,7 @@ def _phase_partition_frame(
 
 
 def load_predictions(cutoff: str | None, *, evaluation_phase: str = REGULAR_SEASON) -> pd.DataFrame:
-    sql = """
-      SELECT p.game_date::text AS game_date,p.game_id,p.model_version,
-             p.prediction_snapshot_class,p.scheduled_start_utc,p.prediction_timestamp_utc,
-             p.prediction_cutoff_utc,p.home_team,p.away_team,p.home_win_probability,
-             p.away_win_probability,p.predicted_winner,p.confidence_band,p.model_hash,
-             p.payload_sha256 AS prediction_payload_sha256,
-             o.official_home_runs,o.official_away_runs,o.official_winner,o.prediction_correct,
-             o.payload_sha256 AS outcome_payload_sha256
-      FROM mlb.public_game_moneyline_predictions p
-      LEFT JOIN mlb.public_game_moneyline_outcomes o
-        USING (game_date,game_id,model_version,prediction_snapshot_class)
-      WHERE p.model_version=%s AND p.prediction_snapshot_class=%s
-        AND p.admission_status=%s
-        AND (%s::date IS NULL OR p.game_date<=%s::date)
-      ORDER BY p.game_date,p.scheduled_start_utc,p.game_id
-    """
+    sql = PREDICTIONS_QUERY
     with pg_connect() as conn, conn.cursor() as cur:
         cur.execute(sql, (MODEL, SNAPSHOT, ADMISSION, cutoff, cutoff))
         rows = cur.fetchall()
@@ -172,9 +177,25 @@ def load_predictions(cutoff: str | None, *, evaluation_phase: str = REGULAR_SEAS
     return _phase_partition_frame(frame, evaluation_phase=evaluation_phase)
 
 
-def latest_resolved_cutoff(*, evaluation_phase: str = REGULAR_SEASON) -> str:
-    with pg_connect() as conn, conn.cursor() as cur:
-        cur.execute("""
+PREDICTIONS_QUERY = """
+      SELECT p.game_date::text AS game_date,p.game_id,p.model_version,
+             p.prediction_snapshot_class,p.scheduled_start_utc,p.prediction_timestamp_utc,
+             p.prediction_cutoff_utc,p.home_team,p.away_team,p.home_win_probability,
+             p.away_win_probability,p.predicted_winner,p.confidence_band,p.model_hash,
+             p.payload_sha256 AS prediction_payload_sha256,
+             o.official_home_runs,o.official_away_runs,o.official_winner,o.prediction_correct,
+             o.payload_sha256 AS outcome_payload_sha256
+      FROM mlb.public_game_moneyline_predictions p
+      LEFT JOIN mlb.public_game_moneyline_outcomes o
+        USING (game_date,game_id,model_version,prediction_snapshot_class)
+      WHERE p.model_version=%s AND p.prediction_snapshot_class=%s
+        AND p.admission_status=%s
+        AND (%s::date IS NULL OR p.game_date<=%s::date)
+      ORDER BY p.game_date,p.scheduled_start_utc,p.game_id
+    """
+
+
+LATEST_RESOLVED_QUERY = """
           SELECT p.game_date::text AS game_date,p.game_id,p.model_version,
                  p.prediction_snapshot_class
           FROM mlb.public_game_moneyline_predictions p
@@ -183,7 +204,12 @@ def latest_resolved_cutoff(*, evaluation_phase: str = REGULAR_SEASON) -> str:
           WHERE p.model_version=%s AND p.prediction_snapshot_class=%s
             AND p.admission_status=%s
           ORDER BY p.game_date,p.game_id
-        """, (MODEL, SNAPSHOT, ADMISSION))
+        """
+
+
+def latest_resolved_cutoff(*, evaluation_phase: str = REGULAR_SEASON) -> str:
+    with pg_connect() as conn, conn.cursor() as cur:
+        cur.execute(LATEST_RESOLVED_QUERY, (MODEL, SNAPSHOT, ADMISSION))
         rows = cur.fetchall()
     frame = pd.DataFrame(rows)
     if frame.empty:
@@ -1016,9 +1042,8 @@ def run(output: Path, cutoff_arg: str) -> dict[str, Any]:
     write_csv(excluded, output / "excluded_row_ledger.csv")
     (output / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True, default=json_value) + "\n")
     (output / "main_report.md").write_text(report_text(summary, cohort, tests, requirement, book_summary))
-    rerun = (f"/bin/zsh -lc 'set -a; source backend/.env; set +a; .venv/bin/python -m "
-             f"backend.mlb.scripts.audit_mlb_moneyline_probability_region_premise_v1 "
-             f"--resolved-cutoff {cutoff} --output {output.relative_to(ROOT)}'\n")
+    rerun = (f"./bin/python -m backend.mlb.scripts.audit_mlb_moneyline_probability_region_premise_v1 "
+             f"--resolved-cutoff {cutoff} --output {output.relative_to(ROOT)}\n")
     (output / "rerun_command.txt").write_text(rerun)
     make_validator(output / "validator.py")
     files = sorted(p for p in output.iterdir() if p.is_file() and p.name != "sha256_manifest.txt")
@@ -1027,13 +1052,18 @@ def run(output: Path, cutoff_arg: str) -> dict[str, Any]:
 
 
 def main() -> None:
+    global _CLI_DATABASE_URL_OVERRIDE
     parser = argparse.ArgumentParser()
     parser.add_argument("--resolved-cutoff", default="latest", help="YYYY-MM-DD or latest")
     parser.add_argument("--output", type=Path, default=Path(
         "artifacts/analysis/model_development/mlb_moneyline_probability_region_premise_audit_v1/2026-09-09"))
     args = parser.parse_args()
     output = args.output if args.output.is_absolute() else ROOT / args.output
-    summary = run(output, args.resolved_cutoff)
+    _CLI_DATABASE_URL_OVERRIDE = os.environ.get(AUDIT_DATABASE_URL_ENV)
+    try:
+        summary = run(output, args.resolved_cutoff)
+    finally:
+        _CLI_DATABASE_URL_OVERRIDE = None
     print(json.dumps(summary, indent=2, sort_keys=True, default=json_value))
 
 
