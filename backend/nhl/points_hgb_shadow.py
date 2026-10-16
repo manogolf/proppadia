@@ -165,6 +165,13 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
         expected_ids = {int(row[0]) for row in cur.fetchall()}
         if expected_ids - set(game_ids):
             raise RuntimeError("HGB_OFFICIAL_HISTORY_PACKAGE_GAP")
+        # Outcome packages can also contain preseason rows from the same
+        # 120-day window. The validated HGB history contract is regular-season
+        # only, matching the game/log query below; exclude those labels before
+        # the exporter joins them to regular-season game metadata.
+        outcomes = filter_history_outcomes_to_expected_games(outcomes, expected_ids)
+        outcomes.to_csv(outcomes_path, index=False)
+        game_ids = sorted(map(int, outcomes.game_id.unique()))
         cur.execute("""SELECT g.season AS canonical_season,g.game_date,g.start_time_utc,
                    g.home_team_id,g.away_team_id,l.game_id,l.player_id,
                    l.team_id,l.is_home,l.toi_minutes,l.pp_toi_minutes,l.shots_on_goal,l.shot_attempts
@@ -226,6 +233,15 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
         "started_excluded_game_ids": started_games,
         "excluded_started_game_ids": started_games,
     }
+
+
+def filter_history_outcomes_to_expected_games(outcomes: pd.DataFrame,
+                                             expected_game_ids: set[int]) -> pd.DataFrame:
+    """Keep only official labels for finalized regular-season history games."""
+    if "game_id" not in outcomes:
+        raise ValueError("HGB_OFFICIAL_OUTCOME_GAME_ID_MISSING")
+    game_ids = pd.to_numeric(outcomes.game_id, errors="raise")
+    return outcomes.loc[game_ids.isin(expected_game_ids)].copy()
 
 
 def capture_from_files(

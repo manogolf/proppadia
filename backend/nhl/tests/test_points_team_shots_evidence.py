@@ -15,6 +15,7 @@ from backend.nhl.points_team_shots_evidence import (
     verify_evidence_package,
     write_evidence_package,
 )
+from backend.nhl import points_hgb_shadow
 from backend.nhl.prediction_lineage import canonical_game_set_hash, prepare_scoring_input
 from backend.nhl.scripts import export_nhl_points_hgb_features as hgb_exporter
 
@@ -272,6 +273,13 @@ class TeamShotEvidenceTests(unittest.TestCase):
         logs["team_id"] = 1
         with self.assertRaisesRegex(ValueError, "HGB_HISTORY_TEAM_SOURCE_CONFLICT"):
             hgb_exporter.normalize_history(logs, outcomes)
+
+    def test_hgb_history_excludes_outcomes_without_regular_season_game_binding(self):
+        outcomes = pd.DataFrame([{"game_id": 2026020001, "player_id": 1},
+                                 {"game_id": 2026010001, "player_id": 2}])
+        filtered = points_hgb_shadow.filter_history_outcomes_to_expected_games(
+            outcomes, {2026020001})
+        self.assertEqual(filtered.game_id.tolist(), [2026020001])
 
     def test_read_only_export_wrapper_writes_snapshot_and_receipt_bound_package(self):
         feature_bytes = b"game_id,player_id,team_d10_sf_per_game\n100,7,3.5\n"
