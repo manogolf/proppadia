@@ -195,6 +195,21 @@ class PpToiZeroSemanticsTests(unittest.TestCase):
             [((3 * 1200) + 241, (3 * 1200) + 300)],
         )
 
+    def test_manpower_segments_do_not_bridge_a_real_one_second_gap(self):
+        from backend.nhl.scripts.backfill_game_manpower_segments import segments_for_team_advantage_abs
+
+        plays = [
+            {"periodDescriptor": {"number": 1, "periodType": "REG"}, "timeInPeriod": "10:00", "typeDescKey": "faceoff", "situationCode": "1541"},
+            {"periodDescriptor": {"number": 1, "periodType": "REG"}, "timeInPeriod": "10:10", "typeDescKey": "penalty", "situationCode": "1551"},
+            {"periodDescriptor": {"number": 1, "periodType": "REG"}, "timeInPeriod": "10:11", "typeDescKey": "faceoff", "situationCode": "1541"},
+            {"periodDescriptor": {"number": 1, "periodType": "REG"}, "timeInPeriod": "10:20", "typeDescKey": "faceoff", "situationCode": "1551"},
+            {"periodDescriptor": {"number": 1, "periodType": "REG"}, "timeInPeriod": "20:00", "typeDescKey": "period-end", "situationCode": "1551"},
+        ]
+        self.assertEqual(
+            segments_for_team_advantage_abs(plays, "AWAY_ADV"),
+            [(600, 610), (611, 620)],
+        )
+
     def test_active_pp_extraction_deduplicates_identical_official_shift_intervals(self):
         from backend.nhl.scripts.fill_pp_toi_minutes_for_date import extract_pp_toi_minutes_from_db
 
@@ -214,6 +229,28 @@ class PpToiZeroSemanticsTests(unittest.TestCase):
         self.assertEqual(result, {8480995: 1.6})
         self.assertIn("SELECT DISTINCT game_id, player_id, team_id, period, start_sec, end_sec", cursor.sql)
         self.assertEqual(cursor.params, (2026020111, 2026020111, 2026020111))
+
+    def test_oct16_prepared_correction_sql_is_scoped_guarded_and_idempotent(self):
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[3]
+        forward = (root / "backend/nhl/sql/repairs/repair_nhl_oct16_official_source_conflicts.sql").read_text()
+        rollback = (root / "backend/nhl/sql/repairs/rollback_nhl_oct16_official_source_conflicts.sql").read_text()
+        forward_rows = forward.split("INSERT INTO oct16_source_candidates VALUES", 1)[1].split(";", 1)[0]
+        rollback_rows = rollback.split("INSERT INTO oct16_source_candidates VALUES", 1)[1].split(";", 1)[0]
+
+        self.assertEqual(forward_rows.count("('shot_attempts',"), 8)
+        self.assertEqual(forward_rows.count("('pp_toi_minutes',"), 2)
+        self.assertEqual(rollback_rows.count("('shot_attempts',"), 8)
+        self.assertEqual(rollback_rows.count("('pp_toi_minutes',"), 2)
+        self.assertIn("expected_shots_on_goal", forward)
+        self.assertIn("nhl.team_external_ids", forward)
+        self.assertIn("UNRESOLVED_PP_PROTECTED_VALUE_CHANGED", forward)
+        self.assertIn("IS NOT DISTINCT FROM c.original_value", forward)
+        self.assertIn("IS NOT DISTINCT FROM c.replacement_value", forward)
+        self.assertIn("UPDATE_ROW_COUNT_EXCEEDED_SCOPE", forward)
+        self.assertIn("ROLLBACK_UNEXPECTED_CURRENT_VALUE", rollback)
+        self.assertIn("UNRESOLVED_PP_PROTECTED_VALUE_CHANGED", rollback)
     def test_postgame_stage_sync_does_not_retain_stale_pp_toi_on_unknown_snapshot(self):
         from backend.nhl.postgame_reconcile import staging_sync
 

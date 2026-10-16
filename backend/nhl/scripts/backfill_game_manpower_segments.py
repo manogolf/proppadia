@@ -194,8 +194,6 @@ def segments_for_team_advantage_abs(
         ps, pe = merged[-1]
         if s <= pe:
             merged[-1] = (ps, max(pe, e))
-        elif s - pe <= 1:
-            merged[-1] = (ps, e)
         else:
             merged.append((s, e))
     return merged
