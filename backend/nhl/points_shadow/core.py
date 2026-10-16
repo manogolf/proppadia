@@ -81,6 +81,7 @@ def verify_feature_contract_identity(identity: dict[str, Any] | None = None) -> 
         "version": contract["version"],
         "sha256": identity["feature_contract_sha256"],
         "feature_construction_sha256": construction["sha256"],
+        "identity_path": str(identity.get("_identity_path", IDENTITY_PATH)),
     }
 
 

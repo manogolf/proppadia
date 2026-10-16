@@ -247,6 +247,17 @@ class DailyRunRecorder:
             "database_write_capable", "database_write_status",
             "transaction_disposition", "database_row_counts",
             "database_row_counts_complete", "error_type",
+            # Bounded source-integrity evidence emitted by the NHL skater-log
+            # acquisition and promotion children. Detailed conflict rows and
+            # per-game hashes remain in the run-bound diagnostic artifact.
+            "slate_date", "scheduled_games", "boxscores_seen",
+            "pbp_required_games", "pbp_reconciled_games", "pbp_failure_reasons",
+            "boxscore_explicit_rows", "validated_pbp_rows", "unknown_rows",
+            "observed_positive_rows", "observed_zero_rows", "verified_observations",
+            "promotion_preview", "matched_existing_official_pbp_observations",
+            "confirmed_discrepancy_count", "diagnostic_artifact",
+            "promoted_rows", "preserved_existing_values", "filled_nulls",
+            "inserted_known_values", "unknown_after_promotion",
         }
         child = {key: value[key] for key in allowed if key in value}
         status = self._classify_child_database_write(child)

@@ -1,0 +1,16 @@
+{
+  "feature_construction": {
+    "path": "backend/nhl/sql/export_points.sql",
+    "sha256": "61ac83bf6049bdfe5a12b895667fcbe6efa82f5aa2c960171bfcf3a95e7df43d"
+  },
+  "feature_contract": {
+    "version": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2_ATTEMPT_MISSINGNESS_V1",
+    "base_contract": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2",
+    "attempt_history": "Unknown shot-attempt observations remain NULL in source history and are excluded from AVG denominators; they are not converted to observed zero. Sums ignore unknown rows while preserving observed zeros.",
+    "model_input_boundary": "The existing Phoenix feature export may retain its documented final feature-level COALESCE defaults. This contract changes source-row aggregation semantics only; it does not change model columns, fitted parameters, or scorer behavior.",
+    "training_semantics_comparability": "NOT_ESTABLISHED: retained Phoenix historical training feature frame is unavailable. Predictions under this corrected source-missingness contract are not automatically comparable to frozen-contract historical results.",
+    "model_role": "PHOENIX_INCUMBENT_SHADOW_ONLY",
+    "frozen_model_or_authority_change": false
+  },
+  "feature_contract_sha256": "ea76d39bae458618983846568f2a53e89cd10f448abaeaff8fbc75e288d5e296"
+}

@@ -1473,6 +1473,7 @@ def _score_phoenix_points_artifact(*, recorder, prediction_run_dir: Path,
         "--features-csv", points_input_csv,
         "--model-root", MODELS_DIR / "latest" / "points",
         "--out", output_path,
+        "--feature-contract-identity", ROOT / "backend/nhl/points_shadow/phoenix_shadow_attempt_missingness_v1.json",
     ])
     validation = validate_prediction_output(
         path=output_path, lane="points", canonical_games=canonical_games,
@@ -1838,7 +1839,8 @@ def _run_independent_daily_lanes(
                 production_identity["phoenix_shadow"] = ({"status": "COMPLETE",
                     "model": "PHOENIX_POINTS_INCUMBENT_SHADOW",
                     "model_family": "phoenix", "model_version": PHOENIX_AUTHORITY,
-                    "feature_contract": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2",
+                    "feature_contract": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2_ATTEMPT_MISSINGNESS_V1",
+                    "historical_comparability": "NOT_ESTABLISHED_CORRECTED_SOURCE_MISSINGNESS_SHADOW",
                     "path": phoenix_shadow_identity["path"],
                     "sha256": phoenix_shadow_identity["sha256"],
                     "prediction_row_count": phoenix_shadow_identity["row_count"],
@@ -1851,7 +1853,7 @@ def _run_independent_daily_lanes(
                     if phoenix_shadow_identity else {"status": "FAILED_NONBLOCKING",
                         "model": "PHOENIX_POINTS_INCUMBENT_SHADOW",
                         "model_family": "phoenix", "model_version": PHOENIX_AUTHORITY,
-                        "feature_contract": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2",
+                        "feature_contract": "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2_ATTEMPT_MISSINGNESS_V1",
                         "reason": phoenix_shadow_error})
                 production_identity["fitted_model_evidence"] = {
                     "model_family": "hist_gradient_boosting",

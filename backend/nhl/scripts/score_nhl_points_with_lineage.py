@@ -21,11 +21,19 @@ def main() -> None:
     parser.add_argument("--features-csv", required=True)
     parser.add_argument("--model-root", required=True)
     parser.add_argument("--out", required=True)
+    parser.add_argument(
+        "--feature-contract-identity",
+        help="Explicit versioned feature identity; defaults to the immutable frozen identity.",
+    )
     args = parser.parse_args()
 
     output = Path(args.out)
     output.parent.mkdir(parents=True, exist_ok=True)
-    feature_contract = verify_feature_contract_identity()
+    identity_path = Path(args.feature_contract_identity) if args.feature_contract_identity else None
+    feature_identity = json.loads(identity_path.read_text()) if identity_path else None
+    if feature_identity is not None:
+        feature_identity["_identity_path"] = str(identity_path.resolve())
+    feature_contract = verify_feature_contract_identity(feature_identity)
     unbound = output.with_name(f".{output.name}.{uuid.uuid4().hex}.unbound.csv")
     scorer = Path(__file__).with_name("score_points_phoenix.py")
     command = [
@@ -48,6 +56,8 @@ def main() -> None:
             ("scorer", scorer),
             ("feature_construction", Path(__file__).resolve().parents[1] / "sql" / "export_points.sql"),
         ]
+        if identity_path:
+            components.append(("feature_contract_identity", identity_path))
         for line in lines:
             tag = f"{line:g}".replace(".", "_")
             line_dir = Path(args.model_root) / tag
@@ -62,6 +72,11 @@ def main() -> None:
                 "feature_contract_version": feature_contract["version"],
                 "feature_contract_sha256": feature_contract["sha256"],
                 "feature_construction_sha256": feature_contract["feature_construction_sha256"],
+                "feature_contract_identity_path": str(identity_path) if identity_path else None,
+                "training_semantics_comparability": (
+                    "NOT_ESTABLISHED_CORRECTED_SOURCE_MISSINGNESS_SHADOW"
+                    if identity_path else "FROZEN_CONTRACT"
+                ),
             })
         print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({"fitted_model_evidence": evidence}, sort_keys=True))
     finally:
