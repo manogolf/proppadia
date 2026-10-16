@@ -1,0 +1,96 @@
+{
+  "baseline_exceptions_total": 326,
+  "counterfactual_changed_vs_current_raw_replay_rows": 21551,
+  "counterfactual_changed_vs_frozen_feature_rows": 21551,
+  "counterfactual_feature_reproduced_from_lineage_rows": 21599,
+  "counterfactual_feature_reproduction_percent": 100.0,
+  "database_mutation": false,
+  "exact_baseline_reproduction_percent_of_qualified_population": 99.62961248,
+  "feature_contract": "NHL_POINTS_COUNT_HGB_V1_HISTORY_120_DAY_VALIDATED",
+  "frozen_population_rows": 90486,
+  "fully_verified_baseline_exceptions": 80,
+  "hgb_feature_order": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "history_selection": "strict target game_date exclusion; inclusive target_date-120d lower bound; latest 10 verified player-games ordered by game_date, game_id",
+  "integrity_checks": {
+    "all_hgb_features_and_outcomes_complete": true,
+    "baseline_exceptions_retained_separately_and_flagged": true,
+    "frozen_population_exact_row_identity_coverage": true,
+    "frozen_replay_duplicate_prevention": true,
+    "lineage_recomputed_counterfactual_matches_retained_replay": true,
+    "only_mean_pp_toi_last10_changed_among_hgb_features": true,
+    "qualified_dataset_duplicate_prevention": true,
+    "strict_prior_latest_ten_120_day_lineage_verified": true,
+    "verified_source_hashes_present_and_well_formed": true
+  },
+  "maximum_absolute_counterfactual_delta_vs_frozen": 7.11,
+  "mean_absolute_counterfactual_delta_vs_frozen": 1.1769016904074778,
+  "median_absolute_counterfactual_delta_vs_frozen": 0.7489999999999999,
+  "model_training_scoring_or_promotion": false,
+  "only_changed_model_feature": "mean_pp_toi_last10",
+  "output_artifact_sha256": {
+    "baseline_exceptions": "d6b8651bb282052556197c765e038558e4dbbb3295e1825fe44f7d46833e6a52",
+    "feature_dataset": "0ff5b928c8086d8f5c9426835238443108b9c601b6e848aceefa725df08f7e1d",
+    "population_strata": "e159a57e55ce52de4c7aba18f7142ff07cffc1f1cd02424f0646ed13ad67f109",
+    "strict_prior_lineage": "1f3a0665b8683432b22aaa63ac1f4b9e8cccf1d7dde7dfa4d9c78b337af8a346"
+  },
+  "output_row_counts": {
+    "baseline_exceptions": 326,
+    "feature_dataset": 21599,
+    "population_strata": 59,
+    "strict_prior_lineage": 171347
+  },
+  "outside_120_day_window_rows": 0,
+  "p90_absolute_counterfactual_delta_vs_frozen": 2.899,
+  "partial_verification_baseline_exceptions_excluded": 246,
+  "pending_32_row_correction_applied": false,
+  "production_authority": false,
+  "qualified_fully_source_verified_rows": 21599,
+  "qualified_rows_with_exact_current_raw_baseline_reproduction": 21519,
+  "research_only": true,
+  "schema_version": "NHL_POINTS_VERIFIED_PP_TOI_RESEARCH_DATASET_V1",
+  "source_artifact_paths": {
+    "counterfactual_replay": "artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/hgb_pp_toi_feature_exposure_training_plus_32_COUNTERFACTUAL.csv",
+    "counterfactual_replay_summary": "artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/hgb_pp_toi_feature_exposure_training_plus_32_COUNTERFACTUAL_summary.json",
+    "dataset_builder": "backend/nhl/scripts/build_nhl_points_verified_pp_toi_research_dataset.py",
+    "frozen_feature_exporter": "backend/nhl/scripts/export_nhl_points_hgb_features.py",
+    "frozen_hgb_contract": "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/shadow_contract.json",
+    "frozen_training_input": "artifacts/analysis/nhl/points_official_outcome_restoration/2026-10-09/restored_v3/validation_input_2023_2025.csv.gz",
+    "read_only_raw_snapshot": "artifacts/analysis/nhl/raw_foundation_integrity_2026-10-16/current_raw_snapshot.csv",
+    "verified_candidate_overlay": "artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/pp_toi_recovery_candidates_plus_32_official_overlay_COUNTERFACTUAL.csv"
+  },
+  "source_artifact_sha256": {
+    "counterfactual_replay": "e6e7a71e7b71981f290586c0ffb2f2a49e0187c8118d228fecb9a1671294dd25",
+    "counterfactual_replay_summary": "610efb2ba6323747421f11c6a046a9633910c5325cf0980c14c915dce365a85f",
+    "dataset_builder": "a84909d1a0119de676bb39d7960950382eac6576a9dd84f101bb6fc832d461f1",
+    "frozen_feature_exporter": "43d8b4678af9a080c1d973a773ff8c1e42479831d6742cf5b33d4380b014e49a",
+    "frozen_hgb_contract": "db308f4a9ced500d5a8b94e36423cb0aefa28b156942cafcfdba1724030ace91",
+    "frozen_training_input": "45605af7f472481af4d5a33a103b679ab4284db5d043f82842757297a3534892",
+    "read_only_raw_snapshot": "fadf53ffaaefe518affe06b58f6ba7dd709dd070a3d025d1f3dc0fa2115fcc68",
+    "verified_candidate_overlay": "6d37ed9793931e4b4615ef0b60bdb3b561ca9dfd1012c8341d97b2845259f2ce"
+  },
+  "source_expectations": {
+    "counterfactual_replay": "e6e7a71e7b71981f290586c0ffb2f2a49e0187c8118d228fecb9a1671294dd25",
+    "counterfactual_replay_summary": "610efb2ba6323747421f11c6a046a9633910c5325cf0980c14c915dce365a85f",
+    "frozen_training_input": "45605af7f472481af4d5a33a103b679ab4284db5d043f82842757297a3534892",
+    "read_only_raw_snapshot": "fadf53ffaaefe518affe06b58f6ba7dd709dd070a3d025d1f3dc0fa2115fcc68",
+    "verified_candidate_overlay": "6d37ed9793931e4b4615ef0b60bdb3b561ca9dfd1012c8341d97b2845259f2ce"
+  },
+  "status": "READY_WITH_EXPLICIT_BASELINE_EXCEPTIONS",
+  "strict_prior_violations": 0,
+  "verified_contributor_history_min_max": [
+    1,
+    10
+  ],
+  "verified_contributor_lineage_rows": 171347
+}
