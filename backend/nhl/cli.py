@@ -1618,6 +1618,7 @@ def _run_independent_daily_lanes(
     odds_phase: str, daily_run_id: str, canonical_games,
     saves_export_ready: bool, points_export_ready: bool,
     legacy_sog_prediction: dict[str, Any] | None,
+    points_evidence_capture: Mapping[str, Any] | None = None,
     reuse_odds_observation: Path | None = None,
 ) -> None:
     """Run lane-local scoring, acquisition, attachment, and integrity stages."""
@@ -2876,6 +2877,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "canonical_games": canonical_games,
         "saves_export_ready": saves_export_ready,
         "points_export_ready": points_export_ready,
+        "points_evidence_capture": points_evidence_capture,
         "legacy_sog_prediction": None,
         "reuse_odds_observation": reuse_odds_observation,
     }
@@ -3251,6 +3253,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         saves_export_ready=saves_export_ready,
         points_export_ready=points_export_ready,
         legacy_sog_prediction=legacy_sog_identity,
+        points_evidence_capture=points_evidence_capture,
         reuse_odds_observation=reuse_odds_observation,
     )
     return
