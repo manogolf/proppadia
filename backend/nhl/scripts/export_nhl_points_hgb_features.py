@@ -93,6 +93,38 @@ def normalize_slate(slate: pd.DataFrame, season: int) -> pd.DataFrame:
     return slate
 
 
+def build_team_game_aggregation(history: pd.DataFrame) -> pd.DataFrame:
+    """Return the exact team/game SOG totals consumed by the HGB exporter."""
+    return (history.loc[history.team_id.notna()]
+            .groupby(["team_id", "game_id", "game_date"], as_index=False, sort=True)
+            .agg(team_sog=("shots_on_goal", "sum"), source_player_rows=("player_id", "size"),
+                 unique_players=("player_id", "nunique")))
+
+
+def build_team_shot_history_evidence(history: pd.DataFrame, slate: pd.DataFrame) -> pd.DataFrame:
+    """Retain strict-prior contributing game IDs and D10 for every HGB target."""
+    team_games = build_team_game_aggregation(history)
+    groups = {int(team): group.sort_values(["game_date", "game_id"], kind="mergesort")
+              for team, group in team_games.groupby("team_id", sort=False)}
+    rows = []
+    for target in slate.itertuples(index=False):
+        day = pd.Timestamp(target.game_date)
+        team_history = groups.get(int(target.team_id), team_games.iloc[:0])
+        eligible = team_history.loc[
+            team_history.game_date.lt(day)
+            & team_history.game_date.ge(day - pd.Timedelta(days=120))
+        ].tail(10)
+        rows.append({
+            "game_id": int(target.game_id), "player_id": int(target.player_id),
+            "game_date": day.date().isoformat(), "team_id": int(target.team_id),
+            "contributing_game_ids": ";".join(map(str, eligible.game_id.astype(int))),
+            "valid_game_count": int(len(eligible)),
+            "rolling_denominator": int(len(eligible)),
+            "team_d10_sf_per_game": float(eligible.team_sog.mean()) if len(eligible) else 0.0,
+        })
+    return pd.DataFrame(rows)
+
+
 def build_features(history: pd.DataFrame, slate: pd.DataFrame) -> pd.DataFrame:
     team_games = (history.loc[history.team_id.notna()]
                   .groupby(["team_id", "game_id", "game_date"], as_index=False)

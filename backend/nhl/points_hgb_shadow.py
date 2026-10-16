@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import joblib
 import numpy as np
@@ -65,6 +66,16 @@ def validate_hgb_capture(capture: Path, *, daily_run_root: Path | None = None) -
         raise RuntimeError("HGB_CAPTURE_FEATURE_CONTRACT_MISMATCH")
     if feature_contract.get("research_history_contract") != identity.get("history_contract"):
         raise RuntimeError("HGB_CAPTURE_HISTORY_CONTRACT_MISMATCH")
+    if receipt.get("source_input_manifest_path"):
+        source_manifest_path = capture / receipt["source_input_manifest_path"]
+        source_manifest = json.loads(source_manifest_path.read_text())
+        if (source_manifest.get("parent_daily_run_id") != expected_parent
+                or source_manifest.get("feature_exporter_sha256") != identity.get("feature_exporter_sha256")):
+            raise RuntimeError("HGB_SOURCE_INPUT_MANIFEST_BINDING_MISMATCH")
+        for value in source_manifest.get("files", {}).values():
+            source_path = capture / value["path"]
+            if not source_path.is_file() or sha(source_path) != value.get("sha256"):
+                raise RuntimeError("HGB_SOURCE_INPUT_HASH_MISMATCH")
     if receipt.get("phoenix_control", {}).get("status") == "BOUND":
         phoenix = receipt["phoenix_control"]
         if (phoenix.get("parent_run_id") != expected_parent
@@ -136,6 +147,16 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
     # Confirm that every completed regular-season game in the bounded history has
     # an immutable outcome package before constructing features.
     with psycopg.connect(db_url, prepare_threshold=None) as conn, conn.cursor() as cur:
+        cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+        cur.execute("SELECT transaction_timestamp(), current_setting('transaction_isolation'), "
+                    "current_setting('transaction_read_only'), pg_current_snapshot()::text")
+        snapshot_row = cur.fetchone()
+        database_snapshot = {
+            "transaction_timestamp_utc": snapshot_row[0].isoformat(),
+            "transaction_isolation": snapshot_row[1],
+            "transaction_read_only": snapshot_row[2],
+            "postgres_snapshot": snapshot_row[3],
+        }
         cur.execute("""SELECT DISTINCT g.game_id FROM nhl.games g
             WHERE substring(g.game_id::text,5,2) = '02' AND lower(g.status) = 'final'
               AND g.game_date >= %s AND g.game_date < %s
@@ -144,7 +165,8 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
         expected_ids = {int(row[0]) for row in cur.fetchall()}
         if expected_ids - set(game_ids):
             raise RuntimeError("HGB_OFFICIAL_HISTORY_PACKAGE_GAP")
-        cur.execute("""SELECT g.season AS canonical_season,g.game_date,l.game_id,l.player_id,
+        cur.execute("""SELECT g.season AS canonical_season,g.game_date,g.start_time_utc,
+                   g.home_team_id,g.away_team_id,l.game_id,l.player_id,
                    l.team_id,l.is_home,l.toi_minutes,l.pp_toi_minutes,l.shots_on_goal,l.shot_attempts
             FROM nhl.skater_game_logs_raw l JOIN nhl.games g USING(game_id)
             WHERE l.game_id = ANY(%s) AND substring(g.game_id::text,5,2) = '02'
@@ -199,6 +221,7 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
         "canonical_game_ids": canonical_ids,
         "canonical_game_count": len(canonical_ids),
         "canonical_game_set_hash": canonical_game_set_hash(canonical_ids),
+        "database_snapshot": database_snapshot,
         "eligible_pregame_game_ids": eligible_game_ids,
         "started_excluded_game_ids": started_games,
         "excluded_started_game_ids": started_games,
@@ -213,6 +236,8 @@ def capture_from_files(
     capture_phase: str, parent_run_id: str, feature_cutoff_utc: str,
     output_root: Path, excluded_started_game_ids: list[int] | None = None,
     canonical_game_ids: list[int] | None = None,
+    source_artifacts: Mapping[str, Path] | None = None,
+    source_snapshot_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Exercise exporter and scorer as production does, then retain a sealed capture."""
     phoenix_available = (phoenix_predictions_path is not None
@@ -296,6 +321,98 @@ def capture_from_files(
         prediction_out = capture / "predictions.csv"
         phoenix_out = capture / "phoenix_control_predictions.csv"
         shutil.copyfile(source_features, feature_out)
+        retained_source_inputs = {}
+        source_capture_status = "EVIDENCE_CAPTURE_COMPLETE"
+        source_capture_error = None
+        source_capture_diagnostics: dict[str, Any] = {}
+        retained_aggregation_files: list[str] = []
+        for index, (label, source_path) in enumerate(sorted((source_artifacts or {}).items())):
+            source_path = Path(source_path)
+            if not source_path.is_file():
+                source_capture_status = "EVIDENCE_CAPTURE_PARTIAL"
+                source_capture_error = f"HGB_SOURCE_INPUT_MISSING:{label}"
+                continue
+            filename = f"source_input_{index:02d}_{re.sub(r'[^a-zA-Z0-9_-]+', '_', label)}{source_path.suffix or '.bin'}"
+            target = capture / filename
+            try:
+                shutil.copyfile(source_path, target)
+                retained_source_inputs[str(label)] = {
+                    "path": filename, "sha256": sha(target), "bytes": target.stat().st_size,
+                    "source_path": str(source_path.resolve()),
+                }
+            except Exception as source_error:
+                source_capture_status = "EVIDENCE_CAPTURE_PARTIAL"
+                source_capture_error = f"HGB_SOURCE_INPUT_COPY_FAILED:{label}:{type(source_error).__name__}"
+                if target.is_file():
+                    retained_source_inputs[str(label)] = {
+                        "path": filename, "sha256": sha(target), "bytes": target.stat().st_size,
+                        "source_path": str(source_path.resolve()), "complete_copy": False,
+                    }
+        agg_path = capture / "team_game_aggregation.csv"
+        history_path = capture / "prior_team_game_contributions.csv"
+        try:
+            if not source_artifacts or not {"official_skater_logs", "canonical_slate"}.issubset(source_artifacts):
+                raise RuntimeError("HGB_SOURCE_INPUT_SET_INCOMPLETE")
+            outcome_paths = [Path(path) for label, path in sorted(source_artifacts.items())
+                             if label.startswith("official_outcomes_")]
+            if not outcome_paths:
+                raise RuntimeError("HGB_OFFICIAL_OUTCOME_SOURCE_INPUTS_MISSING")
+            raw_logs = pd.read_csv(Path(source_artifacts["official_skater_logs"]))
+            raw_outcomes = pd.concat([pd.read_csv(path) for path in outcome_paths], ignore_index=True)
+            history = exporter.normalize_history(raw_logs, raw_outcomes)
+            slate_frame = exporter.normalize_slate(
+                pd.read_csv(Path(source_artifacts["canonical_slate"])), int(season))
+            team_games_evidence = exporter.build_team_game_aggregation(history)
+            target_history_evidence = exporter.build_team_shot_history_evidence(history, slate_frame)
+            actual_values = features[["game_id", "player_id", "team_d10_sf_per_game"]]
+            checked = actual_values.merge(
+                target_history_evidence[["game_id", "player_id", "team_d10_sf_per_game"]],
+                on=["game_id", "player_id"], how="outer", validate="one_to_one",
+                suffixes=("_export", "_evidence"), indicator=True)
+            if not checked._merge.eq("both").all():
+                raise RuntimeError("HGB_TEAM_SHOT_EVIDENCE_IDENTITY_MISMATCH")
+            errors = (pd.to_numeric(checked.team_d10_sf_per_game_export, errors="raise")
+                      - pd.to_numeric(checked.team_d10_sf_per_game_evidence, errors="raise")).abs()
+            if errors.gt(1e-12).any():
+                raise RuntimeError("HGB_TEAM_SHOT_EVIDENCE_VALUE_MISMATCH")
+            team_games_evidence.to_csv(agg_path, index=False, float_format="%.17g")
+            target_history_evidence.to_csv(history_path, index=False, float_format="%.17g")
+            retained_aggregation_files.extend([agg_path.name, history_path.name])
+            source_capture_diagnostics = {
+                "status": "PASS", "target_rows": int(len(checked)),
+                "maximum_absolute_feature_difference": float(errors.max()) if len(errors) else 0.0,
+                "source_skater_rows": int(len(raw_logs)),
+                "duplicate_player_game_rows": int(raw_logs.duplicated(["game_id", "player_id"]).sum()),
+                "missing_sog_rows": int(pd.to_numeric(raw_logs.shots_on_goal, errors="coerce").isna().sum()),
+                "missing_attempts_rows": int(pd.to_numeric(raw_logs.shot_attempts, errors="coerce").isna().sum()),
+                "team_game_aggregation_rows": int(len(team_games_evidence)),
+            }
+        except Exception as source_error:
+            source_capture_status = "EVIDENCE_CAPTURE_PARTIAL"
+            source_capture_error = f"{type(source_error).__name__}:{source_error}"
+            source_capture_diagnostics = {"status": "PARTIAL", "reason": source_capture_error}
+            retained_aggregation_files.extend(
+                path.name for path in (agg_path, history_path) if path.is_file() and path.name not in retained_aggregation_files)
+        source_manifest = {
+            "schema_version": "NHL_POINTS_HGB_SOURCE_INPUTS_V1",
+            "parent_daily_run_id": parent_run_id,
+            "feature_exporter_path": "backend/nhl/scripts/export_nhl_points_hgb_features.py",
+            "feature_exporter_sha256": sha(ROOT / "backend/nhl/scripts/export_nhl_points_hgb_features.py"),
+            "database_snapshot": dict(source_snapshot_metadata or {}),
+            "official_outcome_files_are_immutable_artifact_inputs": True,
+            "capture_status": source_capture_status,
+            "capture_error": source_capture_error,
+            "source_to_feature_validation": source_capture_diagnostics,
+            "files": retained_source_inputs,
+        }
+        source_manifest_path = capture / "source_input_manifest.json"
+        source_manifest_written = True
+        try:
+            source_manifest_path.write_text(json.dumps(source_manifest, indent=2, sort_keys=True) + "\n")
+        except Exception as manifest_error:
+            source_capture_status = "EVIDENCE_CAPTURE_PARTIAL"
+            source_capture_error = f"HGB_SOURCE_MANIFEST_WRITE_FAILED:{type(manifest_error).__name__}"
+            source_manifest_written = False
         first.to_csv(prediction_out, index=False, float_format="%.17g")
         if phoenix_available:
             shutil.copyfile(phoenix_predictions_path, phoenix_out)
@@ -354,6 +471,14 @@ def capture_from_files(
             "deterministic_replay": "DETERMINISTIC_REPLAY_PASS", "replay_prediction_sha256": replay_sha,
             "model_identity": identity,
             "phoenix_control": phoenix_control,
+            "source_input_manifest_path": "source_input_manifest.json" if source_manifest_written else None,
+            "source_input_manifest_sha256": sha(source_manifest_path) if source_manifest_written else None,
+            "source_input_sha256s": {label: value["sha256"] for label, value in retained_source_inputs.items()},
+            "source_database_snapshot": dict(source_snapshot_metadata or {}),
+            "source_to_feature_capture_status": source_capture_status,
+            "source_to_feature_capture_error": source_capture_error,
+            "source_to_feature_validation": source_capture_diagnostics,
+            "source_aggregation_files": retained_aggregation_files,
         }
         (capture / "model_identity.json").write_text(json.dumps(identity, indent=2, sort_keys=True) + "\n")
         contract_identity = {
@@ -371,6 +496,10 @@ def capture_from_files(
         (capture / "RUN_COMPLETE.json").write_text(json.dumps(marker, indent=2, sort_keys=True) + "\n")
         names = ["features.csv", "predictions.csv", "model_identity.json",
                  "feature_contract_identity.json", "receipt.json", "RUN_COMPLETE.json"]
+        if source_manifest_written:
+            names.append("source_input_manifest.json")
+        names.extend(value["path"] for value in retained_source_inputs.values())
+        names.extend(retained_aggregation_files)
         if phoenix_available:
             names.append("phoenix_control_predictions.csv")
         (capture / "SHA256SUMS").write_text("".join(f"{sha(capture / name)}  {name}\n" for name in names))

@@ -1,0 +1,33 @@
+{
+  "schema_version": "NHL_POINTS_PREGAME_EVIDENCE_ACTIVATION_V1",
+  "capture_installation_status": "INSTALLED_AWAITING_LIVE_VERIFICATION",
+  "challenger_readiness": "READY",
+  "daily_execution_performed": false,
+  "live_daily_receipt_verified": false,
+  "local_integration": {
+    "status": "EVIDENCE_CAPTURE_COMPLETE",
+    "slate_date": "2026-10-15",
+    "transaction_isolation": "repeatable read",
+    "transaction_read_only": "on",
+    "postgres_snapshot": "17209071:17209071:",
+    "feature_export_sha256": "dc41c8500f1db93738d25e113ffd71ebeb700ebe7e2c366158fc7a7612e7432e",
+    "feature_export_hash_matches_existing_daily_receipt": true,
+    "temporary_test_package_retained": false
+  },
+  "source_paths": {
+    "phoenix": "nhl.skater_game_logs_raw -> backend/nhl/sql/export_points.sql -> train_nhl_points_v2.csv -> prepare_scoring_input -> score_nhl_points_with_lineage.py",
+    "hgb": "read-only official skater logs + canonical slate + immutable official outcomes -> export_nhl_points_hgb_features.py -> HGB scorer"
+  },
+  "write_providers": {
+    "database_writes": 0,
+    "provider_requests": 0,
+    "paid_credits": 0
+  },
+  "known_data_quality": {
+    "historical_training_feature_rows_changed": 30547,
+    "historical_training_rows": 90486,
+    "captured_2026_team_d10_mean": 14.907,
+    "reconstructed_2026_team_d10_mean": 25.972,
+    "shot_attempts_null_repair_performed": false
+  }
+}

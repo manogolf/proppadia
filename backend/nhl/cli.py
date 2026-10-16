@@ -38,7 +38,7 @@ import shutil
 import tempfile
 from pathlib import Path
 import pandas as pd
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Mapping, Optional, Sequence, Union
 from datetime import datetime, timedelta, timezone
 import re
 import psycopg
@@ -81,6 +81,12 @@ from backend.nhl.sog_structural_correction_shadow import capture as capture_sog_
 from backend.nhl.points_hgb_shadow import capture_from_files as capture_points_hgb_shadow
 from backend.nhl.points_hgb_shadow import prepare_authoritative_inputs as prepare_points_hgb_inputs
 from backend.nhl.points_hgb_shadow import build_production_prediction_artifact
+from backend.nhl.points_team_shots_evidence import (
+    attach_fallback_feature_export as attach_points_fallback_export,
+    bind_scorer_input as bind_points_evidence_scorer_input,
+    capture_points_export_snapshot,
+    mark_capture_partial as mark_points_evidence_partial,
+)
 from backend.nhl.points_hgb_promotion import (
     AUTHORITY_PATH, HGB_AUTHORITY, PHOENIX_AUTHORITY,
     assert_hgb_promotion_ready, selected_production_authority,
@@ -1414,7 +1420,8 @@ def build_points(slate: str, *, odds_json: Path | None = None,
 def _score_phoenix_points_artifact(*, recorder, prediction_run_dir: Path,
                                    canonical_games, slate: str,
                                    daily_run_id: str, cutoff: str,
-                                   output_path: Path) -> dict[str, Any]:
+                                   output_path: Path,
+                                   evidence_capture: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Score the existing Phoenix model, returning its bound artifact identity."""
     points_source_csv = EXPORTS_DIR / "train_nhl_points_v2.csv"
     recorder.lane("points").inputs.append(artifact_identity(points_source_csv))
@@ -1428,6 +1435,38 @@ def _score_phoenix_points_artifact(*, recorder, prediction_run_dir: Path,
     )
     points_input_identity.update(artifact_identity(points_input_csv))
     recorder.lane("points").inputs.append(points_input_identity)
+    if evidence_capture and evidence_capture.get("path"):
+        try:
+            evidence_binding = bind_points_evidence_scorer_input(
+                Path(str(evidence_capture["path"])), points_input_csv)
+            capture_status = str(evidence_capture.get("status", "EVIDENCE_CAPTURE_COMPLETE"))
+            recorder.lane("points").outputs.append({
+                "evidence_capture_status": capture_status,
+                "evidence_capture_path": evidence_capture["path"],
+                "evidence_capture_reason": evidence_capture.get("reason"),
+                "evidence_capture_manifest_sha256": evidence_binding["manifest_sha256"],
+                "phoenix_scorer_input_path": evidence_binding["path"],
+                "phoenix_scorer_input_sha256": evidence_binding["sha256"],
+            })
+        except Exception as error:
+            reason = f"PHOENIX_SCORER_INPUT_BIND_FAILED:{type(error).__name__}:{error}"
+            try:
+                partial_identity = mark_points_evidence_partial(
+                    Path(str(evidence_capture["path"])), reason)
+            except Exception:
+                partial_identity = {}
+            recorder.lane("points").outputs.append({
+                "evidence_capture_status": "EVIDENCE_CAPTURE_PARTIAL",
+                "evidence_capture_path": evidence_capture.get("path"),
+                "evidence_capture_manifest_sha256": partial_identity.get("manifest_sha256"),
+                "evidence_capture_reason": reason,
+            })
+    elif evidence_capture:
+        recorder.lane("points").outputs.append({
+            "evidence_capture_status": evidence_capture.get("status", "EVIDENCE_CAPTURE_FAILED"),
+            "evidence_capture_path": evidence_capture.get("path"),
+            "evidence_capture_reason": evidence_capture.get("reason"),
+        })
     score_result = run([
         PY, SCRIPTS_DIR / "score_nhl_points_with_lineage.py",
         "--features-csv", points_input_csv,
@@ -1696,6 +1735,7 @@ def _run_independent_daily_lanes(
                         canonical_games=canonical_games, slate=slate,
                         daily_run_id=daily_run_id, cutoff=points_cutoff,
                         output_path=phoenix_pred_path,
+                        evidence_capture=points_evidence_capture,
                     )
                 except Exception as phoenix_error:
                     if production_authority == PHOENIX_AUTHORITY:
@@ -1747,6 +1787,13 @@ def _run_independent_daily_lanes(
                         output_root=ROOT / "artifacts/operational/nhl/points_hgb_shadow",
                         excluded_started_game_ids=source_summary["started_excluded_game_ids"],
                         canonical_game_ids=source_summary["canonical_game_ids"],
+                        source_artifacts={
+                            "official_skater_logs": logs_path,
+                            "canonical_slate": slate_path,
+                            **{f"official_outcomes_{index:02d}": path
+                               for index, path in enumerate(outcomes_paths)},
+                        },
+                        source_snapshot_metadata=source_summary.get("database_snapshot", {}),
                     )
                     hgb_capture_result["source_summary"] = source_summary
                 except Exception as shadow_error:
@@ -2743,6 +2790,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
 
     # 4b) Saves / Points exporters are independent lane inputs.
     saves_export_ready = points_export_ready = False
+    points_evidence_capture: dict[str, Any] | None = None
     try:
         saves_csv = psql_stdout(SQL_DIR / "export_saves_from_denali.sql", vars={"slate_date": slate})
         (EXPORTS_DIR / "train_goalie_saves_v2.csv").write_bytes(saves_csv)
@@ -2750,9 +2798,39 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     except Exception as error:
         recorder.fail_lane("saves", error, blocking=False)
     try:
-        points_csv = psql_stdout(SQL_DIR / "export_points.sql", vars={"slate_date": slate})
+        points_evidence_capture = capture_points_export_snapshot(
+            db_url=db, slate_date=slate,
+            season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+            run_id=daily_run_id, export_sql=SQL_DIR / "export_points.sql",
+            output_root=ROOT / "artifacts/operational/nhl/points_feature_evidence",
+            psql_environment=_psql_env(),
+        )
+        points_csv = points_evidence_capture.pop("feature_export_bytes", None)
+        if points_csv is None:
+            # Evidence retention is nonblocking: fall back to the established
+            # exporter invocation if the wrapper failed before feature COPY.
+            points_csv = psql_stdout(SQL_DIR / "export_points.sql", vars={"slate_date": slate})
+            if points_evidence_capture.get("path"):
+                try:
+                    points_evidence_capture.update(attach_points_fallback_export(
+                        Path(str(points_evidence_capture["path"])), points_csv,
+                        str(points_evidence_capture.get("reason") or "SAME_SNAPSHOT_EXPORT_UNAVAILABLE")))
+                except Exception as evidence_error:
+                    points_evidence_capture.update({
+                        "status": "EVIDENCE_CAPTURE_PARTIAL",
+                        "reason": f"FALLBACK_EXPORT_RETENTION_FAILED:{type(evidence_error).__name__}:{evidence_error}",
+                        "same_snapshot_as_feature_export": False,
+                    })
         (EXPORTS_DIR / "train_nhl_points_v2.csv").write_bytes(points_csv)
         points_export_ready = True
+        recorder.lane("points").inputs.append({
+            "evidence_capture_status": points_evidence_capture.get("status"),
+            "evidence_capture_reason": points_evidence_capture.get("reason"),
+            "evidence_capture_path": points_evidence_capture.get("path"),
+            "evidence_capture_manifest_sha256": points_evidence_capture.get("manifest_sha256"),
+            "feature_export_sha256": points_evidence_capture.get("feature_export_sha256"),
+            "same_snapshot_as_feature_export": points_evidence_capture.get("same_snapshot_as_feature_export"),
+        })
     except Exception as error:
         recorder.fail_lane("points", error, blocking=False)
     print("exports → sog_features_{slate}_denali.csv, train_goalie_saves_v2.csv, train_nhl_points_v2.csv")

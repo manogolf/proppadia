@@ -1,0 +1,55 @@
+{
+  "date_blocked_holdout": {
+    "evaluation_period": [
+      "2025-10-07",
+      "2026-04-16"
+    ],
+    "evaluation_rows": 47239,
+    "evaluation_season": 2025,
+    "monthly_folds": [
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04"
+    ],
+    "policy": "EXPANDING_PRIOR_DATE_MONTHLY_ORIGINS",
+    "training_seasons": [
+      2023,
+      2024
+    ]
+  },
+  "frozen_incumbent": {
+    "model_identity_sha256": "a53f43d5caea9a64ee8e6d48daf8072e0332b629998242639b2ba15be743e5c2",
+    "model_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+    "scaler_identity_sha256": "611685ae22c0c0a5883c6deeee1897cad9de268d796071b57f1695376995562d"
+  },
+  "holdout_2025": {
+    "corrected_feature_column_sha256": "f621fa090fe3c962ac880aed5f78c81d40c9d71955372e948aac113618c92fd3",
+    "corrected_matrix_sha256": "cb32800ab51f1488d892eb7a754a0d8691d23810fc6ed01bc4e0aa0f8cc05c3f",
+    "label_parity": true,
+    "original_feature_column_sha256": "70a29f02a2be1960156a73721471b81189e01a95491c0a2fecc9501b07a81f89",
+    "original_matrix_sha256": "f1591fb1f114eb288d041d0e0e56d8574dae06721d04c59ade4dda4b1fc2c0be",
+    "other_feature_and_label_parity": true,
+    "row_identity_parity": true,
+    "rows": 47239
+  },
+  "status": "READY",
+  "training": {
+    "corrected_feature_column_sha256": "16b8561c4d4a3f4b3f5e10a1df35fdd8080339ab2fcca983ded994cb732f4933",
+    "corrected_matrix_sha256": "f66a13bbba21109fb682ac1921667abaae8ea3eade1ef96ec8baedc81709b31b",
+    "label_parity": true,
+    "original_feature_column_sha256": "7a16350bfc64354226520fc862901be3651b299f36657c85cc3b438ef8144a49",
+    "original_matrix_sha256": "12fe371aeb86ccc7630882b4fb0f63b55ce8aacfbb3216a1e70c92e0b85d4473",
+    "other_feature_and_label_parity": true,
+    "row_identity_parity": true,
+    "rows": 90486,
+    "season_rows": {
+      "2023": 47221,
+      "2024": 43265
+    }
+  },
+  "training_performed": false
+}
