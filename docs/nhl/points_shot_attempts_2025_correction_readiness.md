@@ -1,6 +1,19 @@
 # NHL 2025 Shot-Attempt Correction Readiness
 
-Status: **READY FOR SEPARATE AUTHORIZATION; no database update executed.**
+Historical preparation record: the proposed 34,108-row correction described
+here was subsequently executed and verified. See the [2025 recovery execution
+receipt](points_shot_attempts_2025_recovery_execution_2026-10-16.md): all 34,108
+officially verified attempts were corrected, the 6,368 unresolved observations
+were unchanged, and the idempotency retry changed zero rows. The unexecuted
+historical correction currently referenced by the NHL source-integrity work is
+the separate 71,627-row 2023–24 PP-TOI candidate; see the [PP-TOI recovery
+report](pp_toi_historical_recovery_2026-10-16.md).
+
+Status: **SUPERSEDED — the 34,108-row recovery was executed and verified.**
+The readiness status below records the pre-execution checks; it is not the
+current database state. The execution report is authoritative for the completed
+2025 shot-attempt correction. The separate 71,627-row PP-TOI correction remains
+prepared and unexecuted.
 
 ## Current-state verification
 
@@ -18,7 +31,7 @@ A new read-only export of the same complete 2025 game-ID prefix contains 46,713 
 
 The 34,108 proposed values comprise 31,381 positive observations and 2,727 independently verified zeros. Of the 14,036 recoverable NULLs, 12,075 are positive and 1,961 are verified zero. The 20,072 populated incorrect values include 1,633 stored zero-to-positive discrepancies, 14,847 positive values below official PBP, and 3,592 positive values above official PBP (766 of the latter have official count zero). The legacy fallback signature appears on 17,162 target rows. The Oct. 10, 2025 database dump remains a historical state checkpoint, not independent validation of source truth; the current before snapshot is likewise a value snapshot, not source evidence.
 
-All targets use the `202502` game-ID prefix. The separate 2026 source correction uses `202602` IDs, so it is outside the target key range. No database rows were modified in this task; consequently the existing corrected 2026 rows remain untouched.
+All targets use the `202502` game-ID prefix. The separate 2026 source correction uses `202602` IDs, so it is outside the target key range. At the time of this preparation task, no database rows were modified and the existing corrected 2026 rows remained untouched. The subsequent 2025 shot-attempt update and its protected-row checks are recorded in the execution report linked above.
 
 ## Prepared SQL and safeguards
 
@@ -58,4 +71,4 @@ Smallest practical separation: normal validated ingestion uses a dedicated servi
 
 ## Checks and limits
 
-`./bin/python backend/nhl/scripts/prepare_nhl_2025_attempts_repair.py` revalidated the hashes, key population, current values, and field snapshots before producing the SQL. Focused tests passed: `backend.nhl.tests.test_prepare_nhl_2025_attempts_repair` and `backend.nhl.tests.test_points_attempts_source` (9 tests total). `git diff --check` passed. The SQL was prepared and statically tested, not executed against the database. The separate 2025 correction still requires execution authorization. The Oct. 10 checkpoint and both current snapshots do not substitute for independently validated official source records. `NHL_RAW_FOUNDATION_INTEGRITY` and the broader Points investigation remain open.
+`./bin/python backend/nhl/scripts/prepare_nhl_2025_attempts_repair.py` revalidated the hashes, key population, current values, and field snapshots before producing the SQL. Focused tests passed: `backend.nhl.tests.test_prepare_nhl_2025_attempts_repair` and `backend.nhl.tests.test_points_attempts_source` (9 tests total). `git diff --check` passed. At the time this readiness report was prepared, SQL was prepared and statically tested but not yet executed; the subsequent execution and verification are recorded in the linked execution report. The Oct. 10 checkpoint and both current snapshots do not substitute for independently validated official source records. `NHL_RAW_FOUNDATION_INTEGRITY` and the broader Points investigation remain open.

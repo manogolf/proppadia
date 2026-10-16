@@ -6,16 +6,29 @@ IDs are identity. Names are labels. Aliases are bridges. Fallback joins are diag
 
 ## Core Rule
 
-Stored analytical rows should carry canonical IDs whenever the source ecosystem provides them.
+Stored analytical rows must carry official numeric player, team, and game IDs
+whenever the sport's official source provides them. Team codes may remain useful
+descriptive attributes, but they are not the canonical team key.
 
 For MLB:
 
-- Player canonical identity: MLB `player_id`
-- Game canonical identity: MLB `game_id`
-- Team canonical identity: canonical team code, with official team ID where available
+- Player canonical identity: official MLB numeric player ID
+- Game canonical identity: official MLB numeric game ID
+- Team canonical identity: official MLB numeric team ID
+- Team codes and abbreviations remain labels/attributes, not canonical keys.
 - Market research identity: `date + game_id + player_id + prop_type + side + line`
 
-For NHL/NBA, the same doctrine applies using each league's official player, game, and team IDs.
+For NHL, canonical player, game, and team identities are the official NHL
+numeric IDs. NBA and future sports use the corresponding official numeric IDs
+provided by their governing data source.
+
+An internal or legacy numeric ID belongs to its own namespace. It is not an
+official ID unless a crosswalk explicitly establishes that relationship.
+Every cross-namespace mapping must be unique, validated against authoritative
+context, and traceable to retained source evidence. For example, the PP-TOI
+historical investigation decoded legacy NHL team IDs through the original
+internal abbreviation map; comparing those raw numbers directly with official
+NHL team IDs produced false mismatches.
 
 ## Labels Are Not Identity
 
@@ -33,6 +46,8 @@ Examples that must not be treated as canonical identity:
 - public catalog label
 
 These can be used only as bridge or fallback fields with visible provenance.
+They must never be authoritative database join keys, including when their
+normalized forms happen to be unique in one observed sample.
 
 ## Aliases Are Bridges
 
@@ -58,6 +73,15 @@ Required bridge fields:
 - identity provenance
 - identity confidence
 - unresolved/ambiguous reason when not matched
+- original provider text, preserved without normalization
+
+Normalization for candidate discovery must account for diacritics and
+transliterations, punctuation, initials, compound surnames, and suffixes
+(`Jr.`, `Sr.`, `II`, `III`). Retain both the original text and any normalized
+candidate form. Normalization proposes candidates; it does not prove identity.
+A match must bind to verified official player, team, and game identities using
+the available provider event, team, schedule, and source context. If more than
+one candidate remains plausible, leave the row unresolved.
 
 ## When Fallbacks Are Acceptable
 
@@ -77,7 +101,7 @@ Name joins are forbidden as the primary join when both sides have:
 
 - player ID
 - game ID
-- team ID or canonical team code
+- official team ID
 - market key with line/side/prop
 
 Name joins are also forbidden when the result affects:
@@ -90,6 +114,11 @@ Name joins are also forbidden when the result affects:
 - performance claims
 
 Name joins may remain display-only.
+
+An alias or normalized-name join must not be promoted to an authoritative
+relationship solely because it returns one row. The candidate and supporting
+evidence must be retained, and the final binding must be validated against
+official numeric identities and game context.
 
 ## External Provider Graduation
 
@@ -152,3 +181,13 @@ Every feature that adds columns, artifacts, reports, derived fields, or joins mu
 - What health check catches identity regression tomorrow?
 
 If those answers are missing, the feature is incomplete.
+
+## Source Integrity and Governing Contracts
+
+Identity mappings and joins must also preserve source truth and source
+completeness. Follow the project-wide [Missingness and Zero Semantics
+Contract](contracts/missingness_and_zero_semantics.md) and the source-integrity
+requirements linked from [Project Doctrine](PROJECT_DOCTRINE.md). Research,
+training, and scoring code must not alter canonical source identifiers as a side
+effect. Changes to ingestion, identity mapping, feature joins, or reconciliation
+must review these governing contracts before implementation.

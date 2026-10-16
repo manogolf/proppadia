@@ -153,13 +153,23 @@ Canonical identity is part of feature completeness.
 
 Reference: `docs/CANONICAL_IDENTITY_DOCTRINE.md`
 
+Identity work must follow that doctrine before changing ingestion, identity mapping,
+feature joins, or reconciliation. The project-wide [Missingness and Zero Semantics
+Contract](contracts/missingness_and_zero_semantics.md) and its source-integrity
+requirements also apply to source-backed identity records.
+
 The project standard is:
 
 - IDs are identity.
 - Names are labels.
 - Aliases are bridges.
 - Fallback joins are diagnostics, not foundations.
-- Stored analytical rows should carry canonical IDs whenever available.
+- Stored analytical rows must carry official numeric player, team, and game IDs
+  whenever the sport's official source provides them.
+- Internal or legacy numeric identifiers are separate namespaces. A crosswalk
+  must be explicit, unique, validated, and traceable to its source evidence.
+- Names, abbreviations, aliases, and display labels are never authoritative
+  database join keys.
 
 Every durable row must be able to answer:
 
@@ -169,11 +179,33 @@ Every durable row must be able to answer:
 - Is that fallback visible?
 - What keeps identity complete tomorrow?
 
-For MLB, canonical player identity is MLB `player_id`; canonical game identity is MLB `game_id`; canonical market research identity is `date + game_id + player_id + prop_type + side + line`.
+For MLB, canonical player, team, and game identity use the corresponding official
+MLB numeric identifiers. Canonical market research identity includes official
+`game_id` and `player_id`, plus `date + prop_type + side + line`.
 
-External provider rows may begin as name/event/team aliases, but derived analytical artifacts should preserve canonical IDs once they are available.
+For NHL, canonical player, team, and game identity use official NHL numeric
+identifiers. An internal legacy ID must not be interpreted as an official ID
+because the numeric values happen to match or look plausible.
+
+External bookmaker text may be normalized to discover candidate matches, but a
+resolved relationship must bind to verified official player, team, and game IDs.
+Preserve the original provider text, candidate set, mapping evidence, and
+resolution method. Identity normalization must explicitly handle diacritics,
+transliterations, punctuation, initials, compound surnames, and suffixes such as
+Jr., Sr., II, and III. A normalized-name match alone cannot select a candidate;
+ambiguous identity remains unresolved.
+
+Research, model fitting, and scoring may read canonical source identities but
+must not silently modify them. Identity-changing ingestion or reconciliation
+must retain auditable source and mapping evidence.
 
 ## Code Review Standard
+
+Codex tasks involving ingestion, identity mapping, feature joins, or
+reconciliation must inspect this doctrine and the linked
+`docs/CANONICAL_IDENTITY_DOCTRINE.md` before editing. Review the
+Missingness and Zero Semantics Contract when source fields or completeness are
+in scope.
 
 When reviewing any change that adds or modifies one of these:
 
