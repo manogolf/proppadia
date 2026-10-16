@@ -1,5 +1,7 @@
 import unittest
 import os
+import subprocess
+import sys
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -76,11 +78,45 @@ class NHLDatabaseAccessTests(unittest.TestCase):
         env = {
             "NHL_DB_ACCESS_MODE": "restricted",
             "NHL_RESEARCH_DATABASE_URL": "postgresql://proppadia_nhl_research_login:secret@db.invalid/postgres",
+            "DATABASE_URL": "postgresql://mlb-shared:secret@db.invalid/postgres",
+            "SUPABASE_DB_URL": "postgresql://mlb-shared-supabase:secret@db.invalid/postgres",
         }
         routed = routed_database_environment("research", environ=env)
         self.assertEqual(routed["SUPABASE_DB_URL"], env["NHL_RESEARCH_DATABASE_URL"])
         self.assertEqual(routed["DATABASE_URL"], env["NHL_RESEARCH_DATABASE_URL"])
         self.assertNotIn("NHL_INGEST_DATABASE_URL", routed)
+        # Routing is for the child only; shared MLB configuration in the
+        # parent process must remain untouched.
+        self.assertEqual(env["DATABASE_URL"], "postgresql://mlb-shared:secret@db.invalid/postgres")
+        self.assertEqual(env["SUPABASE_DB_URL"], "postgresql://mlb-shared-supabase:secret@db.invalid/postgres")
+
+    def test_inherited_database_environment_precedes_dotenv_files(self):
+        # The shared Supabase resolver loads dotenv files with override=False.
+        # Exercise that behavior in a clean child process so the real local
+        # environment and imported module globals are not changed by this test.
+        inherited_database = "postgresql://inherited-mlb:placeholder@db.invalid/postgres"
+        inherited_supabase = "postgresql://inherited-supabase:placeholder@db.invalid/postgres"
+        child_env = {
+            "PATH": os.environ.get("PATH", ""),
+            "DATABASE_URL": inherited_database,
+            "SUPABASE_DB_URL": inherited_supabase,
+            "PYTHONDONTWRITEBYTECODE": "1",
+        }
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "from backend.supabase import supabase_utils as s; "
+                "assert s.DATABASE_URL == 'postgresql://inherited-mlb:placeholder@db.invalid/postgres'; "
+                "assert s.SUPABASE_DB_URL == 'postgresql://inherited-supabase:placeholder@db.invalid/postgres'",
+            ],
+            cwd=os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")),
+            env=child_env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, "dotenv loading replaced inherited DB configuration")
 
     def test_restricted_operations_role_is_separate_from_ingestion(self):
         env = {
