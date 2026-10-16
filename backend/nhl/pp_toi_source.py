@@ -8,6 +8,7 @@ import os
 import psycopg
 from pathlib import Path
 from typing import Any, Iterable
+from decimal import Decimal, ROUND_HALF_UP
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,7 +38,17 @@ def pp_toi_conflict(
     """Return a conflict only when both observations are known and differ."""
     if existing_value is None or incoming_value is None:
         return None
-    if float(existing_value) == float(incoming_value):
+    # skater_game_logs_raw.pp_toi_minutes is NUMERIC(5,2). A shift overlap is
+    # naturally measured in seconds/60, so compare at the persisted precision
+    # instead of reporting harmless float/rounding differences as conflicts.
+    storage_quantum = Decimal("0.01")
+    existing_stored = Decimal(str(existing_value)).quantize(
+        storage_quantum, rounding=ROUND_HALF_UP
+    )
+    incoming_stored = Decimal(str(incoming_value)).quantize(
+        storage_quantum, rounding=ROUND_HALF_UP
+    )
+    if existing_stored == incoming_stored:
         return None
     row = {
         "game_id": int(game_id),

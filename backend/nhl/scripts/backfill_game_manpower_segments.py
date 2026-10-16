@@ -148,50 +148,39 @@ def segments_for_team_advantage_abs(
     Returns list of [start_abs_sec, end_abs_sec) advantage segments, both-goalies-only.
     Built by diffing consecutive events (same basis as your diagnostics).
     """
-    rows: List[Tuple[int, str]] = []
-    for ev in plays:
-        t = pbp_event_abs_sec(ev)
-        if t is None:
+    by_period: Dict[int, List[Tuple[int, int, str]]] = defaultdict(list)
+    period_ends: Dict[int, int] = {}
+    period_types: Dict[int, str] = {}
+    for order, ev in enumerate(plays):
+        descriptor = ev.get("periodDescriptor") or {}
+        period = descriptor.get("number")
+        within_period = mmss_to_sec(str(ev.get("timeInPeriod") or ""))
+        if period is None or within_period is None:
             continue
-        sc = ev.get("situationCode")
-        if not sc:
-            continue
-        rows.append((t, str(sc)))
-
-    rows.sort(key=lambda x: x[0])
-    if len(rows) < 2:
-        return []
+        period = int(period)
+        period_types[period] = str(descriptor.get("periodType") or "").upper()
+        if ev.get("typeDescKey") == "period-end":
+            period_ends[period] = within_period
+        situation = ev.get("situationCode")
+        if situation:
+            by_period[period].append((within_period, order, str(situation)))
 
     segs: List[Tuple[int, int]] = []
-    cur_start: Optional[int] = None
-    cur_on = False
-
-    for i in range(len(rows) - 1):
-        t0, sc0 = rows[i]
-        t1, _ = rows[i + 1]
-        dt = max(0, t1 - t0)
-        if dt <= 0:
+    for period, rows in sorted(by_period.items()):
+        # Shootout clock rows do not describe skater manpower intervals.
+        if period_types.get(period) == "SO":
             continue
-
-        ctx = parse_situation_code(sc0)
-        if ctx is None:
-            continue
-        lab = advantage_label(ctx)
-        on = (lab == which)
-
-        if on and not cur_on:
-            cur_start = t0
-            cur_on = True
-        if (not on) and cur_on:
-            segs.append((cur_start if cur_start is not None else t0, t0))
-            cur_start = None
-            cur_on = False
-
-    # Close open segment at last known timestamp (best-effort)
-    if cur_on and cur_start is not None:
-        last_t = rows[-1][0]
-        if last_t > cur_start:
-            segs.append((cur_start, last_t))
+        rows.sort(key=lambda row: (row[0], row[1]))
+        period_base = (period - 1) * SECONDS_PER_PERIOD
+        period_end = period_ends.get(period, rows[-1][0])
+        for index, (start, _order, situation) in enumerate(rows):
+            stop = rows[index + 1][0] if index + 1 < len(rows) else period_end
+            stop = min(stop, period_end)
+            if stop <= start:
+                continue
+            ctx = parse_situation_code(situation)
+            if ctx is not None and advantage_label(ctx) == which:
+                segs.append((period_base + start, period_base + stop))
 
     # Merge overlaps/adjacent
     segs.sort()

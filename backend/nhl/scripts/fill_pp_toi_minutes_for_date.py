@@ -155,9 +155,20 @@ def extract_pp_toi_minutes_from_db(cur, game_id: int) -> Dict[int, float]:
     cur.execute(
         """
         WITH pp AS (
-          SELECT game_id, period, start_sec, end_sec, pp_team_id AS team_id
+          SELECT DISTINCT game_id, period, start_sec, end_sec, pp_team_id AS team_id
           FROM nhl.game_manpower_segments
           WHERE game_id = %s
+        ),
+        shifts AS (
+          -- The official Stats API can repeat an identical player interval
+          -- under separate shift IDs. Those are one observed interval, not
+          -- additive ice time.
+          SELECT DISTINCT game_id, player_id, team_id, period, start_sec, end_sec
+          FROM nhl.shiftcharts_raw
+          WHERE game_id = %s
+            AND player_id IS NOT NULL AND team_id IS NOT NULL
+            AND period IS NOT NULL AND start_sec IS NOT NULL AND end_sec IS NOT NULL
+            AND end_sec > start_sec
         ),
         ov AS (
           SELECT
@@ -168,7 +179,7 @@ def extract_pp_toi_minutes_from_db(cur, game_id: int) -> Dict[int, float]:
                 LEAST(s.end_sec, pp.end_sec) - GREATEST(s.start_sec, pp.start_sec)
               )
             )::bigint AS pp_seconds
-          FROM nhl.shiftcharts_raw s
+          FROM shifts s
           JOIN pp
             ON pp.game_id = s.game_id
            AND pp.period  = s.period
@@ -180,7 +191,7 @@ def extract_pp_toi_minutes_from_db(cur, game_id: int) -> Dict[int, float]:
         FROM ov
         WHERE pp_seconds > 0;
         """,
-        (game_id, game_id),
+        (game_id, game_id, game_id),
     )
     out: Dict[int, float] = {}
     for pid, mins in cur.fetchall():

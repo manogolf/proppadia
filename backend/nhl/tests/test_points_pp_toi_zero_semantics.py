@@ -168,6 +168,52 @@ class PpToiZeroSemanticsTests(unittest.TestCase):
             self.assertEqual(payload["conflicts"][0]["team_id"], 27)
             self.assertEqual(artifact["conflict_count"], 1)
 
+    def test_pp_toi_conflict_comparison_uses_persisted_numeric_scale(self):
+        self.assertIsNone(pp_toi_conflict(
+            game_id=2026020113, player_id=8476462, team_id=1,
+            existing_value=1.92, incoming_value=115 / 60,
+            source_kind="RECONSTRUCTED_SHIFT_OVERLAP", source_reference="official shifts",
+        ))
+        conflict = pp_toi_conflict(
+            game_id=2026020111, player_id=8480995, team_id=14,
+            existing_value=2.18, incoming_value=1.60,
+            source_kind="RECONSTRUCTED_SHIFT_OVERLAP", source_reference="official shifts",
+        )
+        self.assertIsNotNone(conflict)
+        self.assertEqual(conflict["existing_pp_toi_minutes"], 2.18)
+
+    def test_manpower_segments_close_at_period_boundaries_and_ignore_shootout(self):
+        from backend.nhl.scripts.backfill_game_manpower_segments import segments_for_team_advantage_abs
+
+        plays = [
+            {"periodDescriptor": {"number": 4, "periodType": "OT"}, "timeInPeriod": "04:01", "typeDescKey": "faceoff", "situationCode": "1431"},
+            {"periodDescriptor": {"number": 4, "periodType": "OT"}, "timeInPeriod": "05:00", "typeDescKey": "period-end", "situationCode": "1431"},
+            {"periodDescriptor": {"number": 5, "periodType": "SO"}, "timeInPeriod": "20:00", "typeDescKey": "game-end", "situationCode": "1431"},
+        ]
+        self.assertEqual(
+            segments_for_team_advantage_abs(plays, "AWAY_ADV"),
+            [((3 * 1200) + 241, (3 * 1200) + 300)],
+        )
+
+    def test_active_pp_extraction_deduplicates_identical_official_shift_intervals(self):
+        from backend.nhl.scripts.fill_pp_toi_minutes_for_date import extract_pp_toi_minutes_from_db
+
+        class Cursor:
+            sql = ""
+            params = ()
+
+            def execute(self, sql, params):
+                self.sql = sql
+                self.params = params
+
+            def fetchall(self):
+                return [(8480995, 1.6)]
+
+        cursor = Cursor()
+        result = extract_pp_toi_minutes_from_db(cursor, 2026020111)
+        self.assertEqual(result, {8480995: 1.6})
+        self.assertIn("SELECT DISTINCT game_id, player_id, team_id, period, start_sec, end_sec", cursor.sql)
+        self.assertEqual(cursor.params, (2026020111, 2026020111, 2026020111))
     def test_postgame_stage_sync_does_not_retain_stale_pp_toi_on_unknown_snapshot(self):
         from backend.nhl.postgame_reconcile import staging_sync
 
