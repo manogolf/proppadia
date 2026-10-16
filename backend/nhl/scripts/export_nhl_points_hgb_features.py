@@ -51,7 +51,17 @@ def normalize_history(logs: pd.DataFrame, outcomes: pd.DataFrame) -> pd.DataFram
     cols = [c for c in ("game_id", "player_id", "team_id", "is_home", "home_team_id", "away_team_id", "toi_minutes", "pp_toi_minutes", "shots_on_goal", "shot_attempts", "start_time_utc") if c in logs]
     hist = outcomes.merge(logs[cols], on=["game_id", "player_id"], how="left", suffixes=("_outcome", "_log"), validate="one_to_one")
     if "team_id_outcome" in hist:
-        hist["team_id"] = hist.team_id_outcome.fillna(hist.team_id_log)
+        # The official outcome's player team is the identity source. Keep the
+        # raw log identity long enough to reject conflicts instead of silently
+        # preferring one source. `is_home` is a descriptive log flag and can be
+        # absent or stale; it must not decide which physical team owns a row.
+        outcome_team = pd.to_numeric(hist.team_id_outcome, errors="coerce")
+        log_team = pd.to_numeric(hist.team_id_log, errors="coerce")
+        conflict = outcome_team.notna() & log_team.notna() & outcome_team.ne(log_team)
+        if conflict.any():
+            sample = hist.loc[conflict, ["game_id", "player_id", "team_id_outcome", "team_id_log"]].head(10)
+            raise ValueError(f"HGB_HISTORY_TEAM_SOURCE_CONFLICT:{sample.to_dict('records')}")
+        hist["team_id"] = outcome_team.fillna(log_team)
         hist = hist.drop(columns=["team_id_outcome", "team_id_log"])
     if "is_home_outcome" in hist:
         hist["is_home"] = hist.is_home_outcome.fillna(hist.is_home_log)
@@ -68,12 +78,17 @@ def normalize_history(logs: pd.DataFrame, outcomes: pd.DataFrame) -> pd.DataFram
     # legacy player/team share calculation below.
     for col in ("team_id", "home_team_id", "away_team_id"):
         hist[col] = pd.to_numeric(hist[col], errors="coerce")
-    home_mask = pd.to_numeric(hist.is_home, errors="coerce").eq(1)
-    away_mask = pd.to_numeric(hist.is_home, errors="coerce").eq(0)
-    hist["canonical_team_id"] = np.where(home_mask, hist.home_team_id,
-        np.where(away_mask, hist.away_team_id, np.nan))
-    if hist.canonical_team_id.isna().any() or not hist.canonical_team_id.eq(hist.team_id).all():
-        raise ValueError("HGB_HISTORY_TEAM_BINDING_INVALID")
+    home_team = hist.home_team_id
+    away_team = hist.away_team_id
+    valid_home = hist.team_id.notna() & home_team.notna() & hist.team_id.eq(home_team)
+    valid_away = hist.team_id.notna() & away_team.notna() & hist.team_id.eq(away_team)
+    valid = valid_home ^ valid_away
+    if not valid.all():
+        invalid = hist.loc[~valid, ["game_id", "player_id", "team_id", "home_team_id", "away_team_id"]].head(10)
+        raise ValueError(f"HGB_HISTORY_TEAM_BINDING_INVALID:{invalid.to_dict('records')}")
+    # Use the independently bound official player team, after proving it is
+    # exactly one of the canonical game's two physical sides.
+    hist["canonical_team_id"] = hist.team_id
     hist["canonical_team_id"] = hist.canonical_team_id.astype("int64")
     hist["realized_points"] = pd.to_numeric(hist.goals, errors="raise") + pd.to_numeric(hist.assists, errors="raise")
     hist["official_sog"] = pd.to_numeric(hist.official_sog, errors="coerce")

@@ -259,6 +259,20 @@ class TeamShotEvidenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "HGB_HISTORY_TEAM_BINDING_INVALID"):
             hgb_exporter.normalize_history(logs, outcomes)
 
+    def test_hgb_history_binds_physical_team_without_relying_on_log_is_home_flag(self):
+        logs = pd.DataFrame([{"game_id": 10, "player_id": 1, "team_id": 2, "is_home": 1,
+            "home_team_id": 1, "away_team_id": 2, "toi_minutes": 10, "pp_toi_minutes": 0,
+            "shots_on_goal": 1, "shot_attempts": 2, "start_time_utc": "2026-01-01T00:00:00Z"}])
+        outcomes = pd.DataFrame([{"game_id": 10, "player_id": 1, "game_date": "2026-01-01",
+            "canonical_season": 2026, "team_id": 2, "goals": 0, "assists": 0, "official_sog": 1,
+            "outcome_source_timestamp_utc": "2026-01-02T00:00:00Z"}])
+        normalized = hgb_exporter.normalize_history(logs, outcomes)
+        self.assertEqual(int(normalized.iloc[0].canonical_team_id), 2)
+
+        logs["team_id"] = 1
+        with self.assertRaisesRegex(ValueError, "HGB_HISTORY_TEAM_SOURCE_CONFLICT"):
+            hgb_exporter.normalize_history(logs, outcomes)
+
     def test_read_only_export_wrapper_writes_snapshot_and_receipt_bound_package(self):
         feature_bytes = b"game_id,player_id,team_d10_sf_per_game\n100,7,3.5\n"
         raw_csv = ("player_id,game_id,game_date,game_start_utc,team_id,canonical_team_id,home_team_id,"
