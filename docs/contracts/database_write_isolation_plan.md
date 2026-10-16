@@ -63,13 +63,15 @@ Use `NOLOGIN` permission groups so code does not hold the owner credential:
 | Role | Purpose | Allowed access |
 | --- | --- | --- |
 | `proppadia_research_ro` | Research, feature export, model fit, scoring | `CONNECT`, schema `USAGE`, and `SELECT` on approved source, staging-read, and derived relations; no DML, DDL, sequence mutation, or role switching to a writer. |
-| `proppadia_nhl_ingest` | Routine NHL schedule, roster, logs, PBP, and reconciliation | DML on narrowly enumerated ingestion staging/operational tables; source-table promotion only through reviewed safe promotion functions. No general raw-table `UPDATE`, `DELETE`, `TRUNCATE`, or DDL. |
+| `proppadia_nhl_ingest` | Routine NHL schedule, roster, logs, PBP, and reconciliation | DML on enumerated ingestion staging/operational tables and column-scoped `INSERT`/`UPDATE` on source tables required by existing daily writers. No source `DELETE`/`TRUNCATE`, DDL, or correction membership. |
 | `proppadia_mlb_ingest` | Routine MLB roster, game, and stat ingestion | DML only on enumerated MLB ingestion staging/operational tables; canonical source promotion through reviewed safe entry points. No research or historical correction authority. |
 | `proppadia_nhl_source_correction` | Separately authorized NHL historical corrections | `SELECT` plus column-level `UPDATE` only on explicitly authorized source fields, initially `nhl.skater_game_logs_raw.shot_attempts` and `pp_toi_minutes`; no standing app membership, DDL, delete, or truncate. |
 | `proppadia_mlb_source_correction` | Separately authorized MLB historical corrections | No grants until an exact MLB table/field correction scope is approved; then column-level grants only. |
 
-Use separate login identities for the NHL daily runner, MLB scheduled writer,
-and research/scoring process, each granted membership in exactly one group.
+Use separate login identities for the NHL daily runner,
+`proppadia_nhl_daily_login`, NHL research/scoring,
+`proppadia_nhl_research_login`, MLB scheduled writer, and research process,
+each granted membership in exactly one corresponding group.
 Do not grant any of them membership in `postgres`, `service_role`,
 `supabase_admin`, or a role with `BYPASSRLS`. The correction group should be
 activated by a controlled operator session (`SET ROLE`) only for a separately
@@ -78,7 +80,7 @@ model environments. Keep table ownership with a non-application owner role
 where practical; do not transfer Supabase-owned objects until dependencies and
 extension ownership are reviewed.
 
-## Migration shape (not executable as written)
+## Target permission shape (illustrative)
 
 The following is the intended permission shape, not an approved production
 migration. Exact object grants must be generated from the verified writer/read
@@ -104,17 +106,31 @@ GRANT SELECT ON <approved_nhl_and_mlb_read_relations> TO proppadia_research_ro;
 -- Staging writes only after each writer's required verbs are inventoried.
 GRANT SELECT, INSERT, UPDATE, DELETE ON <specific_ingest_stage_relations>
   TO proppadia_nhl_ingest, proppadia_mlb_ingest;
--- Raw-source DML stays revoked from application roles. Existing direct
--- INSERT/UPSERT promoters must first be routed through safe, reviewed database
--- functions that preserve populated observations, fill only permitted NULLs,
--- and emit numeric-keyed source conflicts. Grant EXECUTE on exact signatures.
+-- Research and API-role raw-source DML stays revoked. Routine ingestion gets
+-- only the table/column writes required by reviewed daily promoters.
 REVOKE INSERT, UPDATE, DELETE, TRUNCATE ON nhl.skater_game_logs_raw
   FROM PUBLIC, anon, authenticated, service_role, proppadia_research_ro,
-       proppadia_nhl_ingest, proppadia_mlb_ingest;
+       proppadia_mlb_ingest;
 GRANT SELECT ON nhl.skater_game_logs_raw TO proppadia_research_ro;
+GRANT SELECT ON nhl.skater_game_logs_raw TO proppadia_nhl_ingest;
+GRANT INSERT (player_id, game_id, team_id, opponent_id, is_home, game_date,
+              shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes, blocks)
+  ON nhl.skater_game_logs_raw TO proppadia_nhl_ingest;
+GRANT UPDATE (team_id, opponent_id, is_home, game_date, shots_on_goal,
+              shot_attempts, toi_minutes, pp_toi_minutes, blocks)
+  ON nhl.skater_game_logs_raw TO proppadia_nhl_ingest;
 GRANT UPDATE (shot_attempts, pp_toi_minutes)
   ON nhl.skater_game_logs_raw TO proppadia_nhl_source_correction;
 ```
+
+The committed NHL preparation migration is executable SQL, but it is only a
+preparation slice and is not a complete production grant set. It creates the
+three `NOLOGIN` NHL permission groups and grants the skater-log raw/stage slice
+shown above. The
+login roles `proppadia_nhl_research_login` and `proppadia_nhl_daily_login` are
+intentionally not created by that file; their membership and secrets are a
+later, separately authorized provisioning step. This prevents accidentally
+creating an unusable passwordless login or placing credentials in SQL.
 
 Before this shape can be enforced, direct raw writers in NHL CLI and
 `run_nhl_postgame_reconciliation.py`, PP-TOI/attempt promoters, and MLB source
@@ -155,14 +171,79 @@ PRIVILEGES` is proposed until object owners are moved off application roles.
    identities before removing any old connection secret. Capture role name,
    command, row counts, and outcomes in receipts without secret material.
 
+### Credential creation and delivery
+
+After separate authorization and migration review, create login roles only for
+the two named NHL paths and grant each exactly its matching `NOLOGIN` group.
+Set passwords interactively with PostgreSQL `\password role_name` from a
+trusted `psql` session; do not put passwords in migration SQL, shell arguments,
+command history, or captured output. Deliver each resulting connection URL
+directly into the recipient's secret store. For the local Mac, put the two
+URLs and `NHL_DB_ACCESS_MODE=restricted` in the already ignored
+`backend/.env`, then set that file to owner-read/write permissions (`chmod
+600 backend/.env`). Do not put the owner URL in the same process environment
+after cutover. Confirm the actual scheduler before provisioning any scheduler
+secret: no NHL GitHub Actions daily workflow exists in this checkout, and the
+external scheduler inventory is not established. If a scheduler is later
+confirmed, provide only the role URL it needs through that scheduler's native
+secret manager. Keep the correction role `NOLOGIN`; an operator can grant its
+group membership temporarily to a controlled session only for a separately
+authorized correction, then revoke the membership.
+
+### NHL local routing preparation
+
+The actual local NHL launch is `./bin/python -m backend.nhl.cli daily` (often
+with `--with-odds`). The CLI loads `backend/.env` among its local dotenv
+locations and spawns the ingestion scripts and SQL commands. This checkout has
+no `.github/workflows/nhl-daily-refresh.yml`; do not create or configure that
+assumed scheduler during this cutover. The only repository NHL daily entry
+point identified here is the local CLI/Make command surface. Confirm local
+launch agents or other external schedulers with the operator before activation.
+
+The staged code routing uses `NHL_DB_ACCESS_MODE=restricted` as an explicit
+opt-in. In that mode the CLI requires `NHL_RESEARCH_DATABASE_URL` with login
+role `proppadia_nhl_research_login` for read/scoring/export subprocesses and
+`NHL_INGEST_DATABASE_URL` with login role `proppadia_nhl_daily_login` for
+commands classified as database-writing. Pooler usernames may append the
+project suffix. It overwrites inherited `SUPABASE_DB_URL` and `DATABASE_URL`
+for every child, routes direct `psql` arguments, and fails before execution if
+the selected DSN is missing or its username is wrong. It never uses the legacy
+owner variables as fallback while restricted mode is enabled. With the mode
+unset (the current state), legacy resolution is unchanged.
+
+The initial code preparation is in `backend/nhl/database_access.py` and is
+wired into the central CLI's `run()` path and database helpers. Read-only
+query/export and HGB/Phoenix input-snapshot calls select the research login;
+registered ingestion scripts and SQL mutations select the daily login. The
+evaluator that writes `nhl.eval_sog_daily` is classified as a writer. Each
+spawned child receives only its selected role DSN; the other restricted DSN is
+removed from its environment. This routing is inactive until the explicit mode
+is set; no dotenv or production connection configuration was changed.
+
+The current restricted writer classification is deliberately a staging aid,
+not a complete daily permission manifest. It covers the existing central CLI
+writer registry and SQL mutations, but the migration only grants the raw
+skater-log/stage slice. Complete table/function/sequence privileges for games,
+players, rosters, goalie logs, shift data, feature stores, predictions,
+receipts, and any other write targets must be enumerated and added before a
+full daily cutover. Until then, restricted mode is not ready for the daily
+command and must remain off.
+
 ## Required code and operator actions
 
 - **Code cutover is required:** current Python and SQL commands use a shared
   owner DSN and several write directly with `psycopg`/`psql`; grants alone
-  cannot distinguish those commands. The raw promoters must use safe
-  `SECURITY DEFINER` functions with fixed `search_path`, explicit arguments,
-  source/identity checks, and no dynamic SQL, or another equivalently narrow
-  existing mechanism. Model/research readers must use the read-only DSN.
+  cannot distinguish those commands. For this first stage, raw writes remain
+  limited to the dedicated ingestion identity and explicitly granted columns;
+  research/scoring identities have no source DML. A later move to function-only
+  raw promotion would require separately validated procedures and cutover.
+  Model/research readers must use the read-only DSN.
+- **Standalone script limitation:** scripts launched outside the central NHL
+  CLI that read `SUPABASE_DB_URL` directly do not all consult the restricted
+  resolver yet. At activation, research/scoring shell and scheduler
+  environments must contain only the read-only connection alias, with owner
+  and ingestion URLs absent. Inventory and migrate any standalone database
+  writer before that environment cutover.
 - **Review API exposure:** the live MLB grants include broad API-role DML, and
   `mlb.game_info` has RLS disabled. Confirm exposed schemas and current API
   consumers before revoking access; `service_role` remains privileged and
@@ -171,7 +252,8 @@ PRIVILEGES` is proposed until object owners are moved off application roles.
   roles/grants and later revoke existing access. This can be performed through
   the established PostgreSQL migration path; a manual Supabase dashboard
   operation is not technically required. A human with Supabase project-owner
-  access must still approve/provide the login secrets in the repository's
-  secret store and any local runtime secret store.
+  access must approve the provisioning and provide each credential directly
+  to its secret store. The local operator must place the local secrets in the
+  ignored `backend/.env`; no credential value belongs in Git or a report.
 - No database permission, credential, workflow, or production code change was
   made for this plan. Production enforcement remains unauthorized.

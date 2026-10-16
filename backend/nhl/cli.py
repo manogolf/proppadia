@@ -27,6 +27,11 @@ from __future__ import annotations
 
 from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
 from backend.nhl.odds_markets import NHL_COMPREHENSIVE_PROP_MARKETS_CSV
+from backend.nhl.database_access import (
+    database_url as nhl_database_url,
+    restricted_mode as nhl_restricted_mode,
+    routed_database_environment as nhl_routed_database_environment,
+)
 
 import argparse
 import json
@@ -482,6 +487,8 @@ def run_psql_bytes(db_url: str, sql: str, *, timeout: Optional[int] = None) -> b
     Runs a single SQL command via psql and returns stdout bytes.
     Raises if psql exits non-zero.
     """
+    if nhl_restricted_mode():
+        db_url = nhl_database_url("research")
     return subprocess.check_output(
         ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-c", sql],
         stderr=subprocess.STDOUT,
@@ -546,6 +553,7 @@ _DATABASE_WRITE_CAPABLE_SCRIPTS = {
     "fill_pp_toi_minutes_for_date.py",
     "import_schedule_today.py",
     "import_roster_today.py",
+    "evaluate_sog_predictions.py",
     "load_nhl_predictions_generic.py",
     "load_sog_predictions_denali.py",
 }
@@ -586,11 +594,30 @@ def run(
         _command_is_database_write_capable(cmd)
         if database_write_capable is None else bool(database_write_capable)
     )
-    cmd_for_log = _format_cmd_for_log(cmd)
-    print("▶", cmd_for_log)
     e = os.environ.copy()
     if env:
         e.update(env)
+    # When restricted mode is explicitly enabled, every spawned DB client gets
+    # a role-specific DSN. Unknown child commands receive research access and
+    # therefore fail closed if they attempt writes.
+    if nhl_restricted_mode(e):
+        access = "ingestion" if write_capable else "research"
+        db_env = nhl_routed_database_environment(access, environ=e)
+        # Do not disclose the other capability's credential to a child.
+        e.pop("NHL_RESEARCH_DATABASE_URL", None)
+        e.pop("NHL_INGEST_DATABASE_URL", None)
+        e.update(db_env)
+        if cmd and Path(cmd[0]).name == "psql":
+            replaced_dsn = False
+            for index, token in enumerate(cmd[1:], start=1):
+                if token.startswith(("postgres://", "postgresql://")):
+                    cmd[index] = db_env["SUPABASE_DB_URL"]
+                    replaced_dsn = True
+                    break
+            if not replaced_dsn:
+                raise RuntimeError("NHL_RESTRICTED_PSQL_DSN_UNRECOGNIZED")
+    cmd_for_log = _format_cmd_for_log(cmd)
+    print("▶", cmd_for_log)
     started = time.monotonic()
     try:
         result = sp.run(cmd, cwd=str(cwd), env=e, check=check, text=True, capture_output=True)
@@ -674,12 +701,18 @@ def _redact_token_for_log(token: str) -> str:
 def _format_cmd_for_log(cmd: Sequence[object]) -> str:
     return " ".join(_redact_token_for_log(str(c)) for c in cmd)
 
-def require_db_url() -> str:
-    db = os.environ.get("SUPABASE_DB_URL")
-    if not db:
-        print("FATAL: SUPABASE_DB_URL missing", file=sys.stderr)
-        sys.exit(2)
-    return db
+def require_db_url(access: str = "ingestion") -> str:
+    try:
+        if not nhl_restricted_mode():
+            legacy_url = os.environ.get("SUPABASE_DB_URL")
+            if not legacy_url:
+                raise RuntimeError("SUPABASE_DB_URL missing")
+            return legacy_url
+        return nhl_database_url(access)
+    except RuntimeError as error:
+        # Keep the existing concise CLI failure style without printing a DSN.
+        print(f"FATAL: {error}", file=sys.stderr)
+        raise SystemExit(2) from None
 
 def run_psql_file(sql_file: Path, *, vars: dict[str, str] | None = None):
     db = require_db_url()
@@ -700,7 +733,7 @@ def run_psql_file_to_path(
     *,
     vars: dict[str, str] | None = None,
 ) -> None:
-    db = require_db_url()
+    db = require_db_url("research")
     cmd = ["psql", "--no-psqlrc", "--pset", "pager=off", "-v", "ON_ERROR_STOP=1", db]
 
     if vars:
@@ -721,9 +754,7 @@ def run_psql(sql: str) -> str:
     import os
     import subprocess
 
-    db_url = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-    if not db_url:
-        raise RuntimeError("Missing SUPABASE_DB_URL (or DATABASE_URL)")
+    db_url = nhl_database_url("research")
 
     cmd = ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-A", "-F", ",", "-t", "-c", sql]
     try:
@@ -733,6 +764,8 @@ def run_psql(sql: str) -> str:
     return p.stdout
 
 def psql_one_row(db_url: str, sql: str) -> dict:
+    if nhl_restricted_mode():
+        db_url = nhl_database_url("research")
     wrapped = f"SELECT row_to_json(t) FROM ({sql}) t;"
     res = sp.run(
         ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", wrapped],
@@ -796,7 +829,7 @@ def _run_sog_evaluator() -> None:
 
 def psql_stdout(sql_file: Path, *, vars: dict[str, str] | None = None) -> bytes:
     """Run psql on a file that COPY/SELECTs TO STDOUT and return stdout bytes."""
-    db = require_db_url()
+    db = require_db_url("research")
     cmd = ["psql", "--no-psqlrc", "--pset", "pager=off", "-q", "-v", "ON_ERROR_STOP=1", db]
 
     if vars:
@@ -942,6 +975,8 @@ def export_sog_denali_features(
       - Script itself does COPY ... TO STDOUT WITH CSV HEADER.
       - (Post guard) Ensures CSV is non-empty and has basic ID columns.
     """
+    if nhl_restricted_mode():
+        db_url = nhl_database_url("research")
     sql_path = BASE / "sql" / "export_sog_denali_pregame.sql"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -1772,7 +1807,7 @@ def _run_independent_daily_lanes(
                 try:
                     temporary = tempfile.TemporaryDirectory(prefix="nhl_points_hgb_daily_")
                     logs_path, outcomes_paths, slate_path, source_summary = prepare_points_hgb_inputs(
-                        db_url=db, canonical_games=list(canonical_games), slate_date=slate,
+                        db_url=require_db_url("research"), canonical_games=list(canonical_games), slate_date=slate,
                         phoenix_predictions=(Path(phoenix_shadow_identity["path"])
                                              if phoenix_shadow_identity else None),
                         asof_utc=points_cutoff, work_dir=Path(temporary.name))
@@ -2015,7 +2050,7 @@ def _run_independent_daily_lanes(
                 canonical_games, json.loads(raw_schedule_path.read_text()), slate_date=slate,
                 canonical_season=infer_nhl_season_from_date_yyyy_mm_dd(slate))
             schedule_path, history_path, _ = export_inputs(
-                db, slate, input_root, canonical_schedule=cross_schedule)
+                require_db_url("research"), slate, input_root, canonical_schedule=cross_schedule)
             odds_envelope_path = None
             if captured and odds_result is not None and odds_integrity_error is None:
                 envelope = _cross_market_envelope_from_daily_observation(
@@ -2247,7 +2282,7 @@ def _run_independent_daily_lanes(
             cutoff = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
             with tempfile.TemporaryDirectory(prefix="nhl_points_hgb_daily_") as temporary:
                 logs_path, outcomes_paths, slate_path, source_summary = prepare_points_hgb_inputs(
-                    db_url=db, canonical_games=list(canonical_games), slate_date=slate,
+                    db_url=require_db_url("research"), canonical_games=list(canonical_games), slate_date=slate,
                     phoenix_predictions=Path(phoenix_identity["path"]), asof_utc=cutoff,
                     work_dir=Path(temporary))
                 result = capture_points_hgb_shadow(
@@ -2664,7 +2699,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     # --- EARLY EXIT: no NHL games on this slate date ---
     no_games_sql = f"SELECT COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}';"
     res = sp.run(
-        ["psql", db, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", no_games_sql],
+        ["psql", require_db_url("research"), "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", no_games_sql],
         capture_output=True, text=True, check=True
     )
     game_count = int((res.stdout or "").strip() or "0")
@@ -2853,7 +2888,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         recorder.fail_lane("saves", error, blocking=False)
     try:
         points_evidence_capture = capture_points_export_snapshot(
-            db_url=db, slate_date=slate,
+            db_url=require_db_url("research"), slate_date=slate,
             season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
             run_id=daily_run_id, export_sql=SQL_DIR / "export_points.sql",
             output_root=ROOT / "artifacts/operational/nhl/points_feature_evidence",
