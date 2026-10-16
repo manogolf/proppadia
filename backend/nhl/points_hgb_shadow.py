@@ -278,6 +278,8 @@ def capture_from_files(
             raise ValueError("HGB_FEATURE_SCHEMA_MISSING")
         if manifest.get("history_contract") != "NHL_POINTS_COUNT_HGB_V1_HISTORY_120_DAY_VALIDATED":
             raise ValueError("HGB_HISTORY_CONTRACT_IDENTITY_MISMATCH")
+        if manifest.get("team_shot_feature_contract") != exporter.TEAM_SHOT_FEATURE_CONTRACT:
+            raise ValueError("HGB_TEAM_SHOT_FEATURE_CONTRACT_IDENTITY_MISMATCH")
         if pd.to_datetime(features.game_start_utc, utc=True).le(cutoff).any():
             raise ValueError("NOT_STRICTLY_PREGAME")
         if not (pd.to_datetime(features.history_cutoff_exclusive).dt.date
@@ -384,8 +386,15 @@ def capture_from_files(
                 "source_skater_rows": int(len(raw_logs)),
                 "duplicate_player_game_rows": int(raw_logs.duplicated(["game_id", "player_id"]).sum()),
                 "missing_sog_rows": int(pd.to_numeric(raw_logs.shots_on_goal, errors="coerce").isna().sum()),
+                "missing_official_sog_rows": int(history.official_sog.isna().sum()),
+                "missing_official_source_timestamps": int(history.outcome_source_timestamp_utc.isna().sum()),
                 "missing_attempts_rows": int(pd.to_numeric(raw_logs.shot_attempts, errors="coerce").isna().sum()),
                 "team_game_aggregation_rows": int(len(team_games_evidence)),
+                "canonical_team_count": int(team_games_evidence.team_id.nunique()),
+                "team_shot_feature_contract": exporter.TEAM_SHOT_FEATURE_CONTRACT,
+                "target_evidence_has_game_ids_and_denominators": bool(
+                    {"canonical_team_id", "contributing_game_ids", "contributing_team_sog",
+                     "valid_game_count", "source_timestamps"}.issubset(target_history_evidence.columns)),
             }
         except Exception as source_error:
             source_capture_status = "EVIDENCE_CAPTURE_PARTIAL"
@@ -398,6 +407,7 @@ def capture_from_files(
             "parent_daily_run_id": parent_run_id,
             "feature_exporter_path": "backend/nhl/scripts/export_nhl_points_hgb_features.py",
             "feature_exporter_sha256": sha(ROOT / "backend/nhl/scripts/export_nhl_points_hgb_features.py"),
+            "team_shot_feature_contract": exporter.TEAM_SHOT_FEATURE_CONTRACT,
             "database_snapshot": dict(source_snapshot_metadata or {}),
             "official_outcome_files_are_immutable_artifact_inputs": True,
             "capture_status": source_capture_status,
@@ -488,6 +498,7 @@ def capture_from_files(
             "research_history_contract": HISTORY_CONTRACT,
             "operational_history_contract": "NHL_POINTS_COUNT_HGB_V1_HISTORY_120_DAY_VALIDATED",
             "operational_feature_contract_sha256": sha(ROOT / "artifacts/analysis/nhl/points_hgb_operational_bridge/2026-10-09/operational_feature_contract_v2.json"),
+            "team_shot_feature_contract": exporter.TEAM_SHOT_FEATURE_CONTRACT,
         }
         (capture / "feature_contract_identity.json").write_text(json.dumps(contract_identity, indent=2, sort_keys=True) + "\n")
         (capture / "receipt.json").write_text(json.dumps(body, indent=2, sort_keys=True) + "\n")

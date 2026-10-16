@@ -34,6 +34,76 @@ def raw_rows() -> pd.DataFrame:
 
 
 class TeamShotEvidenceTests(unittest.TestCase):
+    @staticmethod
+    def hgb_history(days_and_sog):
+        rows = []
+        for idx, (day, sog) in enumerate(days_and_sog, start=1):
+            rows.append({"game_id": 1000+idx, "player_id": 5000+idx, "game_date": day,
+                "canonical_season": 2026, "realized_points": 0, "goals": 0, "assists": 0,
+                "team_id": 1, "canonical_team_id": 1, "is_home": 1, "home_team_id": 1,
+                "away_team_id": 2, "toi_minutes": 10., "pp_toi_minutes": 0.,
+                "shots_on_goal": sog, "shot_attempts": 2*sog,
+                "official_sog": sog, "start_time_utc": f"{day}T00:00:00Z",
+                "outcome_source_timestamp_utc": pd.Timestamp(day, tz="UTC") + pd.Timedelta(days=1)})
+        frame = pd.DataFrame(rows)
+        frame["game_date"] = pd.to_datetime(frame.game_date).dt.normalize()
+        frame["start_time_utc"] = pd.to_datetime(frame.start_time_utc, utc=True)
+        frame["outcome_source_timestamp_utc"] = pd.to_datetime(frame.outcome_source_timestamp_utc, utc=True)
+        return frame
+
+    @staticmethod
+    def hgb_target(date="2026-04-30"):
+        return hgb_exporter.normalize_slate(pd.DataFrame([{
+            "game_id": 2026020900, "player_id": 7000, "game_date": date,
+            "game_start_utc": f"{date}T23:00:00Z", "is_home": 1,
+            "home_team_id": 1, "away_team_id": 2}]), 2026)
+
+    def test_hgb_no_history_partial_history_and_zero_sog_denominator(self):
+        target = self.hgb_target()
+        empty = pd.DataFrame(columns=self.hgb_history([("2026-04-01", 0)]).columns)
+        no_history = hgb_exporter.build_features(empty, target)
+        self.assertEqual(float(no_history.iloc[0].team_d10_sf_per_game), 0.0)
+        partial = self.hgb_history([("2026-04-01", 0), ("2026-04-10", 30)])
+        feature = hgb_exporter.build_features(partial, target)
+        evidence = hgb_exporter.build_team_shot_history_evidence(partial, target)
+        self.assertEqual(float(feature.iloc[0].team_d10_sf_per_game), 15.0)
+        self.assertEqual(int(evidence.iloc[0].valid_game_count), 2)
+        self.assertEqual(evidence.iloc[0].contributing_game_ids, "1001;1002")
+
+    def test_hgb_full_ten_game_history_is_latest_ten_strict_prior_and_120_day_bounded(self):
+        dates = pd.date_range("2026-01-20", periods=11, freq="7D")
+        observations = [(day.date().isoformat(), value) for value, day in enumerate(dates, start=10)]
+        # Same-day game is excluded; 121-day game is also excluded.
+        observations.extend([("2026-04-30", 999), ("2025-12-30", 888)])
+        history = self.hgb_history(observations)
+        target = self.hgb_target()
+        evidence = hgb_exporter.build_team_shot_history_evidence(history, target)
+        self.assertEqual(int(evidence.iloc[0].valid_game_count), 10)
+        self.assertNotIn("1012", evidence.iloc[0].contributing_game_ids.split(";"))
+        self.assertNotIn("1013", evidence.iloc[0].contributing_game_ids.split(";"))
+        self.assertEqual(float(evidence.iloc[0].team_d10_sf_per_game), 15.5)
+        self.assertTrue(evidence.iloc[0].source_timestamps)
+        built = hgb_exporter.build_features(history, target)
+        self.assertEqual(float(built.iloc[0].team_d10_sf_per_game), 15.5)
+
+    def test_hgb_exporter_handles_each_partial_history_depth(self):
+        target = self.hgb_target()
+        for count in range(1, 11):
+            history_dates = [(day.date().isoformat(), 0 if day == pd.Timestamp("2026-02-01") else 20)
+                for day in pd.date_range("2026-02-01", periods=count, freq="7D")]
+            history = self.hgb_history(history_dates)
+            evidence = hgb_exporter.build_team_shot_history_evidence(history, target)
+            built = hgb_exporter.build_features(history, target)
+            self.assertEqual(int(evidence.iloc[0].valid_game_count), count)
+            self.assertAlmostEqual(float(built.iloc[0].team_d10_sf_per_game),
+                float(history.official_sog.tail(10).mean()))
+
+    def test_hgb_duplicate_team_game_player_identity_rejected(self):
+        history = self.hgb_history([("2026-04-01", 4)])
+        duplicated = pd.concat([history, history], ignore_index=True)
+        with self.assertRaisesRegex(ValueError, "HGB_DUPLICATE_CANONICAL_TEAM_GAME_PLAYER"):
+            hgb_exporter.build_team_game_aggregation(duplicated)
+
     def test_absent_prior_games_map_to_zero(self):
         target, history, _ = reconstruct_from_raw_rows(raw_rows().iloc[0:0], targets())
         self.assertEqual(target.iloc[0].valid_prior_game_count, 0)
@@ -152,26 +222,42 @@ class TeamShotEvidenceTests(unittest.TestCase):
         # The production Phoenix output is the SQL COPY contract; the HGB
         # feature path independently consumes official outcomes and source logs.
         history = pd.DataFrame([
-            {"game_id": 10, "player_id": 1, "team_id": 1, "is_home": 1, "toi_minutes": 10,
+            {"game_id": 10, "player_id": 1, "team_id": 1, "is_home": 1, "home_team_id": 1, "away_team_id": 2, "toi_minutes": 10,
              "pp_toi_minutes": 0, "shots_on_goal": 0, "shot_attempts": 2, "start_time_utc": "2026-01-01T00:00:00Z"},
-            {"game_id": 10, "player_id": 2, "team_id": 1, "is_home": 1, "toi_minutes": 10,
+            {"game_id": 10, "player_id": 2, "team_id": 1, "is_home": 1, "home_team_id": 1, "away_team_id": 2, "toi_minutes": 10,
              "pp_toi_minutes": 0, "shots_on_goal": 2, "shot_attempts": 3, "start_time_utc": "2026-01-01T00:00:00Z"},
         ])
         outcomes = pd.DataFrame([{"game_id": 10, "player_id": 1, "game_date": "2026-01-01",
-                                  "canonical_season": 2026, "goals": 0, "assists": 0},
+                                  "canonical_season": 2026, "goals": 0, "assists": 0, "official_sog": 1,
+                                  "outcome_source_timestamp_utc": "2026-01-02T00:00:00Z"},
                                  {"game_id": 10, "player_id": 2, "game_date": "2026-01-01",
-                                  "canonical_season": 2026, "goals": 0, "assists": 0}])
+                                  "canonical_season": 2026, "goals": 0, "assists": 0, "official_sog": 3,
+                                  "outcome_source_timestamp_utc": "2026-01-02T00:00:00Z"}])
         normalized_history = hgb_exporter.normalize_history(history, outcomes)
         hgb_slate = hgb_exporter.normalize_slate(pd.DataFrame([{
             "game_id": 2026020100, "player_id": 7, "game_date": "2026-01-10", "game_start_utc": "2026-01-10T22:00:00Z",
             "is_home": 1, "home_team_id": 1, "away_team_id": 2}]), 2026)
         hgb_features = hgb_exporter.build_features(normalized_history, hgb_slate)
-        self.assertEqual(float(hgb_features.iloc[0].team_d10_sf_per_game), 2.0)
+        self.assertEqual(float(hgb_features.iloc[0].team_d10_sf_per_game), 4.0)
         self.assertNotEqual(float(hgb_features.iloc[0].team_d10_sf_per_game), 3.5)
         hgb_history_evidence = hgb_exporter.build_team_shot_history_evidence(normalized_history, hgb_slate)
         self.assertEqual(hgb_history_evidence.iloc[0].contributing_game_ids, "10")
         self.assertEqual(int(hgb_history_evidence.iloc[0].valid_game_count), 1)
-        self.assertEqual(float(hgb_history_evidence.iloc[0].team_d10_sf_per_game), 2.0)
+        self.assertEqual(float(hgb_history_evidence.iloc[0].team_d10_sf_per_game), 4.0)
+
+    def test_hgb_official_team_shot_source_fails_closed_on_missing_sog_or_team_binding(self):
+        logs = pd.DataFrame([{"game_id": 10, "player_id": 1, "team_id": 1, "is_home": 1,
+            "home_team_id": 1, "away_team_id": 2, "toi_minutes": 10, "pp_toi_minutes": 0,
+            "shots_on_goal": 0, "shot_attempts": 2, "start_time_utc": "2026-01-01T00:00:00Z"}])
+        outcomes = pd.DataFrame([{"game_id": 10, "player_id": 1, "game_date": "2026-01-01",
+            "canonical_season": 2026, "goals": 0, "assists": 0, "official_sog": None,
+            "outcome_source_timestamp_utc": "2026-01-02T00:00:00Z"}])
+        with self.assertRaisesRegex(ValueError, "HGB_OFFICIAL_TEAM_GAME_SOURCE_INCOMPLETE"):
+            hgb_exporter.build_team_game_aggregation(hgb_exporter.normalize_history(logs, outcomes))
+        logs.loc[0, "team_id"] = 99
+        outcomes.loc[0, "official_sog"] = 0
+        with self.assertRaisesRegex(ValueError, "HGB_HISTORY_TEAM_BINDING_INVALID"):
+            hgb_exporter.normalize_history(logs, outcomes)
 
     def test_read_only_export_wrapper_writes_snapshot_and_receipt_bound_package(self):
         feature_bytes = b"game_id,player_id,team_d10_sf_per_game\n100,7,3.5\n"

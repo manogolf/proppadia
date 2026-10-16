@@ -1,0 +1,375 @@
+{
+  "2025_metrics": {
+    "V1_CORRECTED_TEAM_SHOTS": {
+      "0.5": {
+        "auc": 0.6758369850901857,
+        "brier": 0.2067691063533156,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.60158087254985,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 47239
+      },
+      "1.5": {
+        "auc": 0.7355282037485428,
+        "brier": 0.0761053429870238,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.2718610450361905,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 47239
+      },
+      "2.5": {
+        "auc": 0.7825882745329737,
+        "brier": 0.018706064436683,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.0862042517830936,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 47239
+      },
+      "COUNT": {
+        "auc": null,
+        "brier": null,
+        "count_mae": 0.5375815357111053,
+        "count_residual_realized_minus_expected": 9.014482992514285e-05,
+        "count_rmse": 0.6866665770084995,
+        "log_loss": null,
+        "mean_expected_points": 0.4601439837502734,
+        "mean_realized_points": 0.4602341285801986,
+        "n": 47239
+      }
+    },
+    "V1_ORIGINAL_FEATURES": {
+      "0.5": {
+        "auc": 0.6758147388439548,
+        "brier": 0.2067430189523579,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.6015366743664992,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 47239
+      },
+      "1.5": {
+        "auc": 0.7357959731407513,
+        "brier": 0.0760754454170816,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.2717762581955628,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 47239
+      },
+      "2.5": {
+        "auc": 0.7828229603415886,
+        "brier": 0.0187012987818912,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.0861853150612869,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 47239
+      },
+      "COUNT": {
+        "auc": null,
+        "brier": null,
+        "count_mae": 0.5372497311795879,
+        "count_residual_realized_minus_expected": 0.001162454941242,
+        "count_rmse": 0.6865330725709224,
+        "log_loss": null,
+        "mean_expected_points": 0.4590716736389565,
+        "mean_realized_points": 0.4602341285801986,
+        "n": 47239
+      }
+    },
+    "V2_CORRECTED_TEAM_SHOTS": {
+      "0.5": {
+        "auc": 0.6733179394488709,
+        "brier": 0.2074634378252917,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.6030864473911055,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 47239
+      },
+      "1.5": {
+        "auc": 0.7317948212715469,
+        "brier": 0.0763315155163052,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.2728552128277619,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 47239
+      },
+      "2.5": {
+        "auc": 0.7798230842229336,
+        "brier": 0.0187135361041723,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.0863915314745441,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 47239
+      },
+      "COUNT": {
+        "auc": null,
+        "brier": null,
+        "count_mae": 0.5404775662692577,
+        "count_residual_realized_minus_expected": -0.0010837978837173,
+        "count_rmse": 0.68814416927388,
+        "log_loss": null,
+        "mean_expected_points": 0.4613179264639159,
+        "mean_realized_points": 0.4602341285801986,
+        "n": 47239
+      }
+    }
+  },
+  "2025_metrics_csv": "2025_validation_metrics.csv",
+  "2026_metrics": {
+    "A_V1_CAPTURED_DEFECTIVE": {
+      "0.5": {
+        "auc": 0.6480716548510425,
+        "brier": 0.2211545979880573,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.6347415596910473,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 1320
+      },
+      "1.5": {
+        "auc": 0.6928873674701659,
+        "brier": 0.0830560227108102,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.3093609318556123,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 1320
+      },
+      "2.5": {
+        "auc": 0.7484615384615384,
+        "brier": 0.0148811775974632,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.0784443565642671,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 1320
+      },
+      "COUNT": {
+        "auc": null,
+        "brier": null,
+        "count_mae": 0.527621360607634,
+        "count_residual_realized_minus_expected": 0.1491292358536526,
+        "count_rmse": 0.722723009983008,
+        "log_loss": null,
+        "mean_expected_points": 0.3167798550554382,
+        "mean_realized_points": 0.4659090909090909,
+        "n": 1320
+      }
+    },
+    "B_V1_CORRECTED_OFFICIAL_TEAM_SHOTS": {
+      "0.5": {
+        "auc": 0.652211113659332,
+        "brier": 0.2157072993770745,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.6211603187406654,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 1320
+      },
+      "1.5": {
+        "auc": 0.6962460351420556,
+        "brier": 0.0812424532972143,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.2957089343679897,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 1320
+      },
+      "2.5": {
+        "auc": 0.7636153846153846,
+        "brier": 0.0147907086485045,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.0737803427593962,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 1320
+      },
+      "COUNT": {
+        "auc": null,
+        "brier": null,
+        "count_mae": 0.5382102749370277,
+        "count_residual_realized_minus_expected": 0.0905699813389255,
+        "count_rmse": 0.7109501295416579,
+        "log_loss": null,
+        "mean_expected_points": 0.3753391095701653,
+        "mean_realized_points": 0.4659090909090909,
+        "n": 1320
+      }
+    },
+    "C_V2_CORRECTED_OFFICIAL_TEAM_SHOTS": {
+      "0.5": {
+        "auc": 0.648450947728149,
+        "brier": 0.2167765310318965,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.6235257463596636,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 1320
+      },
+      "1.5": {
+        "auc": 0.6921572223241029,
+        "brier": 0.0818403196824935,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.2979668131170722,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 1320
+      },
+      "2.5": {
+        "auc": 0.7785576923076923,
+        "brier": 0.0147863997153493,
+        "count_mae": null,
+        "count_residual_realized_minus_expected": null,
+        "count_rmse": null,
+        "log_loss": 0.0734580705629446,
+        "mean_expected_points": null,
+        "mean_realized_points": null,
+        "n": 1320
+      },
+      "COUNT": {
+        "auc": null,
+        "brier": null,
+        "count_mae": 0.5419083276179882,
+        "count_residual_realized_minus_expected": 0.0957304953307167,
+        "count_rmse": 0.7136267283918907,
+        "log_loss": null,
+        "mean_expected_points": 0.3701785955783741,
+        "mean_realized_points": 0.4659090909090909,
+        "n": 1320
+      }
+    }
+  },
+  "2026_metrics_csv": "2026_retrospective_metrics.csv",
+  "daily_run_added": false,
+  "database_mutations": 0,
+  "database_rebuilt": false,
+  "evidence_capture_status": "INSTALLED_AWAITING_LIVE_VERIFICATION",
+  "feature_repair": "CANONICAL_PHYSICAL_TEAM_OFFICIAL_SOG_GAME_TOTALS_STRICT_PRIOR_120D_LATEST_10",
+  "funnel_v1_changed": false,
+  "hashes": {
+    "feature_columns": [
+      "is_home",
+      "d10_sog_per60",
+      "attempts_d10_per60",
+      "player_points_last10",
+      "current_season_points_prior",
+      "current_season_games_prior",
+      "mean_toi_last10",
+      "mean_pp_toi_last10",
+      "team_d10_sf_per_game",
+      "last10_team_sog_share"
+    ],
+    "fitted_model_identity_sha256": "d7ebccde4a67aa5978ecc6943a991dfdc80cfe5210e41a53bc08d9e3b754bd14",
+    "model_type": "HistGradientBoostingRegressor",
+    "scaler_joblib_identity": "d4667a9ecdaa2195cec07b1d926a4706",
+    "training_feature_matrix_sha256": "f66a13bbba21109fb682ac1921667abaae8ea3eade1ef96ec8baedc81709b31b",
+    "v1_model_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+    "v2_combined_sha256": "dd1a73cc286e66e1bba0767361ff279ed9b1b5042eaa1b9396bd0d8c5225022f",
+    "v2_model_sha256": "11d130974b56c1fb5109ac6d3d6c81358a5fd4101bdffc2475c5b6faebb53b92",
+    "v2_scaler_sha256": "0221dc598155b091e8883b4b99902f67eab06c6228f01308c75ca3b80cb7277b"
+  },
+  "known_region_csv": "2026_known_region_comparisons.csv",
+  "matrix_parity": {
+    "historical_database_rebuilt": false,
+    "holdout_corrected_sha256": "cb32800ab51f1488d892eb7a754a0d8691d23810fc6ed01bc4e0aa0f8cc05c3f",
+    "holdout_identities_equal": true,
+    "holdout_original_sha256": "f1591fb1f114eb288d041d0e0e56d8574dae06721d04c59ade4dda4b1fc2c0be",
+    "holdout_rows": 47239,
+    "holdout_target_labels_equal": true,
+    "official_source_manifest_sha256": "6a1c3587744f661b6b073b59ed6edd02d25f79cdb8b5d34811fa30b0011e2e8f",
+    "only_changed_feature": "team_d10_sf_per_game",
+    "other_nine_features_equal": true,
+    "status": "PASS",
+    "target_date_leakage_contract": "strict prior; same-date excluded; 120-day window; latest up to 10 team games",
+    "training_corrected_sha256": "f66a13bbba21109fb682ac1921667abaae8ea3eade1ef96ec8baedc81709b31b",
+    "training_identities_equal": true,
+    "training_key_sha256": "bddb5005c6283efbf093ed80346d3a4440b4ac238c24fddd3ab382610c937e91",
+    "training_label_sha256": "0127ce3f8ed158769db6ee42a5f893f33884740d7020a8795000cf1065c16dc0",
+    "training_original_sha256": "12fe371aeb86ccc7630882b4fb0f63b55ce8aacfbb3216a1e70c92e0b85d4473",
+    "training_rows": 90486,
+    "training_target_labels_equal": true
+  },
+  "model_contract_path": "model_contract.json",
+  "model_id": "NHL_POINTS_COUNT_HGB_V2",
+  "operational_feature_status": "CORRECTED_IN_EXISTING_HGB_DAILY_FEATURE_EXPORTER",
+  "other_lanes_changed": false,
+  "phoenix_changed": false,
+  "production_authority": "NHL_POINTS_COUNT_HGB_V1",
+  "prospective_validation_required": true,
+  "provider_requests": 0,
+  "pushed": false,
+  "reproducibility": {
+    "first_prediction_sha256": "32bf58500e27d777adc9060c20611eee5e3fc59245e49431b417a32d9c3f5dc2",
+    "hyperparameters": {
+      "early_stopping": false,
+      "l2_regularization": 1.0,
+      "loss": "poisson",
+      "max_iter": 100,
+      "max_leaf_nodes": 15,
+      "random_state": 42
+    },
+    "maximum_absolute_difference": 0.0,
+    "repeat_prediction_sha256": "32bf58500e27d777adc9060c20611eee5e3fc59245e49431b417a32d9c3f5dc2",
+    "status": "PASS",
+    "training_rows": 90486,
+    "training_target_sha256": "0127ce3f8ed158769db6ee42a5f893f33884740d7020a8795000cf1065c16dc0"
+  },
+  "schema_version": "NHL_POINTS_HGB_V2_DIRECT_REPAIR_V1",
+  "source_validation": {
+    "corrected_feature_mean": 25.910833333333333,
+    "exact_agreement_rows": 1800,
+    "maximum_absolute_difference": 0.0,
+    "reconstruction_sha256": "9a6488c30bbec181a3d018d17ec48ff9b759a74568e75c5f1dcdf89c04206e68",
+    "remaining_discrepancies": 0,
+    "settled_corrected_feature_mean": 25.97171717171717,
+    "source_evidence_sha256": "a69592fd661d11f1658762dc89d6e8106376f310e42cfb49e3276a77dac540c3",
+    "source_gap_rows": 0,
+    "source_supported_rows": 1800,
+    "target_rows": 1800
+  },
+  "status": "COMPLETE",
+  "v1_corrected_inputs_are_interim_choice": true,
+  "v2_selection_decision": "NOT_SELECTED_V2_NOT_SUPERIOR_TO_V1_WITH_CORRECTED_INPUTS",
+  "v2_status": "EVALUATED_ARTIFACT_RETAINED_NOT_INTEGRATED"
+}

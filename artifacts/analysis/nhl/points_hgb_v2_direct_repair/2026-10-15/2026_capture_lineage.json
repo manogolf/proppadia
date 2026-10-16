@@ -1,0 +1,56 @@
+{
+  "captured_rows": 1800,
+  "captures": [
+    {
+      "feature_sha256": "390075220066b14e114728ae5a7b406935cc2dcc26c34ec2c1d64c7a5e7d2655",
+      "frozen_v1_replay_max_abs_error": 1.1102230246251565e-16,
+      "identity_match": true,
+      "path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-09/run_id=nhldaily_20261009T195836812178Z_6d8ecbb3/phase=EARLY/captured_at=20261009T200143266929Z/features.csv",
+      "rows": 197,
+      "slate_date": "2026-10-09"
+    },
+    {
+      "feature_sha256": "d54d7e0c949bf1506193e64f9f975f1fdcaa4a79928611e745d4294a94a7be0f",
+      "frozen_v1_replay_max_abs_error": 1.1102230246251565e-16,
+      "identity_match": true,
+      "path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/phase=EARLY/captured_at=20261010T225535073250Z/features.csv",
+      "rows": 478,
+      "slate_date": "2026-10-10"
+    },
+    {
+      "feature_sha256": "6913facf9c0d0543a6fbdf12c5b7679331e5a98c54ce6797f66cb7f60e5ee2f7",
+      "frozen_v1_replay_max_abs_error": 1.1102230246251565e-16,
+      "identity_match": true,
+      "path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T195547605240Z_932ee4ee/phase=EARLY/captured_at=20261011T195856046740Z/features.csv",
+      "rows": 147,
+      "slate_date": "2026-10-11"
+    },
+    {
+      "feature_sha256": "9512115fca1395816155ad9a21e56004475a91fecdf8eb3b0663508d8b3bab1c",
+      "frozen_v1_replay_max_abs_error": 1.1102230246251565e-16,
+      "identity_match": true,
+      "path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/phase=EARLY/captured_at=20261012T220702076898Z/features.csv",
+      "rows": 97,
+      "slate_date": "2026-10-12"
+    },
+    {
+      "feature_sha256": "1e714f3a6660841a06c670e3c9a1b8acc0521a2bb0ddd70e7243b3a6665fac4c",
+      "frozen_v1_replay_max_abs_error": 1.1102230246251565e-16,
+      "identity_match": true,
+      "path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/phase=EARLY/captured_at=20261013T201812574041Z/features.csv",
+      "rows": 786,
+      "slate_date": "2026-10-13"
+    },
+    {
+      "feature_sha256": "d1c9d146799ea9f64ed77f6cf1fd5078e4a2bb471be32609428405bdc209d875",
+      "frozen_v1_replay_max_abs_error": 1.1102230246251565e-16,
+      "identity_match": true,
+      "path": "artifacts/operational/nhl/points_hgb_shadow/season=2026/slate_date=2026-10-14/run_id=nhldaily_20261014T164821141695Z_ba6f79fb/phase=EARLY/captured_at=20261014T165143239641Z/features.csv",
+      "rows": 95,
+      "slate_date": "2026-10-14"
+    }
+  ],
+  "immutable_predictions_modified": false,
+  "settled_rows": 1320,
+  "status": "PASS"
+}

@@ -1,0 +1,46 @@
+{
+  "combined_artifact_sha256": "dd1a73cc286e66e1bba0767361ff279ed9b1b5042eaa1b9396bd0d8c5225022f",
+  "feature_columns": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V1",
+  "fitted_model_identity_sha256": "d7ebccde4a67aa5978ecc6943a991dfdc80cfe5210e41a53bc08d9e3b754bd14",
+  "hyperparameters": {
+    "early_stopping": false,
+    "l2_regularization": 1.0,
+    "loss": "poisson",
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "random_state": 42
+  },
+  "model_artifact_sha256": "11d130974b56c1fb5109ac6d3d6c81358a5fd4101bdffc2475c5b6faebb53b92",
+  "model_family": "hist_gradient_boosting",
+  "model_id": "NHL_POINTS_COUNT_HGB_V2",
+  "model_type": "HistGradientBoostingRegressor",
+  "probability_construction": "POISSON_SURVIVAL_FROM_FROZEN_HGB_EXPECTED_COUNT",
+  "scaler_artifact_sha256": "0221dc598155b091e8883b4b99902f67eab06c6228f01308c75ca3b80cb7277b",
+  "schema_version": "NHL_POINTS_HGB_FITTED_MODEL_IDENTITY_V1",
+  "target": "official goals + assists",
+  "team_shot_feature_contract": "NHL_POINTS_TEAM_D10_OFFICIAL_CANONICAL_V1",
+  "thresholds": {
+    "0.5": "P(X >= 1)",
+    "1.5": "P(X >= 2)",
+    "2.5": "P(X >= 3)"
+  },
+  "training_feature_matrix_sha256": "f66a13bbba21109fb682ac1921667abaae8ea3eade1ef96ec8baedc81709b31b",
+  "training_rows": 90486,
+  "training_seasons": [
+    2023,
+    2024
+  ],
+  "training_target_sha256": "0127ce3f8ed158769db6ee42a5f893f33884740d7020a8795000cf1065c16dc0"
+}

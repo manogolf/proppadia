@@ -1,0 +1,12 @@
+{
+  "corrected_feature_mean": 25.910833333333333,
+  "exact_agreement_rows": 1800,
+  "maximum_absolute_difference": 0.0,
+  "reconstruction_sha256": "9a6488c30bbec181a3d018d17ec48ff9b759a74568e75c5f1dcdf89c04206e68",
+  "remaining_discrepancies": 0,
+  "settled_corrected_feature_mean": 25.97171717171717,
+  "source_evidence_sha256": "a69592fd661d11f1658762dc89d6e8106376f310e42cfb49e3276a77dac540c3",
+  "source_gap_rows": 0,
+  "source_supported_rows": 1800,
+  "target_rows": 1800
+}

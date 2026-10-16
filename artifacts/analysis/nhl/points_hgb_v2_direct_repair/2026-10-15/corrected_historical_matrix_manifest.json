@@ -1,0 +1,20 @@
+{
+  "historical_database_rebuilt": false,
+  "holdout_corrected_sha256": "cb32800ab51f1488d892eb7a754a0d8691d23810fc6ed01bc4e0aa0f8cc05c3f",
+  "holdout_identities_equal": true,
+  "holdout_original_sha256": "f1591fb1f114eb288d041d0e0e56d8574dae06721d04c59ade4dda4b1fc2c0be",
+  "holdout_rows": 47239,
+  "holdout_target_labels_equal": true,
+  "official_source_manifest_sha256": "6a1c3587744f661b6b073b59ed6edd02d25f79cdb8b5d34811fa30b0011e2e8f",
+  "only_changed_feature": "team_d10_sf_per_game",
+  "other_nine_features_equal": true,
+  "status": "PASS",
+  "target_date_leakage_contract": "strict prior; same-date excluded; 120-day window; latest up to 10 team games",
+  "training_corrected_sha256": "f66a13bbba21109fb682ac1921667abaae8ea3eade1ef96ec8baedc81709b31b",
+  "training_identities_equal": true,
+  "training_key_sha256": "bddb5005c6283efbf093ed80346d3a4440b4ac238c24fddd3ab382610c937e91",
+  "training_label_sha256": "0127ce3f8ed158769db6ee42a5f893f33884740d7020a8795000cf1065c16dc0",
+  "training_original_sha256": "12fe371aeb86ccc7630882b4fb0f63b55ce8aacfbb3216a1e70c92e0b85d4473",
+  "training_rows": 90486,
+  "training_target_labels_equal": true
+}

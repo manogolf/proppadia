@@ -1,0 +1,16 @@
+{
+  "first_prediction_sha256": "32bf58500e27d777adc9060c20611eee5e3fc59245e49431b417a32d9c3f5dc2",
+  "hyperparameters": {
+    "early_stopping": false,
+    "l2_regularization": 1.0,
+    "loss": "poisson",
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "random_state": 42
+  },
+  "maximum_absolute_difference": 0.0,
+  "repeat_prediction_sha256": "32bf58500e27d777adc9060c20611eee5e3fc59245e49431b417a32d9c3f5dc2",
+  "status": "PASS",
+  "training_rows": 90486,
+  "training_target_sha256": "0127ce3f8ed158769db6ee42a5f893f33884740d7020a8795000cf1065c16dc0"
+}
