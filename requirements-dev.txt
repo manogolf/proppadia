@@ -1,0 +1,2 @@
+# Test runner for repository development and focused test suites.
+pytest==9.1.1
