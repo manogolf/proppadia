@@ -52,6 +52,27 @@ class SafeSourcePromotionContractTests(unittest.TestCase):
         ):
             self.assertIn(expected, sql)
 
+    def test_disposable_fixture_defines_migration_roles_and_update_columns(self):
+        migration = MIGRATION.read_text().lower()
+        setup = (ROOT / "backend/nhl/sql/tests/nhl_safe_promotion_fixture_setup.sql").read_text().lower()
+        fixture = (ROOT / "backend/nhl/sql/tests/nhl_safe_promotion_fixture_test.sql").read_text().lower()
+        required_roles = (
+            "proppadia_nhl_ingest", "proppadia_nhl_daily_login",
+            "proppadia_nhl_source_correction", "proppadia_nhl_research_login",
+            "proppadia_nhl_operations_login", "proppadia_research_ro",
+            "proppadia_nhl_ops_writer", "anon", "authenticated", "service_role",
+        )
+        for role in required_roles:
+            self.assertIn(f"rolname='{role}'", setup)
+        self.assertIn("grant proppadia_nhl_ingest to proppadia_nhl_daily_login", setup)
+        self.assertIn("set local role proppadia_nhl_daily_login", fixture)
+
+        grant = migration.split("grant update (", 1)[1].split(")\n  on nhl.skater_game_logs_raw", 1)[0]
+        columns = {column.strip() for column in grant.replace("\n", " ").split(",")}
+        raw_table = setup.split("create table nhl.skater_game_logs_raw(", 1)[1].split(");", 1)[0]
+        for column in columns:
+            self.assertRegex(raw_table, rf"\b{column}\b")
+
     def test_all_active_raw_promoters_use_the_safe_entry_points(self):
         cli = (ROOT / "backend/nhl/cli.py").read_text()
         postgame = (ROOT / "backend/nhl/scripts/run_nhl_postgame_reconciliation.py").read_text()

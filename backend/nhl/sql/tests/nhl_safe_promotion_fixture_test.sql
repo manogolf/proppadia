@@ -18,7 +18,8 @@ INSERT INTO nhl.shiftcharts_raw VALUES
   (2026020001,2,18,1,0,120),
   (2026020001,4,18,1,0,120);
 
-SET LOCAL ROLE proppadia_nhl_ingest;
+-- Exercise the effective permissions inherited by the real daily login.
+SET LOCAL ROLE proppadia_nhl_daily_login;
 
 -- New official source observations can still be inserted.
 INSERT INTO nhl.skater_game_logs_raw
