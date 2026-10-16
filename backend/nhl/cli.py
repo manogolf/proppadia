@@ -79,10 +79,9 @@ from backend.nhl.prediction_lineage import (
     pregame_game_eligibility,
 )
 from backend.nhl.model_identity import fitted_model_identity
-from backend.nhl.points_attempts_source import preserve_existing_attempts_conflict_assignment
+from backend.nhl.points_attempts_source import capture_stage_attempt_conflicts
 from backend.nhl.pp_toi_source import (
     capture_stage_pp_toi_conflicts,
-    preserve_existing_pp_toi_conflict_assignment,
 )
 from backend.nhl.sog_feature_input import begin_capture as begin_sog_feature_capture
 from backend.nhl.sog_feature_input import finalize_capture as finalize_sog_feature_capture
@@ -2669,9 +2668,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
       is_home        = EXCLUDED.is_home,
       game_date      = EXCLUDED.game_date,
       shots_on_goal  = EXCLUDED.shots_on_goal,
-      {preserve_existing_attempts_conflict_assignment()},
-      toi_minutes    = EXCLUDED.toi_minutes,
-      {preserve_existing_pp_toi_conflict_assignment("nhl.skater_game_logs_raw")}{update_blocks}
+      toi_minutes    = EXCLUDED.toi_minutes{update_blocks}
     RETURNING player_id, game_id, shot_attempts
     )
     SELECT 'NHL_CHILD_SUMMARY_JSON=' || json_build_object(
@@ -2679,18 +2676,19 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
       'slate_date', '{yday}',
       'promoted_rows', COUNT(*),
       'preserved_existing_values', COUNT(*) FILTER (WHERE b.shot_attempts IS NOT NULL),
-      'filled_nulls', COUNT(*) FILTER (
-        WHERE b.player_id IS NOT NULL AND b.shot_attempts IS NULL
-          AND u.shot_attempts IS NOT NULL),
       'inserted_known_values', COUNT(*) FILTER (
         WHERE b.player_id IS NULL AND u.shot_attempts IS NOT NULL),
-      'unknown_after_promotion', COUNT(*) FILTER (WHERE u.shot_attempts IS NULL)
+      'unknown_before_protected_null_fill', COUNT(*) FILTER (WHERE u.shot_attempts IS NULL)
     )::text
     FROM upserted u
     LEFT JOIN raw_before b USING (player_id, game_id);
     """
     pp_toi_conflicts = capture_stage_pp_toi_conflicts(
         db, slate_date=yday, run_id=daily_run_id, stage="daily_promotion")
+    attempts_conflicts = capture_stage_attempt_conflicts(
+        db, slate_date=yday, stage="daily_promotion")
+    print("NHL_SHOT_ATTEMPTS_PROMOTION_CONFLICTS=" +
+          json.dumps(attempts_conflicts, sort_keys=True))
     pp_toi_summary = {
         "lane": _ACTIVE_DAILY_LANE,
         "command_identity": "daily PP-TOI source conflict comparison",
@@ -2711,6 +2709,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         _ACTIVE_DAILY_RECORDER.record_child(pp_toi_summary)
     print("NHL_PP_TOI_PROMOTION_CONFLICTS=" + json.dumps(pp_toi_summary, sort_keys=True))
     run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
+    run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c",
+         "SELECT 'NHL_PROTECTED_SOURCE_NULL_FILLS=' || "
+         f"nhl.promote_skater_game_log_protected_fields(DATE '{yday}');"])
 
     # A3a) Build manpower segments (PP/PK windows) for this slate date (required for PP TOI)
     run([PY, SCRIPTS_DIR / "backfill_game_manpower_segments.py", "--start-date", yday, "--end-date", yday, "--season", str(season)])

@@ -13,21 +13,6 @@ from decimal import Decimal, ROUND_HALF_UP
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def preserve_existing_pp_toi_conflict_assignment(target_relation: str) -> str:
-    """Never replace a populated raw observation during routine promotion.
-
-    This also permits a source value, including verified zero, to fill a raw
-    NULL. A populated value is not thereby asserted to be verified; correction
-    of populated history belongs to the separately guarded recovery procedure.
-    """
-    if target_relation != "nhl.skater_game_logs_raw":
-        raise ValueError("UNSUPPORTED_PP_TOI_TARGET")
-    return (
-        f"pp_toi_minutes = COALESCE({target_relation}.pp_toi_minutes, "
-        "EXCLUDED.pp_toi_minutes)"
-    )
-
-
 def pp_toi_conflict(
     *, game_id: int, player_id: int, team_id: int | None,
     existing_value: float | None, incoming_value: float | None,

@@ -11,26 +11,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-
-def preserve_existing_attempts_conflict_assignment(
-    target_relation: str = "nhl.skater_game_logs_raw",
-) -> str:
-    """Return the raw-table UPSERT assignment that never replaces known attempts.
-
-    Raw shot-attempt values may have independent official-PBP verification. A
-    routine stage promotion may fill an unknown (NULL) raw value, but it must
-    not replace a populated value, including a verified zero. Corrections to a
-    populated value belong to the guarded official-source recovery path.
-    """
-    relation_parts = target_relation.split(".")
-    if len(relation_parts) not in (1, 2) or not all(
-        part.isidentifier() for part in relation_parts
-    ):
-        raise ValueError("INVALID_ATTEMPTS_TARGET_RELATION")
-    return (
-        "shot_attempts = COALESCE("
-        f"{target_relation}.shot_attempts, EXCLUDED.shot_attempts)"
-    )
+import psycopg
 
 
 def replace_staged_attempts_conflict_assignment() -> str:
@@ -64,6 +45,45 @@ def compare_reconciled_attempts(
             None if official_attempts is None else int(official_attempts)
         ),
         "status": status,
+    }
+
+
+def capture_stage_attempt_conflicts(
+    dsn: str, *, slate_date: str, stage: str,
+) -> dict[str, Any]:
+    """Read exact-key staged attempts that conflict with populated raw values."""
+    with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT raw.game_id::bigint, raw.player_id::bigint,
+                   raw.shot_attempts::integer, stage.shot_attempts::integer
+              FROM nhl.skater_game_logs_raw AS raw
+              JOIN nhl.import_skater_logs_stage AS stage
+                ON stage.game_id=raw.game_id AND stage.player_id=raw.player_id
+             WHERE raw.game_date=%s::date AND stage.game_date=%s::date
+               AND raw.shot_attempts IS NOT NULL
+               AND stage.shot_attempts IS NOT NULL
+               AND raw.shot_attempts IS DISTINCT FROM stage.shot_attempts
+             ORDER BY raw.game_id, raw.player_id
+            """,
+            (slate_date, slate_date),
+        )
+        conflicts = [
+            {
+                "game_id": int(game_id),
+                "player_id": int(player_id),
+                "existing_shot_attempts": int(existing),
+                "incoming_shot_attempts": int(incoming),
+                "status": "CONFLICT_PRESERVED_EXISTING_VALUE",
+            }
+            for game_id, player_id, existing, incoming in cursor.fetchall()
+        ]
+    return {
+        "schema_version": "NHL_SHOT_ATTEMPTS_SOURCE_CONFLICTS_V1",
+        "stage": stage,
+        "slate_date": slate_date,
+        "conflict_count": len(conflicts),
+        "conflicts": conflicts,
     }
 
 

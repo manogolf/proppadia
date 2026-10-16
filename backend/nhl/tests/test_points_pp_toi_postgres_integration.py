@@ -11,6 +11,7 @@ import csv
 import importlib
 import json
 import os
+import re
 import tempfile
 import unittest
 import uuid
@@ -75,6 +76,12 @@ def _postgame_promotion_sql(schema: str, slate_date: str) -> tuple[str, tuple]:
         def execute(self, sql, params=None):
             captured.append((sql, params))
 
+        def fetchall(self):
+            return []
+
+        def fetchone(self):
+            return (0,)
+
     class Connection:
         def __enter__(self):
             return self
@@ -90,10 +97,27 @@ def _postgame_promotion_sql(schema: str, slate_date: str) -> tuple[str, tuple]:
 
     with patch.object(postgame.psycopg, "connect", return_value=Connection()):
         postgame._promote_stage("postgresql://capture-only", slate_date)
-    if not captured:
+    promotion = next((item for item in captured
+                      if "INSERT INTO nhl.skater_game_logs_raw" in item[0]), None)
+    if promotion is None:
         raise AssertionError("postgame skater promotion SQL was not captured")
-    sql, params = captured[0]
+    sql, params = promotion
     return sql.replace("nhl.", f"{schema}."), tuple(params)
+
+
+def _install_fixture_functions(connection, schema: str) -> None:
+    migration = (ROOT / "backend/nhl/sql/migrations/20261017_safe_skater_source_promotion.sql").read_text()
+    statements = re.findall(
+        r"CREATE OR REPLACE FUNCTION nhl\..*?\$\$;", migration, flags=re.S
+    )
+    if len(statements) != 2:
+        raise AssertionError("safe promotion migration function definitions changed")
+    quoted_schema = f'"{schema}"'
+    for statement in statements:
+        connection.execute(
+            statement.replace("nhl.", quoted_schema + ".")
+            .replace("pg_catalog, nhl", "pg_catalog, " + quoted_schema)
+        )
 
 
 def _fill_conflict_sql(schema: str) -> str:
@@ -119,6 +143,7 @@ class PpToiPostgresWritePathTests(unittest.TestCase):
         self.conn.execute("SET LOCAL statement_timeout = '45s'")
         self.conn.execute(f'CREATE SCHEMA "{self.schema}"')
         self._create_fixture_tables()
+        _install_fixture_functions(self.conn, self.schema)
 
     def tearDown(self):
         schema = self.schema
@@ -132,6 +157,8 @@ class PpToiPostgresWritePathTests(unittest.TestCase):
         qschema = f'"{self.schema}"'
         self.conn.execute(f"CREATE TABLE {qschema}.games(game_id bigint PRIMARY KEY, game_date date, home_team_id bigint, away_team_id bigint)")
         self.conn.execute(f"CREATE TABLE {qschema}.team_external_ids(team_id bigint, provider text, provider_team_id text)")
+        self.conn.execute(f"CREATE TABLE {qschema}.game_manpower_segments(game_id bigint, period integer, start_sec integer, end_sec integer, pp_team_id bigint)")
+        self.conn.execute(f"CREATE TABLE {qschema}.shiftcharts_raw(game_id bigint, player_id bigint, team_id bigint, period integer, start_sec integer, end_sec integer)")
         self.conn.execute(f"""CREATE TABLE {qschema}.roster_status(
             game_id bigint, player_id bigint, team_id bigint, asof_ts timestamptz)""")
         self.conn.execute(f"""CREATE TABLE {qschema}.import_skater_logs_stage(
@@ -217,6 +244,10 @@ class PpToiPostgresWritePathTests(unittest.TestCase):
         self.conn.execute(daily_sql)
         postgame_sql, postgame_params = _postgame_promotion_sql(self.schema, "2023-10-10")
         self.conn.execute(postgame_sql, postgame_params)
+        self.conn.execute(
+            f'SELECT "{self.schema}".promote_skater_game_log_protected_fields(%s::date)',
+            ("2023-10-10",),
+        )
 
         # Execute the actual backfill helper against the same isolated schema.
         pp_map = {
@@ -225,6 +256,17 @@ class PpToiPostgresWritePathTests(unittest.TestCase):
             int(null_fill["player_id"]): float(source_values[int(null_fill["player_id"])]),
             # Unknown source is deliberately absent from the reconstructed map.
         }
+        null_fill_player = int(null_fill["player_id"])
+        null_fill_team = int(null_fill["official_team_id"])
+        null_fill_seconds = round(pp_map[null_fill_player] * 60)
+        self.conn.execute(
+            f'INSERT INTO "{self.schema}".game_manpower_segments VALUES (%s,1,0,900,%s)',
+            (game_id, null_fill_team),
+        )
+        self.conn.execute(
+            f'INSERT INTO "{self.schema}".shiftcharts_raw VALUES (%s,%s,%s,1,0,%s)',
+            (game_id, null_fill_player, null_fill_team, null_fill_seconds),
+        )
         with self.conn.cursor() as cursor:
             changed = pp_fill.update_game(
                 cursor, game_id, pp_map,

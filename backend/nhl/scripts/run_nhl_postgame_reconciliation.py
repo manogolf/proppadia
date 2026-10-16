@@ -75,10 +75,9 @@ from backend.nhl.player_external_identity import (
     localized_text,
     resolve_player_external_identity,
 )
-from backend.nhl.points_attempts_source import preserve_existing_attempts_conflict_assignment
+from backend.nhl.points_attempts_source import capture_stage_attempt_conflicts
 from backend.nhl.pp_toi_source import (
     capture_stage_pp_toi_conflicts,
-    preserve_existing_pp_toi_conflict_assignment,
 )
 
 
@@ -1169,6 +1168,10 @@ def _run(command: list[str], slate_date: str, dsn: str,
 
 def _promote_stage(dsn: str, slate_date: str) -> None:
     """Idempotently promote existing governed skater/goalie stage tables."""
+    attempts_conflicts = capture_stage_attempt_conflicts(
+        dsn, slate_date=slate_date, stage="postgame_promotion")
+    print("NHL_SHOT_ATTEMPTS_PROMOTION_CONFLICTS=" + json.dumps(
+        attempts_conflicts, sort_keys=True))
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
         cursor.execute(f"""
             WITH latest_roster AS (
@@ -1205,9 +1208,7 @@ def _promote_stage(dsn: str, slate_date: str) -> None:
             ON CONFLICT (player_id,game_id) DO UPDATE SET
               team_id=excluded.team_id,opponent_id=excluded.opponent_id,is_home=excluded.is_home,
               game_date=excluded.game_date,shots_on_goal=excluded.shots_on_goal,
-              {preserve_existing_attempts_conflict_assignment()},
               toi_minutes=excluded.toi_minutes,
-              {preserve_existing_pp_toi_conflict_assignment("nhl.skater_game_logs_raw")},
               blocks=excluded.blocks,hits=excluded.hits,fenwick_for=excluded.fenwick_for,
               missed_shots=excluded.missed_shots,blocked_shots_taken=excluded.blocked_shots_taken,
               rebounds_for=excluded.rebounds_for,takeaways=excluded.takeaways,giveaways=excluded.giveaways,
@@ -1216,6 +1217,12 @@ def _promote_stage(dsn: str, slate_date: str) -> None:
               sh_shot_attempts=excluded.sh_shot_attempts,ev_sog=excluded.ev_sog,pp_sog=excluded.pp_sog,
               sh_sog=excluded.sh_sog,goals=excluded.goals,assists=excluded.assists,points=excluded.points
         """, (slate_date, slate_date))
+        cursor.execute(
+            "SELECT nhl.promote_skater_game_log_protected_fields(%s::date)",
+            (slate_date,),
+        )
+        protected_fills = cursor.fetchone()[0]
+        print(f"NHL_PROTECTED_SOURCE_NULL_FILLS={protected_fills}")
         cursor.execute("""
             WITH latest_roster AS (
               SELECT DISTINCT ON (game_id,player_id) game_id,player_id,team_id

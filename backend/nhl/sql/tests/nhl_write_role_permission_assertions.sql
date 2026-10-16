@@ -96,12 +96,43 @@ BEGIN
 
   IF NOT has_table_privilege(ingest_login, raw_table, 'SELECT')
      OR NOT has_column_privilege(ingest_login, raw_table, 'shot_attempts', 'INSERT')
-     OR NOT has_column_privilege(ingest_login, raw_table, 'shot_attempts', 'UPDATE')
+     OR NOT has_column_privilege(ingest_login, raw_table, 'pp_toi_minutes', 'INSERT')
+     OR has_column_privilege(ingest_login, raw_table, 'shot_attempts', 'UPDATE')
+     OR has_column_privilege(ingest_login, raw_table, 'pp_toi_minutes', 'UPDATE')
      OR has_column_privilege(ingest_login, raw_table, 'player_id', 'UPDATE')
      OR has_column_privilege(ingest_login, raw_table, 'game_id', 'UPDATE')
+     OR has_table_privilege(ingest_login, raw_table, 'UPDATE')
+     OR NOT has_column_privilege(ingest_login, raw_table, 'team_id', 'UPDATE')
+     OR NOT has_column_privilege(ingest_login, raw_table, 'shots_on_goal', 'UPDATE')
      OR has_table_privilege(ingest_login, raw_table, 'DELETE')
      OR has_table_privilege(ingest_login, raw_table, 'TRUNCATE') THEN
-    RAISE EXCEPTION 'NHL_INGEST_RAW_TABLE_PRIVILEGE_MISMATCH';
+    RAISE EXCEPTION 'NHL_INGEST_RAW_SOURCE_COLUMN_PRIVILEGE_MISMATCH';
+  END IF;
+
+  IF NOT has_function_privilege(ingest_login,
+       'nhl.promote_skater_game_log_protected_fields(date)', 'EXECUTE')
+     OR NOT has_function_privilege(ingest_login,
+       'nhl.fill_pp_toi_minutes_from_shift_overlap(bigint)', 'EXECUTE')
+     OR has_function_privilege(research_login,
+       'nhl.promote_skater_game_log_protected_fields(date)', 'EXECUTE')
+     OR has_function_privilege(operations_login,
+       'nhl.promote_skater_game_log_protected_fields(date)', 'EXECUTE')
+     OR has_function_privilege(research_login,
+       'nhl.fill_pp_toi_minutes_from_shift_overlap(bigint)', 'EXECUTE')
+     OR has_function_privilege(operations_login,
+       'nhl.fill_pp_toi_minutes_from_shift_overlap(bigint)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'NHL_SAFE_PROMOTION_FUNCTION_EXECUTE_PRIVILEGE_MISMATCH';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM pg_proc p
+    JOIN pg_namespace n ON n.oid=p.pronamespace
+    CROSS JOIN LATERAL aclexplode(COALESCE(p.proacl, acldefault('f', p.proowner))) a
+    WHERE n.nspname='nhl'
+      AND p.proname IN ('promote_skater_game_log_protected_fields',
+                        'fill_pp_toi_minutes_from_shift_overlap')
+      AND a.grantee=0 AND a.privilege_type='EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'NHL_SAFE_PROMOTION_PUBLIC_EXECUTE_PRESENT';
   END IF;
 
   IF NOT has_table_privilege(ingest_login, stage_table, 'INSERT')

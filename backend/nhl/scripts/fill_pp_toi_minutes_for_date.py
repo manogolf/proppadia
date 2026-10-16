@@ -238,6 +238,9 @@ def update_game(
     parts = target_relation.split(".")
     if len(parts) not in (1, 2) or not all(part.isidentifier() for part in parts):
         raise ValueError("INVALID_PP_TOI_FILL_TARGET")
+    if parts[-1] != "skater_game_logs_raw":
+        raise ValueError("INVALID_PP_TOI_FILL_TARGET")
+    schema = parts[-2] if len(parts) == 2 else "nhl"
     target = target_relation
     cur.execute(
         f"SELECT player_id::bigint FROM {target} WHERE game_id = %s;",
@@ -248,19 +251,16 @@ def update_game(
     if not overlap:
         return (len(db_players), 0, 0)
 
-    rows = [(pp_map[pid], game_id, pid) for pid in overlap]
-
-    cur.executemany(
-        f"""
-        UPDATE {target}
-           SET pp_toi_minutes = %s
-         WHERE game_id = %s
-           AND player_id = %s
-           AND pp_toi_minutes IS NULL;
-        """,
-        rows,
+    # The database function recomputes positive PP/shift overlap from the
+    # canonical source tables and can only fill currently NULL raw values.
+    # Schema identifiers were checked above; no values enter SQL text.
+    cur.execute(
+        f'SELECT "{schema}".fill_pp_toi_minutes_from_shift_overlap(%s)',
+        (game_id,),
     )
-    return (len(db_players), len(overlap), max(0, int(cur.rowcount)))
+    result = cur.fetchone()
+    updated = int(result[0]) if result else 0
+    return (len(db_players), len(overlap), updated)
 
 
 def assert_no_bad_team_games(cur, slate_date: str) -> int:

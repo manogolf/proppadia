@@ -132,6 +132,20 @@ the enumerated NHL application permissions. It was applied during the
 authorized 2026-10-16 cutover. Three login roles were provisioned separately;
 no correction login or correction membership was created.
 
+**Safe-promotion completion prepared 2026-10-16; not deployed.** The applied
+`20261016_prepare_nhl_write_roles.sql` still grants the daily ingest group
+`UPDATE` on `shot_attempts` and `pp_toi_minutes`. That does not meet the original
+target above, even though the current Python upserts conventionally preserve
+populated values. The prepared `20261017_safe_skater_source_promotion.sql`
+revokes those two column grants and exposes only fixed NULL-fill functions to
+the ingest group. Stage promotion records same-date nonnegative values only
+into raw NULLs; PP-TOI overlap is recomputed from manpower segments and shifts.
+The application conflict clauses no longer update either protected field,
+and exact-key shot-attempt and PP-TOI conflicts are retained in diagnostics.
+The migration, rollback SQL, and disposable PostgreSQL fixture are prepared;
+none has been run against production. Until deployment and its SQL fixture and
+role assertions pass, database-enforced NHL safe promotion remains incomplete.
+
 Before activation, direct raw writers in the NHL CLI,
 `run_nhl_postgame_reconciliation.py`, and PP-TOI/attempt promoters were
 identified for restricted routing; the daily command now exercises those

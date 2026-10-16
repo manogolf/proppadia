@@ -12,9 +12,9 @@ from unittest.mock import MagicMock, Mock, patch
 import pandas as pd
 
 from backend.nhl.points_attempts_source import (
+    capture_stage_attempt_conflicts,
     compare_reconciled_attempts,
     derive_attempts_from_final_pbp,
-    preserve_existing_attempts_conflict_assignment,
     replace_staged_attempts_conflict_assignment,
 )
 from backend.nhl.scripts import build_nhl_points_architecture_bakeoff as bakeoff
@@ -60,6 +60,43 @@ def source_payloads():
 
 
 class PointsAttemptsSourceTests(unittest.TestCase):
+    def test_stage_conflict_capture_emits_exact_identity_and_values(self):
+        from backend.nhl import points_attempts_source
+
+        class Cursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def execute(self, sql, params):
+                self.sql = sql
+                self.params = params
+
+            def fetchall(self):
+                return [(2026020001, 8470001, 7, 99)]
+
+        class Connection:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return False
+
+            def cursor(self):
+                return Cursor()
+
+        with patch.object(points_attempts_source.psycopg, "connect", return_value=Connection()):
+            result = capture_stage_attempt_conflicts(
+                "postgresql://fixture", slate_date="2026-10-15", stage="unit")
+        self.assertEqual(result["conflict_count"], 1)
+        self.assertEqual(result["conflicts"][0], {
+            "game_id": 2026020001, "player_id": 8470001,
+            "existing_shot_attempts": 7, "incoming_shot_attempts": 99,
+            "status": "CONFLICT_PRESERVED_EXISTING_VALUE",
+        })
+
     def test_final_pbp_preserves_positive_and_verified_zero_counts(self):
         boxscore, pbp = source_payloads()
         self.assertEqual(derive_attempts_from_final_pbp(boxscore, pbp, game_id=2026020001),
@@ -185,29 +222,6 @@ class PointsAttemptsSourceTests(unittest.TestCase):
         self.assertIn("shot_attempts IS NOT NULL", sql)
         self.assertIn("Frozen model input default", sql)
 
-    def test_raw_promotion_conflict_preserves_populated_values_and_fills_nulls(self):
-        assignment = preserve_existing_attempts_conflict_assignment("raw")
-        connection = sqlite3.connect(":memory:")
-        connection.execute("CREATE TABLE raw (player_id INTEGER PRIMARY KEY, shot_attempts INTEGER)")
-
-        def promote(player_id, old_value, incoming):
-            connection.execute("INSERT INTO raw VALUES (?, ?)", (player_id, old_value))
-            connection.execute(
-                "INSERT INTO raw VALUES (?, ?) ON CONFLICT(player_id) DO UPDATE SET "
-                + assignment,
-                (player_id, incoming),
-            )
-            actual = connection.execute(
-                "SELECT shot_attempts FROM raw WHERE player_id = ?", (player_id,)
-            ).fetchone()[0]
-            self.assertEqual(actual, old_value if old_value is not None else incoming)
-
-        promote(1, 7, None)   # unavailable rerun cannot clear a verified count
-        promote(2, 0, 8)      # a verified zero cannot be replaced
-        promote(3, 12, 99)    # an unverified different count cannot replace it
-        promote(4, None, 0)   # a verified zero can fill an unknown raw value
-        promote(5, None, 6)   # a verified positive can fill an unknown raw value
-
     def test_stage_refresh_replaces_stale_attempts_with_unknown(self):
         connection = sqlite3.connect(":memory:")
         connection.execute("CREATE TABLE stage (player_id INTEGER PRIMARY KEY, shot_attempts INTEGER)")
@@ -247,16 +261,16 @@ class PointsAttemptsSourceTests(unittest.TestCase):
         self.assertIn(replace_staged_attempts_conflict_assignment(), stage_sql)
         self.assertNotIn("COALESCE(EXCLUDED.shot_attempts", stage_sql)
 
-    def test_both_raw_promoters_use_preserve_existing_assignment(self):
-        expected = preserve_existing_attempts_conflict_assignment()
+    def test_raw_promoters_delegate_protected_null_fills_to_database_function(self):
         cli_source = (Path(__file__).resolve().parents[1] / "cli.py").read_text()
         postgame_source = (Path(__file__).resolve().parents[1] / "scripts" /
                            "run_nhl_postgame_reconciliation.py").read_text()
-        self.assertIn("{preserve_existing_attempts_conflict_assignment()}", cli_source)
-        self.assertIn("{preserve_existing_attempts_conflict_assignment()}", postgame_source)
-        self.assertNotIn("shot_attempts  = COALESCE(EXCLUDED.shot_attempts", cli_source)
-        self.assertNotIn("shot_attempts=coalesce(excluded.shot_attempts", postgame_source)
-        self.assertIn("COALESCE(nhl.skater_game_logs_raw.shot_attempts, EXCLUDED.shot_attempts)", expected)
+        self.assertNotIn("shot_attempts = EXCLUDED.shot_attempts", cli_source)
+        self.assertNotIn("shot_attempts=excluded.shot_attempts", postgame_source)
+        self.assertNotIn("pp_toi_minutes = EXCLUDED.pp_toi_minutes", cli_source)
+        self.assertNotIn("pp_toi_minutes=excluded.pp_toi_minutes", postgame_source)
+        self.assertIn("promote_skater_game_log_protected_fields", cli_source)
+        self.assertIn("promote_skater_game_log_protected_fields", postgame_source)
         self.assertIn("NHL_SHOT_ATTEMPTS_PROMOTION_SUMMARY_V1", cli_source)
 
     def test_hgb_training_builder_excludes_missing_attempts_but_keeps_zero(self):
