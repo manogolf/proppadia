@@ -1,0 +1,32 @@
+{
+  "after_retry_snapshot_equal_to_postcommit": true,
+  "after_retry_snapshot_path": "artifacts/operational/nhl/pp_toi_recovery_execution/run_id=pp_toi_recovery_20261016T152648Z/after_retry_raw.csv",
+  "after_retry_snapshot_sha256": "a01c8521af57e1ff16b1dada1619dc7dcc75185dc59fb6710f1c1c28762a15bb",
+  "all_changed_values_match_official_reconstruction": true,
+  "changed_fields": {
+    "pp_toi_minutes": 71627
+  },
+  "changed_rows": 71627,
+  "changed_rows_path": "artifacts/operational/nhl/pp_toi_recovery_execution/run_id=pp_toi_recovery_20261016T152648Z/changed_rows.csv",
+  "changed_rows_sha256": "f3c915cac682bd8e82cf08efee37e883b32623e874f62aa8080aeb906ef24ac3",
+  "checkpoint_only_identities_absent": 51,
+  "correct_rows_unchanged": 1605,
+  "corrected_positive_values": 50724,
+  "corrected_verified_zeros": 20903,
+  "missing_raw_identities_absent": 195,
+  "post_update_snapshot_path": "artifacts/operational/nhl/pp_toi_recovery_execution/run_id=pp_toi_recovery_20261016T152648Z/after_raw.csv",
+  "post_update_snapshot_sha256": "a01c8521af57e1ff16b1dada1619dc7dcc75185dc59fb6710f1c1c28762a15bb",
+  "pre_update_snapshot_path": "artifacts/operational/nhl/pp_toi_recovery_execution/run_id=pp_toi_recovery_20261016T152648Z/before_raw.csv",
+  "pre_update_snapshot_sha256": "732129de985e27033bd8106d963b3a447ffd371b384cef0b88d09f2c95be7100",
+  "protected_2025_rows_unchanged": 46713,
+  "protected_2026_rows_unchanged": 4248,
+  "retry_updates": 0,
+  "rollback_executed": false,
+  "run_id": "pp_toi_recovery_20261016T152648Z",
+  "schema_version": "NHL_PP_TOI_RECOVERY_POSTCOMMIT_VERIFICATION_V1",
+  "scoped_rows": 142209,
+  "status": "PASS",
+  "unique_keys_before_after": 142209,
+  "unrelated_fields_or_keys_changed": 0,
+  "unresolved_raw_rows_unchanged": 18016
+}

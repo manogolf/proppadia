@@ -1,0 +1,37 @@
+{
+  "already_correct_unchanged": 1605,
+  "candidate_counts": {
+    "UNRESOLVED": 18016,
+    "UNRESOLVED_NO_CURRENT_RAW_ROW": 51,
+    "UNRESOLVED_NO_RAW_PLAYER_GAME_ROW": 195,
+    "VERIFIED_CORRECT": 1605,
+    "VERIFIED_INCORRECT": 71627
+  },
+  "candidate_sha256": "0bd6953c4152e3b29b0bc1af324816f5916d86066d494559a58f492eed4dcfef",
+  "checkpoint_only_identities_absent": 51,
+  "db_mutation": false,
+  "forward_sql_sha256": "6b7eea80d7347869ee9b9f46d2948c653c60c61b7c9f0a53a3e800bda976177c",
+  "missing_raw_identities_absent": 195,
+  "official_manifest_self_excluding_sha256": "e7f9117810e6d40e0a9b791a3936f04cd827c57e6fcb54c11c0b1d3a1e694034",
+  "official_manifest_sha256": "625f59f6d29fd7a54a2b4a5df7a630c2968f6e8bab36ad2f0b6bf88c6b7e22f2",
+  "population_rows": {
+    "202302_202402": 91248,
+    "202502_protected": 46713,
+    "202602_protected": 4248
+  },
+  "positive_to_positive": 50724,
+  "positive_to_verified_zero": 20903,
+  "pre_update_raw_snapshot_path": "artifacts/operational/nhl/pp_toi_recovery_execution/run_id=pp_toi_recovery_20261016T152648Z/before_raw.csv",
+  "pre_update_raw_snapshot_sha256": "732129de985e27033bd8106d963b3a447ffd371b384cef0b88d09f2c95be7100",
+  "pre_update_snapshot_rows": 142209,
+  "pre_update_snapshot_unique_keys": 142209,
+  "preflight_status": "PASS",
+  "proposed_target_games": 2039,
+  "rollback_sql_sha256": "be5781ebd992b29343becd547bcbf79e90bce94c59b67f2300fda44ba0c90064",
+  "run_id": "pp_toi_recovery_20261016T152648Z",
+  "schema_version": "NHL_PP_TOI_RECOVERY_PREFLIGHT_V1",
+  "source_validation": "PASS; candidate source hashes validated against retained official response archive",
+  "target_count": 71627,
+  "targets_match_current_before_values": true,
+  "unresolved_raw_unchanged": 18016
+}

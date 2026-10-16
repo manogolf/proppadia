@@ -1,0 +1,46 @@
+{
+  "after_retry_snapshot_sha256": "a01c8521af57e1ff16b1dada1619dc7dcc75185dc59fb6710f1c1c28762a15bb",
+  "after_snapshot_sha256": "a01c8521af57e1ff16b1dada1619dc7dcc75185dc59fb6710f1c1c28762a15bb",
+  "already_correct_rows_unchanged": 1605,
+  "before_snapshot_sha256": "732129de985e27033bd8106d963b3a447ffd371b384cef0b88d09f2c95be7100",
+  "candidate_sha256": "0bd6953c4152e3b29b0bc1af324816f5916d86066d494559a58f492eed4dcfef",
+  "changed_rows_sha256": "f3c915cac682bd8e82cf08efee37e883b32623e874f62aa8080aeb906ef24ac3",
+  "checkpoint_only_identities_excluded": 51,
+  "forward_sql_sha256": "6b7eea80d7347869ee9b9f46d2948c653c60c61b7c9f0a53a3e800bda976177c",
+  "forward_transaction": {
+    "database_disposition": "COMMITTED",
+    "exit_status": 0,
+    "observed_psql_output": [
+      "BEGIN",
+      "CREATE TABLE",
+      "INSERT 0 71627",
+      "NOTICE: PP_TOI_RECOVERY_CHANGED_ROWS=71627; candidate_sha256=0bd6953c4152e3b29b0bc1af324816f5916d86066d494559a58f492eed4dcfef",
+      "DO",
+      "COMMIT"
+    ],
+    "path": "artifacts/operational/nhl/pp_toi_recovery_execution/run_id=pp_toi_recovery_20261016T152648Z/forward_transaction.log"
+  },
+  "idempotency_retry": {
+    "database_disposition": "COMMITTED_ZERO_CHANGES",
+    "exit_status": 0,
+    "observed_psql_output": [
+      "BEGIN",
+      "CREATE TABLE",
+      "INSERT 0 71627",
+      "NOTICE: PP_TOI_RECOVERY_CHANGED_ROWS=0; candidate_sha256=0bd6953c4152e3b29b0bc1af324816f5916d86066d494559a58f492eed4dcfef",
+      "DO",
+      "COMMIT"
+    ],
+    "path": "artifacts/operational/nhl/pp_toi_recovery_execution/run_id=pp_toi_recovery_20261016T152648Z/idempotency_retry.log"
+  },
+  "missing_raw_identities_excluded": 195,
+  "official_manifest_sha256": "625f59f6d29fd7a54a2b4a5df7a630c2968f6e8bab36ad2f0b6bf88c6b7e22f2",
+  "positive_to_positive": 50724,
+  "positive_to_verified_zero": 20903,
+  "rollback_sql_sha256": "be5781ebd992b29343becd547bcbf79e90bce94c59b67f2300fda44ba0c90064",
+  "rollback_validation": "STATIC: exact target keys, candidate count, current-value guard, update-field scope and post-update guard verified; rollback not executed",
+  "run_id": "pp_toi_recovery_20261016T152648Z",
+  "schema_version": "NHL_PP_TOI_RECOVERY_TRANSACTION_RECEIPT_V1",
+  "target_count": 71627,
+  "unresolved_raw_rows_unchanged": 18016
+}
