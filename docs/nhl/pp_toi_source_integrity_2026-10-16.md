@@ -41,4 +41,60 @@ Frozen Phoenix points metadata lists 15 features and contains no PP-TOI feature 
 - **Smallest justified code correction:** preserve numeric zero by replacing truthiness-based PP key selection with first-present/non-`None` selection; remove PP-specific `NULLIF(...,0)` and zero-suppressing `COALESCE` behavior from staging/promoters so the stored value preserves source zero versus NULL. Before allowing any computed zero, require explicit per-game completeness for both manpower windows and shift-chart identities; emit zero only for covered players with verified zero overlap. Keep positive-only fill behavior from converting absence into zero, and add PP-specific source/promotion/conflict counts to the receipt. This proposal was not implemented because this task is investigation-only.
 - **Historical correction prerequisite:** acquire/retain official final-game PBP and shift charts for a bounded representative set (then expand only if warranted), bind source records to canonical player/game IDs, validate complete game/player coverage, and retain raw hashes and before/after candidate evidence. Do not bulk-fill the 98,292 rows or the retained October 2025 HGB's 1,004 NULL PP-TOI observations without that evidence.
 
-No DB writes, daily runs, model changes, or source requests were made. No PP-TOI row was changed by this investigation.
+At the initial investigation stage no DB writes, daily runs, model changes, or source requests were made. The follow-up below records nine authorized official NHL GET requests; no PP-TOI row was changed.
+
+## Follow-up: official shift-level reconstruction and zero-handling repair
+
+This follow-up supersedes the earlier statement above that representative reconstruction was unavailable. Three bounded games from affected historical seasons were independently reconstructed using retained final NHL PBP, boxscore, and official shiftcharts responses. No database values were changed.
+
+### Distribution and plausibility
+
+Read-only counts from nhl.skater_game_logs_raw:
+
+| Game-ID season prefix | Player-games | NULL | Zero | Positive | Positive PP/TOI median (mean) | Positive skaters per team-game, median (mean) | Team-game PP sum median (p90, max) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 2023 | 50,252 | 0 | 714 | 49,538 | 0.310 (0.342) min | 100% (98.6%) | 5.51 (9.72, 72.75) min |
+| 2024 | 47,260 | 0 | 981 | 46,279 | 0.290 (0.312) min | 100% (97.9%) | 5.04 (9.00, 64.86) min |
+| 2025 | 46,713 | 9,953 | 4,274 | 32,486 | 0.780 (1.468) min | 77.8% (69.6%) | 19.90 (39.20, 94.57) min |
+| 2026 | 6,560 | 3,400 | 0 | 3,160 | 1.700 (2.136) min | 61.1% (48.0%) | 27.41 (45.03, 73.33) min |
+
+No current record had PP TOI exceeding total TOI. Among rows with positive PP and total TOI, the PP/TOI ratio median was 1.9% in 2023 and 1.8% in 2024, versus 5.1% in 2025 and 10.5% in 2026. The 2023 and 2024 distributions are suspicious: nearly every skater is positive, yet player values and team-game totals are much lower than later seasons. Distribution alone does not prove which values are wrong; it is consistent with a broad systematic transformation or flawed historical calculation.
+
+The 98,292 changed rows are the exact Oct. 10, 2025 checkpoint zeros later found positive in the current table. The checkpoint establishes the before-values, not that they were correct.
+
+### Independent official reconstruction
+
+For game IDs 2023020024, 2023021169, and 2024020211, official PBP and boxscore both reported final state OFF. Each boxscore contained 36 skaters. Shiftcharts had 659, 772, and 794 rows; all 108 boxscore skaters had shifts. Each skater's total shift duration agreed with boxscore TOI within 60 seconds.
+
+Two existing repository algorithms were used: rebuild_pp_toi_from_shiftcharts_and_pbp.py and 20260222_runtime_cleanup/approx_pp_toi_from_shiftcharts.py. They produced the same two-decimal PP-TOI result for all 36 skaters in each game. PBP manpower windows were joined to official player shift intervals; absent overlap was interpreted as zero only when the player's shift coverage was present.
+
+| Game | Checkpoint values | Current sum | Reconstructed sum | Reconstructed positive / zero | Current positive where reconstruction is zero | Current within 0.05 min | Mean absolute delta |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 2023020024 | 36 zero | 96.85 | 86.03 | 30 / 6 | 6 | 9/36 | 0.566 min |
+| 2023021169 | 36 zero | 18.00 | 88.87 | 26 / 10 | 10 | 0/36 | 2.316 min |
+| 2024020211 | 36 zero | 106.94 | 93.73 | 32 / 4 | 4 | 14/36 | 0.648 min |
+| Total | 108 zero | 221.79 | 268.63 | 88 / 20 | 20 | 23/108 | 1.177 min |
+
+Game 2023021169 is especially diagnostic: the current values are exactly 0.55 minutes for each skater on one team and 0.45 for each on the other, totaling 18 player-minutes. Independent reconstruction gives 26 positive values and 10 verified zeros, totaling 88.87 player-minutes. This confirms corruption among the sampled records, including false positive values on all ten reconstructed-zero skaters. Across the three games, 85 current rows differ from the reconstruction by more than 0.05 minute. Matching rows do not establish provenance for unsampled records.
+
+Raw team_id disagrees with official boxscore team identity for 54/108 sampled rows (36 in 2023020024, 18 in 2023021169). Reconstruction used official boxscore identity and shiftchart team assignment. This separate identity inconsistency is a caveat, not repaired here.
+
+Raw PBP, boxscore, and shiftchart responses, acquisition times, endpoints, byte counts, hashes, the 108-row comparison, and per-game summaries are retained under artifacts/analysis/nhl/pp_toi_source_integrity_2026-10-16/official_sources/. See acquisition_manifest.json. The inputs and derived comparisons are reproducible.
+
+### Historical cause and HGB feature exposure
+
+The bounded sample establishes systematic historical source-value corruption, but not the process that wrote all 98,292 rows. Archived approx_pp_toi_from_shiftcharts.py has broad historical replacement capability and is a plausible mechanism. Git history proves the code existed, but no retained run receipt or database statement log ties it to these records. No single writer is attributed as the confirmed cause. The checkpoint and current snapshot are the earliest retained before/after states, not proof of the original values' correctness.
+
+HGB's frozen feature exporter calculates mean_pp_toi_last10 from up to ten strict-prior player games in the 120-day history window using the mean of observed PP-TOI values. The retained bounded counterfactual file contains 965 target player-games with one or more sampled source records in their histories. After substituting independently reconstructed values for those 108 sample rows, the feature changed for 805 targets; mean absolute change across the 965 rows was 0.126 minutes, maximum 1.360 minutes. This demonstrates source-to-feature exposure, not a prediction or performance effect. No model or prediction changed. Phoenix's frozen feature contract has no direct PP-TOI feature.
+
+### Confirmed zero-loss fixes
+
+- seed_skater_logs_for_date.py now selects the first recognized PP-TOI key that is not None, instead of Python or truthiness. Numeric zero no longer falls through and becomes None.
+- The staging UPSERT represents the latest source snapshot: explicit zero stays zero; a missing field clears stale staged state to NULL.
+- The daily and postgame stage-to-raw promoters no longer apply NULLIF(pp_toi_minutes, 0). A non-NULL incoming source value, including zero, is applied; incoming NULL preserves an existing raw value. New unknown rows remain NULL.
+
+These changes do not claim undocumented Gamecenter fields are complete or that absent values imply zero. The manpower/shiftcharts fill remains positive-only because it lacks player-completeness proof to emit zero. Archived reconstruction scripts were not changed. No historical data rewrite was executed.
+
+Focused integration tests exercise the actual parser, stage SQL, and shared raw-promoter assignment with explicit numeric zero, 0:00, positive, missing/unknown, latest-source clearing of stale stage state, zero promotion, preserving raw values on NULL, and repeated updates. The command ./bin/python -m unittest backend.nhl.tests.test_points_pp_toi_zero_semantics backend.nhl.tests.test_points_attempts_source passed 15 tests.
+
+Classification: historical corruption is confirmed in this 108-row sample and the 2023/24 distribution is strongly suspicious; exact cause and full-population affected count remain unresolved. Further recovery should require game-specific official shift evidence and explicit game/player coverage, not the checkpoint or current non-NULL values.

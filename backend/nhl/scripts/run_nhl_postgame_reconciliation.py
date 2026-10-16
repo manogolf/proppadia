@@ -75,6 +75,7 @@ from backend.nhl.player_external_identity import (
     resolve_player_external_identity,
 )
 from backend.nhl.points_attempts_source import preserve_existing_attempts_conflict_assignment
+from backend.nhl.pp_toi_source import preserve_existing_pp_toi_conflict_assignment
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -1190,7 +1191,7 @@ def _promote_stage(dsn: str, slate_date: str) -> None:
             SELECT s.player_id,s.game_id,s.team_id,
                    CASE WHEN s.team_id=g.home_team_id THEN g.away_team_id ELSE g.home_team_id END,
                    s.team_id=g.home_team_id,s.game_date,s.shots_on_goal,s.shot_attempts,s.toi_minutes,
-                   nullif(s.pp_toi_minutes,0),s.blocks,s.hits,s.fenwick_for,s.missed_shots,
+                   s.pp_toi_minutes,s.blocks,s.hits,s.fenwick_for,s.missed_shots,
                    s.blocked_shots_taken,s.rebounds_for,s.takeaways,s.giveaways,s.penalties_drawn,
                    s.penalties_taken,s.ev_shot_attempts,s.pp_shot_attempts,s.sh_shot_attempts,
                    s.ev_sog,s.pp_sog,s.sh_sog,s.goals,s.assists,
@@ -1202,7 +1203,7 @@ def _promote_stage(dsn: str, slate_date: str) -> None:
               game_date=excluded.game_date,shots_on_goal=excluded.shots_on_goal,
               {preserve_existing_attempts_conflict_assignment()},
               toi_minutes=excluded.toi_minutes,
-              pp_toi_minutes=coalesce(excluded.pp_toi_minutes,nhl.skater_game_logs_raw.pp_toi_minutes),
+              {preserve_existing_pp_toi_conflict_assignment("nhl.skater_game_logs_raw")},
               blocks=excluded.blocks,hits=excluded.hits,fenwick_for=excluded.fenwick_for,
               missed_shots=excluded.missed_shots,blocked_shots_taken=excluded.blocked_shots_taken,
               rebounds_for=excluded.rebounds_for,takeaways=excluded.takeaways,giveaways=excluded.giveaways,

@@ -74,6 +74,7 @@ from backend.nhl.prediction_lineage import (
 )
 from backend.nhl.model_identity import fitted_model_identity
 from backend.nhl.points_attempts_source import preserve_existing_attempts_conflict_assignment
+from backend.nhl.pp_toi_source import preserve_existing_pp_toi_conflict_assignment
 from backend.nhl.sog_feature_input import begin_capture as begin_sog_feature_capture
 from backend.nhl.sog_feature_input import finalize_capture as finalize_sog_feature_capture
 from backend.nhl.sog_fixed_blend import capture as capture_sog_fixed_blends
@@ -2566,7 +2567,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
        shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes{insert_blocks})
     SELECT
       player_id, game_id, team_id, opponent_id, is_home, game_date,
-      shots_on_goal, shot_attempts, toi_minutes, NULLIF(pp_toi_minutes, 0) AS pp_toi_minutes{select_blocks}
+      shots_on_goal, shot_attempts, toi_minutes, pp_toi_minutes{select_blocks}
     FROM joined
     WHERE opponent_id IS NOT NULL
     ON CONFLICT (player_id, game_id) DO UPDATE SET
@@ -2577,7 +2578,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
       shots_on_goal  = EXCLUDED.shots_on_goal,
       {preserve_existing_attempts_conflict_assignment()},
       toi_minutes    = EXCLUDED.toi_minutes,
-      pp_toi_minutes = COALESCE(NULLIF(EXCLUDED.pp_toi_minutes, 0), nhl.skater_game_logs_raw.pp_toi_minutes){update_blocks}
+      {preserve_existing_pp_toi_conflict_assignment("nhl.skater_game_logs_raw")}{update_blocks}
     RETURNING player_id, game_id, shot_attempts
     )
     SELECT 'NHL_CHILD_SUMMARY_JSON=' || json_build_object(

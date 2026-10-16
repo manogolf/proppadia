@@ -1,0 +1,330 @@
+{
+  "2023020024": {
+    "alternate_reconstruction_exact_match_count": 36,
+    "alternative_away_pp_windows": [
+      [
+        369,
+        571
+      ],
+      [
+        1048,
+        1195
+      ],
+      [
+        1739,
+        1882
+      ],
+      [
+        2209,
+        2338
+      ],
+      [
+        2643,
+        2808
+      ]
+    ],
+    "alternative_home_pp_windows": [
+      [
+        212,
+        336
+      ],
+      [
+        674,
+        795
+      ]
+    ],
+    "away_pp_windows": [
+      [
+        369,
+        571
+      ],
+      [
+        1048,
+        1195
+      ],
+      [
+        1739,
+        1882
+      ],
+      [
+        2209,
+        2338
+      ],
+      [
+        2643,
+        2808
+      ]
+    ],
+    "boxscore_skater_count": 36,
+    "checkpoint_zero_current_positive_count": 36,
+    "current_player_sum_min": 96.85,
+    "current_positive_official_zero_count": 6,
+    "current_raw_team_id_mismatch_count": 36,
+    "extra_shift_player_ids": [
+      8475852,
+      8478470
+    ],
+    "final_state_boxscore": "OFF",
+    "final_state_pbp": "OFF",
+    "home_pp_windows": [
+      [
+        212,
+        336
+      ],
+      [
+        674,
+        795
+      ]
+    ],
+    "mean_absolute_current_vs_reconstructed_difference_min": 0.566,
+    "missing_shift_player_ids": [],
+    "official_overlap_positive_count": 30,
+    "official_overlap_total_by_team_id": {
+      "16": 65.61,
+      "8": 20.42
+    },
+    "official_overlap_zero_count": 6,
+    "pbp_play_count": 312,
+    "players_with_team_conflict": [],
+    "reconstructed_player_sum_min": 86.03,
+    "shift_row_count": 659,
+    "shift_total": 659,
+    "unique_shift_player_count": 38,
+    "within_0_05_min_count": 9
+  },
+  "2023021169": {
+    "alternate_reconstruction_exact_match_count": 36,
+    "alternative_away_pp_windows": [
+      [
+        556,
+        678
+      ],
+      [
+        1257,
+        1384
+      ],
+      [
+        2074,
+        2195
+      ],
+      [
+        3486,
+        3600
+      ]
+    ],
+    "alternative_home_pp_windows": [
+      [
+        735,
+        782
+      ],
+      [
+        954,
+        971
+      ],
+      [
+        1391,
+        1696
+      ],
+      [
+        2204,
+        2305
+      ],
+      [
+        2814,
+        2935
+      ]
+    ],
+    "away_pp_windows": [
+      [
+        556,
+        678
+      ],
+      [
+        1257,
+        1384
+      ],
+      [
+        2074,
+        2195
+      ],
+      [
+        3486,
+        3600
+      ]
+    ],
+    "boxscore_skater_count": 36,
+    "checkpoint_zero_current_positive_count": 36,
+    "current_player_sum_min": 18.0,
+    "current_positive_official_zero_count": 10,
+    "current_raw_team_id_mismatch_count": 18,
+    "extra_shift_player_ids": [
+      8480382,
+      8480947,
+      8481020
+    ],
+    "final_state_boxscore": "OFF",
+    "final_state_pbp": "OFF",
+    "home_pp_windows": [
+      [
+        735,
+        782
+      ],
+      [
+        954,
+        971
+      ],
+      [
+        1391,
+        1696
+      ],
+      [
+        2204,
+        2305
+      ],
+      [
+        2814,
+        2935
+      ]
+    ],
+    "mean_absolute_current_vs_reconstructed_difference_min": 2.316,
+    "missing_shift_player_ids": [],
+    "official_overlap_positive_count": 26,
+    "official_overlap_total_by_team_id": {
+      "18": 39.62,
+      "21": 49.25
+    },
+    "official_overlap_zero_count": 10,
+    "pbp_play_count": 346,
+    "players_with_team_conflict": [],
+    "reconstructed_player_sum_min": 88.87,
+    "shift_row_count": 772,
+    "shift_total": 772,
+    "unique_shift_player_count": 39,
+    "within_0_05_min_count": 0
+  },
+  "2024020211": {
+    "alternate_reconstruction_exact_match_count": 36,
+    "alternative_away_pp_windows": [
+      [
+        942,
+        1074
+      ],
+      [
+        1989,
+        2032
+      ],
+      [
+        2541,
+        2681
+      ],
+      [
+        2917,
+        2949
+      ],
+      [
+        3327,
+        3460
+      ]
+    ],
+    "alternative_home_pp_windows": [
+      [
+        761,
+        884
+      ],
+      [
+        1194,
+        1316
+      ],
+      [
+        1674,
+        1878
+      ],
+      [
+        2046,
+        2168
+      ],
+      [
+        2790,
+        2807
+      ],
+      [
+        3017,
+        3083
+      ]
+    ],
+    "away_pp_windows": [
+      [
+        942,
+        1074
+      ],
+      [
+        1989,
+        2032
+      ],
+      [
+        2541,
+        2681
+      ],
+      [
+        2917,
+        2949
+      ],
+      [
+        3327,
+        3460
+      ]
+    ],
+    "boxscore_skater_count": 36,
+    "checkpoint_zero_current_positive_count": 36,
+    "current_player_sum_min": 106.94,
+    "current_positive_official_zero_count": 4,
+    "current_raw_team_id_mismatch_count": 0,
+    "extra_shift_player_ids": [
+      8475683,
+      8475809
+    ],
+    "final_state_boxscore": "OFF",
+    "final_state_pbp": "OFF",
+    "home_pp_windows": [
+      [
+        761,
+        884
+      ],
+      [
+        1194,
+        1316
+      ],
+      [
+        1674,
+        1878
+      ],
+      [
+        2046,
+        2168
+      ],
+      [
+        2790,
+        2807
+      ],
+      [
+        3017,
+        3083
+      ]
+    ],
+    "mean_absolute_current_vs_reconstructed_difference_min": 0.648,
+    "missing_shift_player_ids": [],
+    "official_overlap_positive_count": 32,
+    "official_overlap_total_by_team_id": {
+      "13": 54.49,
+      "18": 39.24
+    },
+    "official_overlap_zero_count": 4,
+    "pbp_play_count": 353,
+    "players_with_team_conflict": [],
+    "reconstructed_player_sum_min": 93.73,
+    "shift_row_count": 794,
+    "shift_total": 794,
+    "unique_shift_player_count": 38,
+    "within_0_05_min_count": 14
+  }
+}

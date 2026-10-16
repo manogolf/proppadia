@@ -148,24 +148,18 @@ def extract_pp_toi_minutes(p: dict) -> Optional[float]:
     If the key doesn't exist, return None (not 0.0).
     """
     # Most likely keys you intended:
-    v = (
-        p.get("ppToi")
-        or p.get("powerPlayToi")
-        or p.get("powerPlayTimeOnIce")
-        or p.get("powerPlayTime")
-    )
+    v = next((p.get(key) for key in (
+        "ppToi", "powerPlayToi", "powerPlayTimeOnIce", "powerPlayTime"
+    ) if p.get(key) is not None), None)
 
     # Sometimes it's nested under stats/timeOnIce blobs
     if v is None:
         for k in ("timeOnIce", "toi", "stats", "playerStats"):
             blob = p.get(k)
             if isinstance(blob, dict):
-                v = (
-                    blob.get("ppToi")
-                    or blob.get("powerPlayToi")
-                    or blob.get("powerPlayTimeOnIce")
-                    or blob.get("powerPlayTime")
-                )
+                v = next((blob.get(key) for key in (
+                    "ppToi", "powerPlayToi", "powerPlayTimeOnIce", "powerPlayTime"
+                ) if blob.get(key) is not None), None)
                 if v is not None:
                     break
 
@@ -533,11 +527,9 @@ def upsert_rows(conn, rows):
       {replace_staged_attempts_conflict_assignment()},
       toi_minutes     = EXCLUDED.toi_minutes,
 
-      -- IMPORTANT: do not clobber with NULL/0; only take incoming when >0
-      pp_toi_minutes  = COALESCE(
-                          NULLIF(EXCLUDED.pp_toi_minutes, 0),
-                          nhl.import_skater_logs_stage.pp_toi_minutes
-                        )
+      -- Stage is the latest source snapshot: preserve explicit zero and clear
+      -- stale staged values when this response does not provide PP TOI.
+      pp_toi_minutes  = EXCLUDED.pp_toi_minutes
       {"," if has_blocks else ""}{f" blocks = COALESCE(EXCLUDED.blocks, nhl.import_skater_logs_stage.blocks)" if has_blocks else ""};
     """
     use_rows = [tuple(r[: len(insert_cols)]) for r in rows]
