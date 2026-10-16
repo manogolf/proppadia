@@ -32,7 +32,7 @@ There were 245 checkpoint identities absent from the current raw snapshot. Of th
 
 Across the 91,248 current raw identities, 89,625 PP-TOI values differ from the October 10 checkpoint. That is a change count only; neither the checkpoint nor current values are assumed correct without official shift evidence.
 
-A fresh read-only transaction exported the live `nhl.skater_game_logs_raw` rows for these prefixes at `2026-10-16T15:09:41Z`. All 91,248 live keys are unique and match the retained current snapshot's keys and PP-TOI values exactly. Every candidate before-value for a live key also matches; there are zero changed or missing live candidate values. The remaining 246 candidate identities have no current raw row and remain excluded from correction. The retained live export SHA-256 is `452cff37a3741b780c575d337d938da6f4144455fa3fdada97c97ec084a05fe2`.
+A fresh read-only transaction exported the live `nhl.skater_game_logs_raw` rows for these prefixes at `2026-10-16T15:09:41Z`. All 91,248 live keys are unique and match the retained current snapshot's keys and PP-TOI values exactly. Every candidate before-value for a live key also matches; there are zero changed or missing live candidate values. The remaining 246 candidate identities have no current raw row and remain excluded from correction. The retained live export is `artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/live_raw_pp_toi_snapshot_readonly.csv` (SHA-256 `452cff37a3741b780c575d337d938da6f4144455fa3fdada97c97ec084a05fe2`), with comparison receipt `live_raw_pp_toi_snapshot_comparison.json` (SHA-256 `c6a18ee0fef8ee1ef81bb5c1e2d0367b5fed41105d8a48febd949c61ea9695fb`).
 
 ## Team identity
 
