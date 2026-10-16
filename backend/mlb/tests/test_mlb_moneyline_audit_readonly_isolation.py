@@ -12,6 +12,45 @@ from backend.mlb.scripts import audit_mlb_moneyline_probability_region_premise_v
 
 
 class MoneylineAuditReadOnlyIsolationTests(unittest.TestCase):
+    def test_audit_uses_hash_bound_retained_postseason_schedule_for_exact_game(self) -> None:
+        import pandas as pd
+
+        from backend.mlb.public_game_predictions.phase_gating_v1 import (
+            MoneylinePhaseGateError,
+            verified_moneyline_phase_authority,
+        )
+
+        source = audit.ROOT / audit.AUDIT_SCHEDULE_SOURCE
+        self.assertEqual(
+            audit.AUDIT_SCHEDULE_SOURCE_SHA256,
+            __import__("hashlib").sha256(source.read_bytes()).hexdigest(),
+        )
+        authority = audit._audit_phase_authority()
+        record = authority.lookup_exact(849834)
+        self.assertEqual(record.source_game_type, "D")
+        self.assertEqual(record.season_phase, audit.POSTSEASON)
+        self.assertEqual(record.postseason_round, "DIVISION_SERIES")
+        self.assertEqual(record.primary_source_sha256, audit.AUDIT_SCHEDULE_SOURCE_SHA256)
+
+        row = {
+            "game_date": "2026-10-05", "game_id": 849834,
+            "model_version": audit.MODEL,
+            "prediction_snapshot_class": audit.SNAPSHOT,
+        }
+        partitioned = audit._phase_partition_frame(pd.DataFrame([row]))
+        self.assertTrue(partitioned.empty)
+        postseason = audit._phase_partition_frame(
+            pd.DataFrame([row]), evaluation_phase=audit.POSTSEASON
+        )
+        self.assertEqual(postseason.game_id.tolist(), [849834])
+
+        # The general authority remains fail-closed for this game; only the
+        # Moneyline audit receives the source-bound overlay.
+        with self.assertRaises(MoneylinePhaseGateError):
+            audit._phase_partition_frame(
+                pd.DataFrame([row]), authority=verified_moneyline_phase_authority()
+            )
+
     def test_only_two_postgres_query_shapes_are_selects_on_target_relations(self) -> None:
         queries = (audit.PREDICTIONS_QUERY, audit.LATEST_RESOLVED_QUERY)
         relations = set()

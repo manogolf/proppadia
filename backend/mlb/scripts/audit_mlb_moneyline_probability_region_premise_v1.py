@@ -12,6 +12,7 @@ import json
 import math
 import os
 import sqlite3
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +26,7 @@ from backend.mlb.public_game_predictions.phase_gating_v1 import (
     REGULAR_SEASON,
     partition_moneyline_rows,
 )
+from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -50,6 +52,27 @@ SEED = 20260909
 SPARSE_N = 30
 AUDIT_DATABASE_URL_ENV = "MLB_MONEYLINE_AUDIT_DATABASE_URL"
 _CLI_DATABASE_URL_OVERRIDE: str | None = None
+
+# This audit-only overlay covers the exact postseason game omitted from the
+# pinned phase proposal. The retained schedule and Moneyline run receipts bind
+# this gamePk to the same source bytes; shared MLB phase authority is unchanged.
+AUDIT_SCHEDULE_SOURCE = (
+    "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-05/"
+    "20261005T200006235152Z_2026-08-05_2026-10-05_"
+    "2bfee6e9d0f17a3fca613e19348778c15a3362ef81ffd65327162eaec6af9261.json"
+)
+AUDIT_SCHEDULE_SOURCE_SHA256 = (
+    "2bfee6e9d0f17a3fca613e19348778c15a3362ef81ffd65327162eaec6af9261"
+)
+
+
+@lru_cache(maxsize=1)
+def _audit_phase_authority() -> RuntimeScheduleAuthority:
+    """Use one pinned retained schedule source for this audit's exact-PK overlay."""
+    return RuntimeScheduleAuthority(
+        source_path=ROOT / AUDIT_SCHEDULE_SOURCE,
+        expected_source_sha256=AUDIT_SCHEDULE_SOURCE_SHA256,
+    )
 
 
 def pg_connect():
@@ -142,7 +165,7 @@ def _phase_partition_frame(
     records = frame.to_dict("records")
     partitions = partition_moneyline_rows(
         records,
-        authority=authority,
+        authority=authority or _audit_phase_authority(),
         unique_identity_fields=("game_date", "game_id", "model_version", "prediction_snapshot_class"),
     )
     selected = partitions.regular_season if evaluation_phase == REGULAR_SEASON else partitions.postseason
