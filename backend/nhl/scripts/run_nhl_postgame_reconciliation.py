@@ -74,6 +74,7 @@ from backend.nhl.player_external_identity import (
     localized_text,
     resolve_player_external_identity,
 )
+from backend.nhl.points_attempts_source import preserve_existing_attempts_conflict_assignment
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -1164,7 +1165,7 @@ def _run(command: list[str], slate_date: str, dsn: str,
 def _promote_stage(dsn: str, slate_date: str) -> None:
     """Idempotently promote existing governed skater/goalie stage tables."""
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
-        cursor.execute("""
+        cursor.execute(f"""
             WITH latest_roster AS (
               SELECT DISTINCT ON (game_id,player_id) game_id,player_id,team_id
               FROM nhl.roster_status
@@ -1199,7 +1200,7 @@ def _promote_stage(dsn: str, slate_date: str) -> None:
             ON CONFLICT (player_id,game_id) DO UPDATE SET
               team_id=excluded.team_id,opponent_id=excluded.opponent_id,is_home=excluded.is_home,
               game_date=excluded.game_date,shots_on_goal=excluded.shots_on_goal,
-              shot_attempts=coalesce(excluded.shot_attempts,nhl.skater_game_logs_raw.shot_attempts),
+              {preserve_existing_attempts_conflict_assignment()},
               toi_minutes=excluded.toi_minutes,
               pp_toi_minutes=coalesce(excluded.pp_toi_minutes,nhl.skater_game_logs_raw.pp_toi_minutes),
               blocks=excluded.blocks,hits=excluded.hits,fenwick_for=excluded.fenwick_for,

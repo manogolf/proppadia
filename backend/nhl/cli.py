@@ -73,6 +73,7 @@ from backend.nhl.prediction_lineage import (
     pregame_game_eligibility,
 )
 from backend.nhl.model_identity import fitted_model_identity
+from backend.nhl.points_attempts_source import preserve_existing_attempts_conflict_assignment
 from backend.nhl.sog_feature_input import begin_capture as begin_sog_feature_capture
 from backend.nhl.sog_feature_input import finalize_capture as finalize_sog_feature_capture
 from backend.nhl.sog_fixed_blend import capture as capture_sog_fixed_blends
@@ -2565,7 +2566,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
       is_home        = EXCLUDED.is_home,
       game_date      = EXCLUDED.game_date,
       shots_on_goal  = EXCLUDED.shots_on_goal,
-      shot_attempts  = COALESCE(EXCLUDED.shot_attempts, nhl.skater_game_logs_raw.shot_attempts),
+      {preserve_existing_attempts_conflict_assignment()},
       toi_minutes    = EXCLUDED.toi_minutes,
       pp_toi_minutes = COALESCE(NULLIF(EXCLUDED.pp_toi_minutes, 0), nhl.skater_game_logs_raw.pp_toi_minutes){update_blocks};
     """

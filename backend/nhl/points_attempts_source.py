@@ -12,6 +12,32 @@ from collections import Counter
 from typing import Any
 
 
+def preserve_existing_attempts_conflict_assignment(
+    target_relation: str = "nhl.skater_game_logs_raw",
+) -> str:
+    """Return the raw-table UPSERT assignment that never replaces known attempts.
+
+    Raw shot-attempt values may have independent official-PBP verification. A
+    routine stage promotion may fill an unknown (NULL) raw value, but it must
+    not replace a populated value, including a verified zero. Corrections to a
+    populated value belong to the guarded official-source recovery path.
+    """
+    relation_parts = target_relation.split(".")
+    if len(relation_parts) not in (1, 2) or not all(
+        part.isidentifier() for part in relation_parts
+    ):
+        raise ValueError("INVALID_ATTEMPTS_TARGET_RELATION")
+    return (
+        "shot_attempts = COALESCE("
+        f"{target_relation}.shot_attempts, EXCLUDED.shot_attempts)"
+    )
+
+
+def replace_staged_attempts_conflict_assignment() -> str:
+    """Treat each stage write as a fresh source snapshot, including NULLs."""
+    return "shot_attempts = EXCLUDED.shot_attempts"
+
+
 ATTEMPT_TYPES = frozenset({"goal", "shot-on-goal", "missed-shot", "blocked-shot"})
 ON_GOAL_TYPES = frozenset({"goal", "shot-on-goal"})
 

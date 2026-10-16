@@ -53,7 +53,10 @@ from backend.nhl.player_external_identity import (
     localized_text,
     resolve_player_external_identity,
 )
-from backend.nhl.points_attempts_source import derive_attempts_from_final_pbp
+from backend.nhl.points_attempts_source import (
+    derive_attempts_from_final_pbp,
+    replace_staged_attempts_conflict_assignment,
+)
 
 # ---------------- Env / args ----------------
 DB_URL = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
@@ -523,7 +526,9 @@ def upsert_rows(conn, rows):
         ELSE EXCLUDED.shots_on_goal
         END,
 
-      shot_attempts   = COALESCE(EXCLUDED.shot_attempts, nhl.import_skater_logs_stage.shot_attempts),
+      -- Stage is a replaceable source snapshot: unknown in this response must
+      -- clear a prior staged value so a failed PBP refresh cannot promote it.
+      {replace_staged_attempts_conflict_assignment()},
       toi_minutes     = EXCLUDED.toi_minutes,
 
       -- IMPORTANT: do not clobber with NULL/0; only take incoming when >0

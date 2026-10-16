@@ -3,12 +3,17 @@ from __future__ import annotations
 import unittest
 import importlib
 import os
+import sqlite3
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pandas as pd
 
-from backend.nhl.points_attempts_source import derive_attempts_from_final_pbp
+from backend.nhl.points_attempts_source import (
+    derive_attempts_from_final_pbp,
+    preserve_existing_attempts_conflict_assignment,
+    replace_staged_attempts_conflict_assignment,
+)
 from backend.nhl.scripts import build_nhl_points_architecture_bakeoff as bakeoff
 from backend.nhl.scripts import export_nhl_points_hgb_features as hgb_exporter
 with patch.dict(os.environ, {"SUPABASE_DB_URL": "postgresql://test", "SLATE_DATE": "2026-01-01"}):
@@ -93,7 +98,9 @@ class PointsAttemptsSourceTests(unittest.TestCase):
             {"game_id": 2026020001, "player_id": 10, "team_id": 1,
              "home_team_id": 1, "away_team_id": 2, "is_home": True,
              "toi_minutes": 10.0, "pp_toi_minutes": 0.0,
-             "shots_on_goal": 1, "shot_attempts": 4},
+             # Representative corrected source value in the retained 2025
+             # recovery evidence (4 -> official-PBP 7).
+             "shots_on_goal": 1, "shot_attempts": 7},
             {"game_id": 2026020002, "player_id": 10, "team_id": 1,
              "home_team_id": 1, "away_team_id": 2, "is_home": True,
              "toi_minutes": 10.0, "pp_toi_minutes": 0.0,
@@ -107,7 +114,7 @@ class PointsAttemptsSourceTests(unittest.TestCase):
             "home_team_id": 1, "away_team_id": 2,
         }]), 2026)
         feature = hgb_exporter.build_features(history, slate)
-        self.assertAlmostEqual(float(feature.iloc[0].attempts_d10_per60), 24.0)
+        self.assertAlmostEqual(float(feature.iloc[0].attempts_d10_per60), 42.0)
 
     def test_phoenix_export_keeps_source_attempts_nullable_until_feature_boundary(self):
         sql = (Path(__file__).resolve().parents[1] / "sql/export_points.sql").read_text()
@@ -115,6 +122,79 @@ class PointsAttemptsSourceTests(unittest.TestCase):
         self.assertNotIn("COALESCE(l.shot_attempts, 0)", sql)
         self.assertIn("shot_attempts IS NOT NULL", sql)
         self.assertIn("Frozen model input default", sql)
+
+    def test_raw_promotion_conflict_preserves_populated_values_and_fills_nulls(self):
+        assignment = preserve_existing_attempts_conflict_assignment("raw")
+        connection = sqlite3.connect(":memory:")
+        connection.execute("CREATE TABLE raw (player_id INTEGER PRIMARY KEY, shot_attempts INTEGER)")
+
+        def promote(player_id, old_value, incoming):
+            connection.execute("INSERT INTO raw VALUES (?, ?)", (player_id, old_value))
+            connection.execute(
+                "INSERT INTO raw VALUES (?, ?) ON CONFLICT(player_id) DO UPDATE SET "
+                + assignment,
+                (player_id, incoming),
+            )
+            actual = connection.execute(
+                "SELECT shot_attempts FROM raw WHERE player_id = ?", (player_id,)
+            ).fetchone()[0]
+            self.assertEqual(actual, old_value if old_value is not None else incoming)
+
+        promote(1, 7, None)   # unavailable rerun cannot clear a verified count
+        promote(2, 0, 8)      # a verified zero cannot be replaced
+        promote(3, 12, 99)    # an unverified different count cannot replace it
+        promote(4, None, 0)   # a verified zero can fill an unknown raw value
+        promote(5, None, 6)   # a verified positive can fill an unknown raw value
+
+    def test_stage_refresh_replaces_stale_attempts_with_unknown(self):
+        connection = sqlite3.connect(":memory:")
+        connection.execute("CREATE TABLE stage (player_id INTEGER PRIMARY KEY, shot_attempts INTEGER)")
+        connection.execute("INSERT INTO stage VALUES (1, 14)")
+        connection.execute(
+            "INSERT INTO stage VALUES (1, NULL) ON CONFLICT(player_id) DO UPDATE SET "
+            + replace_staged_attempts_conflict_assignment(),
+        )
+        self.assertIsNone(connection.execute(
+            "SELECT shot_attempts FROM stage WHERE player_id=1"
+        ).fetchone()[0])
+
+        importer = skater_importer
+
+        class Cursor:
+            def __init__(self):
+                self.executed = []
+
+            def execute(self, sql):
+                self.executed.append(sql)
+
+            def fetchall(self):
+                return [("player_id",), ("game_id",), ("game_date",), ("team_id",),
+                        ("shots_on_goal",), ("shot_attempts",), ("toi_minutes",),
+                        ("pp_toi_minutes",)]
+
+            def executemany(self, sql, rows):
+                self.executed.append(sql)
+                self.rows = list(rows)
+
+        cursor = Cursor()
+        connection = MagicMock()
+        connection.cursor.return_value.__enter__.return_value = cursor
+        importer.upsert_rows(connection, [(1, 2026020001, "2026-01-01", 1, 1, None,
+                                          10.0, None, None)])
+        stage_sql = cursor.executed[-1]
+        self.assertIn(replace_staged_attempts_conflict_assignment(), stage_sql)
+        self.assertNotIn("COALESCE(EXCLUDED.shot_attempts", stage_sql)
+
+    def test_both_raw_promoters_use_preserve_existing_assignment(self):
+        expected = preserve_existing_attempts_conflict_assignment()
+        cli_source = (Path(__file__).resolve().parents[1] / "cli.py").read_text()
+        postgame_source = (Path(__file__).resolve().parents[1] / "scripts" /
+                           "run_nhl_postgame_reconciliation.py").read_text()
+        self.assertIn("{preserve_existing_attempts_conflict_assignment()}", cli_source)
+        self.assertIn("{preserve_existing_attempts_conflict_assignment()}", postgame_source)
+        self.assertNotIn("shot_attempts  = COALESCE(EXCLUDED.shot_attempts", cli_source)
+        self.assertNotIn("shot_attempts=coalesce(excluded.shot_attempts", postgame_source)
+        self.assertIn("COALESCE(nhl.skater_game_logs_raw.shot_attempts, EXCLUDED.shot_attempts)", expected)
 
     def test_hgb_training_builder_excludes_missing_attempts_but_keeps_zero(self):
         rows = []
