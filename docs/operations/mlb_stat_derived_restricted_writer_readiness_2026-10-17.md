@@ -159,6 +159,12 @@ A post-run read-only connection through the same route passed that gate and
 recorded those exact identities. The writer committed with
 `COMMITTED_AFTER_COUNT_RECONCILIATION` and exited 0.
 
+The full before/after row snapshots used the existing `SUPABASE_DB_URL` in
+repeatable-read, read-only PostgreSQL transactions; both session and current
+user were `postgres`. The existing moneyline audit read identity is scoped to a
+different relation and cannot supply these snapshots. No read grant or role was
+changed; the owner connection's transaction was explicitly read-only.
+
 | Operation | Writer-reported result | Full-date before/after |
 | --- | ---: | --- |
 | `safe_upsert_game_info(jsonb) AS result_count` | 1 selected-game row result | 2 rows; fingerprint unchanged |
