@@ -175,7 +175,8 @@ def load_outcomes() -> tuple[pd.DataFrame,str]:
     url=os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
     if not url: raise RuntimeError("database URL required")
     sql="SELECT game_date::text,game_id::bigint,player_id::bigint,hits::integer,plate_appearances::integer FROM mlb.player_stats WHERE game_date BETWEEN DATE '2026-03-25' AND DATE '2026-08-13' ORDER BY game_date,game_id,player_id"
-    with psycopg.connect(url) as conn:
+    from backend.shared.db.mlb_research import mlb_research_readonly_connection
+    with mlb_research_readonly_connection(url) as conn:
         with conn.cursor() as cur: cur.execute(sql); data=cur.fetchall(); cols=[x.name for x in cur.description]
     d=pd.DataFrame(data,columns=cols)
     if d.duplicated(["game_id","player_id"]).any(): raise AssertionError("duplicate outcomes")

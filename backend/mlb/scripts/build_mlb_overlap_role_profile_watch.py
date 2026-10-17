@@ -128,7 +128,8 @@ def _load_pds(rows: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     if not url:
         return pd.DataFrame(), "db_url_missing"
     try:
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import text
+        from backend.shared.db.mlb_research import create_mlb_research_readonly_engine
     except Exception as exc:  # pragma: no cover
         return pd.DataFrame(), f"sqlalchemy_unavailable:{type(exc).__name__}"
     player_ids = sorted({int(v) for v in pd.to_numeric(rows.get("player_id"), errors="coerce").dropna().unique()})
@@ -138,7 +139,7 @@ def _load_pds(rows: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     start_date = min(dates)
     end_date = max(dates)
     try:
-        engine = create_engine(url)
+        engine = create_mlb_research_readonly_engine(url)
         with engine.connect() as conn:
             pds = pd.read_sql(
                 text(
@@ -230,7 +231,8 @@ def _load_player_stats_history(rows: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     if not url:
         return pd.DataFrame(), "db_url_missing"
     try:
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import text
+        from backend.shared.db.mlb_research import create_mlb_research_readonly_engine
     except Exception as exc:  # pragma: no cover
         return pd.DataFrame(), f"sqlalchemy_unavailable:{type(exc).__name__}"
     player_ids = sorted({int(v) for v in pd.to_numeric(rows.get("player_id"), errors="coerce").dropna().unique()})
@@ -240,7 +242,7 @@ def _load_player_stats_history(rows: pd.DataFrame) -> tuple[pd.DataFrame, str]:
     start = (dates.min().date() - timedelta(days=45)).isoformat()
     end = dates.max().date().isoformat()
     try:
-        engine = create_engine(url)
+        engine = create_mlb_research_readonly_engine(url)
         with engine.connect() as conn:
             hist = pd.read_sql(
                 text(

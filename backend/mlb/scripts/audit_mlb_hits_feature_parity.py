@@ -14,7 +14,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from backend.shared.db.mlb_research import create_mlb_research_readonly_engine
 
 
 DEFAULT_OUT_MD = Path("backend/mlb/exports/model_diagnostics/hits_feature_parity_audit.md")
@@ -327,7 +328,7 @@ def main() -> int:
     parser.add_argument("--out-csv", type=Path, default=DEFAULT_OUT_CSV)
     args = parser.parse_args()
 
-    engine = create_engine(_db_url())
+    engine = create_mlb_research_readonly_engine(_db_url())
     training_rows, training_summary = _fetch_training_stats(engine, args.train_from_date, args.to_date)
     prediction_rows, prediction_summary = _fetch_prediction_stats(engine, args.from_date, args.to_date)
     rows = [*training_rows, *prediction_rows, *_metadata_stats(), *_artifact_stats()]

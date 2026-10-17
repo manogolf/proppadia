@@ -25,7 +25,8 @@ import pandas as pd
 from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from backend.shared.db.mlb_research import create_mlb_research_readonly_engine
 
 from backend.mlb.identity.canonical_game_identity import GameIdentityInput, GameIdentityResolver
 from backend.mlb.identity.canonical_market_identity import MarketIdentityInput, resolve_market_identity
@@ -410,7 +411,7 @@ def _join_pds(rows: pd.DataFrame, chunk_size: int) -> pd.DataFrame:
     if rows.empty:
         return rows
     date_value = str(rows["date_norm"].dropna().iloc[0]) if "date_norm" in rows.columns and rows["date_norm"].notna().any() else ""
-    engine = create_engine(_db_url())
+    engine = create_mlb_research_readonly_engine(_db_url())
     game_ids = sorted({int(v) for v in rows.loc[rows["game_id_key"].notna(), "game_id_key"].tolist()})
     team_codes = _load_player_team_codes(engine, game_ids, chunk_size)
     if not team_codes.empty:

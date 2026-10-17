@@ -14,7 +14,7 @@ from pathlib import Path
 from statistics import mean, pstdev
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
-from backend.shared.db.pg import pg_fetchall
+from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 from backend.mlb.identity import (
     GameIdentityInput,
     GameIdentityResolver,

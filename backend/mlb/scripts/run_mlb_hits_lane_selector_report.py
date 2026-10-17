@@ -793,10 +793,11 @@ def _selector_overlap_role_profile_summary(date_value: str, overlap_summary: dic
             "context_status": "db_url_missing",
         }
     try:
-        from sqlalchemy import create_engine, text
+        from sqlalchemy import text
+        from backend.shared.db.mlb_research import create_mlb_research_readonly_engine
 
         player_ids = sorted({int(v) for v in pd.to_numeric(exact_rows.get("player_id"), errors="coerce").dropna().unique()})
-        engine = create_engine(url)
+        engine = create_mlb_research_readonly_engine(url)
         with engine.connect() as conn:
             pds = pd.read_sql(
                 text(

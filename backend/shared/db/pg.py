@@ -19,6 +19,9 @@ MLB_INGEST_DATABASE_URL_ENV = "MLB_INGEST_DATABASE_URL"
 MLB_INGEST_OPT_IN_ENV = "MLB_USE_RESTRICTED_INGEST"
 MLB_INGEST_LOGIN = "proppadia_mlb_ingest_login"
 MLB_INGEST_ROLE = "proppadia_mlb_ingest"
+MLB_RESEARCH_DATABASE_URL_ENV = "MLB_RESEARCH_DATABASE_URL"
+MLB_RESEARCH_LOGIN = "proppadia_mlb_research_login"
+MLB_RESEARCH_ROLE = "proppadia_mlb_research_ro"
 
 _MLB_INGEST_FUNCTIONS = (
     "safe_upsert_player_stats",
@@ -350,6 +353,41 @@ def pg_fetchall(sql: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
     with _connect() as conn, conn.cursor() as cur:
         cur.execute(sql, params)
         return list(cur.fetchall() or [])
+
+
+def pg_fetchall_mlb_research_readonly(
+    sql: str, params: Sequence[Any] = ()
+) -> List[Dict[str, Any]]:
+    """Use the process opt-in research route, retaining the legacy fallback."""
+    research_url = os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip()
+    if not research_url:
+        return pg_fetchall(sql, params)
+    if psycopg is None:
+        raise RuntimeError("psycopg is required for the MLB research connection")
+    conn = psycopg.connect(
+        research_url,
+        row_factory=psycopg.rows.dict_row,
+        prepare_threshold=None,
+        options="-c search_path=mlb,public",
+    )
+    try:
+        conn.execute("BEGIN READ ONLY")
+        identity = conn.execute(
+            "SELECT session_user::text AS session_user, current_user::text AS current_user, "
+            "pg_has_role(current_user, %s, 'USAGE') AS role_inherited",
+            (MLB_RESEARCH_ROLE,),
+        ).fetchone()
+        if (
+            identity["session_user"] != MLB_RESEARCH_LOGIN
+            or identity["current_user"] != MLB_RESEARCH_LOGIN
+            or not identity["role_inherited"]
+        ):
+            raise RuntimeError("MLB research connection identity or inherited role mismatch")
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            return list(cur.fetchall() or [])
+    finally:
+        conn.close()
 
 
 def pg_fetchone(sql: str, params: Sequence[Any] = ()) -> Optional[Dict[str, Any]]:

@@ -15,7 +15,8 @@ from typing import Any, Iterable, Sequence
 
 import numpy as np
 import pandas as pd
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
+from backend.shared.db.mlb_research import create_mlb_research_readonly_engine
 
 
 DEFAULT_ROOT = Path("artifacts/analysis/mlb/execution_vs_model")
@@ -368,7 +369,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     paths = _discover_reconcile_files(Path(args.reconcile_root), args.from_date, args.to_date)
     reconcile = _load_hits_reconcile(paths)
-    engine = create_engine(_db_url(), pool_pre_ping=True)
+    engine = create_mlb_research_readonly_engine(_db_url(), pool_pre_ping=True)
     features = _prep_features(_fetch_features(engine, args.from_date, args.to_date))
     sides = _side_rows(reconcile, features)
     report = build_report(sides)

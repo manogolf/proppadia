@@ -396,7 +396,7 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P2.2 Inventory owner-level database aliases and plan gradual replacement
 
-- Status: **READ PERMISSIONS PREPARED — production deployment and process routing remain open**.
+- Status: **READ PERMISSIONS AND PROCESS ROUTING PREPARED — production deployment and verification remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as
   `session_user=current_user=postgres`. The restricted alias connected as
   `proppadia_mlb_ingest_login`; after the application's required `SET ROLE`,
@@ -498,19 +498,60 @@ writer validation does not authorize a hosted cutover or a different writer.
   selector projection, and existing route contracts. These checks do not prove
   application behavior on a natural daily run. No production grants, policies,
   role attributes, aliases, credentials, or scheduler settings were changed.
-- Process routing remains a separate follow-up. Add process-only
-  `MLB_RESEARCH_DATABASE_URL` routing for `report_mlb_hits_environment.py`,
-  `run_mlb_hits_lane_selector_daily.py`, `run_mlb_hits_lane_selector_report.py`,
+- Process routing is prepared in the local commit
+  `route MLB research readers through opt-in URL` with the dedicated
+  `backend/shared/db/mlb_research.py` opt-in engine/connection helper.
+  The helper chooses `MLB_RESEARCH_DATABASE_URL` only when one of the listed
+  consumers explicitly calls it; without that variable it uses the caller's
+  current URL. Opted-in SQLAlchemy transactions start with
+  `SET TRANSACTION READ ONLY`, then assert
+  `session_user=current_user=proppadia_mlb_research_login` and inherited
+  membership in `proppadia_mlb_research_ro`. The direct psycopg and shared
+  `pg_fetchall` variants begin `READ ONLY` transactions and enforce the same
+  identity check. Generic `pg_connect`, `pg_fetchall`, `DATABASE_URL`, and
+  `SUPABASE_DB_URL` resolution are unchanged.
+- The exact routed consumers are `report_mlb_hits_environment.py` (shared
+  psycopg reader helper), `run_mlb_hits_lane_selector_daily.py`,
+  `run_mlb_hits_lane_selector_report.py`,
   `build_mlb_overlap_role_profile_watch.py`,
   `report_mlb_hits_recency_vs_baseline.py`,
-  `report_mlb_hits_interaction_failure.py`, `audit_mlb_hits_feature_parity.py`,
-  and `assemble_mlb_hits05_2026_season_to_date_evidence_v1.py`. The first uses
-  the shared `pg_fetchall` connection helper; the selector, profile, research
-  reports, and evidence assembler resolve their own URL or engine. Route only
-  these read-only child processes through the research URL, assert the effective
-  login, and preserve `MLB_MONEYLINE_AUDIT_DATABASE_URL` for the Moneyline audit
-  and BvP post-commit readback. Do not change shared default aliases or either
-  daily wrapper.
+  `report_mlb_hits_interaction_failure.py`,
+  `audit_mlb_hits_feature_parity.py` (read-only SQLAlchemy engine helper), and
+  `assemble_mlb_hits05_2026_season_to_date_evidence_v1.py` (direct psycopg
+  read-only connection). No writer, repair, reconciliation-write, maintenance,
+  Moneyline audit, or BvP verifier uses this helper. Existing
+  `MLB_MONEYLINE_AUDIT_DATABASE_URL` routes remain intact.
+- Focused offline coverage is in
+  `backend/tests/test_mlb_research_readonly_routing.py`: URL selection and
+  legacy fallback, pre-query read-only transaction setup, expected login and
+  inherited role checks, failure on an unexpected identity, mapping-row shape
+  for the shared fetch helper, and routing non-leakage into generic reads. It
+  also checks all eight named consumer sources reference their intended reader
+  helper and contain no direct DML. The run passed (`6 passed, 8 subtests
+  passed`). This task did not connect to production or run a PostgreSQL preview;
+  the earlier isolated permission/rollback preview remains the database-level
+  evidence. Real application row shapes and write denial under the deployed
+  login remain cutover checks.
+- Production cutover sequence, still requiring separate authorization: (1)
+  keep the current scheduled environment and routes while reviewing this
+  commit; (2) apply
+  `backend/mlb/sql/migrations/20261017_mlb_research_source_read.sql` in an
+  approved maintenance window and verify the six grants, four policies, and
+  both research roles' `NOBYPASSRLS` attributes; (3) supply the existing
+  research URL only to the eight reader process environments, preserving the
+  current writer environment, Moneyline audit URL, and BvP verification URL;
+  (4) smoke the readers individually outside the scheduled run, checking
+  identity, expected row counts/shapes, unrelated-column denial, and denied
+  writes; (5) opt the daily report and selector readers in before the next
+  scheduled MLB run, then verify their natural-run outputs and confirm writer
+  receipts and Moneyline/BvP checks are unchanged; (6) if a reader fails, unset
+  its process-level research URL and return it to its legacy route, then use
+  the paired rollback only under separate database-change authorization.
+  Relevant recurring entrypoints are `mlb-hits-environment-report` (also a
+  nonblocking child of `mlb-daily-refresh`), its selector/reconciliation path,
+  and `build_mlb_overlap_role_profile_watch.py`; the other research/evidence
+  scripts are direct command paths. This prepared code requires no tracked or
+  installed daily-wrapper change.
 - Exceptional maintenance remains a separate owner route: migration/rollback
   and phase activation tools, historical correction/backfill/recompute targets,
   and manual training regeneration. They are not daily scheduled consumers and
@@ -529,7 +570,9 @@ writer validation does not authorize a hosted cutover or a different writer.
   through the existing research login; (3) verify query row scope, expected
   results, and write denial under that identity; (4) decide and validate a separately
   approved route for the daily materialized-view refresh; (5) retain the first
-  natural restricted source/training INSERT or protected NULL-fill evidence.
+  natural restricted source/training INSERT or protected NULL-fill evidence;
+  (6) after separately authorized grant deployment, complete the reader
+  cutover smoke and first-natural-run checks above.
   No alias, role, grant, credential, or scheduler change is authorized by this
   inventory.
 
