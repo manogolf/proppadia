@@ -50,7 +50,22 @@ the setup file, the migration command above, then
 The last script rolls back its fixture rows. It asserts successful new-row
 INSERT, same-value replay, stage NULL-fill, shift-overlap NULL-fill, conflict
 preservation, idempotent replay, denied direct protected UPDATE/DELETE/TRUNCATE,
-and no correction-role membership for ingest.
+that the test session is running as the daily login, denial of correction-role
+switching, and no correction-role membership for ingest. The fixture setup
+temporarily grants the fixture administrator (`postgres`) membership in the
+NOLOGIN daily test identity so `SET LOCAL ROLE` can simulate that connection;
+it does not grant privileges to the daily identity itself. Revoke that
+membership during cleanup.
+
+For an isolated preview run, execute the committed rollback only after all
+fixture assertions pass. Verify that both functions are absent and that the
+fixture's pre-migration ingest column grants are restored. Then run
+`nhl_safe_promotion_fixture_cleanup.sql`; it checks the expected fixture-only
+inventory, revokes both test memberships, drops the fixture `nhl` schema, and
+drops only the seven fixture-created Proppadia roles. It does not remove
+Supabase-reserved roles or alter other schemas. The rollback intentionally
+restores the old direct-update exposure and must remain confined to the
+disposable preview test.
 
 ## Rollback
 

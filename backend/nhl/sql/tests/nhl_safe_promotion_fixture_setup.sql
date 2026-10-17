@@ -67,3 +67,6 @@ GRANT SELECT ON nhl.games,nhl.game_manpower_segments,nhl.shiftcharts_raw TO prop
 GRANT SELECT ON nhl.skater_game_logs_raw TO proppadia_nhl_source_correction;
 GRANT UPDATE (shot_attempts,pp_toi_minutes)
   ON nhl.skater_game_logs_raw TO proppadia_nhl_source_correction;
+-- Test harness only: let the fixture administrator simulate the NOLOGIN
+-- daily identity with SET LOCAL ROLE. The cleanup script revokes this.
+GRANT proppadia_nhl_daily_login TO postgres;

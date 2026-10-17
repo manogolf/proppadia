@@ -20,6 +20,43 @@ INSERT INTO nhl.shiftcharts_raw VALUES
 
 -- Exercise the effective permissions inherited by the real daily login.
 SET LOCAL ROLE proppadia_nhl_daily_login;
+SELECT current_user AS fixture_effective_role;
+
+SAVEPOINT correction_role_switch_probe;
+\set ON_ERROR_STOP off
+SET LOCAL ROLE proppadia_nhl_source_correction;
+\if :ERROR
+  ROLLBACK TO SAVEPOINT correction_role_switch_probe;
+  \echo FIXTURE_CORRECTION_ROLE_SWITCH=DENIED_AS_EXPECTED
+\else
+  ROLLBACK TO SAVEPOINT correction_role_switch_probe;
+  \echo FIXTURE_CORRECTION_ROLE_SWITCH=UNEXPECTEDLY_ALLOWED
+  \quit 1
+\endif
+\set ON_ERROR_STOP on
+
+DO $$
+BEGIN
+  IF current_user <> 'proppadia_nhl_daily_login' THEN
+    RAISE EXCEPTION 'FIXTURE_DAILY_ROLE_SWITCH_IDENTITY_MISMATCH';
+  END IF;
+  IF NOT has_function_privilege(current_user,
+       'nhl.promote_skater_game_log_protected_fields(date)', 'EXECUTE')
+     OR NOT has_function_privilege(current_user,
+       'nhl.fill_pp_toi_minutes_from_shift_overlap(bigint)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'FIXTURE_DAILY_SAFE_FUNCTION_EXECUTE_MISSING';
+  END IF;
+  IF has_function_privilege('proppadia_nhl_source_correction',
+       'nhl.promote_skater_game_log_protected_fields(date)', 'EXECUTE')
+     OR has_function_privilege('proppadia_nhl_source_correction',
+       'nhl.fill_pp_toi_minutes_from_shift_overlap(bigint)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'FIXTURE_CORRECTION_ROLE_HAS_SAFE_FUNCTION_EXECUTE';
+  END IF;
+  IF pg_has_role(current_user,'proppadia_nhl_source_correction','MEMBER') THEN
+    RAISE EXCEPTION 'FIXTURE_DAILY_HAS_CORRECTION_ROLE_MEMBERSHIP';
+  END IF;
+END
+$$;
 
 -- New official source observations can still be inserted.
 INSERT INTO nhl.skater_game_logs_raw

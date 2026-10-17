@@ -5,7 +5,9 @@
 Authorized test of the isolated Supabase preview `nhl-source-protection-test`
 (`vbnzmvmhuwvpkijxeuyq`) using `NHL_PP_TOI_TEST_DSN`. No production database,
 production connection, scheduler, or canonical source record was accessed or
-changed. SQL files were used unchanged from commits `395dc5d7` and `53bc783e`.
+changed. The first attempt used committed SQL unchanged. On retry, only the
+fixture setup/test harness changed; the migration and rollback remained
+unchanged.
 
 ## Target and initial state
 
@@ -18,7 +20,7 @@ changed. SQL files were used unchanged from commits `395dc5d7` and `53bc783e`.
 - Supabase `anon`, `authenticated`, and `service_role` roles were present and
   were not created or altered by fixture setup.
 
-## Execution
+## First attempt
 
 | Stage | Result | Evidence |
 | --- | --- | --- |
@@ -43,6 +45,43 @@ session `SET ROLE` to the daily-login role. Therefore no ingestion or protected
 overwrite assertion ran. The preview-only fixture harness needs a reviewed way
 to exercise the test identity before the test can continue.
 
-No rollback, compensating grant, repair, or cleanup was attempted. The preview
-retains our fixture objects and migration changes alongside its pre-existing
-Supabase objects; review this state before any further action.
+At the end of the first attempt, no rollback, compensating grant, repair, or
+cleanup had been attempted. The subsequent authorized retry and current
+retained state are recorded below.
+
+## Authorized retry and retained state
+
+The test harness was corrected locally by adding a fixture-only membership
+from the preview administrator `postgres` to the `NOLOGIN`
+`proppadia_nhl_daily_login`. This does not grant privileges to the daily login;
+it lets the administrator simulate it with `SET LOCAL ROLE`. The fixture test
+now prints the effective role, checks function access boundaries, and attempts
+the correction-role switch under a savepoint. A fixture-only cleanup script
+revokes the administrator and daily-to-ingest memberships and removes only the
+fixture schema and roles.
+
+Before retry, read-only inspection confirmed the same preview identity, the
+five expected empty fixture tables, the two safe-promotion functions, the
+seven NOLOGIN fixture roles, no administrator-to-daily membership, and no
+daily-to-correction membership. The original setup and migration remained in
+place; neither was rerun.
+
+| Stage | Result | Evidence |
+| --- | --- | --- |
+| Temporary admin membership | PASS | Granted `proppadia_nhl_daily_login` to preview `postgres`; verified in a read-only transaction. |
+| Daily role switch | PASS | `current_user` became `proppadia_nhl_daily_login`; it inherited ingest and had no correction membership. |
+| Correction-role switch denial | PASS | PostgreSQL denied `SET LOCAL ROLE proppadia_nhl_source_correction`; the fixture caught the expected error and rolled back to its savepoint. |
+| Ingestion and protection assertions | PASS | New insert, same-value replay, stage NULL-fill, shift-overlap NULL-fill, preservation of populated values, denied protected UPDATEs, denied DELETE/TRUNCATE, and idempotent replays all passed. The fixture transaction rolled back. |
+| Safe-promotion rollback SQL | EXECUTED | Both functions were dropped; the rollback transaction committed. |
+| Rollback verification | PARTIAL / FAIL | Read-only checks confirmed functions absent, fixture tables empty, and protected UPDATE grants present for ingest and correction. Exact restoration to the fixture's pre-migration grants was not demonstrated. |
+| Cleanup | NOT RUN | Stopped after the rollback-baseline discrepancy. |
+
+The mismatch is in the fixture baseline: setup grants ingest UPDATE only on
+`game_date`, `toi_minutes`, and `shots_on_goal`, while the committed rollback
+restores a wider prior grant set including `shot_attempts` and
+`pp_toi_minutes`. Thus the rollback returned the grants encoded by its SQL,
+but the fixture did not model that SQL's pre-migration grant baseline. The
+preview currently retains the five empty fixture tables, seven NOLOGIN roles,
+the rollback state, and the temporary `postgres`-to-daily membership. After
+identifying the baseline mismatch, no cleanup or further database change was
+attempted.
