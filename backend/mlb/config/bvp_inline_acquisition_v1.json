@@ -13,7 +13,7 @@
   },
   "state_authority": "artifacts/ops/bvp_inline_v1/acquisition.sqlite3",
   "state_kind": "LOCAL_OPERATIONAL_APPEND_ONLY_CLAIMS_EVENTS_RESULTS_AND_SUCCESS_RECEIPTS; NOT_BASEBALL_DATABASE_SCHEMA",
-  "canonical_collector_sha256": "a3f4c3811cea930aa55152bf7661de47a209d3edbbc37bbd5391ed2b72391261",
+  "canonical_collector_sha256": "9e4d0e3a312e684eb2f0aa2faa229daefb690dad60623609a3898eeecb50aa23",
   "retained_retry_contract": "BVP_INITIAL_SCHEDULE_WAKE_RETRY_V1",
   "identity_contract": "BVP_CANONICAL_SLATE_IDENTITY_V1",
   "independent_lane_failure_policy": "WARN_AND_CONTINUE; NEVER_MODEL_SKIP_AN_ACQUISITION_FAILURE",

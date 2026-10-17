@@ -1,6 +1,7 @@
 # Repository operating instructions
 
 - Before work, read applicable `AGENTS.md` files and the relevant project doctrine, contracts, and runbooks. This checklist points to those sources; their detailed policies remain authoritative.
+- At task start, review backlog items germane to authorized work; resolve related items that fit naturally within scope and close them with evidence, record newly deferred items before finishing, and do not pursue unrelated backlog work or expand production authorization.
 - Use `backend/.env` as the authoritative environment configuration. Never print, log, or include credentials or connection strings in output or artifacts.
 - When an authorized external request fails on DNS or transport inside the sandbox, immediately request elevated network permission for that request and retry. Check elevation before diagnosing a Mac or provider outage.
 - Preserve ordinary provider retry behavior; do not add arbitrary one-attempt limits.
