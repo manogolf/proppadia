@@ -31,14 +31,16 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
         cls.workflow = WORKFLOW.read_text()
 
     def test_roster_writer_conflict_and_inactive_operations_are_documented(self):
-        self.assertIn("INSERT INTO mlb.player_ids", self.roster)
-        self.assertIn("ON CONFLICT (player_id)", self.roster)
-        self.assertIn("COALESCE(EXCLUDED.player_name, player_ids.player_name)", self.roster)
-        self.assertIn("WHERE NOT (player_id = ANY(%s::bigint[]))", self.roster)
-        self.assertIn("SELECT(player_id)", self.contract)
-        self.assertIn("`ON CONFLICT` expressions read existing values", self.contract)
-        for field in ("player_name", "team", "team_id", "active", "status", "updated_at"):
+        migration = (ROOT / "backend/mlb/sql/migrations/20261019_mlb_adjacent_writer_entrypoints.sql").read_text()
+        self.assertIn("mlb.safe_upsert_player_roster(%s::jsonb)", self.roster)
+        self.assertIn("mlb.safe_mark_player_roster_inactive(%s::bigint[],%s,%s)", self.roster)
+        self.assertIn("COALESCE(EXCLUDED.%I,mlb.player_ids.%I)", migration)
+        self.assertIn("p_successful_teams<GREATEST(p_total_teams-1,1)", migration)
+        self.assertIn("mlb.safe_insert_player_id_if_absent(%s::jsonb)", self.stat)
+        self.assertIn("ordinary role needs no direct table DML or SELECT", self.contract)
+        for field in ("player_name", "team", "team_id", "status", "updated_at"):
             self.assertIn(f"`{field}`", self.contract)
+        self.assertIn("Active/status and timestamp refresh", self.contract)
         self.assertIn("at least `total - 1` team fetches succeeded", self.contract)
 
     def test_stat_source_upsert_null_fills_and_quarantines_populated_conflicts(self):
@@ -97,15 +99,18 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
         self.assertNotIn("GRANT TRUNCATE", derived_migration)
 
     def test_game_phase_conflicts_and_bvp_upsert_are_recorded(self):
+        migration = (ROOT / "backend/mlb/sql/migrations/20261019_mlb_adjacent_writer_entrypoints.sql").read_text()
         self.assertIn("CANONICAL_GAME_PHASE_CONFLICT", self.stat)
-        self.assertIn("INSERT INTO mlb.game_info", self.stat)
-        self.assertIn("ON CONFLICT (prop_type, player_id, game_id, feature_set_tag)", self.bvp)
+        self.assertIn("mlb.safe_upsert_game_info(%s::jsonb)", self.stat)
+        self.assertIn("mlb.safe_upsert_prop_features_precomputed(%s::jsonb)", self.bvp)
+        self.assertIn("ON CONFLICT(prop_type,player_id,game_id,feature_set_tag)", migration)
+        self.assertIn("IS NOT DISTINCT FROM", migration)
         self.assertIn("prop_features_precomputed", self.contract)
 
     def test_hosted_workflow_uses_separate_secret_without_secret_inspection(self):
         self.assertIn("secrets.SUPABASE_DB_URL", self.workflow)
-        self.assertIn("its value must not be inspected", self.contract_one_line)
-        self.assertIn("must not be inspected", self.contract_one_line)
+        self.assertIn("its value was not inspected", self.contract_one_line)
+        self.assertIn("identity and a bounded hosted run remain unverified", self.contract_one_line)
 
     def test_fixture_is_explicitly_disposable_and_denies_destructive_privileges(self):
         self.assertIn("never canonical production tables", self.fixture_one_line)

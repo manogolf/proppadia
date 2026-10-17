@@ -1019,13 +1019,15 @@ def _upsert_game_info_min(
             (sorted(phase_columns),),
         )
         available = {
-            str((item or {}).get("column_name"))
+            str(_row_mapping(cur, item).get("column_name"))
             for item in cur.fetchall()
-            if (item or {}).get("column_name")
+            if _row_mapping(cur, item).get("column_name")
         }
-    if available and available != phase_columns:
+    if available != phase_columns:
         missing = sorted(phase_columns - available)
-        raise RuntimeError(f"CANONICAL_PHASE_SCHEMA_PARTIAL:{','.join(missing)}")
+        if available:
+            raise RuntimeError(f"CANONICAL_PHASE_SCHEMA_PARTIAL:{','.join(missing)}")
+        raise RuntimeError("CANONICAL_PHASE_SCHEMA_REQUIRED_FOR_RESTRICTED_WRITER")
 
     if available:
         if not re.fullmatch(r"[0-9a-f]{64}", source_sha256):
@@ -1042,10 +1044,11 @@ def _upsert_game_info_min(
             )
             existing = cur.fetchone()
         if existing:
+            existing_row = _row_mapping(cur, existing)
             conflicts = [
                 field
                 for field in PHASE_CORE_FIELDS
-                if existing.get(field) is not None and existing.get(field) != row.get(field)
+                if existing_row.get(field) is not None and existing_row.get(field) != row.get(field)
             ]
             if conflicts:
                 raise RuntimeError(
@@ -1054,88 +1057,25 @@ def _upsert_game_info_min(
         row["schedule_relationships"] = json.dumps(
             row["schedule_relationships"], sort_keys=True, separators=(",", ":")
         )
+        payload = {
+            key: value for key, value in row.items()
+            if key in {
+                "game_id", "game_time", "game_date", "home_team_id", "away_team_id",
+                "home_team_abbr", "away_team_abbr", "source_season", "source_game_type",
+                "season_phase", "postseason_round", "season_name", "source_round",
+                "schedule_relationships", "game_type_source_sha256",
+            }
+        }
+        payload["schedule_relationships"] = json.loads(payload["schedule_relationships"])
         with conn.cursor() as cur:
             cur.execute(
-                """
-                INSERT INTO mlb.game_info (
-                    game_id, game_time, game_date, home_team_id, away_team_id,
-                    home_team_abbr, away_team_abbr, source_season,
-                    source_game_type, season_phase, postseason_round,
-                    season_name, source_round, schedule_relationships,
-                    game_type_source_sha256
-                ) VALUES (
-                    %(game_id)s, %(game_time)s, %(game_date)s,
-                    %(home_team_id)s, %(away_team_id)s,
-                    %(home_team_abbr)s, %(away_team_abbr)s,
-                    %(source_season)s, %(source_game_type)s,
-                    %(season_phase)s, %(postseason_round)s,
-                    %(season_name)s, %(source_round)s,
-                    %(schedule_relationships)s::jsonb,
-                    %(game_type_source_sha256)s
-                )
-                ON CONFLICT (game_id) DO UPDATE SET
-                    game_time = COALESCE(game_info.game_time, EXCLUDED.game_time),
-                    game_date = EXCLUDED.game_date,
-                    home_team_id = COALESCE(game_info.home_team_id, EXCLUDED.home_team_id),
-                    away_team_id = COALESCE(game_info.away_team_id, EXCLUDED.away_team_id),
-                    home_team_abbr = COALESCE(game_info.home_team_abbr, EXCLUDED.home_team_abbr),
-                    away_team_abbr = COALESCE(game_info.away_team_abbr, EXCLUDED.away_team_abbr),
-                    source_season = COALESCE(game_info.source_season, EXCLUDED.source_season),
-                    source_game_type = COALESCE(game_info.source_game_type, EXCLUDED.source_game_type),
-                    season_phase = COALESCE(game_info.season_phase, EXCLUDED.season_phase),
-                    postseason_round = COALESCE(game_info.postseason_round, EXCLUDED.postseason_round),
-                    season_name = COALESCE(game_info.season_name, EXCLUDED.season_name),
-                    source_round = COALESCE(game_info.source_round, EXCLUDED.source_round),
-                    schedule_relationships = game_info.schedule_relationships || EXCLUDED.schedule_relationships,
-                    game_type_source_sha256 = COALESCE(
-                        game_info.game_type_source_sha256,
-                        EXCLUDED.game_type_source_sha256
-                    )
-                """,
-                row,
+                "SELECT mlb.safe_upsert_game_info(%s::jsonb)",
+                (json.dumps(payload, separators=(",", ":"), default=str),),
             )
-            return int(cur.rowcount or 0)
+            result = cur.fetchone()
+            return int((result or (0,))[0] or 0)
 
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            INSERT INTO mlb.game_info (
-                game_id,
-                game_time,
-                game_date,
-                home_team_id,
-                away_team_id,
-                home_team_abbr,
-                away_team_abbr
-            ) VALUES (
-                %(game_id)s,
-                %(game_time)s,
-                %(game_date)s,
-                %(home_team_id)s,
-                %(away_team_id)s,
-                %(home_team_abbr)s,
-                %(away_team_abbr)s
-            )
-            ON CONFLICT (game_id)
-            DO UPDATE SET
-                game_time = COALESCE(game_info.game_time, EXCLUDED.game_time),
-                game_date = EXCLUDED.game_date,
-                home_team_id = COALESCE(game_info.home_team_id, EXCLUDED.home_team_id),
-                away_team_id = COALESCE(game_info.away_team_id, EXCLUDED.away_team_id),
-                home_team_abbr = COALESCE(game_info.home_team_abbr, EXCLUDED.home_team_abbr),
-                away_team_abbr = COALESCE(game_info.away_team_abbr, EXCLUDED.away_team_abbr)
-            WHERE (
-                game_info.game_time IS NULL
-                OR game_info.game_date IS DISTINCT FROM EXCLUDED.game_date
-                OR game_info.home_team_id IS NULL
-                OR game_info.away_team_id IS NULL
-                OR game_info.home_team_abbr IS NULL
-                OR game_info.away_team_abbr IS NULL
-            )
-            """,
-            row,
-        )
-        return int(cur.rowcount or 0)
+    raise RuntimeError("CANONICAL_PHASE_SCHEMA_REQUIRED_FOR_RESTRICTED_WRITER")
 
 
 def _table_has_column(conn, table_name: str, column_name: str) -> bool:
@@ -1161,39 +1101,22 @@ def _upsert_player_id_min(
     player_name: str,
     team_abbr: Optional[str],
     team_id: Optional[int],
-    has_team_col: bool,
-    has_team_id_col: bool,
-    has_placeholder_col: bool,
 ) -> int:
     row: Dict[str, Any] = {
         "player_id": int(player_id),
         "player_name": str(player_name) if player_name else f"player_{int(player_id)}",
+        "team": normalizeTeamAbbreviation(team_abbr),
+        "team_id": _to_int(team_id),
+        "is_placeholder": True,
     }
-    cols = ["player_id", "player_name"]
-    vals = ["%(player_id)s", "%(player_name)s"]
-    if has_team_col:
-        cols.append("team")
-        vals.append("%(team)s")
-        row["team"] = normalizeTeamAbbreviation(team_abbr)
-    if has_team_id_col:
-        cols.append("team_id")
-        vals.append("%(team_id)s")
-        row["team_id"] = _to_int(team_id)
-    if has_placeholder_col:
-        cols.append("is_placeholder")
-        vals.append("%(is_placeholder)s")
-        row["is_placeholder"] = True
 
     with conn.cursor() as cur:
         cur.execute(
-            f"""
-            INSERT INTO mlb.player_ids ({", ".join(cols)})
-            VALUES ({", ".join(vals)})
-            ON CONFLICT (player_id) DO NOTHING
-            """,
-            row,
+            "SELECT mlb.safe_insert_player_id_if_absent(%s::jsonb)",
+            (json.dumps(row, separators=(",", ":")),),
         )
-        return int(cur.rowcount or 0)
+        result = cur.fetchone()
+        return int((result or (0,))[0] or 0)
 
 
 def _coerce_team_text_numeric(value: Any) -> Optional[str]:
@@ -1629,9 +1552,6 @@ def run(
 
     with pg_connect() as conn:
         mtp_has_game_type = _table_has_column(conn, "model_training_props", "game_type")
-        player_ids_has_team = _table_has_column(conn, "player_ids", "team")
-        player_ids_has_team_id = _table_has_column(conn, "player_ids", "team_id")
-        player_ids_has_placeholder = _table_has_column(conn, "player_ids", "is_placeholder")
         if not quiet:
             print(f"ℹ️ model_training_props.game_type column detected: {mtp_has_game_type}")
 
@@ -1948,9 +1868,6 @@ def run(
                                 player_name=pname,
                                 team_abbr=team_abbr,
                                 team_id=team_id,
-                                has_team_col=player_ids_has_team,
-                                has_team_id_col=player_ids_has_team_id,
-                                has_placeholder_col=player_ids_has_placeholder,
                             )
 
                             stats_written = _upsert_player_stats_row(

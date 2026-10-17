@@ -240,7 +240,18 @@ def test_explicit_authority_manual_and_fail_closed_states(monkeypatch):
 def test_wake_retry_source_and_feature_formulas_unchanged():
     path="backend/mlb/scripts/refresh_mlb_bvp_pvb.py"
     previous=subprocess.run(["git","show","1c36620785837e057f89b263d3ab88f28c723469:"+path],capture_output=True,text=True,check=True).stdout
-    assert (ROOT/path).read_text()==previous
+    current=(ROOT/path).read_text()
+    old_tree=ast.parse(previous)
+    new_tree=ast.parse(current)
+    # The one intended change is routing persistence through a fixed DB entry
+    # point. Acquisition, feature construction, retry, and scheduling logic
+    # must remain byte-semantically equivalent at the function AST level.
+    excluded={"_upsert_rows", "_upsert_rows_on_connection"}
+    old_functions={n.name: ast.dump(n, include_attributes=False) for n in old_tree.body
+                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name not in excluded}
+    new_functions={n.name: ast.dump(n, include_attributes=False) for n in new_tree.body
+                   if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name not in excluded}
+    assert old_functions == new_functions
 
 
 def test_bvp_block_is_not_swallowed_by_heuristic_fallback():

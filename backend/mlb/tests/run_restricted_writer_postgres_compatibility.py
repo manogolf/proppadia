@@ -20,6 +20,8 @@ import psycopg
 
 from backend.mlb.scripts import insert_mlb_stat_derived as writer
 from backend.mlb.scripts.backfill_mlb_player_pa import PaRow, _update_player_stats_pa
+from backend.mlb.scripts import refresh_mlb_players_rosters as roster_writer
+from backend.mlb.scripts import refresh_mlb_bvp_pvb as bvp_writer
 
 
 EXPECTED_PROJECT_REF = "vbnzmvmhuwvpkijxeuyq"
@@ -161,6 +163,35 @@ def _create_fixture(conn: psycopg.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE mlb.player_ids (
+            player_id bigint PRIMARY KEY, player_name text, team text, team_id bigint,
+            active boolean, status text, updated_at timestamptz, is_placeholder boolean
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE mlb.game_info (
+            game_id bigint PRIMARY KEY, game_time timestamp without time zone, game_date date NOT NULL,
+            home_team_id bigint, away_team_id bigint, home_team_abbr text, away_team_abbr text,
+            source_season integer, source_game_type text, season_phase text, postseason_round text,
+            season_name text, source_round text, schedule_relationships jsonb NOT NULL DEFAULT '{}'::jsonb,
+            game_type_source_sha256 text
+        )
+        """
+    )
+    conn.execute(
+        """
+        CREATE TABLE mlb.prop_features_precomputed (
+            prop_type text NOT NULL, player_id bigint NOT NULL, game_id bigint NOT NULL,
+            game_date date NOT NULL, features jsonb, feature_set_tag text NOT NULL,
+            model_tag text NOT NULL, computed_at timestamptz NOT NULL,
+            PRIMARY KEY(prop_type,player_id,game_id,feature_set_tag)
+        )
+        """
+    )
     conn.execute(f"GRANT USAGE ON SCHEMA mlb TO {WRITER_ROLE}")
 
 
@@ -193,6 +224,15 @@ def _run_role_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> 
     _expect_denied(conn, "truncate_denied", "TRUNCATE mlb.player_stats", results)
     _expect_denied(conn, "derived_delete_denied", "DELETE FROM mlb.player_derived_stats WHERE player_id=1", results)
     _expect_denied(conn, "derived_truncate_denied", "TRUNCATE mlb.player_derived_stats", results)
+    for relation, key in (("player_ids", "player_id=1"), ("game_info", "game_id=1"), ("prop_features_precomputed", "player_id=1")):
+        _expect_denied(conn, f"{relation}_direct_insert_denied", f"INSERT INTO mlb.{relation} DEFAULT VALUES", results)
+        _expect_denied(conn, f"{relation}_direct_update_denied", f"UPDATE mlb.{relation} SET {key.split('=')[0]}={key.split('=')[1]} WHERE {key}", results)
+        _expect_denied(conn, f"{relation}_delete_denied", f"DELETE FROM mlb.{relation} WHERE {key}", results)
+        _expect_denied(conn, f"{relation}_truncate_denied", f"TRUNCATE mlb.{relation}", results)
+    _expect_denied(conn, "player_ids_team_replacement_direct_denied", "UPDATE mlb.player_ids SET team_id=999 WHERE player_id=1", results)
+    _expect_denied(conn, "game_info_phase_replacement_direct_denied", "UPDATE mlb.game_info SET source_game_type='P' WHERE game_id=1", results)
+    _expect_denied(conn, "game_info_date_replacement_direct_denied", "UPDATE mlb.game_info SET game_date='1900-01-01' WHERE game_id=1", results)
+    _expect_denied(conn, "bvp_features_direct_replacement_denied", "UPDATE mlb.prop_features_precomputed SET features='{}'::jsonb WHERE player_id=1", results)
     _expect_denied(conn, "correction_role_switch_denied", f"SET ROLE {CORRECTION_ROLE}", results)
     _expect_denied(conn, "role_grant_escalation_denied", f"GRANT {CORRECTION_ROLE} TO {WRITER_ROLE}", results)
     _expect_denied(conn, "function_replace_denied", "CREATE OR REPLACE FUNCTION mlb.safe_upsert_player_stats(jsonb) RETURNS integer LANGUAGE sql AS 'SELECT 0'", results)
@@ -303,6 +343,89 @@ def _run_role_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> 
         _record(results, "derived_identity_collision_preserved", "FAIL", detail="collision was not rejected")
 
 
+def _run_adjacent_writer_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> None:
+    conn.execute(f"SET ROLE {WRITER_ROLE}")
+    with conn.cursor() as cur:
+        all_roster_columns = {"player_name", "team", "team_id", "active", "status", "updated_at"}
+        roster_writer._upsert_player(cur, all_roster_columns, player_id=6001, player_name=None, team_abbr=None, team_id=None)
+        roster_writer._upsert_player(cur, all_roster_columns, player_id=6001, player_name="Roster Name", team_abbr="NYY", team_id=147)
+        roster_writer._upsert_player(cur, all_roster_columns, player_id=6001, player_name="Changed Name", team_abbr="BOS", team_id=111)
+        placeholder = writer._upsert_player_id_min(
+            conn, player_id=6002, player_name="Placeholder", team_abbr="NYY", team_id=147,
+        )
+        roster_writer._mark_inactive(cur, all_roster_columns, [6002], successful_teams=29, total_teams=30)
+        conn.execute("SAVEPOINT roster_threshold")
+        try:
+            cur.execute("SELECT mlb.safe_mark_player_roster_inactive(%s::bigint[],%s,%s)", ([6001], 20, 30))
+        except psycopg.Error as exc:
+            conn.execute("ROLLBACK TO SAVEPOINT roster_threshold")
+            conn.execute("RELEASE SAVEPOINT roster_threshold")
+            _record(results, "roster_inactive_threshold_fail_closed", "PASS" if exc.sqlstate == "23514" else "FAIL", sqlstate=exc.sqlstate)
+        else:
+            conn.execute("ROLLBACK TO SAVEPOINT roster_threshold")
+            conn.execute("RELEASE SAVEPOINT roster_threshold")
+            _record(results, "roster_inactive_threshold_fail_closed", "FAIL", detail="insufficient team success was accepted")
+    conn.execute("RESET ROLE")
+    roster_state = conn.execute("SELECT player_name,team,team_id,active,status FROM mlb.player_ids WHERE player_id=6001").fetchone()
+    placeholder_state = conn.execute("SELECT player_name,team,team_id,is_placeholder FROM mlb.player_ids WHERE player_id=6002").fetchone()
+    _record(results, "roster_conflict_replay_and_inactive_mark", "PASS" if roster_state == ("Changed Name","BOS",111,False,"inactive") else "FAIL", observed=list(roster_state or ()))
+    _record(results, "stat_derived_placeholder_insert_if_absent", "PASS" if placeholder == 1 and placeholder_state == ("Placeholder","NYY",147,True) else "FAIL", inserted=placeholder, observed=list(placeholder_state or ()))
+
+    schedule = {
+        "gamePk": 900901,
+        "officialDate": "2026-09-23",
+        "gameDate": "2026-09-23T23:00:00Z",
+        "gameType": "R",
+        "season": "2026",
+        "teams": {"home": {"team": {"id": 147, "abbreviation": "NYY"}}, "away": {"team": {"id": 111, "abbreviation": "BOS"}}},
+    }
+    source_hash = "a" * 64
+    conn.execute(f"SET ROLE {WRITER_ROLE}")
+    phase_seed = {
+        "game_id":900902,"game_time":None,"game_date":"2026-09-23","home_team_id":None,
+        "away_team_id":None,"home_team_abbr":None,"away_team_abbr":None,
+        "source_season":2026,"source_game_type":"R","season_phase":"REGULAR_SEASON",
+        "postseason_round":None,"season_name":"MLB_2026_REGULAR_SEASON","source_round":None,
+        "schedule_relationships":{},"game_type_source_sha256":source_hash,
+    }
+    conn.execute("SELECT mlb.safe_upsert_game_info(%s::jsonb)", (json.dumps(phase_seed,separators=(",",":")),))
+    null_fill_game = dict(schedule, gamePk=900902)
+    null_fill = writer._upsert_game_info_min(conn, null_fill_game, source_sha256=source_hash)
+    first = writer._upsert_game_info_min(conn, schedule, source_sha256=source_hash)
+    replay = writer._upsert_game_info_min(conn, schedule, source_sha256=source_hash)
+    changed_date = dict(schedule, officialDate="2026-09-24")
+    date_refresh = writer._upsert_game_info_min(conn, changed_date, source_sha256=source_hash)
+    bad_phase = {"game_id":900901,"game_date":"2026-09-25","source_season":2026,"source_game_type":"P","season_phase":"POSTSEASON","postseason_round":None,"season_name":"2026 Postseason","source_round":None,"schedule_relationships":{},"game_type_source_sha256":"b"*64}
+    conn.execute("SAVEPOINT game_phase_conflict")
+    try:
+        conn.execute("SELECT mlb.safe_upsert_game_info(%s::jsonb)", (json.dumps(bad_phase,separators=(",",":")),))
+    except psycopg.Error as exc:
+        conn.execute("ROLLBACK TO SAVEPOINT game_phase_conflict")
+        conn.execute("RELEASE SAVEPOINT game_phase_conflict")
+        phase_conflict = exc.sqlstate == "23514"
+        _record(results, "game_phase_conflict_denied_by_entrypoint", "PASS" if phase_conflict else "FAIL", sqlstate=exc.sqlstate)
+    else:
+        conn.execute("ROLLBACK TO SAVEPOINT game_phase_conflict")
+        conn.execute("RELEASE SAVEPOINT game_phase_conflict")
+        _record(results, "game_phase_conflict_denied_by_entrypoint", "FAIL", detail="phase conflict was accepted")
+    conn.execute("RESET ROLE")
+    game_state = conn.execute("SELECT game_date,source_game_type,home_team_id,home_team_abbr FROM mlb.game_info WHERE game_id=900901").fetchone()
+    game_state_values = (str(game_state[0]), *game_state[1:]) if game_state else None
+    null_fill_state = conn.execute("SELECT game_time IS NOT NULL,home_team_id,away_team_id,home_team_abbr,away_team_abbr FROM mlb.game_info WHERE game_id=900902").fetchone()
+    _record(results, "game_info_null_fill_official_date_refresh_and_replay", "PASS" if null_fill == 1 and all(null_fill_state) and first == 1 and replay == 1 and date_refresh == 1 and game_state_values == ("2026-09-24","R",147,"NYY") else "FAIL", writes=[null_fill,first,replay,date_refresh], observed=list(game_state_values or ()), null_fill_row=list(null_fill_state or ()))
+
+    feature_rows = [("hits",6001,900901,"2026-09-24",{"vs_avg":0.25,"sample":4},"v1","fixture")]
+    conn.execute(f"SET ROLE {WRITER_ROLE}")
+    feature_first = bvp_writer._upsert_rows_on_connection(conn, feature_rows, batch_size=10)
+    feature_replay = bvp_writer._upsert_rows_on_connection(conn, feature_rows, batch_size=10)
+    feature_update = bvp_writer._upsert_rows_on_connection(conn, [("hits",6001,900901,"2026-09-24",{"vs_avg":0.5,"new_sample":2},"v1","fixture-v2")], batch_size=10)
+    conn.execute("RESET ROLE")
+    feature_state = conn.execute("SELECT features,model_tag FROM mlb.prop_features_precomputed WHERE prop_type='hits' AND player_id=6001 AND game_id=900901 AND feature_set_tag='v1'").fetchone()
+    features = dict(feature_state[0]) if feature_state else {}
+    bvp_ok = feature_first == 1 and feature_replay == 1 and feature_update == 1 and features == {"vs_avg":0.5,"sample":4,"new_sample":2} and feature_state[1] == "fixture-v2"
+    _record(results, "bvp_feature_merge_replay_and_recompute", "PASS" if bvp_ok else "FAIL", writes=[feature_first,feature_replay,feature_update], features=features)
+
+
 def run() -> dict[str, Any]:
     dsn = os.environ.get("NHL_PP_TOI_TEST_DSN")
     parsed = urlsplit(dsn or "")
@@ -328,6 +451,9 @@ def run() -> dict[str, Any]:
             "player_stats": "SELECT + fixed function EXECUTE; no direct INSERT/UPDATE/DELETE/TRUNCATE",
             "player_derived_stats": "SELECT + INSERT + UPDATE derived columns; no DELETE/TRUNCATE",
             "model_training_props": "SELECT + fixed function EXECUTE + metadata-only UPDATE; no direct INSERT/protected-tuple UPDATE",
+            "player_ids": "fixed roster/identity EXECUTE only; no direct table DML",
+            "game_info": "SELECT + fixed metadata EXECUTE; no direct table DML",
+            "prop_features_precomputed": "fixed derived-feature EXECUTE only; no direct table DML",
             "correction_role": "NOLOGIN; no membership granted to writer",
         },
         "protected_write_boundary": {
@@ -400,6 +526,11 @@ def run() -> dict[str, Any]:
         report["derived_writer_migration_sha256"] = __import__("hashlib").sha256(derived_migration_sql.encode()).hexdigest()
         conn.execute(derived_migration_sql, prepare=False)
         conn.execute(derived_migration_sql, prepare=False)
+        adjacent_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261019_mlb_adjacent_writer_entrypoints.sql"
+        adjacent_migration_sql = adjacent_migration_path.read_text()
+        report["adjacent_writer_migration_sha256"] = __import__("hashlib").sha256(adjacent_migration_sql.encode()).hexdigest()
+        conn.execute(adjacent_migration_sql, prepare=False)
+        conn.execute(adjacent_migration_sql, prepare=False)
         _record(report["results"], "migration_idempotent_replay", "PASS")
         report["fixture_object_owners"] = {
             "player_stats": conn.execute("SELECT r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='mlb' AND c.relname='player_stats'").fetchone()[0],
@@ -433,11 +564,48 @@ def run() -> dict[str, Any]:
         ).fetchone()
         expected_derived_acl = (True, False, True, False, True, False, False)
         _record(report["results"], "derived_writer_exact_acl", "PASS" if derived_acl == expected_derived_acl else "FAIL", observed=list(derived_acl), expected=list(expected_derived_acl))
+        adjacent_privileges = conn.execute(
+            """SELECT
+                 has_table_privilege(%s,'mlb.player_ids','INSERT') OR has_any_column_privilege(%s,'mlb.player_ids','INSERT'),
+                 has_table_privilege(%s,'mlb.player_ids','UPDATE') OR has_any_column_privilege(%s,'mlb.player_ids','UPDATE'),
+                 has_table_privilege(%s,'mlb.game_info','INSERT') OR has_any_column_privilege(%s,'mlb.game_info','INSERT'),
+                 has_table_privilege(%s,'mlb.game_info','UPDATE') OR has_any_column_privilege(%s,'mlb.game_info','UPDATE'),
+                 has_table_privilege(%s,'mlb.prop_features_precomputed','INSERT') OR has_any_column_privilege(%s,'mlb.prop_features_precomputed','INSERT'),
+                 has_table_privilege(%s,'mlb.prop_features_precomputed','UPDATE') OR has_any_column_privilege(%s,'mlb.prop_features_precomputed','UPDATE'),
+                 has_table_privilege(%s,'mlb.player_ids','DELETE') OR has_table_privilege(%s,'mlb.player_ids','TRUNCATE'),
+                 has_table_privilege(%s,'mlb.game_info','DELETE') OR has_table_privilege(%s,'mlb.game_info','TRUNCATE'),
+                 has_table_privilege(%s,'mlb.prop_features_precomputed','DELETE') OR has_table_privilege(%s,'mlb.prop_features_precomputed','TRUNCATE'),
+                 has_function_privilege(%s,'mlb.safe_upsert_player_roster(jsonb)','EXECUTE'),
+                 has_function_privilege(%s,'mlb.safe_insert_player_id_if_absent(jsonb)','EXECUTE'),
+                 has_function_privilege(%s,'mlb.safe_mark_player_roster_inactive(bigint[],integer,integer)','EXECUTE'),
+                 has_function_privilege(%s,'mlb.safe_upsert_game_info(jsonb)','EXECUTE'),
+                 has_function_privilege(%s,'mlb.safe_upsert_prop_features_precomputed(jsonb)','EXECUTE')""",
+            (WRITER_ROLE,) * 23,
+        ).fetchone()
+        expected_adjacent_privileges = (False,False,False,False,False,False,False,False,False,True,True,True,True,True)
+        _record(report["results"], "adjacent_writer_exact_privilege_shape", "PASS" if adjacent_privileges == expected_adjacent_privileges else "FAIL", observed=list(adjacent_privileges), expected=list(expected_adjacent_privileges))
         report["phase"] = "restricted_role_behavior"
         _run_role_tests(conn, report["results"])
+        _run_adjacent_writer_tests(conn, report["results"])
 
         report["phase"] = "migration_rollback"
         conn.execute("RESET ROLE")
+        adjacent_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261019_mlb_adjacent_writer_entrypoints_rollback.sql"
+        adjacent_rollback_sql = adjacent_rollback_path.read_text()
+        report["adjacent_writer_rollback_sha256"] = __import__("hashlib").sha256(adjacent_rollback_sql.encode()).hexdigest()
+        conn.execute(adjacent_rollback_sql, prepare=False)
+        adjacent_functions_remaining = conn.execute(
+            "SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='mlb' AND p.proname IN ('safe_upsert_player_roster','safe_insert_player_id_if_absent','safe_mark_player_roster_inactive','safe_upsert_game_info','safe_upsert_prop_features_precomputed')"
+        ).fetchone()[0]
+        direct_adjacent_dml = conn.execute(
+            """SELECT
+                 has_table_privilege(%s,'mlb.player_ids','INSERT') OR has_any_column_privilege(%s,'mlb.player_ids','INSERT') OR has_table_privilege(%s,'mlb.player_ids','UPDATE') OR has_any_column_privilege(%s,'mlb.player_ids','UPDATE'),
+                 has_table_privilege(%s,'mlb.game_info','INSERT') OR has_any_column_privilege(%s,'mlb.game_info','INSERT') OR has_table_privilege(%s,'mlb.game_info','UPDATE') OR has_any_column_privilege(%s,'mlb.game_info','UPDATE'),
+                 has_table_privilege(%s,'mlb.prop_features_precomputed','INSERT') OR has_any_column_privilege(%s,'mlb.prop_features_precomputed','INSERT') OR has_table_privilege(%s,'mlb.prop_features_precomputed','UPDATE') OR has_any_column_privilege(%s,'mlb.prop_features_precomputed','UPDATE')""",
+            (WRITER_ROLE,) * 12,
+        ).fetchone()
+        adjacent_select_remains = conn.execute("SELECT has_table_privilege(%s,'mlb.game_info','SELECT')", (WRITER_ROLE,)).fetchone()[0]
+        _record(report["results"], "adjacent_writer_rollback_removes_functions_and_dml", "PASS" if adjacent_functions_remaining == 0 and not any(direct_adjacent_dml) and not adjacent_select_remains else "FAIL", functions_remaining=adjacent_functions_remaining, direct_dml=list(direct_adjacent_dml), game_info_select_remains=bool(adjacent_select_remains))
         pa_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261018_safe_player_stats_pa_backfill_rollback.sql"
         pa_rollback_sql = pa_rollback_path.read_text()
         report["pa_backfill_rollback_sha256"] = __import__("hashlib").sha256(pa_rollback_sql.encode()).hexdigest()

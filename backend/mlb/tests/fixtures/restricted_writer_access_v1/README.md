@@ -3,7 +3,7 @@
 This fixture directory records disposable PostgreSQL test cases; it does not
 contain production credentials and must never be pointed at production.
 
-The current executable fixture covers these three isolated relations:
+The executable fixture covers these protected and adjacent writer relations:
 
 - `mlb.player_stats`: `(player_id, game_id)` unique key and the official
   observation columns enumerated in
@@ -13,9 +13,9 @@ The current executable fixture covers these three isolated relations:
   19 documented metrics), and `updated_at`.
 - `mlb.model_training_props`: the materialization/result columns listed in
   the contract, including the protected historical outcome tuple.
-
-Roster, `game_info`, and BvP/PvB compatibility remain separate test scopes and
-are not claimed as verified by this fixture.
+- `mlb.player_ids`: roster identity/status and insert-if-absent columns.
+- `mlb.game_info`: current schedule metadata and canonical phase fields.
+- `mlb.prop_features_precomputed`: derived BvP/PvB JSON feature rows.
 
 Before running any SQL fixture, the operator must independently confirm the
 isolated project/branch identity and authorization. Stop if identity is
@@ -29,7 +29,7 @@ the real production login, owner, `service_role`, or API roles in this fixture.
 `backend/mlb/tests/run_restricted_writer_postgres_compatibility.py` connects
 only when `NHL_PP_TOI_TEST_DSN` carries the allowlisted preview project
 reference and the initial preview contains no `mlb` or `nhl` schema. It creates
-the schema, three minimal writer tables, and temporary NOLOGIN roles (including
+the schema, minimal writer tables for the covered paths, and temporary NOLOGIN roles (including
 the reviewed `proppadia_mlb_ingest` group name) inside one transaction. It
 applies the exact source/training and PA-backfill migrations, calls the actual
 Python stat/training/PA writers, runs both fail-closed rollbacks, and finally
@@ -48,9 +48,11 @@ MLB_WRITER_PG_RECEIPT=artifacts/analysis/mlb/restricted_writer_postgres_compatib
 ```
 
 The probe records the migration and rollback hashes, exact function/table
-privilege results, allowed application writes, and denied direct DML. Errors
-are sanitized to exception class, SQLSTATE, and nonsecret PostgreSQL diagnostic
-fields. Fixture changes are always rolled back.
+privilege results, allowed application writes, and denied direct DML. It also
+exercises roster refresh, game metadata, and BvP/PvB persistence through the
+adjacent-writer migration and calls the existing Python writers for those
+paths. Errors are sanitized to exception class, SQLSTATE, and nonsecret
+PostgreSQL diagnostic fields. Fixture changes are always rolled back.
 
 ## Assertions in the isolated PostgreSQL phase
 
@@ -68,6 +70,14 @@ fields. Fixture changes are always rolled back.
   writer must not have direct DELETE or TRUNCATE; a collision must be visible
   and preserve both the existing derived row and source identity for review.
 - Verify phase disagreement raises before source metadata is changed.
+- Verify roster insert/NULL fill/current-observation refresh/replay, and that
+  inactive marking rejects a failed-team threshold; direct `player_ids`
+  writes remain denied.
+- Verify game metadata NULL filling, accepted official-date refresh, replay,
+  and phase-conflict denial through the fixed entry point; direct `game_info`
+  writes remain denied.
+- Verify BvP/PvB JSON feature merge and recomputation through the fixed
+  entrypoint; direct `prop_features_precomputed` writes remain denied.
 - Verify training-row materialization preserves an established outcome tuple
   (`prop_value`, `line`, `over_under`, `outcome`, `status`, `was_correct`) on
   conflict, while identical-result metadata replay and rolling-result

@@ -612,50 +612,41 @@ def _upsert_rows(
 ) -> int:
     if not rows:
         return 0
-    sql = """
-INSERT INTO mlb.prop_features_precomputed (
-  prop_type,
-  player_id,
-  game_id,
-  game_date,
-  features,
-  feature_set_tag,
-  model_tag,
-  computed_at
-)
-VALUES (%s, %s, %s, %s::date, %s::jsonb, %s, %s, NOW())
-ON CONFLICT (prop_type, player_id, game_id, feature_set_tag)
-DO UPDATE SET
-  game_date = EXCLUDED.game_date,
-  features = COALESCE(mlb.prop_features_precomputed.features, '{}'::jsonb) || EXCLUDED.features,
-  model_tag = EXCLUDED.model_tag,
-  computed_at = NOW()
-"""
-
-    written = 0
     with pg_connect() as conn:
-        with conn.cursor() as cur:
-            buf: List[Tuple[Any, ...]] = []
-            for row in rows:
-                buf.append(
-                    (
-                        row[0],
-                        int(row[1]),
-                        int(row[2]),
-                        row[3],
-                        json.dumps(row[4], separators=(",", ":")),
-                        row[5],
-                        row[6],
-                    )
-                )
-                if len(buf) >= batch_size:
-                    cur.executemany(sql, buf)
-                    written += len(buf)
-                    buf = []
-            if buf:
-                cur.executemany(sql, buf)
-                written += len(buf)
+        written = _upsert_rows_on_connection(conn, rows, batch_size=batch_size)
         conn.commit()
+    return written
+
+
+def _upsert_rows_on_connection(
+    conn,
+    rows: Sequence[Tuple[str, int, int, str, Dict[str, float], str, str]],
+    *,
+    batch_size: int,
+) -> int:
+    """Execute the production BvP/PvB writer through the fixed DB entrypoint."""
+    written = 0
+    size = max(1, int(batch_size))
+    with conn.cursor() as cur:
+        for offset in range(0, len(rows), size):
+            payload = [
+                {
+                    "prop_type": row[0],
+                    "player_id": int(row[1]),
+                    "game_id": int(row[2]),
+                    "game_date": row[3],
+                    "features": row[4],
+                    "feature_set_tag": row[5],
+                    "model_tag": row[6],
+                }
+                for row in rows[offset : offset + size]
+            ]
+            cur.execute(
+                "SELECT mlb.safe_upsert_prop_features_precomputed(%s::jsonb)",
+                (json.dumps(payload, separators=(",", ":")),),
+            )
+            result = cur.fetchone()
+            written += int((result or (0,))[0] or 0)
     return written
 
 

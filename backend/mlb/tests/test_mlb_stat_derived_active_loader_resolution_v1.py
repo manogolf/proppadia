@@ -115,6 +115,7 @@ class _GameInfoCursor:
         self.calls = []
         self.params = []
         self.rowcount = 1
+        self.last_sql = ""
 
     def __enter__(self):
         return self
@@ -123,6 +124,7 @@ class _GameInfoCursor:
         return False
 
     def execute(self, sql, params=None):
+        self.last_sql = sql
         self.calls.append(sql)
         self.params.append(params)
 
@@ -130,6 +132,8 @@ class _GameInfoCursor:
         return [{"column_name": name} for name in self.available]
 
     def fetchone(self):
+        if "safe_upsert_game_info" in self.last_sql:
+            return (1,)
         return None
 
 
@@ -141,24 +145,29 @@ class _GameInfoConnection:
         return self.cursor_value
 
 
-@pytest.mark.parametrize("phase_schema", [False, True])
-def test_game_info_uses_official_date_and_replaces_stale_conflict_date(phase_schema):
+def test_game_info_uses_official_date_and_replaces_stale_conflict_date():
     phase_columns = set(active.PHASE_STORAGE_COLUMNS) | {"game_type_source_sha256"}
-    available = phase_columns if phase_schema else set()
-    conn = _GameInfoConnection(available)
+    conn = _GameInfoConnection(phase_columns)
     game = _game(824785, "2026-09-23", "Final", "F", "F")
     # The UTC timestamp falls on the prior date, as with the postponed/makeup
     # boundary; accepted operational day must come from officialDate.
     game["gameDate"] = "2026-09-22T23:45:00Z"
     assert active._upsert_game_info_min(
-        conn, game, source_sha256=("a" * 64 if phase_schema else "")
+        conn, game, source_sha256="a" * 64
     ) == 1
+    import json
     insert_sql = conn.cursor_value.calls[-1]
-    row = conn.cursor_value.params[-1]
+    row = json.loads(conn.cursor_value.params[-1][0])
     assert row["game_date"] == "2026-09-23"
-    assert "game_date = EXCLUDED.game_date" in insert_sql
-    if not phase_schema:
-        assert "game_info.game_date IS DISTINCT FROM EXCLUDED.game_date" in insert_sql
+    assert "safe_upsert_game_info" in insert_sql
+
+
+def test_game_info_fails_closed_without_canonical_phase_schema():
+    conn = _GameInfoConnection(set())
+    game = _game(824785, "2026-09-23", "Final", "F", "F")
+    with pytest.raises(RuntimeError, match="CANONICAL_PHASE_SCHEMA_REQUIRED_FOR_RESTRICTED_WRITER"):
+        active._upsert_game_info_min(conn, game, source_sha256="a" * 64)
+    assert len(conn.cursor_value.calls) == 1
 
 
 def test_game_info_fails_closed_without_accepted_official_date():

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import json
 import os
 import sys
 from typing import Dict, Iterable, List, Optional, Set, Tuple
@@ -135,69 +136,31 @@ def _upsert_player(
     team_abbr: str,
     team_id: int,
 ) -> None:
-    insert_cols: List[str] = ["player_id"]
-    values: List[object] = [player_id]
-    update_sets: List[str] = []
-
-    if "player_name" in cols:
-        insert_cols.append("player_name")
-        values.append(player_name)
-        update_sets.append("player_name = COALESCE(EXCLUDED.player_name, player_ids.player_name)")
-
-    if "team" in cols:
-        insert_cols.append("team")
-        values.append(team_abbr)
-        update_sets.append("team = COALESCE(EXCLUDED.team, player_ids.team)")
-
-    if "team_id" in cols:
-        insert_cols.append("team_id")
-        values.append(team_id)
-        update_sets.append("team_id = COALESCE(EXCLUDED.team_id, player_ids.team_id)")
-
-    if "active" in cols:
-        insert_cols.append("active")
-        values.append(True)
-        update_sets.append("active = TRUE")
-
-    if "status" in cols:
-        insert_cols.append("status")
-        values.append("active")
-        update_sets.append("status = 'active'")
-
-    if "updated_at" in cols:
-        insert_cols.append("updated_at")
-        values.append(dt.datetime.now(dt.timezone.utc))
-        update_sets.append("updated_at = now()")
-
-    placeholders = ", ".join(["%s"] * len(insert_cols))
-    sql = f"""
-        INSERT INTO mlb.player_ids ({", ".join(insert_cols)})
-        VALUES ({placeholders})
-        ON CONFLICT (player_id)
-        DO UPDATE SET {", ".join(update_sets) if update_sets else "player_id = EXCLUDED.player_id"}
-    """
-    cur.execute(sql, values)
+    payload: Dict[str, object] = {"player_id": player_id}
+    # The fixed DB entrypoint filters optional columns against the live table
+    # shape, so the restricted login does not need direct player_ids ACLs.
+    payload.update({"player_name": player_name, "team": team_abbr, "team_id": team_id})
+    cur.execute(
+        "SELECT mlb.safe_upsert_player_roster(%s::jsonb)",
+        (json.dumps(payload, separators=(",", ":")),),
+    )
 
 
-def _mark_inactive(cur: psycopg.Cursor, cols: Set[str], active_ids: Iterable[int]) -> None:
+def _mark_inactive(
+    cur: psycopg.Cursor,
+    cols: Set[str],
+    active_ids: Iterable[int],
+    *,
+    successful_teams: int,
+    total_teams: int,
+) -> None:
     ids = sorted({int(x) for x in active_ids})
     if not ids:
         return
-    updates: List[str] = []
-    if "active" in cols:
-        updates.append("active = FALSE")
-    if "status" in cols:
-        updates.append("status = 'inactive'")
-    if "updated_at" in cols:
-        updates.append("updated_at = now()")
-    if not updates:
-        return
-    sql = f"""
-        UPDATE mlb.player_ids
-        SET {", ".join(updates)}
-        WHERE NOT (player_id = ANY(%s::bigint[]))
-    """
-    cur.execute(sql, (ids,))
+    cur.execute(
+        "SELECT mlb.safe_mark_player_roster_inactive(%s::bigint[],%s,%s)",
+        (ids, successful_teams, total_teams),
+    )
 
 
 def main() -> int:
@@ -233,7 +196,9 @@ def main() -> int:
             pass
         with conn.transaction():
             with conn.cursor() as cur:
-                cols = _table_columns(cur, "player_ids")
+                # The fixed database entrypoint performs schema-aware writes;
+                # catalog visibility is not required from this restricted role.
+                cols: Set[str] = set()
                 for idx, (team_id, team_abbr) in enumerate(teams, start=1):
                     print(f"[{idx}/{total}] fetching {team_abbr} roster ...", flush=True)
                     try:
@@ -264,7 +229,10 @@ def main() -> int:
                         f"[inactive-mark] applying inactive status for players absent from {len(active_ids)} active ids ...",
                         flush=True,
                     )
-                    _mark_inactive(cur, cols, active_ids)
+                    _mark_inactive(
+                        cur, cols, active_ids,
+                        successful_teams=ok, total_teams=total,
+                    )
                     print("[inactive-mark] done", flush=True)
                 else:
                     print(
