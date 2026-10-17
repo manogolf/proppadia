@@ -90,10 +90,11 @@ REFERENCES, and TRIGGER on `player_stats`, `model_training_props`,
 The four source/training/identity tables had RLS enabled in that snapshot;
 `game_info` and `prop_features_precomputed` did not. The repository scan found
 no active frontend API writer for these tables; the only matching frontend
-module is under `utils/archive`. `mlb-cron.yml` passes a Supabase service key,
-but its referenced runner is absent from this checkout, so hosted API
-dependencies are not fully established. Do not revoke API grants until the
-hosted runner and deployed PostgREST consumers are identified and tested.
+module is under `utils/archive`. The former `mlb-cron.yml` wrapper passed a
+Supabase service key, but its referenced runner was absent from this checkout;
+the owner has since retired GitHub-hosted cron automation and the wrapper was
+removed. Do not revoke API grants until deployed PostgREST consumers are
+identified and tested.
 
 ## Preview compatibility probe
 

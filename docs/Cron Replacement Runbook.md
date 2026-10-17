@@ -1,10 +1,11 @@
 # Cron Replacement Runbook
 
-Snapshot date: February 15, 2026
+Snapshot date: October 17, 2026
 
 ## Purpose
 
-This runbook defines how to replace legacy/suspended GitHub cron workflows with stable command-based operations, while preserving meaningful project behavior.
+This runbook records the retirement of hosted GitHub cron automation and the
+local command surfaces that remain authoritative.
 
 Related docs:
 
@@ -14,11 +15,12 @@ Related docs:
 ## Principles
 
 1. Keep data-producing and user-visible jobs.
-2. Do not re-enable brittle schedules just because they are free.
+2. Do not add or re-enable GitHub-hosted schedules under the current owner
+   decision.
 3. Use one command surface per lane:
    - MLB: `make mlb-*`
    - NHL: `backend/nhl/cli.py` (local automator source of truth until migration)
-4. Require verification before and after any schedule change.
+4. Keep local scheduling changes outside this workflow-retirement record.
 
 ## Preflight (Before Any Cron Change)
 
@@ -34,43 +36,33 @@ This enforces:
 2. scheduled workflow command paths/modules resolve,
 3. NHL workflow compatibility wrappers are present.
 
-## Replacement Table
+## Retired Hosted Workflow Functions
 
-1. `mlb-insert_stat_derived_props.yml`
-   - Replacement: `make mlb-stat-derived-refresh`
-   - Verification: `make mlb-check-stat-derived MLB_STAT_DERIVED_DAYS=7 MLB_STAT_DERIVED_MIN=1`
-2. `mlb-backfill_predictions.yml`
-   - Replacement: `make mlb-stat-derived-backfill MLB_STAT_FROM_DATE=YYYY-MM-DD MLB_STAT_TO_DATE=YYYY-MM-DD MLB_STAT_DERIVED_DAYS=400 MLB_STAT_DERIVED_MIN=1`
-   - Verification: same volume check + spot API check
-3. `mlb-cache-player-profiles.yml`
-   - Replacement: included in daily refresh runbook/manual warming pass
-   - Verification: player-profile endpoint smoke
-4. `mlb-generate_streak_profiles.yml`
-   - Replacement: fold into post-refresh validation lane
-   - Verification: profile contract + smoke
-5. `mlb-precompute.yml`, `mlb-retrain.yml`, `mlb-retrain_models.yml`, `mlb-train_recent_models.yml`
-   - Replacement: manual-only training lane
-   - Verification: one manual success + contract checks before any schedule restore
+The four remaining MLB manual wrappers were removed because their referenced
+scripts are missing or archived. The earlier scheduled roster workflow was
+removed locally in commit `a1ae4b6a`. These retired GitHub workflows are not
+needed by the local command surfaces:
+
+- MLB roster refresh: `make mlb-roster-refresh-all`
+- MLB daily pipeline: `make mlb-daily-refresh` or
+  `make mlb-daily-refresh-strict`
+- MLB stat-derived refresh: `make mlb-stat-derived-refresh`
+- NHL daily operations: local Mac pipeline through `backend/nhl/cli.py`
 
 ## Current Live Scheduling Policy
 
-1. Scheduled GitHub workflows should stay minimal and intentional.
-2. MLB roster refresh is owned by the Mac-based local pipeline; no GitHub MLB
-   roster schedule remains.
-3. NHL remains primarily local automator-driven until hosted migration is explicitly approved.
-
-Decision rule:
-
-1. Use local automator for NHL daily production while pipeline behavior is still evolving.
-2. Use hosted cron only for stable, path-audited commands with clear post-run verification.
+GitHub-hosted cron automation is retired. MLB and NHL Mac-based local
+scheduling and execution remain authoritative. This retirement does not change
+local commands, launchd jobs, or database routing.
 
 ## Current State Snapshot
 
-No scheduled workflow YAML is present in the current checked-in inventory.
-MLB roster refresh is owned by the Mac-based local pipeline; NHL scheduling is
-outside this MLB replacement runbook.
-
-Manual-only workflows include legacy MLB cron jobs and NHL roster refresh helper.
+No workflow YAML is present under `.github/workflows/` in the current checkout.
+The read-only GitHub inventory on October 17, 2026 contained five workflows,
+all `disabled_manually`; the four non-roster workflows had only
+`workflow_dispatch`, and the retired roster workflow had `schedule` and
+`workflow_dispatch`. Remote deletion awaits reviewed publication of only the
+workflow-retirement commits. No workflow was run or changed remotely.
 
 ## Operator Commands
 
@@ -93,28 +85,21 @@ make mlb-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 make nhl-post-deploy BASE_URL=https://baseball-streaks-sq44.onrender.com
 ```
 
-## Gate Before Re-enabling Any Schedule
+## Local Governance Checks
 
 1. `make workflow-inventory-strict`
 2. `make workflow-path-audit-strict`
-3. One manual workflow run succeeds.
-4. Post-deploy check succeeds for that lane.
-
-If any gate fails, keep schedule disabled and repair paths first.
+These checks verify repository workflow inventory and command references; they
+do not approve restoring hosted scheduling.
 
 ## Operator Handoff Checklist
 
-Before handing cron ownership from local automator to hosted scheduler:
-
-1. Record current command, cadence, and timezone.
-2. Confirm `make cron-governance-check` passes.
-3. Run one hosted manual trigger and capture result.
-4. Verify site/API health with post-deploy checks.
-5. Keep previous local schedule paused, not deleted, until two consecutive hosted runs pass.
+Publish only the workflow-retirement commits from an isolated worktree based
+on `origin/main`. Do not push the current ahead local `main` branch.
 
 ## Weekly Governance Cadence
 
 1. Run `make cron-current-state`.
 2. Run `make cron-governance-check`.
 3. Review any workflow file changes since last check.
-4. Confirm suspended workflows remain intentionally manual-only.
+4. Confirm no hosted workflow YAML or scheduled trigger has been restored.

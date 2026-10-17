@@ -10,9 +10,9 @@
   - `backend/domains/nhl/*`
 - `backend/nhl/` — NHL pipeline scripts/sql/models/data
 - `backend/scripts/` — smoke checks, post-deploy checks, ops helpers
-- `.github/workflows/` — CI/CD & crons
-  - `nhl-daily-refresh.yml` (scheduled NHL refresh pipeline)
-  - `nhl-refresh-rosters.yml` (manual NHL full-team roster refresh)
+- `.github/workflows/` — no workflow YAML is currently present. GitHub-hosted
+  cron automation is retired; Mac-based local scheduling and execution remain
+  authoritative.
 - MLB full-team roster refresh is run by the Mac-based local pipeline through
   `make mlb-roster-refresh-all` under restricted ingest; no hosted roster
   workflow is active.
@@ -23,7 +23,7 @@
 - `SUPABASE_DB_URL` (also exported as `DATABASE_URL`)
 - `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
 - `DEBUG_PBP` (default 0 in CI; set to 1 locally only when debugging)
-- `TZ=UTC` in workflows
+- `TZ=UTC` was used by historical hosted workflows
 
 ## Services
 
@@ -37,7 +37,8 @@
   - SOG/strength from PBP
   - PP TOI from box; fallback to shiftcharts
 - Storage: `nhl.*` tables (skater/goalie logs, etc.)
-- Cron: `.github/workflows/nhl-daily-refresh.yml`
+- Scheduling: local Mac orchestration through the NHL CLI; no hosted NHL cron
+  workflow is active.
 
 ## Frontend
 

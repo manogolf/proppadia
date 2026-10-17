@@ -11,9 +11,11 @@ This plan treats MLB historical rows as the primary asset and keeps only the run
 ## Policy
 
 1. Keep MLB data assets and read paths.
-2. Freeze nonessential MLB automation while suspended.
-3. Archive stale workflow/script wiring that is not required by current runtime.
-4. Re-enable MLB automation only after explicit path validation.
+2. Keep the local Mac MLB pipeline as the operational authority.
+3. Retire hosted GitHub cron automation and stale workflow/script wiring that
+   is not required by current runtime.
+4. Keep historical workflow evidence archived without treating it as callable
+   automation.
 
 ## Canonical MLB Data Assets (Do Not Break)
 
@@ -38,9 +40,10 @@ These tables are currently used by active MLB runtime/read paths:
   - `backend/domains/mlb/repository/*`
 - MLB smoke/contract checks in `backend/scripts/*mlb*`.
 
-## Freeze Scope (While MLB Cron Is Suspended)
+## Active MLB Operations
 
-Do not rely on scheduled MLB workflow execution for correctness right now.
+Do not rely on hosted GitHub workflow execution for MLB correctness. Local Mac
+scheduling and execution remain authoritative.
 
 Keep manual/on-demand capability only:
 
@@ -49,18 +52,15 @@ Keep manual/on-demand capability only:
 - `make mlb-post-deploy*`
 - `make mlb-checks-*`
 
-## Workflow Classification Rule (MLB)
+## Hosted Workflow State
 
-Classify each MLB workflow as one of:
-
-- `suspended-valid`: currently suspended, paths valid, can be re-enabled later.
-- `suspended-needs-path-fix`: suspended and references stale paths.
-- `archive`: no longer part of intended MLB control plane.
-
-Current guidance:
-
-- Keep MLB workflow files as historical orchestration map (since MLB was workflow-driven).
-- Do not re-enable schedules until each file is path-validated against current repo layout.
+No workflow YAML remains under `.github/workflows/` in the current checkout.
+The four remaining local MLB wrappers were removed because their manual jobs
+referenced scripts that were missing or retained only in the defunct archive.
+The scheduled MLB roster workflow was removed locally earlier in commit
+`a1ae4b6a`. The read-only GitHub inventory on October 17, 2026 showed those
+five remote workflows disabled; remote deletion awaits reviewed publication.
+No hosted workflow is an operational dependency.
 
 ## Data Protection Guardrails
 
@@ -76,31 +76,25 @@ Before any large MLB cleanup:
 
 ## Cleanup Strategy (Safe)
 
-1. Document-only classification first (no deletions).
-2. Disable schedules for any stale workflow.
-3. Archive workflows/scripts only after:
-   - replacement path exists or
-   - capability explicitly deemed unnecessary.
+1. Preserve workflow and script history in the archive.
+2. Keep retired hosted workflows out of the active workflow directory.
+3. Keep a record of each retired workflow's purpose and current local
+   operational owner.
 4. Keep rollback note per archived workflow:
    - original file path
    - owning purpose
    - replacement/manual command (if any)
 
-## Reactivation Criteria (Preseason)
+## Local Operations Validation
 
-Before re-enabling MLB scheduled jobs:
-
-1. Each workflow command resolves to existing files/commands.
-2. Workflow uses current dependency/install paths.
-3. One manual run succeeds in GitHub Actions.
-4. Post-run validation passes:
-   - `make mlb-post-deploy-strict` (or offseason variant as appropriate)
-   - targeted data freshness checks for roster/cache jobs.
+Use local repository checks and MLB post-deploy/freshness checks for the
+Mac-based pipeline. Reinstating hosted scheduling requires a new owner decision
+and is outside this plan.
 
 ## Decision Summary
 
 - MLB value is in stored data rows first.
 - Runtime read/query functionality remains priority.
-- Automation is optional until explicitly revalidated.
+- Hosted automation is retired; local Mac scheduling remains authoritative.
 - Cleanup should reduce ambiguity, not erase recoverable history.
 

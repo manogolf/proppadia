@@ -4,129 +4,62 @@ Snapshot date: October 17, 2026
 
 ## Operating Model
 
-- NHL control plane: `backend/nhl/cli.py` (CLI-driven)
-- MLB control plane: Mac-based local Makefile + Python pipeline (`make mlb-*`).
-  GitHub-hosted MLB roster automation is retired.
+- NHL production runs through the local Mac pipeline and `backend/nhl/cli.py`.
+- MLB operations run through the local Mac pipeline and `make mlb-*` command
+  surface. The local roster refresh is operational under restricted ingest.
+- GitHub-hosted cron automation is retired. Do not restore schedules or use
+  hosted workflows as an operational dependency.
 
-## Status Labels
+## Current Repository Inventory
 
-- `keep-active`: should stay active now.
-- `suspended-valid`: intentionally suspended; paths appear valid.
-- `suspended-needs-path-fix`: intentionally suspended/manual-only; workflow references stale paths.
-- `archive-candidate`: obsolete or high-confusion legacy wiring.
+There are no workflow YAML files under `.github/workflows/` in this checkout.
+The four remaining local MLB workflow files were removed because their
+`workflow_dispatch` jobs pointed to scripts that are absent or archived under
+`archive/defunct_20250926_090506/`. The earlier roster workflow deletion is
+recorded in the local history at commit `a1ae4b6a`.
 
-## Current Classification
+The read-only GitHub inventory checked October 17, 2026 contained five
+workflows, all `disabled_manually`: the four removed MLB manual workflows and
+the previously retired MLB roster workflow. The four remaining workflows had
+only `workflow_dispatch`; the roster workflow had `schedule` and
+`workflow_dispatch`. Remote deletion awaits a reviewed publication of the
+isolated retirement commits. No workflow was run, enabled, or edited remotely.
 
-### Keep Active
+| Workflow | Trigger on remote `main` | Decision | Evidence |
+| --- | --- | --- | --- |
+| `mlb-cache-player-profiles.yml` | `workflow_dispatch` | Retired and removed | Calls `backend/scripts/cache/generateCachedPlayerProfiles.js`, present only in the defunct archive. |
+| `mlb-cron.yml` | `workflow_dispatch` | Retired and removed | Calls missing `scripts/cronRunner.js`; no local operation depends on it. |
+| `mlb-generate_streak_profiles.yml` | `workflow_dispatch` | Retired and removed | Both called Node scripts are present only in the defunct archive. |
+| `mlb-sync_user_added_props.yml` | `workflow_dispatch` | Retired and removed | Calls `scripts/syncUserAddedPropsNow.js`, present only in the defunct archive; no local operation depends on it. |
+| `mlb-refresh-player-ids.yml` | `schedule`, `workflow_dispatch` | Owner-retired and removed locally in `a1ae4b6a` | Local MLB roster refresh is the operational authority under restricted ingest. |
 
-- `.github/workflows/ci-offline-checks.yml`
-- `.github/workflows/nhl-daily-refresh.yml`
-- `Makefile` MLB operational targets:
-  - `mlb-daily-refresh` / `mlb-daily-refresh-strict` / `mlb-daily-refresh-smoke`
-  - `mlb-help` / `mlb-runbook` / `mlb-cron-preview`
-  - `mlb-stat-derived-refresh`
-  - `mlb-stat-derived-backfill`
-  - `mlb-stat-derived-smoke`
-  - `mlb-pipeline-check`
-  - `mlb-pipeline-check-json`
-  - `mlb-pipeline-log`
-  - `mlb-pipeline-last`
-  - `mlb-pipeline-daily-check`
-  - `mlb-insert-stat-derived`
-  - `mlb-check-stat-derived`
-  - `mlb-roster-refresh-all`
-  - `mlb-market-cache-refresh`
-  - `mlb-post-deploy` / `mlb-post-deploy-strict-offseason`
-  - `ops-status` / `ops-help` / `ops-operator-summary` / `ops-operator-summary-json` / `ops-operator-summary-json-compact` / `ops-operator-log` / `ops-operator-last` / `ops-operator-incident` / `ops-operator-incident-strict` / `ops-daily-check`
-- `backend/mlb/scripts/insert_mlb_stat_derived.py`
-- `backend/mlb/scripts/validate_mlb_stat_derived_recent.py`
+No active local command, script, documentation procedure, or workflow depends
+on hosted cron execution. Historical workflow records and archived scripts are
+retained as history, not as callable operations.
 
-### Suspended Valid
+## Local Operations and Checks
 
-- `.github/workflows/nhl-refresh-rosters.yml`
+- MLB roster: `make mlb-roster-refresh-all`.
+- MLB daily operations: `make mlb-daily-refresh` or
+  `make mlb-daily-refresh-strict`.
+- NHL daily operations: `backend/nhl/cli.py` through the local Mac pipeline.
+- `make workflow-inventory-strict` and
+  `make workflow-path-audit-strict` remain local governance checks; an empty
+  hosted schedule inventory is expected.
+- `make nhl-workflow-compat-check` remains a local compatibility check. It is
+  not evidence that a hosted NHL workflow is present or scheduled.
 
-### Retired
+## Retirement and Publication
 
-- `.github/workflows/mlb-refresh-player-ids.yml` — owner-retired; removed from
-  this local repository. Remote deletion awaits normal reviewed publication.
-  Local MLB roster refresh remains operational under restricted ingest.
+The owner decision is to keep Mac-based scheduling and execution authoritative.
+Do not add hosted schedules, provision hosted cron credentials, or change local
+commands, launchd jobs, or database routing as part of this retirement.
+The legacy `SUPABASE_DB_URL` GitHub workflow reference was confined to the
+retired roster workflow in the inspected remote inventory. Secret values were
+not inspected and no secrets were changed.
 
-### Suspended Needs Path Fix
-
-- `.github/workflows/mlb-retrain.yml`
-- `.github/workflows/mlb-retrain_models.yml`
-- `.github/workflows/mlb-train_recent_models.yml`
-- `.github/workflows/mlb-precompute.yml`
-
-### Archive Candidates
-
-- `.github/workflows/mlb-backfill_predictions.yml`
-- `.github/workflows/mlb-cache-player-profiles.yml`
-- `.github/workflows/mlb-cron.yml`
-- `.github/workflows/mlb-generate_streak_profiles.yml`
-- `.github/workflows/mlb-insert_stat_derived_props.yml`
-- `.github/workflows/mlb-sync_user_added_props.yml`
-
-## Notes
-
-- “Needs path fix” and “archive candidate” are based on current repo path drift:
-  several workflows still call old `backend/scripts/...` paths while equivalent code now lives under `backend/mlb/...` or `mlb/scripts/...`.
-- No workflow should be re-enabled on schedule without one successful manual run and post-deploy verification.
-- Current MLB stat-derived authority is Python DB-URL-native (`insert_mlb_stat_derived.py`), not the legacy JS path.
-- Archive-candidate MLB workflows now have `schedule` removed in-repo and are manual-only (`workflow_dispatch`).
-- There are currently no unexpected scheduled MLB workflow files in-repo (`make workflow-inventory-strict` baseline clean).
-- Scheduled workflow path audit is currently clean (`make workflow-path-audit-strict` pass).
-
-## Cron Replacement Plan (GitHub Suspended → Stable Ops)
-
-Primary policy:
-
-1. Preserve meaningful jobs, but move them to stable command surfaces first (`make mlb-*`, `backend/nhl/cli.py`).
-2. Keep legacy GitHub workflows manual-only until command paths and verification are clean.
-3. Re-enable any schedule only after one successful manual run + smoke verification.
-
-Replacement map:
-
-1. `mlb-insert_stat_derived_props.yml` → `make mlb-stat-derived-refresh`
-2. `mlb-backfill_predictions.yml` → `make mlb-stat-derived-backfill ...` (manual window)
-3. `mlb-cache-player-profiles.yml` → fold into daily refresh runbook/manual warm pass
-4. `mlb-generate_streak_profiles.yml` → fold into post-refresh validation lane
-5. `mlb-cron.yml` / `mlb-sync_user_added_props.yml` → covered by current API/runtime behavior; manual-only unless a concrete gap is found
-6. `mlb-precompute.yml` / `mlb-retrain*.yml` / `mlb-train_recent_models.yml` → manual-only training lane until path-fix + model policy signoff
-
-Current operator stance:
-
-1. NHL production remains local automator + `backend/nhl/cli.py` while cron migration stabilizes.
-2. MLB hosted scheduling uses conservative cadence (Render/manual) and strict checks.
-3. Cost control over convenience: no automatic expansion of hosted cron frequency.
-
-## MLB Cron Baseline (Current)
-
-Quick runnable command list: `docs/Operations Command Matrix.md`
-Workflow schedule inventory commands:
-- `make cron-governance-check` (one-command strict governance gate)
-- `make workflow-inventory` (report only)
-- `make workflow-inventory-strict` (fails on unexpected scheduled files)
-- `make workflow-path-audit` (report missing workflow python refs for scheduled files)
-- `make workflow-path-audit-strict` (fails on missing workflow python refs for scheduled files)
-- `make nhl-workflow-compat-check` (ensures NHL compatibility wrappers exist and compile)
-- Full/manual audit mode:
-  - `make workflow-path-audit` default = scheduled workflows only
-  - `.venv/bin/python backend/scripts/check_workflow_command_paths.py --all-workflows`
-
-Recommended low-risk cadence while season is inactive:
-
-1. `mlb-market-cache-refresh` every 8 hours (already conservative).
-2. `mlb-roster-refresh-all` is run by the local Mac MLB pipeline.
-3. `mlb-insert-stat-derived` daily during active season; optional/suspended in offseason.
-4. `mlb-check-stat-derived` after insert (or at least daily) as volume guard.
-   - use `mlb-stat-derived-refresh` to execute both in one run.
-5. `mlb-stat-derived-backfill` for explicit historical windows (manual/on-demand).
-
-Governance cadence and handoff procedure: `docs/Cron Replacement Runbook.md`
-
-Canonical commands:
-
-```bash
-make mlb-daily-refresh-strict MLB_MARKET_DAYS=1 MLB_ROSTER_DATE=$(date +%F) MLB_STAT_DAYS_AGO=2 MLB_STAT_SKIP_EXISTING_DATES=1 MLB_STAT_DERIVED_DAYS=7
-```
+The local branch is substantially ahead of `origin/main`. Publish only the
+roster deletion commit `a1ae4b6a` and the subsequent hosted-workflow retirement
+commit by applying those changes in an isolated worktree based on
+`origin/main`, reviewing the exact diff, and publishing that isolated branch
+through the normal reviewed Git process. Do not push the current local `main`.

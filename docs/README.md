@@ -10,8 +10,9 @@ If the question is “what is the active runtime path right now?”:
 - Shared DB/runtime helpers: `backend/shared/*`
 - MLB command surface: `make mlb-*` targets in `Makefile`
 - NHL command surface: `backend/nhl/cli.py` and `make nhl-*` targets
-- Scheduled workflows expected active:
-  - `.github/workflows/nhl-daily-refresh.yml`
+- GitHub-hosted cron automation is retired. Local Mac scheduling and
+  execution remain authoritative; no workflow YAML is present in the current
+  checkout.
 - MLB roster refresh authority: the Mac-based local MLB pipeline using
   `make mlb-roster-refresh-all`; hosted GitHub roster automation is retired.
 - Governance checks:
@@ -48,7 +49,7 @@ If the question is “what is the active runtime path right now?”:
 - `docs/Legacy Quarantine Map.md`: backend archive/legacy move map to `backend/_legacy/*`.
 - `docs/Workflow Classification.md`: current keep/suspend/archive workflow status map.
 - `make phase-status-json`: machine-readable summary of the phase tracker in `docs/Execution Plan.md`.
-- `docs/Cron Replacement Runbook.md`: replacement mapping for suspended cron workflows and schedule re-enable gates.
+- `docs/Cron Replacement Runbook.md`: retired hosted cron policy, local command surfaces, and isolated publication guidance.
 - `docs/MLB Data-First Retention Plan.md`: MLB data-preservation-first operating policy.
 - `docs/MLB Post-Phase-6 Backlog.md`: prioritized MLB work plan after Phase 6 readiness.
 - `docs/Offseason Behavior Contract.md`: expected MLB/NHL empty-state behavior and strict-offseason gate policy.
@@ -60,11 +61,11 @@ If the question is “what is the active runtime path right now?”:
 - Included automatically by `make mlb-checks-offline` and `make nhl-checks-offline`.
 - `make diagnose`: optimized local baseline (`runtime-boundaries` + `shared-checks-offline` + MLB core + NHL core) without rerunning shared checks twice.
 - `make ci-offline-checks`: CI/offline baseline (same composition as `diagnose`).
-- `make nhl-workflow-compat-check`: verifies NHL workflow compatibility wrappers required by scheduled workflow steps.
+- `make nhl-workflow-compat-check`: checks local NHL compatibility wrappers; it does not indicate a hosted workflow is active.
 - `make docs-make-target-audit`: fails when docs reference a non-existent Make target.
 - `make cross-sport-post-deploy BASE_URL=<url>`: one-command offseason-safe strict post-deploy checks for MLB + NHL.
-- `docs/Roster Refresh Operations.md`: local + automation runbook for MLB/NHL full-team roster refresh.
-- `docs/Cron Replacement Runbook.md`: migration map and safety gates for suspended legacy cron workflows.
+- `docs/Roster Refresh Operations.md`: local Mac runbook for MLB/NHL full-team roster refresh.
+- `docs/Cron Replacement Runbook.md`: record of the retired hosted cron policy and the local command surfaces.
 
 ## MLB API and Validation
 

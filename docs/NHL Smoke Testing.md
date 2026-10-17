@@ -79,9 +79,13 @@ Flags:
 - `--require-data`: fail when probe date is sparse
 - `--allow-sparse`: keep warnings but do not fail strict gate
 
-## Manual Roster Refresh Workflow
+## Local Roster Refresh
 
-GitHub Actions:
-- Workflow: `.github/workflows/nhl-refresh-rosters.yml`
-- Required secret: `SUPABASE_DB_URL`
-- Manual dispatch input: `nhl_roster_date` (optional `YYYY-MM-DD`)
+Use the local Mac command surface:
+
+```bash
+make nhl-roster-refresh-all NHL_ROSTER_DATE=YYYY-MM-DD
+```
+
+No NHL GitHub Actions workflow is present in the current local or remote
+workflow inventory.

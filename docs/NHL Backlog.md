@@ -12,6 +12,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   contracts and separate authorization. This backlog does not authorize
   database access or writes, production execution, credential changes, or paid
   provider calls.
+- GitHub-hosted cron automation is retired. NHL scheduling and execution
+  remain local to the Mac pipeline; no NHL GitHub workflow appeared in the
+  October 17, 2026 remote workflow inventory. No scheduler or database routing
+  change is included in that decision.
 
 ## Priorities
 

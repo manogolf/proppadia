@@ -83,15 +83,19 @@ Roster operations runbook:
 
 - `docs/Roster Refresh Operations.md`
 
-GitHub workflows present:
+GitHub workflow state:
 
-- Active CI baseline: `.github/workflows/ci-offline-checks.yml`
-- Active NHL daily: `.github/workflows/nhl-daily-refresh.yml`
-- Roster operations:
-  - MLB authority is the Mac-based local pipeline (`make mlb-roster-refresh-all`)
-    under restricted ingest; hosted MLB roster automation is retired.
-  - `.github/workflows/nhl-refresh-rosters.yml` remains the NHL manual helper.
-- Additional legacy MLB workflows still exist and remain callable by schedule/manual dispatch.
+- No workflow YAML files are present under `.github/workflows/` in this
+  checkout. The remaining legacy MLB files were removed because their manual
+  jobs referenced missing or archived scripts; the hosted roster workflow was
+  removed earlier in commit `a1ae4b6a`.
+- A read-only GitHub inventory on October 17, 2026 showed the four legacy
+  manual workflows and the roster workflow still listed remotely, all
+  `disabled_manually`. Their remote removal awaits reviewed publication of
+  only the workflow-retirement commits.
+- GitHub-hosted cron automation is retired. MLB and NHL scheduling and
+  execution remain local; MLB roster refresh uses the existing Make target
+  and restricted ingest route.
 
 ## 5. Current Data Model Behavior (As Implemented)
 
@@ -102,7 +106,7 @@ GitHub workflows present:
 - NHL:
   - Slate-driven prediction endpoints live.
   - Full-team roster refresh command exists via `backend.nhl.cli refresh-rosters-all`.
-  - Daily pipeline wiring exists in NHL automation.
+  - Daily pipeline wiring exists in the local NHL automation.
 
 ## 6. Validation/Quality Gates In Place
 
@@ -125,7 +129,8 @@ GitHub workflows present:
 - Legacy and duplicate trees still exist in the repo and workflows:
   - top-level `mlb/`, `nhl/`
   - `backend/_legacy/*`
-  - several older MLB GitHub Actions files still scheduled/manual-capable
+- Retired workflow YAML and scripts are retained only as historical records or
+  archived code; they are not part of the active control plane.
 - Result: architecture direction is clear, but cleanup/decommission is not fully complete.
 
 ## 8. Planning-Ready Backlog Themes

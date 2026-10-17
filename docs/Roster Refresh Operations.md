@@ -44,7 +44,11 @@ Notes:
 - `nhl-roster-refresh-all` runs `python -m backend.nhl.cli refresh-rosters-all`.
 - `roster-refresh-all` is an umbrella target that runs MLB then NHL.
 
-## Automation
+## Scheduling and Execution
+
+GitHub-hosted cron automation is retired. The Mac-based local pipelines remain
+the operational authority; these commands and their launchd schedules are
+unchanged by the hosted-workflow retirement.
 
 ### MLB
 
@@ -64,11 +68,6 @@ NHL roster refresh is executed in NHL daily automation through:
 - `python -m backend.nhl.cli daily --with-odds`
 
 `backend.nhl.cli daily` calls full-team roster refresh near the start of the run.
-
-Manual NHL refresh workflow:
-- `.github/workflows/nhl-refresh-rosters.yml`
-- Required secret: `SUPABASE_DB_URL`
-- Manual dispatch input: `nhl_roster_date` (optional `YYYY-MM-DD`)
 
 ## Offseason Expectations
 

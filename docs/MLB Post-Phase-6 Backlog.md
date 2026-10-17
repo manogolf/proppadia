@@ -22,7 +22,9 @@ Scope: work after Phase 6 readiness gates are green, before and during MLB prese
 
 ### P1.1 In-season scheduler cutover execution (Phase 6.2)
 
-Use the existing cadence plan as-is; execute close to Opening Day.
+Use the existing local Mac cadence plan as-is; execute close to Opening Day.
+This is a local scheduler cutover only. GitHub-hosted cron automation is
+retired and is not a cutover target.
 
 Acceptance:
 - `make season-cutover-ready` passes after schedule flip.
@@ -317,3 +319,23 @@ writer validation does not authorize a hosted cutover or a different writer.
   grants they require, record verified dependencies and an incremental
   revocation plan, and obtain the separately authorized change before changing
   any grant.
+
+### P2.4 Retire remaining hosted GitHub cron workflows
+
+- Status: **COMPLETE LOCALLY — remote publication pending review**. The owner
+  retired GitHub-hosted cron automation. The four remaining local workflow
+  files were manual-only (`workflow_dispatch`) and called missing or archived
+  legacy scripts, so they were removed. The earlier scheduled roster workflow
+  was removed locally in commit `a1ae4b6a`.
+- The October 17, 2026 read-only remote inventory contained five disabled
+  workflows: those four manual wrappers and the roster workflow with
+  `schedule` plus `workflow_dispatch`. No workflow runs or remote changes were
+  made. The remote files remain pending reviewed publication.
+- The legacy GitHub `SUPABASE_DB_URL` reference was confined to the retired
+  roster workflow in the inspected remote inventory; the four manual wrappers
+  use other secret names. Secret values were not inspected and no secrets were
+  changed.
+- Local Mac commands, launchd jobs, and database routing remain unchanged.
+- Publish only the roster retirement and this follow-up retirement in an
+  isolated worktree based on `origin/main`; do not push the ahead local
+  `main` branch.
