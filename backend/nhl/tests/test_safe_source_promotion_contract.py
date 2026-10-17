@@ -6,6 +6,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 MIGRATION = ROOT / "backend/nhl/sql/migrations/20261017_safe_skater_source_promotion.sql"
+ROLE_MIGRATION = ROOT / "backend/nhl/sql/migrations/20261016_prepare_nhl_write_roles.sql"
+ROLLBACK = ROOT / "backend/nhl/sql/migrations/20261017_safe_skater_source_promotion_rollback.sql"
+FIXTURE_SETUP = ROOT / "backend/nhl/sql/tests/nhl_safe_promotion_fixture_setup.sql"
+
+
+def update_columns(sql: str) -> set[str]:
+    grant = sql.lower().split("grant update (", 1)[1].split(")\n  on nhl.skater_game_logs_raw", 1)[0]
+    return {column.strip() for column in grant.replace("\n", " ").split(",")}
 
 
 class SafeSourcePromotionContractTests(unittest.TestCase):
@@ -72,6 +80,19 @@ class SafeSourcePromotionContractTests(unittest.TestCase):
         raw_table = setup.split("create table nhl.skater_game_logs_raw(", 1)[1].split(");", 1)[0]
         for column in columns:
             self.assertRegex(raw_table, rf"\b{column}\b")
+
+    def test_fixture_baseline_and_rollback_match_original_ingest_update_contract(self):
+        original = ROLE_MIGRATION.read_text()
+        rollback = ROLLBACK.read_text()
+        setup = FIXTURE_SETUP.read_text()
+        original_columns = update_columns(original)
+        self.assertEqual(update_columns(rollback), original_columns)
+        self.assertEqual(update_columns(setup), original_columns)
+
+    def test_fixture_cleanup_requires_exact_restored_update_columns(self):
+        cleanup = (ROOT / "backend/nhl/sql/tests/nhl_safe_promotion_fixture_cleanup.sql").read_text().lower()
+        self.assertIn("fixture_cleanup_ingest_update_column_set_mismatch", cleanup)
+        self.assertIn("fixture_cleanup_correction_update_column_set_mismatch", cleanup)
 
     def test_all_active_raw_promoters_use_the_safe_entry_points(self):
         cli = (ROOT / "backend/nhl/cli.py").read_text()

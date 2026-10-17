@@ -59,7 +59,11 @@ membership during cleanup.
 
 For an isolated preview run, execute the committed rollback only after all
 fixture assertions pass. Verify that both functions are absent and that the
-fixture's pre-migration ingest column grants are restored. Then run
+fixture's pre-migration ingest column grants are restored exactly. The fixture
+setup's raw-table ingest UPDATE column list must match both the original grant
+in `20261016_prepare_nhl_write_roles.sql` and the rollback grant. The cleanup
+guard checks the full restored ingest UPDATE set and the exact two-column
+correction UPDATE set before dropping fixture objects. Then run
 `nhl_safe_promotion_fixture_cleanup.sql`; it checks the expected fixture-only
 inventory, revokes both test memberships, drops the fixture `nhl` schema, and
 drops only the seven fixture-created Proppadia roles. It does not remove

@@ -6,6 +6,8 @@ DO $$
 DECLARE
   actual_relations text[];
   actual_roles text[];
+  actual_ingest_update_columns text[];
+  actual_correction_update_columns text[];
 BEGIN
   IF current_user <> 'postgres' THEN
     RAISE EXCEPTION 'FIXTURE_CLEANUP_WRONG_ADMIN_ROLE';
@@ -44,11 +46,35 @@ BEGIN
      OR pg_has_role('proppadia_nhl_daily_login','proppadia_nhl_source_correction','MEMBER') THEN
     RAISE EXCEPTION 'FIXTURE_CLEANUP_EXPECTED_MEMBERSHIP_MISMATCH';
   END IF;
-  IF NOT has_column_privilege('proppadia_nhl_daily_login',
-       'nhl.skater_game_logs_raw','shot_attempts','UPDATE')
-     OR NOT has_column_privilege('proppadia_nhl_daily_login',
-       'nhl.skater_game_logs_raw','pp_toi_minutes','UPDATE') THEN
-    RAISE EXCEPTION 'FIXTURE_CLEANUP_ROLLBACK_GRANT_STATE_MISMATCH';
+  SELECT array_agg(a.attname::text ORDER BY a.attname::text)
+    INTO actual_ingest_update_columns
+    FROM pg_attribute a
+    JOIN pg_class c ON c.oid=a.attrelid
+    JOIN pg_namespace n ON n.oid=c.relnamespace
+   WHERE n.nspname='nhl' AND c.relname='skater_game_logs_raw'
+     AND a.attnum > 0 AND NOT a.attisdropped
+     AND has_column_privilege('proppadia_nhl_daily_login',c.oid,a.attname,'UPDATE');
+  IF actual_ingest_update_columns <> ARRAY[
+    'assists','blocked_shots_taken','blocks','ev_shot_attempts','ev_sog',
+    'fenwick_for','game_date','giveaways','goals','hits','is_home',
+    'missed_shots','opponent_id','penalties_drawn','penalties_taken','points',
+    'pp_shot_attempts','pp_sog','pp_toi_minutes','rebounds_for',
+    'sh_shot_attempts','sh_sog','shot_attempts','shots_on_goal','takeaways',
+    'team_id','toi_minutes'
+  ]::text[] THEN
+    RAISE EXCEPTION 'FIXTURE_CLEANUP_INGEST_UPDATE_COLUMN_SET_MISMATCH';
+  END IF;
+
+  SELECT array_agg(a.attname::text ORDER BY a.attname::text)
+    INTO actual_correction_update_columns
+    FROM pg_attribute a
+    JOIN pg_class c ON c.oid=a.attrelid
+    JOIN pg_namespace n ON n.oid=c.relnamespace
+   WHERE n.nspname='nhl' AND c.relname='skater_game_logs_raw'
+     AND a.attnum > 0 AND NOT a.attisdropped
+     AND has_column_privilege('proppadia_nhl_source_correction',c.oid,a.attname,'UPDATE');
+  IF actual_correction_update_columns <> ARRAY['pp_toi_minutes','shot_attempts']::text[] THEN
+    RAISE EXCEPTION 'FIXTURE_CLEANUP_CORRECTION_UPDATE_COLUMN_SET_MISMATCH';
   END IF;
 END
 $$;

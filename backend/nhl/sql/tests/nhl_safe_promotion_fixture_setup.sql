@@ -60,7 +60,12 @@ GRANT SELECT ON nhl.skater_game_logs_raw TO proppadia_nhl_ingest;
 GRANT proppadia_nhl_ingest TO proppadia_nhl_daily_login;
 GRANT INSERT (player_id,game_id,game_date,shot_attempts,pp_toi_minutes,toi_minutes,shots_on_goal)
   ON nhl.skater_game_logs_raw TO proppadia_nhl_ingest;
-GRANT UPDATE (game_date,toi_minutes,shots_on_goal)
+GRANT UPDATE (team_id, opponent_id, is_home, game_date, shots_on_goal,
+              shot_attempts, toi_minutes, pp_toi_minutes, blocks, hits,
+              fenwick_for, missed_shots, blocked_shots_taken, rebounds_for,
+              takeaways, giveaways, penalties_drawn, penalties_taken,
+              ev_shot_attempts, pp_shot_attempts, sh_shot_attempts,
+              ev_sog, pp_sog, sh_sog, goals, assists, points)
   ON nhl.skater_game_logs_raw TO proppadia_nhl_ingest;
 GRANT SELECT,INSERT,UPDATE,DELETE ON nhl.import_skater_logs_stage TO proppadia_nhl_ingest;
 GRANT SELECT ON nhl.games,nhl.game_manpower_segments,nhl.shiftcharts_raw TO proppadia_nhl_ingest;
