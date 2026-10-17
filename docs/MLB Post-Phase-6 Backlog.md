@@ -297,6 +297,52 @@ writer validation does not authorize a hosted cutover or a different writer.
   the first naturally occurring INSERT/NULL-fill on an ordinary due-date run,
   with restricted identity, committed counts, and protected-value checks.
 
+### P1.4 Route daily `today_*` materialized-view refresh through a narrow capability
+
+- Status: **ASSESSMENT COMPLETE — implementation requires a separately
+  authorized database function and a process-scoped wrapper routing change**.
+- The active wrapper refreshes `mlb.today_market_snapshot`,
+  `mlb.today_market_timing_signal`, `mlb.today_player_context`, then
+  `mlb.today_workspace_mlb`, using `SUPABASE_DB_URL`. Production PostgreSQL is
+  15.8. All four materialized views are owned by `postgres`; their ACLs grant
+  privileges only to that owner. The restricted login is only a member of
+  `proppadia_mlb_ingest`, which is not the owner and cannot assume `postgres`.
+  PostgreSQL 15 requires materialized-view ownership for refresh; there is no
+  narrow `GRANT REFRESH` privilege. PostgreSQL 17 and later have a `MAINTAIN`
+  privilege, but that does not apply to this production server.
+- There is no existing routine mentioning these views that can refresh them.
+  A direct `SET ROLE` route is unavailable. The four views each have a valid,
+  nonpartial unique index, so `REFRESH ... CONCURRENTLY` is supported while
+  preserving reader access. The current plain refresh may block reads while it
+  replaces contents.
+- Dependencies are derived workspace relations: the market snapshot and
+  timing signal read `today_odds_book_rows` and `today_slate_rows`; player
+  context reads `model_training_props` and `today_slate_rows`; the final
+  `today_workspace_mlb` reads the first three materialized views. The `/mlb/today`
+  repository reads the final workspace. Refresh replaces only these derived
+  caches; it does not issue writes to the source, training, or outcome tables.
+- Assessment record:
+  `docs/operations/mlb_today_materialized_view_restricted_refresh_assessment_2026-10-17.md`.
+- Recommended implementation: an owner-controlled `SECURITY DEFINER` routine
+  containing only the four schema-qualified refresh statements, with a pinned
+  safe `search_path`, no caller-supplied relation names, PUBLIC execution
+  revoked, and EXECUTE granted only to the approved operational identity. Use
+  concurrent refresh after proving this fixed function under PostgreSQL 15.8.
+  Change only the wrapper's refresh invocation to use the process-scoped
+  restricted ingest route; retain the four-view sequence and existing
+  `today_*` staging build. Do not change view ownership or grant the ingest
+  identity owner-level rights. This assessment did not create a function,
+  change grants, modify the wrapper, or execute a refresh.
+- Completion: separately authorize and review a migration and rollback;
+  prove the fixed routine in an isolated PostgreSQL 15.8 database, including
+  allowed refreshes, rejected arbitrary targets, and rejected direct refresh
+  by the restricted identity; inspect source/outcome fingerprints before and
+  after; apply only in an approved maintenance window; route only this wrapper
+  call through the scoped identity; and verify successful sequential refresh,
+  downstream `/mlb/today` reads, lock behavior, and effective session identity
+  on a natural run. Do not combine this with the pending integrated restricted
+  writer validation or the 16:30 PT run.
+
 ### P2.1 Hosted GitHub roster migration
 
 - Status: **RETIRED** — the owner retired GitHub-hosted MLB roster automation.
