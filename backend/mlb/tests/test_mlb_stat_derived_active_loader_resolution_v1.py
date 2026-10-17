@@ -410,6 +410,8 @@ class _TrainingCursor:
         self.rowcount = 0
         self.params = None
         self._rows = []
+        self._result = None
+        self._function_result = False
         self.description = ()
 
     def __enter__(self):
@@ -420,17 +422,19 @@ class _TrainingCursor:
 
     def execute(self, sql, params=None):
         self.params = params
-        key = (int(params["player_id"]), int(params["game_id"]), params["prop_type"], params["prop_source"])
         if sql.lstrip().startswith("SELECT prop_value"):
+            key = (int(params["player_id"]), int(params["game_id"]), params["prop_type"], params["prop_source"])
             prior = self.logical_rows.get(key)
             self._rows = [dict(prior)] if prior is not None else []
+            self._result = self._rows[0] if self._rows else None
+            self._function_result = False
             self.description = [(name,) for name in (prior or {}).keys()]
             return
-        assert "INSERT INTO mlb.model_training_props" in sql
-        assert "ON CONFLICT (player_id, game_id, prop_type, prop_source)" in sql
-        assert "IS NOT DISTINCT FROM" in sql
+        assert "mlb.safe_upsert_model_training_props(%s::jsonb)" in sql
+        payload = json.loads(params[0])
+        key = (int(payload["player_id"]), int(payload["game_id"]), payload["prop_type"], payload["prop_source"])
         comparable = {
-            field: params.get(field)
+            field: payload.get(field)
             for field in (
                 "prop_value", "line", "over_under", "outcome", "status", "was_correct",
                 "game_date", "game_time", "game_day_of_week", "time_of_day_bucket", "streak_type",
@@ -444,9 +448,11 @@ class _TrainingCursor:
         else:
             self.logical_rows[key] = comparable
             self.rowcount = 1
+        self._result = (self.rowcount,)
+        self._function_result = True
 
     def fetchone(self):
-        return self._rows[0] if self._rows else None
+        return self._result
 
 
 class _TrainingConnection:

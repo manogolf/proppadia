@@ -1,9 +1,10 @@
 # MLB Restricted Writer Access Contract v1
 
-**Status: preparation only.** No role, grant, credential, alias, or production
-configuration changes are authorized by this document. The statements below
-describe current writer behavior and the minimum access contract to validate
-on an independently verified disposable PostgreSQL database.
+**Status: preview-verified; production not deployed.** No production role,
+grant, credential, alias, or configuration changes are authorized by this
+document. The fixed write-entrypoint migration has passed on the independently
+identified NHL protection preview; production rollout remains a separate
+authorization.
 
 ## Scope
 
@@ -32,20 +33,40 @@ NOLOGIN group and a dedicated MLB writer login are the intended base for
 routine acquisition, but application SQL safety is not a substitute for
 database-enforced restrictions on direct SQL.
 
-The source-stat upsert now NULL-fills and reports conflicts, but a caller with
-direct table UPDATE could still issue unrelated SQL. Before routing a
-production writer login, validate exact relation and column grants in the
-disposable fixture. Preserve `DELETE`, `TRUNCATE`, DDL, role membership, and
-source-correction privileges as absent from ordinary application logins, and
-protect populated source fields through column restrictions or an already
-reviewed fixed database entry point. Any approved MLB historical corrections
-require their own authorization and field-specific path. PostgreSQL requires
-UPDATE privileges for columns named in `ON CONFLICT DO UPDATE` even when its
-`WHERE` clause rejects a replacement; therefore the current application
-upserts alone cannot provide arbitrary-SQL protection for `player_stats` or
-the protected `model_training_props` result tuple. Do not grant those ordinary
-logins broad UPDATE on those protected columns until the existing approved
-database enforcement design supplies a fixed entry point or equivalent guard.
+`backend/mlb/sql/migrations/20261017_safe_stat_training_write_entrypoints.sql`
+adds fixed `SECURITY DEFINER` JSONB entry points for `player_stats` and
+`model_training_props`. Payload keys are allowlisted, values are parameterized,
+the functions use a fixed `pg_catalog` search path, and PUBLIC execution is
+revoked. `proppadia_mlb_ingest` receives function EXECUTE and SELECT, but no
+direct INSERT/DELETE/TRUNCATE on either protected table and no UPDATE on
+protected columns. It retains column-limited metadata UPDATE on
+`model_training_props` for existing rolling-result synchronization and metadata
+maintenance. There is no direct UPDATE grant on `player_stats`; official
+observations are inserted, NULL-filled, or replayed only through the fixed
+entry point. Populated source disagreements
+continue to produce the existing application conflict/quarantine receipt.
+The separately approved at-bats repair uses
+`safe_fill_player_stats_at_bats(player_id, game_id, at_bats)`, which fills only
+batter rows whose current value is NULL/zero; it cannot replace a positive
+value or write pitcher rows.
+The training entry point inserts new result observations, preserves the
+protected result tuple (`prop_value`, `line`, `over_under`, `outcome`, `status`,
+`was_correct`) on conflict, and refreshes metadata only when that tuple is
+identical. Optional `game_type` is handled only when the caller's existing
+schema check says the column is present.
+
+The first preview execution found and corrected two issues: preflight reads
+used `SELECT ... FOR UPDATE`, which requires UPDATE privilege, and a composite
+JSON row was assigned with an invalid PL/pgSQL target. The writers now use
+nonlocking conflict-inspection reads; the atomic fixed `INSERT ... ON CONFLICT`
+entry points serialize writes and enforce the no-overwrite predicates.
+
+`backend/mlb/sql/migrations/20261017_safe_stat_training_write_entrypoints_rollback.sql`
+is intentionally fail-closed: it drops the entry points but does not restore
+direct DML on protected tables. After rollback, the two application writers
+remain unavailable until the forward migration is reapplied or a separately
+reviewed safe replacement is deployed. It does not grant broad overwrite
+privileges to make the old inline UPSERT path work.
 
 For the roster path, column-level `INSERT`/`UPDATE` on schema-present roster
 fields and `SELECT(player_id)` are the candidate minimum. Do not enable it until
@@ -89,26 +110,35 @@ The focused offline test is
 
 ## PostgreSQL compatibility result — 2026-10-16
 
-The rollback-only fixture ran against the allowlisted Supabase preview
-(`vbnzmvmhuwvpkijxeuyq`), PostgreSQL 15.19, as the preview `postgres` role.
-The initial state had no MLB/NHL schemas, no fixture roles, and zero migration
-history rows. The fixture rolled back completely and verified those schemas
-and roles were absent afterward. No production objects were accessed or
-changed.
+The completed rollback-only fixture applied the exact forward migration and
+rollback SQL on the allowlisted preview (`vbnzmvmhuwvpkijxeuyq`), PostgreSQL
+15.19, as the preview administrator. The transaction cleanup left no MLB/NHL
+schema, fixture role, table, or function. Passing assertions covered source
+insert, verified NULL fill, identical replay, populated conflict preservation,
+the batter-only NULL/zero at-bats repair, training insert/replay, historical
+result conflict preservation, same-result metadata refresh, optional
+`game_type`, derived recomputation/replay, and identity-collision preservation.
+The migration also passed an idempotent second application. Direct
+INSERT/UPDATE/DELETE/TRUNCATE, correction-role assumption, role escalation, and
+function replace/drop attempts were denied (`42501`). The fail-closed rollback
+removed all three functions without restoring direct DML.
 
-Under the restricted fixture grants, plain source and training INSERTs passed;
-populated-value UPDATE, DELETE, TRUNCATE, correction-role assumption, and role
-grant attempts were denied with SQLSTATE `42501`. Derived recomputation and
-same-value replay passed, and a player/date identity collision was preserved.
-However, the actual `player_stats` and `model_training_props` UPSERT functions
-were denied with SQLSTATE `42501` when UPDATE on protected columns was absent.
-Temporarily granting those columns inside the rollback-only fixture allowed
-NULL-fill, replay, and application conflict preservation, but direct SQL
-overwrites also succeeded. Therefore the current callers cannot meet both
-writer compatibility and PostgreSQL-level overwrite denial using table grants
-alone. MLB production cutover remains blocked until a fixed database entry
-point or equivalent approved database enforcement is implemented and tested.
+The ignored local receipt is
+`artifacts/analysis/mlb/restricted_writer_postgres_compatibility/2026-10-16-boundary/receipt.json`
+with SHA-256 `c6a1e3603b849fa845d06f50734ea9519c55385ec97ee8e90b8b064b0fba7d1e`.
+The tested forward migration SHA-256 is
+`8f412d979228a823dbb9f368402fc19b25b89d835808d64e2f77d4cdf0a1f1df`; the
+tested rollback SHA-256 is
+`fe8703d2ef7d8acb210a6ff41c1e01c329df08c6cfd9fe72367e9d5d8a1445a0`.
+No production object, grant, credential, workflow, or schedule was changed.
+This fixture validates the reviewed disposable table contract; production
+compatibility remains unverified for current columns, constraints, owners, RLS,
+triggers, hosted workflow behavior, and unlisted direct writers. Production
+cutover is therefore NOT READY pending a bounded production compatibility
+preflight and separate authorization.
 
-The sanitized receipt is retained at
-`artifacts/analysis/mlb/restricted_writer_postgres_compatibility/2026-10-16/receipt.json`;
-it is a local ignored evidence artifact, not a migration or production change.
+One known active-path gap must be resolved before routing the separate MLB
+plate-appearance backfill to this restricted group: `backfill_mlb_player_pa.py`
+still issues direct `UPDATE mlb.player_stats` and is intentionally denied by
+this migration. Its source fields and populated-value correction rules were not
+part of this entry-point review; do not grant it direct UPDATE as a workaround.

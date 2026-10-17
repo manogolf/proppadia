@@ -3,21 +3,19 @@
 This fixture directory records disposable PostgreSQL test cases; it does not
 contain production credentials and must never be pointed at production.
 
-Required isolated fixture relations:
+The current executable fixture covers these three isolated relations:
 
-- `mlb.player_ids`: primary key `player_id`; optional `player_name`, `team`,
-  `team_id`, `active`, `status`, `updated_at`, `is_placeholder` columns.
 - `mlb.player_stats`: `(player_id, game_id)` unique key and the official
   observation columns enumerated in
   `docs/contracts/mlb_restricted_writer_access_contract_v1.md`.
 - `mlb.player_derived_stats`: `(player_id, game_id)` unique key, `game_date`,
   identity fields, all 57 rolling output columns (`d7_`, `d15_`, `d30_` × the
   19 documented metrics), and `updated_at`.
-- `mlb.game_info`: `game_id` primary key, core schedule/team fields and the
-  optional phase/source columns listed in the contract.
-- `mlb.model_training_props` and `mlb.prop_features_precomputed` with the
-  columns listed in the contract, used to prove these writes remain separate
-  from source-ingest permission.
+- `mlb.model_training_props`: the materialization/result columns listed in
+  the contract, including the protected historical outcome tuple.
+
+Roster, `game_info`, and BvP/PvB compatibility remain separate test scopes and
+are not claimed as verified by this fixture.
 
 Before running any SQL fixture, the operator must independently confirm the
 isolated project/branch identity and authorization. Stop if identity is
@@ -31,9 +29,12 @@ the real production login, owner, `service_role`, or API roles in this fixture.
 `backend/mlb/tests/run_restricted_writer_postgres_compatibility.py` connects
 only when `NHL_PP_TOI_TEST_DSN` carries the allowlisted preview project
 reference and the initial preview contains no `mlb` or `nhl` schema. It creates
-the schema, three minimal writer tables, and two NOLOGIN test roles inside one
-transaction. Every run ends with `ROLLBACK` and verifies the test schema and
-roles are absent afterward. It does not use production tables or role names.
+the schema, three minimal writer tables, and temporary NOLOGIN roles (including
+the reviewed `proppadia_mlb_ingest` group name) inside one transaction. It
+applies the exact entry-point migration, calls the actual Python stat/training
+writers, runs the fail-closed rollback, and finally rolls back the outer
+transaction. It verifies the test schema and roles are absent afterward. It
+does not use production tables or production login names.
 
 Run with the local authoritative environment loaded without echoing it:
 
@@ -46,18 +47,16 @@ MLB_WRITER_PG_RECEIPT=artifacts/analysis/mlb/restricted_writer_postgres_compatib
   ./bin/python -m backend.mlb.tests.run_restricted_writer_postgres_compatibility
 ```
 
-The probe contrasts restricted column grants with a temporary fixture-only
-UPDATE grant. It records whether actual application upserts can run without
-UPDATE on protected columns and whether arbitrary direct UPDATE then remains
-denied. A compatibility blocker is retained in the receipt while all preview
-fixture changes are rolled back.
+The probe records the migration and rollback hashes, exact function/table
+privilege results, allowed application writes, and denied direct DML. Errors
+are sanitized to exception class, SQLSTATE, and nonsecret PostgreSQL diagnostic
+fields. Fixture changes are always rolled back.
 
 ## Assertions in the isolated PostgreSQL phase
 
-- Apply test-only NOLOGIN writer/read roles to fixture objects.
-- Exercise the exact roster upsert, schema-optional columns, inactive marking,
-  and partial-fetch guard.
-- Exercise official stat insert, replay, same-key conflict, NULL/zero AB fill,
+- Apply the exact migration to a test-only NOLOGIN `proppadia_mlb_ingest` role.
+- Exercise official stat insert, replay, same-key conflict, verified NULL fill,
+  and the separate batter-only NULL/zero at-bats repair entry point,
   and conflicting populated stat values. Identical replay and verified NULL
   fill should pass; populated disagreements must be reported/quarantined with
   canonical values unchanged. The approved at-bats NULL/zero repair remains a
@@ -71,8 +70,9 @@ fixture changes are rolled back.
   conflict, while identical-result metadata replay and rolling-result
   recalculation remain valid. BvP feature writes use their separately approved
   operations.
-- Verify direct UPDATE of protected/populated source fields, DELETE, TRUNCATE,
-  DDL, and role assumption fail for the ordinary application login.
+- Verify direct INSERT/UPDATE of protected source and result fields, DELETE,
+  TRUNCATE, DDL/function replacement, and role assumption fail for the
+  restricted writer role.
 
 The PostgreSQL probe is distinct from the offline tests: it validates SQL and
 ACL behavior on the allowlisted disposable preview, then verifies rollback

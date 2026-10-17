@@ -592,7 +592,6 @@ def _select_existing_player_stats(cur: Any, row: Dict[str, Any]) -> Optional[Dic
                walks_allowed, hits_allowed, outs_recorded, earned_runs, is_starter
           FROM mlb.player_stats
          WHERE player_id = %(player_id)s AND game_id = %(game_id)s
-         FOR UPDATE
         """,
         row,
     )
@@ -603,14 +602,6 @@ def _select_existing_player_stats(cur: Any, row: Dict[str, Any]) -> Optional[Dic
 def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
     """Insert official observations, NULL-fill, and quarantine disagreements."""
     conflict_fields: List[str] = []
-    fill_predicate = " OR ".join(
-        f"(player_stats.{field} IS NULL AND EXCLUDED.{field} IS NOT NULL)"
-        for field in PLAYER_STATS_SOURCE_FIELDS
-    )
-    safe_conflict_predicate = " AND ".join(
-        f"(player_stats.{field} IS NULL OR EXCLUDED.{field} IS NULL OR player_stats.{field} = EXCLUDED.{field})"
-        for field in PLAYER_STATS_SOURCE_FIELDS
-    )
     with conn.cursor() as cur:
         existing_row = _select_existing_player_stats(cur, row)
         if existing_row is not None:
@@ -622,68 +613,10 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
                     "conflicting_fields": tuple(conflict_fields),
                 },))
         cur.execute(
-            f"""
-            INSERT INTO mlb.player_stats (
-                player_id, game_id, game_date, team, opponent, is_home, position,
-                plate_appearances, at_bats, hits, total_bases, rbis, runs_scored, strikeouts_batting, walks,
-                singles, doubles, triples, home_runs, stolen_bases,
-                strikeouts_pitching, walks_allowed, hits_allowed, outs_recorded, earned_runs, is_starter
-            ) VALUES (
-                %(player_id)s, %(game_id)s, %(game_date)s, %(team)s, %(opponent)s, %(is_home)s, %(position)s,
-                %(plate_appearances)s, %(at_bats)s, %(hits)s, %(total_bases)s, %(rbis)s, %(runs_scored)s, %(strikeouts_batting)s, %(walks)s,
-                %(singles)s, %(doubles)s, %(triples)s, %(home_runs)s, %(stolen_bases)s,
-                %(strikeouts_pitching)s, %(walks_allowed)s, %(hits_allowed)s, %(outs_recorded)s, %(earned_runs)s, %(is_starter)s
-            )
-            ON CONFLICT (player_id, game_id)
-            DO UPDATE SET
-                game_date = COALESCE(player_stats.game_date, EXCLUDED.game_date),
-                team = COALESCE(player_stats.team, EXCLUDED.team),
-                opponent = COALESCE(player_stats.opponent, EXCLUDED.opponent),
-                is_home = COALESCE(player_stats.is_home, EXCLUDED.is_home),
-                position = COALESCE(player_stats.position, EXCLUDED.position),
-                plate_appearances = COALESCE(player_stats.plate_appearances, EXCLUDED.plate_appearances),
-                at_bats = COALESCE(player_stats.at_bats, EXCLUDED.at_bats),
-                hits = COALESCE(player_stats.hits, EXCLUDED.hits),
-                total_bases = COALESCE(player_stats.total_bases, EXCLUDED.total_bases),
-                rbis = COALESCE(player_stats.rbis, EXCLUDED.rbis),
-                runs_scored = COALESCE(player_stats.runs_scored, EXCLUDED.runs_scored),
-                strikeouts_batting = COALESCE(player_stats.strikeouts_batting, EXCLUDED.strikeouts_batting),
-                walks = COALESCE(player_stats.walks, EXCLUDED.walks),
-                singles = COALESCE(player_stats.singles, EXCLUDED.singles),
-                doubles = COALESCE(player_stats.doubles, EXCLUDED.doubles),
-                triples = COALESCE(player_stats.triples, EXCLUDED.triples),
-                home_runs = COALESCE(player_stats.home_runs, EXCLUDED.home_runs),
-                stolen_bases = COALESCE(player_stats.stolen_bases, EXCLUDED.stolen_bases),
-                strikeouts_pitching = COALESCE(player_stats.strikeouts_pitching, EXCLUDED.strikeouts_pitching),
-                walks_allowed = COALESCE(player_stats.walks_allowed, EXCLUDED.walks_allowed),
-                hits_allowed = COALESCE(player_stats.hits_allowed, EXCLUDED.hits_allowed),
-                outs_recorded = COALESCE(player_stats.outs_recorded, EXCLUDED.outs_recorded),
-                earned_runs = COALESCE(player_stats.earned_runs, EXCLUDED.earned_runs),
-                is_starter = COALESCE(player_stats.is_starter, EXCLUDED.is_starter)
-            WHERE (
-                player_stats.game_date, player_stats.team, player_stats.opponent,
-                player_stats.is_home, player_stats.position, player_stats.plate_appearances,
-                player_stats.at_bats, player_stats.hits, player_stats.total_bases,
-                player_stats.rbis, player_stats.runs_scored, player_stats.strikeouts_batting,
-                player_stats.walks, player_stats.singles, player_stats.doubles,
-                player_stats.triples, player_stats.home_runs, player_stats.stolen_bases,
-                player_stats.strikeouts_pitching, player_stats.walks_allowed,
-                player_stats.hits_allowed, player_stats.outs_recorded, player_stats.earned_runs,
-                player_stats.is_starter
-            ) IS DISTINCT FROM (
-                EXCLUDED.game_date, EXCLUDED.team, EXCLUDED.opponent, EXCLUDED.is_home,
-                EXCLUDED.position, EXCLUDED.plate_appearances, EXCLUDED.at_bats,
-                EXCLUDED.hits, EXCLUDED.total_bases, EXCLUDED.rbis, EXCLUDED.runs_scored,
-                EXCLUDED.strikeouts_batting, EXCLUDED.walks, EXCLUDED.singles,
-                EXCLUDED.doubles, EXCLUDED.triples, EXCLUDED.home_runs,
-                EXCLUDED.stolen_bases, EXCLUDED.strikeouts_pitching, EXCLUDED.walks_allowed,
-                EXCLUDED.hits_allowed, EXCLUDED.outs_recorded, EXCLUDED.earned_runs,
-                EXCLUDED.is_starter
-            ) AND ({fill_predicate}) AND ({safe_conflict_predicate})
-            """,
-            row,
+            "SELECT mlb.safe_upsert_player_stats(%s::jsonb)",
+            (json.dumps(row, default=_json_payload_default, sort_keys=True),),
         )
-        written = int(cur.rowcount or 0)
+        written = int(cur.fetchone()[0] or 0)
         if not written:
             # A concurrent insert can win after the FOR UPDATE found no row.
             # Re-read the conflict target so a rejected race is not mistaken
@@ -698,6 +631,17 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
                         "conflicting_fields": tuple(conflict_fields),
                     },))
         return SafeWriterResult(written)
+
+
+def _json_payload_default(value: Any) -> str:
+    """Serialize date/time/Decimal values for fixed PostgreSQL JSON entrypoints."""
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    # Numeric strings are cast by jsonb_populate_record into the target numeric
+    # type; keeping Decimal's exact text avoids lossy float conversion.
+    if value.__class__.__name__ == "Decimal":
+        return str(value)
+    raise TypeError(f"unsupported database payload value: {type(value).__name__}")
 
 
 def _backfill_player_stats_at_bats(
@@ -715,17 +659,10 @@ def _backfill_player_stats_at_bats(
     """
     with conn.cursor() as cur:
         cur.execute(
-            """
-            UPDATE mlb.player_stats
-               SET at_bats = %s
-             WHERE player_id = %s
-               AND game_id = %s
-               AND COALESCE(position, '') <> 'P'
-               AND COALESCE(at_bats, 0) = 0
-            """,
-            (int(at_bats), int(player_id), int(game_id)),
+            "SELECT mlb.safe_fill_player_stats_at_bats(%s, %s, %s)",
+            (int(player_id), int(game_id), int(at_bats)),
         )
-        return int(cur.rowcount or 0)
+        return int(cur.fetchone()[0] or 0)
 
 
 class ActiveLoaderFinalityError(RuntimeError):
@@ -1304,11 +1241,6 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
     """Persist synthetic outcomes without replacing an established result."""
     _normalize_training_row_team_fields(row)
     protected_result_fields = ("prop_value", "line", "over_under", "outcome", "status", "was_correct")
-    extra_insert_col = ", game_type" if include_game_type else ""
-    extra_insert_val = ", %(game_type)s" if include_game_type else ""
-    extra_update_set = ", game_type = EXCLUDED.game_type" if include_game_type else ""
-    extra_current_tuple = ", model_training_props.game_type" if include_game_type else ""
-    extra_excluded_tuple = ", EXCLUDED.game_type" if include_game_type else ""
     conflicts = []
     with conn.cursor() as cur:
         cur.execute(
@@ -1317,7 +1249,6 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
               FROM mlb.model_training_props
              WHERE player_id = %(player_id)s AND game_id = %(game_id)s
                AND prop_type = %(prop_type)s AND prop_source = %(prop_source)s
-             FOR UPDATE
             """,
             row,
         )
@@ -1337,91 +1268,16 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
                     "conflicting_fields": tuple(changed),
                 })
                 return SafeWriterResult(0, conflicts)
+        payload = dict(row)
+        if not include_game_type:
+            payload.pop("game_type", None)
         cur.execute(
-            f"""
-            INSERT INTO mlb.model_training_props (
-                id, game_id, player_id, player_name, team, opponent,
-                team_id, opponent_team_id, opponent_encoded, is_home,
-                prop_type, prop_value, line, over_under, outcome, status,
-                created_at, updated_at, prop_source, was_correct, game_date,
-                game_time, game_day_of_week, time_of_day_bucket, streak_type, streak_count{extra_insert_col}
-            ) VALUES (
-                %(id)s, %(game_id)s, %(player_id)s, %(player_name)s,
-                COALESCE(NULLIF(%(team_id)s::text, ''), CASE WHEN %(team)s ~ '^[0-9]+$' THEN %(team)s ELSE NULL END),
-                COALESCE(NULLIF(%(opponent_team_id)s::text, ''), CASE WHEN %(opponent)s ~ '^[0-9]+$' THEN %(opponent)s ELSE NULL END),
-                %(team_id)s, %(opponent_team_id)s, %(opponent_encoded)s, %(is_home)s,
-                %(prop_type)s, %(prop_value)s, %(line)s, %(over_under)s, %(outcome)s, %(status)s,
-                %(created_at)s, %(updated_at)s, %(prop_source)s, %(was_correct)s, %(game_date)s,
-                %(game_time)s, %(game_day_of_week)s, %(time_of_day_bucket)s, %(streak_type)s, %(streak_count)s{extra_insert_val}
-            )
-            ON CONFLICT (player_id, game_id, prop_type, prop_source)
-            DO UPDATE SET
-                team = COALESCE(NULLIF(EXCLUDED.team_id::text, ''), CASE WHEN EXCLUDED.team ~ '^[0-9]+$' THEN EXCLUDED.team ELSE NULL END),
-                opponent = COALESCE(NULLIF(EXCLUDED.opponent_team_id::text, ''), CASE WHEN EXCLUDED.opponent ~ '^[0-9]+$' THEN EXCLUDED.opponent ELSE NULL END),
-                team_id = EXCLUDED.team_id,
-                opponent_team_id = EXCLUDED.opponent_team_id,
-                opponent_encoded = EXCLUDED.opponent_encoded,
-                is_home = EXCLUDED.is_home,
-                prop_value = EXCLUDED.prop_value,
-                line = EXCLUDED.line,
-                over_under = EXCLUDED.over_under,
-                outcome = EXCLUDED.outcome,
-                status = EXCLUDED.status,
-                updated_at = EXCLUDED.updated_at,
-                was_correct = EXCLUDED.was_correct,
-                game_date = EXCLUDED.game_date,
-                game_time = EXCLUDED.game_time,
-                game_day_of_week = EXCLUDED.game_day_of_week,
-                time_of_day_bucket = EXCLUDED.time_of_day_bucket,
-                streak_type = EXCLUDED.streak_type,
-                streak_count = EXCLUDED.streak_count{extra_update_set}
-            WHERE (
-                model_training_props.prop_value,
-                model_training_props.line,
-                model_training_props.over_under,
-                model_training_props.outcome,
-                model_training_props.status,
-                model_training_props.was_correct
-            ) IS NOT DISTINCT FROM (
-                EXCLUDED.prop_value,
-                EXCLUDED.line,
-                EXCLUDED.over_under,
-                EXCLUDED.outcome,
-                EXCLUDED.status,
-                EXCLUDED.was_correct
-            ) AND (
-                model_training_props.game_date,
-                model_training_props.game_time,
-                model_training_props.game_day_of_week,
-                model_training_props.time_of_day_bucket,
-                model_training_props.streak_type,
-                model_training_props.streak_count,
-                model_training_props.team,
-                model_training_props.opponent,
-                model_training_props.team_id,
-                model_training_props.opponent_team_id,
-                model_training_props.opponent_encoded,
-                model_training_props.is_home{extra_current_tuple}
-            ) IS DISTINCT FROM (
-                EXCLUDED.game_date,
-                EXCLUDED.game_time,
-                EXCLUDED.game_day_of_week,
-                EXCLUDED.time_of_day_bucket,
-                EXCLUDED.streak_type,
-                EXCLUDED.streak_count,
-                EXCLUDED.team,
-                EXCLUDED.opponent,
-                EXCLUDED.team_id,
-                EXCLUDED.opponent_team_id,
-                EXCLUDED.opponent_encoded,
-                EXCLUDED.is_home{extra_excluded_tuple}
-            )
-            """,
-            row,
+            "SELECT mlb.safe_upsert_model_training_props(%s::jsonb)",
+            (json.dumps(payload, default=_json_payload_default, sort_keys=True),),
         )
         # rowcount is 1 for insert/update, 0 when the guarded conflict clause
         # rejects an established result or sees an idempotent replay.
-        written = int(cur.rowcount or 0)
+        written = int(cur.fetchone()[0] or 0)
         if not written:
             cur.execute(
                 """
@@ -1429,7 +1285,6 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
                   FROM mlb.model_training_props
                  WHERE player_id = %(player_id)s AND game_id = %(game_id)s
                    AND prop_type = %(prop_type)s AND prop_source = %(prop_source)s
-                 FOR UPDATE
                 """,
                 row,
             )
