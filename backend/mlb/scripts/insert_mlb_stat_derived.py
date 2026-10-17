@@ -36,7 +36,7 @@ from backend.mlb.identity.playable_terminal_v1 import (
     classify_playable_terminal,
     reconcile_schedule_by_game_pk,
 )
-from backend.shared.db.pg import pg_connect
+from backend.shared.db.pg import pg_connect, scalar_int_result
 
 
 BATTER_PROP_TYPES = [
@@ -684,10 +684,10 @@ def _backfill_player_stats_at_bats(
     """
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT mlb.safe_fill_player_stats_at_bats(%s, %s, %s)",
+            "SELECT mlb.safe_fill_player_stats_at_bats(%s, %s, %s) AS result_count",
             (int(player_id), int(game_id), int(at_bats)),
         )
-        return int(cur.fetchone()[0] or 0)
+        return scalar_int_result(cur.fetchone())
 
 
 class ActiveLoaderFinalityError(RuntimeError):
@@ -1081,11 +1081,11 @@ def _upsert_game_info_min(
     }}
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT mlb.safe_upsert_game_info(%s::jsonb)",
+            "SELECT mlb.safe_upsert_game_info(%s::jsonb) AS result_count",
             (json.dumps(payload, separators=(",", ":"), default=str),),
         )
         result = cur.fetchone()
-        return int((result or (0,))[0] or 0)
+        return scalar_int_result(result)
 
 
 def _table_has_column(conn, table_name: str, column_name: str) -> bool:
@@ -1122,11 +1122,11 @@ def _upsert_player_id_min(
 
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT mlb.safe_insert_player_id_if_absent(%s::jsonb)",
+            "SELECT mlb.safe_insert_player_id_if_absent(%s::jsonb) AS result_count",
             (json.dumps(row, separators=(",", ":")),),
         )
         result = cur.fetchone()
-        return int((result or (0,))[0] or 0)
+        return scalar_int_result(result)
 
 
 def _coerce_team_text_numeric(value: Any) -> Optional[str]:
@@ -1205,12 +1205,12 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
         if not include_game_type:
             payload.pop("game_type", None)
         cur.execute(
-            "SELECT mlb.safe_upsert_model_training_props(%s::jsonb)",
+            "SELECT mlb.safe_upsert_model_training_props(%s::jsonb) AS result_count",
             (json.dumps(payload, default=_json_payload_default, sort_keys=True),),
         )
         # rowcount is 1 for insert/update, 0 when the guarded conflict clause
         # rejects an established result or sees an idempotent replay.
-        written = int(cur.fetchone()[0] or 0)
+        written = scalar_int_result(cur.fetchone())
         if not written:
             cur.execute(
                 """

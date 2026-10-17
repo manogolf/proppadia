@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Sequence
 
 try:
@@ -41,6 +42,29 @@ _MLB_INGEST_PROTECTED_RELATIONS = (
     "prop_features_precomputed",
     "player_streak_profiles",
 )
+
+
+def scalar_int_result(row: Any, column: str = "result_count") -> int:
+    """Read one integer result from psycopg mapping or tuple rows.
+
+    Fixed PostgreSQL function calls should alias their scalar output to
+    ``result_count``. Missing rows or mapping keys are contract failures rather
+    than silent zero-write results.
+    """
+    if row is None:
+        raise RuntimeError("database scalar result returned no row")
+    if isinstance(row, Mapping):
+        if column not in row:
+            raise RuntimeError(
+                f"database scalar result is missing expected column {column!r}"
+            )
+        value = row[column]
+    else:
+        try:
+            value = row[0]
+        except (IndexError, KeyError, TypeError):
+            raise RuntimeError("database scalar result has an invalid row shape") from None
+    return int(value or 0)
 
 
 def _sqlstate(exc: BaseException) -> Optional[str]:

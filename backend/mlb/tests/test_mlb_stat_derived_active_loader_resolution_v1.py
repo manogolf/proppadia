@@ -133,7 +133,7 @@ class _GameInfoCursor:
 
     def fetchone(self):
         if "safe_upsert_game_info" in self.last_sql:
-            return (1,)
+            return {"result_count": 1}
         return None
 
 
@@ -163,6 +163,7 @@ def test_game_info_uses_official_date_and_replaces_stale_conflict_date():
         "home_team_abbr", "away_team_abbr",
     }
     assert "safe_upsert_game_info" in insert_sql
+    assert "AS result_count" in insert_sql
 
 
 def test_game_info_uses_existing_schema_without_duplicate_phase_columns():
@@ -632,7 +633,7 @@ class _TrainingCursor:
         else:
             self.logical_rows[key] = comparable
             self.rowcount = 1
-        self._result = (self.rowcount,)
+        self._result = {"result_count": self.rowcount}
         self._function_result = True
 
     def fetchone(self):

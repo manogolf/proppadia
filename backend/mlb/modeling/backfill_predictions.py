@@ -29,7 +29,7 @@ import numpy as np
 import joblib
 from dotenv import load_dotenv
 from supabase import create_client
-from backend.shared.db.pg import pg_connect
+from backend.shared.db.pg import pg_connect, scalar_int_result
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Env & clients
@@ -268,11 +268,11 @@ def _persist_prediction_backfill(row_id, prediction: str, confidence: float, tim
     with pg_connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT mlb.safe_fill_prediction_backfill(%s::uuid,%s,%s,%s::timestamptz)",
+                "SELECT mlb.safe_fill_prediction_backfill(%s::uuid,%s,%s,%s::timestamptz) AS result_count",
                 (str(row_id), prediction, float(confidence), timestamp),
             )
             result = cur.fetchone()
-            return int((result or (0,))[0] or 0)
+            return scalar_int_result(result)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Robust, lazy import of build_feature_vector

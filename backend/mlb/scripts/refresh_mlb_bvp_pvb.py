@@ -36,7 +36,7 @@ import requests
 from urllib3.exceptions import NameResolutionError, NewConnectionError
 from urllib3.util import Timeout
 
-from backend.shared.db.pg import pg_connect
+from backend.shared.db.pg import pg_connect, scalar_int_result
 from backend.mlb.shared import bvp_identity as identity
 
 
@@ -642,11 +642,11 @@ def _upsert_rows_on_connection(
                 for row in rows[offset : offset + size]
             ]
             cur.execute(
-                "SELECT mlb.safe_upsert_prop_features_precomputed(%s::jsonb)",
+                "SELECT mlb.safe_upsert_prop_features_precomputed(%s::jsonb) AS result_count",
                 (json.dumps(payload, separators=(",", ":")),),
             )
             result = cur.fetchone()
-            written += int((result or (0,))[0] or 0)
+            written += scalar_int_result(result)
     return written
 
 
