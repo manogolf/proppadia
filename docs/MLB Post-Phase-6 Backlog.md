@@ -205,16 +205,20 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P1.1 Finish staged restricted-ingest cutover for ordinary writers
 
-- Status: **ACTIVE** — the local roster refresh has been validated through the
-  restricted login, and the stat-derived path passed one bounded normal
-  production invocation through the restricted login on 2026-10-17. That run
-  selected one final official game for 2026-10-15, committed its transaction,
-  and preserved all captured full-date and neighboring fingerprints. Existing
-  source/training rows were unchanged, so a fresh-row/NULL-fill write remains
-  unvalidated; ordinary writer migration remains incomplete. The local MLB
-  roster refresh is operational under restricted ingest and is the sole roster
-  automation authority. GitHub-hosted roster automation was retired by the
-  owner; no hosted cutover is part of this backlog.
+- Status: **ACTIVE — bounded writer paths validated; recurring local routing
+  and natural new-row coverage remain open**. The local roster refresh was
+  validated through restricted ingest. The stat-derived path completed one
+  bounded normal invocation through the restricted login on 2026-10-17, with
+  populated-row behavior and date-wide synchronization verified. A natural
+  source/training INSERT or protected NULL fill remains unvalidated. Separately,
+  inspection of the current daily wrapper found it sources `backend/.env` and
+  invokes roster, BvP/PvB, and stat-derived Make targets without setting
+  `MLB_USE_RESTRICTED_INGEST=1`; the shared connection helper therefore falls
+  back to `DATABASE_URL`/`SUPABASE_DB_URL` unless its caller environment sets
+  the opt-in. The configured `SUPABASE_DB_URL` currently authenticates as
+  `postgres`. A one-off restricted validation does not prove the scheduled
+  wrapper takes that route. Do not change the wrapper or scheduler under this
+  item without the separately authorized cutover.
 - Stat-derived evidence:
   `docs/operations/mlb_stat_derived_restricted_writer_readiness_2026-10-17.md`
   and `artifacts/ops/mlb_stat_derived_restricted_validation_2026-10-17/`.
@@ -274,19 +278,21 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P1.3 Assess stat-derived and date-wide training synchronization
 
-- Status: **COMPLETE — assessment documented; normal restricted writer run remains pending**.
+- Status: **COMPLETE — populated-row path and date-wide synchronization
+  validated; natural INSERT/NULL-fill coverage remains pending**.
 - References: `docs/contracts/database_write_isolation_plan.md` and
   `docs/contracts/mlb_2026_game_phase_sidecar_design_v1/`; findings are in
   `docs/operations/mlb_stat_derived_restricted_writer_readiness_2026-10-17.md`.
-- Production read-only checks confirmed the restricted login/group identity,
-  role gate, six-column streak read, fixed-function execution, RLS policies,
-  and direct-write boundaries. Offline checks passed 97 focused tests. The
-  normal writer remains uncertified until one authorized due-date execution
-  records its committed counts and verifies whole-date derived/training effects.
-- Completion for this assessment means the normal path, date-wide write scope,
-  transaction behavior, protected fields, identities, and bounded validation
-  approach are documented. It does not authorize a production writer run or
-  routing change.
+- Production evidence in the readiness record confirms the restricted
+  login/group identity, role gate, six-column streak read, fixed-function
+  execution, RLS policies, and direct-write boundaries. The bounded normal
+  writer invocation exercised already populated rows and verified the
+  whole-date derived/training synchronization without changing captured
+  fingerprints. It did not produce a source/training INSERT or protected
+  NULL-fill, which remains the only data-write coverage gap for this path.
+- Do not force a historical or artificial row to manufacture this case. Record
+  the first naturally occurring INSERT/NULL-fill on an ordinary due-date run,
+  with restricted identity, committed counts, and protected-value checks.
 
 ### P2.1 Hosted GitHub roster migration
 
@@ -305,15 +311,74 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P2.2 Inventory owner-level database aliases and plan gradual replacement
 
-- Status: **PENDING**.
-- Reference: `docs/contracts/database_write_isolation_plan.md`.
-- Completion: inventory active code, scripts, shell commands, and scheduled
-  jobs that use owner-level database aliases; record each consumer, its
-  required operations, and a safe staged replacement order.
+- Status: **INVENTORY COMPLETE — routing and access-scope cutover remain open**.
+- Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as
+  `session_user=current_user=postgres`. The restricted alias connected as
+  `proppadia_mlb_ingest_login`; after the application's required `SET ROLE`,
+  the effective identity was `proppadia_mlb_ingest`. The command-scoped
+  `MLB_MONEYLINE_AUDIT_DATABASE_URL` connected as
+  `proppadia_mlb_research_login`. No credential values were displayed.
+- Production catalogs showed the restricted login is `LOGIN, NOINHERIT` and
+  the ingest group is `NOLOGIN`; the login must explicitly assume the group.
+  The deployed `safe_*` writer functions inspected are `SECURITY DEFINER`,
+  owned by `postgres`, and executable by `proppadia_mlb_ingest` (not by the
+  research login). The callers use `AS result_count` where the shared scalar
+  helper requires that alias; the stat upsert and roster callers instead
+  validate/read the one-column tuple or mapping shape. The four daily MLB
+  materialized views are also owned by `postgres`.
+- Active ordinary local consumers and classification:
+
+  | Consumer | Database use | Current route / next compatible route |
+  | --- | --- | --- |
+  | `proppadia_mlb_refresh_daily.sh` → `mlb-roster-refresh-all` / `refresh_mlb_players_rosters.py` | Schedule/API acquisition; writes roster identities/status. | The script supports the restricted route only with `MLB_USE_RESTRICTED_INGEST=1` and `MLB_INGEST_DATABASE_URL`; the wrapper does not set the opt-in in its source. Its ordinary fallback is the owner alias. The restricted fixed roster functions are deployed and execute for the ingest group. |
+  | Daily wrapper → `mlb-bvp-pvb-refresh` / `refresh_mlb_bvp_pvb.py` | Reads schedule/game metadata and writes recomputable BvP/PvB feature JSON. | `pg_connect()` selects `DATABASE_URL`/`SUPABASE_DB_URL` by default. The writer uses deployed `safe_upsert_prop_features_precomputed`; restricted route is compatible after explicit opt-in. Its post-commit verifier already has a separate research alias and eight-column grant. |
+  | Daily wrapper → `mlb-stat-derived-refresh` / `insert_mlb_stat_derived.py` | Ordinary official acquisition; reads source/streak rows; writes source, game/identity, rolling derived, and training rows, including whole-date synchronization. | `pg_connect()` defaults to the owner alias. The deployed restricted functions and column-limited derived grants cover the normal writer path; enable only via explicit opt-in. Populated-row/date-wide behavior is validated; natural new-row/NULL-fill evidence remains open. |
+  | Daily wrapper → four `REFRESH MATERIALIZED VIEW mlb.today_*` statements | Rebuilds the local daily market/context workspace after its file build. | Executed with `SUPABASE_DB_URL` as owner. Ingest and research roles are not a compatible direct refresh route; no approved fixed-function refresh interface was found. Treat as a separate owner-only operational maintenance dependency until a bounded, separately approved route is chosen. |
+  | Local `dh-forward-capture` and `dh-forward-grade` launch-agent definitions | Retains public StatsAPI schedule/feed bytes and updates local immutable CSV/JSON ledgers. | No database URL or PostgreSQL client in either entrypoint/helper; not an owner-level dependency. `refresh_mlb_market_cache.py` is also provider/local-cache work, not a PostgreSQL consumer. |
+
+- Normal research/report scripts that call shared `pg_connect()` or read the
+  generic database aliases are read-only consumers but currently inherit the
+  same owner alias unless they explicitly select the audit route. The deployed
+  research login has MLB schema USAGE but, among the inspected core relations,
+  has only eight column-level SELECT grants on
+  `prop_features_precomputed`; it has no SELECT on `player_stats`,
+  `player_derived_stats`, `model_training_props`, `player_ids`, `game_info`, or
+  `player_streak_profiles`. It cannot yet replace owner reads for ordinary
+  research or daily reports. The existing restricted research group is the
+  compatible target for narrowly scoped read grants; no grants are proposed or
+  changed here.
+- Exceptional maintenance remains a separate owner route: migration/rollback
+  and phase activation tools, historical correction/backfill/recompute targets,
+  and manual training regeneration. They are not daily scheduled consumers and
+  must remain explicitly gated to their individually authorized maintenance
+  operations; do not route them through ordinary ingest.
+- References: `docs/contracts/database_write_isolation_plan.md`,
+  `docs/contracts/mlb_restricted_writer_access_contract_v1.md`,
+  `docs/operations/mlb_stat_derived_restricted_writer_readiness_2026-10-17.md`,
+  `docs/operations/mlb_bvp_research_read_production_deployment_2026-10-17.md`,
+  `backend/shared/db/pg.py`, the active daily wrapper, and the two MLB DH
+  launch-agent definitions.
+- Completion criteria: (1) move ordinary writer calls in the local daily
+  wrapper to the validated restricted route and verify each effective
+  identity; (2) give ordinary research/report consumers an explicit
+  read-only connection route and the minimum verified table/column SELECT
+  scope; (3) decide and validate a separately approved route for the daily
+  materialized-view refresh; (4) retain the first natural restricted
+  source/training INSERT or protected NULL-fill evidence. No alias, role,
+  grant, credential, or scheduler change is authorized by this inventory.
 
 ### P2.3 Review broad API-role permissions against consumer dependencies
 
-- Status: **PENDING** — dependency review is required before any revocation.
+- Status: **PENDING — initial MLB dependencies and narrow research-read gap
+  recorded; API-role consumer review is incomplete**. The current owner alias
+  bypasses ordinary grant boundaries. Restricted ingest has the fixed writer
+  EXECUTE rights and column-scoped derived-stat writes described in P2.2.
+  The research login's inspected core-relation scope is limited to eight
+  `prop_features_precomputed` columns and is insufficient for general MLB
+  research reads. These checks do not establish which hosted/API consumers
+  depend on broad `anon`, `authenticated`, or `service_role` grants.
+- No API-role permission or policy was changed. Continue to map actual hosted
+  and local consumers before considering revocations.
 - Reference: `docs/contracts/database_write_isolation_plan.md`.
 - Completion: map actual hosted and local consumers to the broad API-role
   grants they require, record verified dependencies and an incremental
