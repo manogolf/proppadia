@@ -304,6 +304,15 @@ reviewed migration provides column-level SELECT on those six fields plus a
 role-scoped SELECT policy, or an approved caller change removes the dependency.
 No write permission on `player_streak_profiles` is needed or proposed.
 
+The prepared correction is
+`20261022_mlb_ingest_streak_profile_read.sql`, with paired rollback
+`20261022_mlb_ingest_streak_profile_read_rollback.sql`. It grants only those
+six columns and limits RLS-visible rows to `mlb_api` profiles with a non-NULL
+`last_game_date`; the caller continues to filter by player, prop type, and
+strictly prior target date. The migration passed the isolated preview fixture
+and remains unapplied to production; production use still requires separate
+authorization.
+
 The exact proposed login and membership SQL, to execute only after separate
 owner authorization and a fresh read-only conflict check, is:
 

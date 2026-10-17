@@ -134,6 +134,19 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
         self.assertIn("DROP POLICY IF EXISTS proppadia_mlb_ingest", rollback)
         self.assertNotIn("ALTER TABLE", rollback)
 
+    def test_streak_profile_read_migration_is_column_and_row_limited(self):
+        migration = (ROOT / "backend/mlb/sql/migrations/20261022_mlb_ingest_streak_profile_read.sql").read_text()
+        rollback = (ROOT / "backend/mlb/sql/migrations/20261022_mlb_ingest_streak_profile_read_rollback.sql").read_text()
+        expected_columns = "player_id, prop_type, prop_source, last_game_date, streak_type, streak_count"
+        self.assertIn(f"GRANT SELECT ({expected_columns})", migration)
+        self.assertIn("USING (prop_source = 'mlb_api' AND last_game_date IS NOT NULL)", migration)
+        self.assertNotIn("GRANT INSERT", migration)
+        self.assertNotIn("GRANT UPDATE", migration)
+        self.assertNotIn("GRANT DELETE", migration)
+        self.assertNotIn("GRANT TRUNCATE", migration)
+        self.assertIn("REVOKE SELECT (player_id, prop_type, prop_source, last_game_date, streak_type, streak_count)", rollback)
+        self.assertIn("DROP POLICY proppadia_mlb_ingest_streak_select", rollback)
+
     def test_hosted_workflow_uses_separate_secret_without_secret_inspection(self):
         self.assertIn("secrets.SUPABASE_DB_URL", self.workflow)
         self.assertIn("its value was not inspected", self.contract_one_line)

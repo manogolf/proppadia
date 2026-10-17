@@ -139,6 +139,14 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "identity or permission assertion failed"):
             pg.configure_mlb_ingest_connection(conn, require_streak_read=True)
 
+    def test_stat_derived_streak_read_contract_passes_when_required(self):
+        conn = _Connection(row=_OK_ROW)
+
+        identity = pg.configure_mlb_ingest_connection(conn, require_streak_read=True)
+
+        self.assertEqual(identity["current_user"], "proppadia_mlb_ingest")
+        self.assertTrue(conn.test_cursor.parameters[1][-1])
+
     def test_database_error_is_sanitized_to_sqlstate(self):
         class _DatabaseError(Exception):
             sqlstate = "42501"

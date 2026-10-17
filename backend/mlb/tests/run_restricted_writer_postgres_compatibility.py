@@ -207,9 +207,115 @@ def _create_fixture(conn: psycopg.Connection) -> None:
         )
         """
     )
-    for relation in ("player_stats", "player_derived_stats", "model_training_props", "player_ids"):
+    conn.execute(
+        """
+        CREATE TABLE mlb.player_streak_profiles (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(), player_id bigint NOT NULL,
+            player_name text, team text, prop_type text, streak_type text,
+            last_updated timestamptz, is_active boolean, streak_broken timestamp,
+            last_game_date date, last_outcome text, recent_outcomes text[],
+            updated_at timestamptz, streak_count integer, hit_streak integer,
+            win_streak integer, rolling_result_avg_7 double precision,
+            source text, prop_source text
+        )
+        """
+    )
+    for relation in (
+        "player_stats", "player_derived_stats", "model_training_props",
+        "player_ids", "player_streak_profiles",
+    ):
         conn.execute(f"ALTER TABLE mlb.{relation} ENABLE ROW LEVEL SECURITY")
     conn.execute(f"GRANT USAGE ON SCHEMA mlb TO {WRITER_ROLE}")
+
+
+def _run_streak_read_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> None:
+    # _run_role_tests intentionally leaves the simulated writer role active;
+    # seed fixture-only rows as the preview administrator before switching back.
+    conn.execute("RESET ROLE")
+    conn.execute(
+        """
+        INSERT INTO mlb.player_streak_profiles
+            (player_id,player_name,team,prop_type,streak_type,last_game_date,streak_count,source,prop_source)
+        VALUES
+            (7001,'fixture-player','SEA','hits','hot','2026-09-20',5,'fixture','mlb_api'),
+            (7001,'fixture-player','SEA','hits','cold','2026-09-19',8,'fixture','manual'),
+            (7001,'fixture-player','SEA','hits','hot','2026-09-25',9,'fixture','mlb_api'),
+            (7002,'fixture-player','SEA','hits','hot',NULL,10,'fixture','mlb_api')
+        """
+    )
+    conn.execute(f"SET ROLE {WRITER_ROLE}")
+    required_columns = (
+        "player_id", "prop_type", "prop_source", "last_game_date", "streak_type", "streak_count"
+    )
+    acl_rows = conn.execute(
+        """SELECT a.attname,has_column_privilege(current_user,a.attrelid,a.attname,'SELECT')
+             FROM pg_attribute a
+            WHERE a.attrelid='mlb.player_streak_profiles'::regclass
+              AND a.attnum>0 AND NOT a.attisdropped
+            ORDER BY a.attnum"""
+    ).fetchall()
+    granted = {name for name, allowed in acl_rows if allowed}
+    exact_acl = granted == set(required_columns)
+    rls_policy = conn.execute(
+        """SELECT c.relrowsecurity, count(p.*)=1,
+                  bool_and(p.cmd='SELECT'
+                    AND p.roles=ARRAY['proppadia_mlb_ingest']::name[]
+                    AND p.qual='((prop_source = ''mlb_api''::text) AND (last_game_date IS NOT NULL))')
+             FROM pg_class c
+             LEFT JOIN pg_policies p ON p.schemaname='mlb'
+                AND p.tablename='player_streak_profiles'
+                AND p.policyname='proppadia_mlb_ingest_streak_select'
+            WHERE c.oid='mlb.player_streak_profiles'::regclass
+            GROUP BY c.relrowsecurity"""
+    ).fetchone()
+    write_denials = conn.execute(
+        """SELECT NOT has_any_column_privilege(current_user,'mlb.player_streak_profiles','INSERT'),
+                  NOT has_any_column_privilege(current_user,'mlb.player_streak_profiles','UPDATE'),
+                  NOT has_table_privilege(current_user,'mlb.player_streak_profiles','DELETE'),
+                  NOT has_table_privilege(current_user,'mlb.player_streak_profiles','TRUNCATE')"""
+    ).fetchone()
+    _record(
+        results, "streak_read_gate_exact_columns_and_source_policy",
+        "PASS" if exact_acl and rls_policy == (True, True, True) and write_denials == (True, True, True, True) else "FAIL",
+        selected_columns=sorted(granted), policy=list(rls_policy or ()), write_denials=list(write_denials or ()),
+    )
+    visible_sources = conn.execute(
+        "SELECT prop_source FROM mlb.player_streak_profiles ORDER BY last_game_date"
+    ).fetchall()
+    _record(
+        results, "streak_rls_limits_rows_to_mlb_api_source",
+        "PASS" if visible_sources == [("mlb_api",), ("mlb_api",)] else "FAIL",
+        visible_sources=[row[0] for row in visible_sources],
+    )
+    prior = writer._get_streak(conn, 7001, "hits", "2026-09-22")
+    too_early = writer._get_streak(conn, 7001, "hits", "2026-09-20")
+    _record(
+        results, "stat_derived_streak_query_source_and_strict_prior_behavior",
+        "PASS" if prior == ("hot", 5) and too_early == (None, None) else "FAIL",
+        eligible=list(prior), same_day_excluded=list(too_early),
+    )
+    _expect_denied(
+        conn, "streak_ungranted_column_select_denied",
+        "SELECT player_name FROM mlb.player_streak_profiles LIMIT 1", results,
+    )
+    _expect_denied(
+        conn, "streak_direct_insert_denied",
+        "INSERT INTO mlb.player_streak_profiles (player_id,prop_source) VALUES (7002,'mlb_api')", results,
+    )
+    _expect_denied(
+        conn, "streak_direct_update_denied",
+        "UPDATE mlb.player_streak_profiles SET streak_count=99 WHERE player_id=7001", results,
+    )
+    _expect_denied(
+        conn, "streak_direct_delete_denied",
+        "DELETE FROM mlb.player_streak_profiles WHERE player_id=7001", results,
+    )
+    _expect_denied(conn, "streak_direct_truncate_denied", "TRUNCATE mlb.player_streak_profiles", results)
+    _expect_denied(
+        conn, "streak_policy_escalation_denied",
+        "CREATE POLICY fixture_escalation ON mlb.player_streak_profiles FOR SELECT USING (true)", results,
+    )
+    conn.execute("RESET ROLE")
 
 
 def _run_role_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> None:
@@ -644,6 +750,22 @@ def run() -> dict[str, Any]:
         report["rls_policy_migration_sha256"] = __import__("hashlib").sha256(rls_migration_sql.encode()).hexdigest()
         conn.execute(rls_migration_sql, prepare=False)
         conn.execute(rls_migration_sql, prepare=False)
+        streak_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261022_mlb_ingest_streak_profile_read.sql"
+        streak_migration_sql = streak_migration_path.read_text()
+        report["streak_profile_read_migration_sha256"] = __import__("hashlib").sha256(streak_migration_sql.encode()).hexdigest()
+        conn.execute(streak_migration_sql, prepare=False)
+        conn.execute(streak_migration_sql, prepare=False)
+        streak_types = {
+            row[0]: row[1] for row in conn.execute(
+                "SELECT column_name,data_type FROM information_schema.columns "
+                "WHERE table_schema='mlb' AND table_name='player_streak_profiles'"
+            ).fetchall()
+        }
+        expected_streak_types = {
+            "player_id": "bigint", "prop_type": "text", "prop_source": "text",
+            "last_game_date": "date", "streak_type": "text", "streak_count": "integer",
+        }
+        _record(report["results"], "streak_profile_production_read_shape", "PASS" if all(streak_types.get(k) == v for k, v in expected_streak_types.items()) else "FAIL", observed={k: streak_types.get(k) for k in expected_streak_types})
         rls_checks = conn.execute(
             """SELECT c.relname,c.relrowsecurity,
                       EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname='mlb' AND p.tablename=c.relname AND p.policyname='proppadia_mlb_ingest_select')
@@ -730,10 +852,25 @@ def run() -> dict[str, Any]:
         _record(report["results"], "adjacent_writer_exact_privilege_shape", "PASS" if adjacent_privileges == expected_adjacent_privileges else "FAIL", observed=list(adjacent_privileges), expected=list(expected_adjacent_privileges))
         report["phase"] = "restricted_role_behavior"
         _run_role_tests(conn, report["results"])
+        _run_streak_read_tests(conn, report["results"])
         _run_adjacent_writer_tests(conn, report["results"])
 
         report["phase"] = "migration_rollback"
         conn.execute("RESET ROLE")
+        streak_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261022_mlb_ingest_streak_profile_read_rollback.sql"
+        streak_rollback_sql = streak_rollback_path.read_text()
+        report["streak_profile_read_rollback_sha256"] = __import__("hashlib").sha256(streak_rollback_sql.encode()).hexdigest()
+        conn.execute(streak_rollback_sql, prepare=False)
+        streak_policy_remaining = conn.execute(
+            "SELECT count(*) FROM pg_policies WHERE schemaname='mlb' "
+            "AND tablename='player_streak_profiles' AND policyname='proppadia_mlb_ingest_streak_select'"
+        ).fetchone()[0]
+        streak_select_remaining = conn.execute(
+            "SELECT bool_or(has_column_privilege(%s,'mlb.player_streak_profiles',column_name,'SELECT')) "
+            "FROM unnest(ARRAY['player_id','prop_type','prop_source','last_game_date','streak_type','streak_count']::name[]) column_name",
+            (WRITER_ROLE,),
+        ).fetchone()[0]
+        _record(report["results"], "streak_profile_read_rollback_restores_acl_and_policy_baseline", "PASS" if streak_policy_remaining == 0 and not streak_select_remaining else "FAIL", policy_remaining=streak_policy_remaining, select_privilege_remaining=bool(streak_select_remaining))
         rls_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261021_mlb_restricted_ingest_rls_policies_rollback.sql"
         rls_rollback_sql = rls_rollback_path.read_text()
         report["rls_policy_rollback_sha256"] = __import__("hashlib").sha256(rls_rollback_sql.encode()).hexdigest()

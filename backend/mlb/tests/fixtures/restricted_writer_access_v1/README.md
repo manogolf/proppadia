@@ -16,6 +16,11 @@ The executable fixture covers these protected and adjacent writer relations:
 - `mlb.player_ids`: roster identity/status and insert-if-absent columns.
 - `mlb.game_info`: current schedule metadata and canonical phase fields.
 - `mlb.prop_features_precomputed`: derived BvP/PvB JSON feature rows.
+- `mlb.player_streak_profiles`: read-only stat-derived dependency. The fixture
+  applies `20261022_mlb_ingest_streak_profile_read.sql`; the ingest role may
+  select only `player_id`, `prop_type`, `prop_source`, `last_game_date`,
+  `streak_type`, and `streak_count`, and RLS restricts visible rows to
+  `prop_source = 'mlb_api'` with a non-NULL `last_game_date`.
 
 Before running any SQL fixture, the operator must independently confirm the
 isolated project/branch identity and authorization. Stop if identity is
@@ -32,7 +37,9 @@ reference and the initial preview contains no `mlb` or `nhl` schema. It creates
 the schema, minimal writer tables for the covered paths, and temporary NOLOGIN roles (including
 the reviewed `proppadia_mlb_ingest` group name) inside one transaction. It
 applies the exact source/training and PA-backfill migrations, calls the actual
-Python stat/training/PA writers, runs both fail-closed rollbacks, and finally
+Python stat/training/PA writers, exercises the six-column streak-read contract
+and actual stat-derived streak query, applies the streak-read migration and
+rollback, runs the other fail-closed rollbacks, and finally
 rolls back the outer transaction. It verifies the test schema and roles are absent afterward. It
 does not use production tables or production login names.
 
