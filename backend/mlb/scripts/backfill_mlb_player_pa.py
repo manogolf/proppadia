@@ -4,13 +4,15 @@
 This script is intentionally schema-aware and progress-safe:
 - dry-run mode fetches/parses/validates without writing;
 - write mode refuses to run until the reviewed PA columns exist;
-- updates are scoped to mlb.player_stats rows keyed by player_id + game_id;
+- safe fills are scoped to mlb.player_stats rows keyed by player_id + game_id;
+- populated PA disagreements are reported and never treated as corrections;
 - rolling PA refresh only runs when reviewed player_derived_stats columns exist.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import time
 from collections import Counter
@@ -72,6 +74,9 @@ class PaRow:
     missing_components: str
     existing_player_stats_row: bool = False
     existing_plate_appearances: int | None = None
+    conflicting_fields: list[str] | None = None
+    source_payload_path: str = ""
+    source_payload_sha256: str = ""
 
 
 def _parse_date(value: str) -> date:
@@ -110,26 +115,26 @@ def _num0(value: int | None) -> int:
     return int(value or 0)
 
 
-def _get_json(url: str, *, timeout: int, retries: int, sleep_seconds: float) -> tuple[dict[str, Any], str]:
+def _get_json(url: str, *, timeout: int, retries: int, sleep_seconds: float) -> tuple[dict[str, Any], str, bytes | None]:
     last_error = ""
     for attempt in range(retries + 1):
         try:
             resp = requests.get(url, timeout=timeout)
             if resp.status_code == 404:
-                return {}, "http_404"
+                return {}, "http_404", None
             resp.raise_for_status()
             payload = resp.json()
-            return payload if isinstance(payload, dict) else {}, ""
+            return payload if isinstance(payload, dict) else {}, "", bytes(resp.content)
         except Exception as exc:
             last_error = f"{type(exc).__name__}:{exc}"
             if attempt < retries:
                 time.sleep(sleep_seconds)
-    return {}, last_error or "fetch_failed"
+    return {}, last_error or "fetch_failed", None
 
 
 def _fetch_schedule(day: str, args: argparse.Namespace) -> tuple[list[dict[str, Any]], str]:
     url = f"{STATSAPI}/schedule?sportId=1&date={day}"
-    payload, error = _get_json(url, timeout=args.timeout, retries=args.retries, sleep_seconds=args.sleep_seconds)
+    payload, error, _ = _get_json(url, timeout=args.timeout, retries=args.retries, sleep_seconds=args.sleep_seconds)
     if error:
         return [], error
     dates = payload.get("dates") or []
@@ -138,9 +143,19 @@ def _fetch_schedule(day: str, args: argparse.Namespace) -> tuple[list[dict[str, 
     return (dates[0] or {}).get("games", []) or [], ""
 
 
-def _fetch_boxscore(game_id: int, args: argparse.Namespace) -> tuple[dict[str, Any], str]:
+def _fetch_boxscore(game_id: int, args: argparse.Namespace) -> tuple[dict[str, Any], str, bytes | None]:
     url = f"{STATSAPI}/game/{int(game_id)}/boxscore"
     return _get_json(url, timeout=args.timeout, retries=args.retries, sleep_seconds=args.sleep_seconds)
+
+
+def _retain_boxscore_payload(game_id: int, raw_box: bytes | None) -> tuple[str, str]:
+    if raw_box is None:
+        return "", ""
+    payload_sha256 = hashlib.sha256(raw_box).hexdigest()
+    source_path = OUT_DIR / "statsapi_boxscores" / f"game_{int(game_id)}_{payload_sha256[:16]}.json"
+    source_path.parent.mkdir(parents=True, exist_ok=True)
+    source_path.write_bytes(raw_box)
+    return str(source_path.relative_to(ROOT)), payload_sha256
 
 
 def _is_final_game(game: dict[str, Any], *, require_regular_season: bool) -> bool:
@@ -263,7 +278,13 @@ def _table_columns(conn, table_name: str) -> set[str]:
         return {str(r["column_name"]) for r in cur.fetchall() or []}
 
 
-def _existing_player_stats(conn, rows: list[PaRow]) -> dict[tuple[int, int], int | None]:
+PA_SOURCE_FIELDS = (
+    "plate_appearances", "hit_by_pitch", "sacrifice_flies", "sacrifice_hits",
+    "catcher_interference", "pa_source",
+)
+
+
+def _existing_player_stats(conn, rows: list[PaRow]) -> dict[tuple[int, int], dict[str, Any]]:
     if not rows:
         return {}
     keys = [(r.player_id, r.game_id) for r in rows]
@@ -273,7 +294,9 @@ def _existing_player_stats(conn, rows: list[PaRow]) -> dict[tuple[int, int], int
             WITH wanted(player_id, game_id) AS (
                 SELECT * FROM unnest(%s::bigint[], %s::bigint[])
             )
-            SELECT ps.player_id, ps.game_id, ps.plate_appearances
+            SELECT ps.player_id, ps.game_id, ps.plate_appearances,
+                   ps.hit_by_pitch, ps.sacrifice_flies, ps.sacrifice_hits,
+                   ps.catcher_interference, ps.pa_source
             FROM mlb.player_stats ps
             JOIN wanted w
               ON w.player_id = ps.player_id
@@ -281,54 +304,65 @@ def _existing_player_stats(conn, rows: list[PaRow]) -> dict[tuple[int, int], int
             """,
             ([p for p, _ in keys], [g for _, g in keys]),
         )
-        return {(int(r["player_id"]), int(r["game_id"])): _to_int(r.get("plate_appearances")) for r in cur.fetchall() or []}
+        fetched = cur.fetchall() or []
+        names = [str(item.name if hasattr(item, "name") else item[0]) for item in (cur.description or [])]
+        output: dict[tuple[int, int], dict[str, Any]] = {}
+        for raw in fetched:
+            record = raw if hasattr(raw, "keys") else dict(zip(names, raw))
+            output[(int(record["player_id"]), int(record["game_id"]))] = {
+                field: record.get(field) for field in PA_SOURCE_FIELDS
+            }
+        return output
 
 
 def _update_player_stats_pa(conn, rows: list[PaRow], *, source: str, only_missing_pa: bool = False) -> int:
     if not rows:
         return 0
-    missing_clause = "AND ps.plate_appearances IS NULL" if only_missing_pa else ""
+    existing = _existing_player_stats(conn, rows)
+    eligible: list[PaRow] = []
+    incoming_fields = {
+        "plate_appearances": "plate_appearances",
+        "hit_by_pitch": "hit_by_pitch",
+        "sacrifice_flies": "sacrifice_flies",
+        "sacrifice_hits": "sacrifice_hits",
+        "catcher_interference": "catcher_interference",
+    }
+    for row in rows:
+        current = existing.get((row.player_id, row.game_id))
+        if current is None:
+            continue
+        conflicts = [
+            field for field, attr in incoming_fields.items()
+            if current.get(field) is not None and current.get(field) != getattr(row, attr)
+        ]
+        if current.get("pa_source") not in (None, source) and any(current.get(field) is None for field in incoming_fields):
+            conflicts.append("pa_source")
+        row.conflicting_fields = sorted(set(conflicts))
+        if not row.conflicting_fields and row.plate_appearances is not None:
+            if not only_missing_pa or current.get("plate_appearances") is None:
+                eligible.append(row)
+
+    writes = 0
     with conn.cursor() as cur:
-        cur.executemany(
-            f"""
-            UPDATE mlb.player_stats ps
-               SET plate_appearances = %s,
-                   hit_by_pitch = %s,
-                   sacrifice_flies = %s,
-                   sacrifice_hits = %s,
-                   catcher_interference = %s,
-                   pa_source = %s,
-                   pa_backfilled_at = now()
-             WHERE ps.player_id = %s
-               AND ps.game_id = %s
-               AND (
-                    COALESCE(ps.position, '') <> 'P'
-                    OR COALESCE(ps.at_bats, 0) > 0
-                    OR COALESCE(ps.hits, 0) > 0
-                    OR COALESCE(ps.walks, 0) > 0
-                    OR COALESCE(ps.strikeouts_batting, 0) > 0
-                    OR COALESCE(ps.runs_scored, 0) > 0
-                    OR COALESCE(ps.rbis, 0) > 0
-                    OR COALESCE(ps.stolen_bases, 0) > 0
-               )
-               {missing_clause}
-            """,
-            [
-                (
-                    r.plate_appearances,
-                    r.hit_by_pitch,
-                    r.sacrifice_flies,
-                    r.sacrifice_hits,
-                    r.catcher_interference,
-                    source,
-                    r.player_id,
-                    r.game_id,
+        for row in eligible:
+            cur.execute("SAVEPOINT pa_backfill_safe_write")
+            try:
+                cur.execute(
+                    "SELECT mlb.safe_fill_player_stats_pa(%s,%s,%s,%s,%s,%s,%s,%s)",
+                    (row.player_id, row.game_id, row.plate_appearances, row.hit_by_pitch,
+                     row.sacrifice_flies, row.sacrifice_hits, row.catcher_interference, source),
                 )
-                for r in rows
-                if r.plate_appearances is not None
-            ],
-        )
-        return int(cur.rowcount or 0)
+                result = cur.fetchone()
+                writes += int((result or {}).get("safe_fill_player_stats_pa", 0) if isinstance(result, dict) else (result or (0,))[0])
+                cur.execute("RELEASE SAVEPOINT pa_backfill_safe_write")
+            except Exception as exc:
+                cur.execute("ROLLBACK TO SAVEPOINT pa_backfill_safe_write")
+                cur.execute("RELEASE SAVEPOINT pa_backfill_safe_write")
+                if getattr(exc, "sqlstate", None) == "23514":
+                    row.conflicting_fields = sorted(set(row.conflicting_fields or []) | {"concurrent_populated_value_conflict"})
+                    continue
+                raise
+    return writes
 
 
 def _refresh_rolling_pa(conn, start: str, end: str) -> int:
@@ -537,11 +571,15 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             if gid is None:
                 continue
             games_seen += 1
-            box, box_error = _fetch_boxscore(gid, args)
+            box, box_error, raw_box = _fetch_boxscore(gid, args)
             if box_error or not box:
                 boxscore_errors[str(gid)] = box_error or "empty_boxscore"
                 continue
             rows, counters = _extract_pa_rows(box, gid, day_s)
+            payload_path, payload_sha256 = _retain_boxscore_payload(gid, raw_box)
+            for row in rows:
+                row.source_payload_path = payload_path
+                row.source_payload_sha256 = payload_sha256
             all_rows.extend(rows)
             component_counts.update(counters)
             games_processed += 1
@@ -571,7 +609,7 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
             for row in all_rows:
                 key = (row.player_id, row.game_id)
                 row.existing_player_stats_row = key in existing
-                row.existing_plate_appearances = existing.get(key)
+                row.existing_plate_appearances = _to_int(existing.get(key, {}).get("plate_appearances"))
             existing_count = sum(1 for row in all_rows if row.existing_player_stats_row)
         else:
             # Without columns, still mark whether core rows exist.
@@ -633,6 +671,11 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "batter_pa_rows_parsed": len(all_rows),
         "existing_player_stats_rows_matched": existing_count,
         "writes_applied": writes_applied,
+        "conflicting_populated_pa_rows": sum(bool(row.conflicting_fields) for row in all_rows),
+        "conflict_fields": [
+            {"player_id": row.player_id, "game_id": row.game_id, "fields": row.conflicting_fields}
+            for row in all_rows if row.conflicting_fields
+        ],
         "rolling_rows_updated": rolling_rows_updated,
         "direct_pa_rows": sum(1 for row in all_rows if row.plate_appearances_direct is not None),
         "formula_pa_rows": sum(1 for row in all_rows if row.plate_appearances_formula is not None),
@@ -642,6 +685,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "coverage_after": coverage_after,
         "schedule_error_dates": schedule_errors,
         "boxscore_error_games": boxscore_errors,
+        "retained_boxscore_payloads": len({row.source_payload_path for row in all_rows if row.source_payload_path}),
+        "boxscore_payloads_missing_hash": sum(not row.source_payload_sha256 for row in all_rows),
         "component_key_counts": dict(component_counts),
         "missing_component_counts": dict(missing_component_counts),
         "outputs": {

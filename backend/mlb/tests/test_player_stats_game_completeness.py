@@ -4,7 +4,7 @@ from backend.mlb.scripts.insert_mlb_stat_derived import (
  _final_games,
  _upsert_player_stats_row,
 )
-from backend.mlb.scripts.backfill_mlb_player_pa import PaRow,_update_player_stats_pa
+from backend.mlb.scripts.backfill_mlb_player_pa import PaRow,_retain_boxscore_payload,_update_player_stats_pa
 
 def off(pid=1,role='STARTED',pa=4,tb=0):
  return {'game_pk':10,'player_mlb_id':pid,'player':f'p{pid}','official_role':role,'plate_appearances':pa,'at_bats':pa,'hits':tb,'singles':tb,'doubles':0,'triples':0,'home_runs':0,'total_bases':tb}
@@ -127,17 +127,51 @@ def test_player_stats_verified_null_fill_and_identical_replay_are_non_destructiv
  replay=Conn(Cursor(stable,0));assert _upsert_player_stats_row(replay,incoming)==0
  assert replay.cur.calls[1]=='SELECT mlb.safe_upsert_player_stats(%s::jsonb)'
 
-def test_blank_only_pa_backfill_does_not_overwrite_populated_pa():
+def test_pa_backfill_uses_fixed_fill_entrypoint_not_direct_update():
  class Cursor:
-  rowcount=1
+  description=[(name,) for name in ('player_id','game_id','plate_appearances','hit_by_pitch','sacrifice_flies','sacrifice_hits','catcher_interference','pa_source')]
   def __enter__(self):return self
   def __exit__(self,*args):return False
-  def executemany(self,sql,rows):self.sql=sql;self.rows=rows
+  def execute(self,sql,params=None):
+   self.calls=getattr(self,'calls',[])+[sql]
+   self.sql=sql
+   if sql.lstrip().startswith('WITH wanted'):
+    self.result=[{'player_id':1,'game_id':10,'plate_appearances':None,'hit_by_pitch':None,'sacrifice_flies':None,'sacrifice_hits':None,'catcher_interference':None,'pa_source':None}]
+   elif 'safe_fill_player_stats_pa' in sql:self.result=(1,)
+  def fetchall(self):return getattr(self,'result',[])
+  def fetchone(self):return getattr(self,'result',(0,))
  class Conn:
   def __init__(self):self.cur=Cursor()
   def cursor(self):return self.cur
  row=PaRow(game_date='2026-08-14',game_id=10,player_id=1,player_name='p',team='NYY',opponent='BOS',at_bats=4,walks=1,hit_by_pitch=0,sacrifice_flies=0,sacrifice_hits=0,catcher_interference=0,plate_appearances_direct=5,plate_appearances_formula=5,plate_appearances=5,formula_matches_direct=True,used_direct_pa=True,missing_components='')
  conn=Conn();assert _update_player_stats_pa(conn,[row],source='statsapi',only_missing_pa=True)==1
- assert 'AND ps.plate_appearances IS NULL' in conn.cur.sql
- assert 'OR COALESCE(ps.at_bats, 0) > 0' in conn.cur.sql
- assert conn.cur.rows[0][0:5]==(5,0,0,0,0)
+ assert 'SELECT mlb.safe_fill_player_stats_pa(%s,%s,%s,%s,%s,%s,%s,%s)' in conn.cur.calls
+
+def test_pa_backfill_reports_populated_conflict_without_calling_entrypoint():
+ class Cursor:
+  description=[(name,) for name in ('player_id','game_id','plate_appearances','hit_by_pitch','sacrifice_flies','sacrifice_hits','catcher_interference','pa_source')]
+  def __enter__(self):return self
+  def __exit__(self,*args):return False
+  def execute(self,sql,params=None):
+   self.sql=sql
+   if sql.lstrip().startswith('WITH wanted'):
+    self.result=[{'player_id':1,'game_id':10,'plate_appearances':4,'hit_by_pitch':0,'sacrifice_flies':0,'sacrifice_hits':0,'catcher_interference':0,'pa_source':'statsapi'}]
+   else:self.entrypoint_called=True
+  def fetchall(self):return self.result
+ class Conn:
+  def __init__(self):self.cur=Cursor()
+  def cursor(self):return self.cur
+ row=PaRow(game_date='2026-08-14',game_id=10,player_id=1,player_name='p',team='NYY',opponent='BOS',at_bats=4,walks=1,hit_by_pitch=0,sacrifice_flies=0,sacrifice_hits=0,catcher_interference=0,plate_appearances_direct=5,plate_appearances_formula=5,plate_appearances=5,formula_matches_direct=True,used_direct_pa=True,missing_components='')
+ conn=Conn();assert _update_player_stats_pa(conn,[row],source='statsapi')==0
+ assert row.conflicting_fields==['plate_appearances']
+ assert not getattr(conn.cur,'entrypoint_called',False)
+
+def test_pa_backfill_retains_exact_boxscore_bytes_and_hash(monkeypatch,tmp_path):
+ import hashlib
+ import backend.mlb.scripts.backfill_mlb_player_pa as backfill
+ monkeypatch.setattr(backfill,'ROOT',tmp_path)
+ monkeypatch.setattr(backfill,'OUT_DIR',tmp_path/'artifacts'/'pa')
+ raw=b'{"official":"boxscore"}\n'
+ relpath,digest=_retain_boxscore_payload(123,raw)
+ assert digest==hashlib.sha256(raw).hexdigest()
+ assert (tmp_path/relpath).read_bytes()==raw

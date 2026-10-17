@@ -49,6 +49,19 @@ The separately approved at-bats repair uses
 `safe_fill_player_stats_at_bats(player_id, game_id, at_bats)`, which fills only
 batter rows whose current value is NULL/zero; it cannot replace a positive
 value or write pitcher rows.
+The separate PA backfill migration
+`20261018_safe_player_stats_pa_backfill.sql` adds
+`safe_fill_player_stats_pa(...)` for exact `(player_id, game_id)` observations
+from the fixed `statsapi` source. It fills only NULL PA/component/provenance
+fields on eligible batter rows, accepts identical replay, and raises a
+`23514` conflict for differing populated observations or incompatible source
+provenance. It does not authorize populated-value PA corrections. The caller
+retains the exact StatsAPI boxscore response in the existing ignored analysis
+output and records its SHA-256/path with each `(player_id, game_id)` row;
+conflicts are included in the same validation output. The routine login
+receives function EXECUTE only; direct `player_stats` UPDATE remains revoked.
+Existing `pa_source` and `pa_backfilled_at` columns retain source label and
+observation time; exact numeric game/player IDs remain the row identity.
 The training entry point inserts new result observations, preserves the
 protected result tuple (`prop_value`, `line`, `over_under`, `outcome`, `status`,
 `was_correct`) on conflict, and refreshes metadata only when that tuple is
@@ -107,6 +120,8 @@ Before any live routing change, a disposable PostgreSQL run must prove:
 
 The focused offline test is
 `./bin/python -m unittest backend.mlb.tests.test_mlb_restricted_writer_access_contract_v1`.
+The PA backfill entrypoint is also applied and rolled back by the existing
+rollback-only PostgreSQL compatibility probe.
 
 ## PostgreSQL compatibility result — 2026-10-16
 
@@ -121,7 +136,18 @@ result conflict preservation, same-result metadata refresh, optional
 The migration also passed an idempotent second application. Direct
 INSERT/UPDATE/DELETE/TRUNCATE, correction-role assumption, role escalation, and
 function replace/drop attempts were denied (`42501`). The fail-closed rollback
-removed all three functions without restoring direct DML.
+removed the fixed functions without restoring direct DML.
+
+The PA-backfill compatibility rerun applied the additive migration twice,
+verified its exact EXECUTE-only grant, exercised the actual backfill helper,
+confirmed NULL fill/replay and `23514` conflict preservation, and rolled back
+both migrations. PostgreSQL denied PA component UPDATE and PA function
+replacement/drop with `42501`; cleanup was complete. Its ignored receipt is
+`artifacts/analysis/mlb/restricted_writer_postgres_compatibility/2026-10-16-pa-backfill/receipt.json`
+with SHA-256
+`34f9950fe10bc385b623a722c9174d9e58902e740eb729e51388235543320a49`.
+The additive PA migration SHA-256 is
+`7e99ce01765a8f97c2585cd13118def4268c90e5fb1796db8890c74f9b405914`.
 
 The ignored local receipt is
 `artifacts/analysis/mlb/restricted_writer_postgres_compatibility/2026-10-16-boundary/receipt.json`
@@ -137,8 +163,8 @@ triggers, hosted workflow behavior, and unlisted direct writers. Production
 cutover is therefore NOT READY pending a bounded production compatibility
 preflight and separate authorization.
 
-One known active-path gap must be resolved before routing the separate MLB
-plate-appearance backfill to this restricted group: `backfill_mlb_player_pa.py`
-still issues direct `UPDATE mlb.player_stats` and is intentionally denied by
-this migration. Its source fields and populated-value correction rules were not
-part of this entry-point review; do not grant it direct UPDATE as a workaround.
+The PA backfill now routes through its own additive fixed function. A populated
+PA disagreement remains a reported conflict; the current contracts do not
+authorize correcting such values through routine ingestion. Production
+compatibility and role grants remain unverified and require a separate
+preflight and owner authorization.

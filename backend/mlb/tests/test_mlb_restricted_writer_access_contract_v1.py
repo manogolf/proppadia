@@ -56,6 +56,20 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
         self.assertIn("differing populated incoming fields", self.contract_one_line)
         self.assertIn("verified NULL fill should pass", self.fixture_one_line)
 
+    def test_pa_backfill_routes_through_fill_only_entrypoint(self):
+        migration = (ROOT / "backend/mlb/sql/migrations/20261018_safe_player_stats_pa_backfill.sql").read_text()
+        backfill = (ROOT / "backend/mlb/scripts/backfill_mlb_player_pa.py").read_text()
+        rollback = (ROOT / "backend/mlb/sql/migrations/20261018_safe_player_stats_pa_backfill_rollback.sql").read_text()
+        self.assertIn("mlb.safe_fill_player_stats_pa(%s,%s,%s,%s,%s,%s,%s,%s)", backfill)
+        self.assertNotIn("UPDATE mlb.player_stats", backfill)
+        self.assertIn("p_source IS DISTINCT FROM 'statsapi'", migration)
+        self.assertIn("USING ERRCODE = '23514'", migration)
+        self.assertIn("COALESCE(plate_appearances, p_plate_appearances)", migration)
+        self.assertIn("source_payload_sha256", backfill)
+        self.assertIn("source_path.write_bytes(raw_box)", backfill)
+        self.assertIn("REVOKE ALL ON FUNCTION", rollback)
+        self.assertNotIn("GRANT UPDATE", migration)
+
     def test_derived_collision_quarantines_and_training_outcomes_are_protected(self):
         self.assertNotIn("DELETE FROM mlb.player_derived_stats", self.stat)
         self.assertIn("LegacyDerivedIdentityCollision", self.stat)

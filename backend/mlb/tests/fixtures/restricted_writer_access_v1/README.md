@@ -31,9 +31,9 @@ only when `NHL_PP_TOI_TEST_DSN` carries the allowlisted preview project
 reference and the initial preview contains no `mlb` or `nhl` schema. It creates
 the schema, three minimal writer tables, and temporary NOLOGIN roles (including
 the reviewed `proppadia_mlb_ingest` group name) inside one transaction. It
-applies the exact entry-point migration, calls the actual Python stat/training
-writers, runs the fail-closed rollback, and finally rolls back the outer
-transaction. It verifies the test schema and roles are absent afterward. It
+applies the exact source/training and PA-backfill migrations, calls the actual
+Python stat/training/PA writers, runs both fail-closed rollbacks, and finally
+rolls back the outer transaction. It verifies the test schema and roles are absent afterward. It
 does not use production tables or production login names.
 
 Run with the local authoritative environment loaded without echoing it:
@@ -61,6 +61,9 @@ fields. Fixture changes are always rolled back.
   fill should pass; populated disagreements must be reported/quarantined with
   canonical values unchanged. The approved at-bats NULL/zero repair remains a
   separately bounded operation.
+- Exercise PA backfill NULL fill, identical replay, populated-value conflict
+  reporting, and rejection of an unapproved source label. Direct
+  `player_stats` UPDATE remains denied.
 - Exercise derived recompute twice and an identity collision. The ordinary
   writer must not have direct DELETE or TRUNCATE; a collision must be visible
   and preserve both the existing derived row and source identity for review.

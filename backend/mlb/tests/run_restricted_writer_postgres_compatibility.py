@@ -19,6 +19,7 @@ from urllib.parse import unquote, urlsplit
 import psycopg
 
 from backend.mlb.scripts import insert_mlb_stat_derived as writer
+from backend.mlb.scripts.backfill_mlb_player_pa import PaRow, _update_player_stats_pa
 
 
 EXPECTED_PROJECT_REF = "vbnzmvmhuwvpkijxeuyq"
@@ -123,6 +124,8 @@ def _create_fixture(conn: psycopg.Connection) -> None:
             team text, opponent text, is_home boolean, position text,
             plate_appearances integer, at_bats integer, hits integer, total_bases integer,
             rbis integer, runs_scored integer, strikeouts_batting integer, walks integer,
+            hit_by_pitch integer, sacrifice_flies integer, sacrifice_hits integer,
+            catcher_interference integer, pa_source text, pa_backfilled_at timestamptz,
             singles integer, doubles integer, triples integer, home_runs integer,
             stolen_bases integer, strikeouts_pitching integer, walks_allowed integer,
             hits_allowed integer, outs_recorded integer, earned_runs numeric, is_starter boolean,
@@ -193,6 +196,7 @@ def _run_role_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> 
     _expect_denied(conn, "direct_training_insert_denied", "INSERT INTO mlb.model_training_props (id,game_id,player_id,prop_type,prop_source) VALUES ('00000000-0000-0000-0000-000000900104',900104,453286,'hits','fixture')", results)
     _expect_denied(conn, "source_populated_update_denied", "UPDATE mlb.player_stats SET hits = 99 WHERE player_id = 101", results)
     _expect_denied(conn, "source_at_bats_direct_update_denied", "UPDATE mlb.player_stats SET at_bats = 99 WHERE player_id = 101", results)
+    _expect_denied(conn, "pa_component_direct_update_denied", "UPDATE mlb.player_stats SET plate_appearances = 99 WHERE player_id = 101", results)
     _expect_denied(conn, "training_outcome_update_denied", "UPDATE mlb.model_training_props SET outcome = 'loss' WHERE player_id = 453286", results)
     _expect_denied(conn, "delete_denied", "DELETE FROM mlb.player_stats WHERE player_id = 101", results)
     _expect_denied(conn, "truncate_denied", "TRUNCATE mlb.player_stats", results)
@@ -208,6 +212,49 @@ def _run_role_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> 
     conflict = writer._upsert_player_stats_row(conn, _source_row(201, 900201, hits=3))
     source_value = conn.execute("SELECT hits FROM mlb.player_stats WHERE player_id=201 AND game_id=900201").fetchone()[0]
     _record(results, "source_conflict_preserved", "PASS" if conflict.conflicts and source_value == 2 else "FAIL", conflicts=list(conflict.conflicts[0]["conflicting_fields"]) if conflict.conflicts else [], retained=source_value)
+
+    conn.execute("RESET ROLE")
+    conn.execute("INSERT INTO mlb.player_stats (player_id,game_id,game_date,position,at_bats,plate_appearances,hit_by_pitch,sacrifice_flies,sacrifice_hits,catcher_interference) VALUES (205,900205,'2026-09-23','LF',3,NULL,NULL,NULL,NULL,NULL)")
+    conn.execute(f"SET ROLE {WRITER_ROLE}")
+    pa_row = PaRow(game_date="2026-09-23", game_id=900205, player_id=205, player_name="fixture-player", team="NYY", opponent="BOS", at_bats=3, walks=1, hit_by_pitch=0, sacrifice_flies=0, sacrifice_hits=0, catcher_interference=0, plate_appearances_direct=4, plate_appearances_formula=4, plate_appearances=4, formula_matches_direct=True, used_direct_pa=True, missing_components="")
+    pa_fill = _update_player_stats_pa(conn, [pa_row], source="statsapi")
+    pa_replay = _update_player_stats_pa(conn, [pa_row], source="statsapi")
+    pa_values = conn.execute("SELECT plate_appearances,hit_by_pitch,sacrifice_flies,sacrifice_hits,catcher_interference,pa_source FROM mlb.player_stats WHERE player_id=205 AND game_id=900205").fetchone()
+    _record(results, "pa_verified_null_fill_and_identical_replay", "PASS" if pa_fill == 1 and pa_replay == 0 and pa_values == (4,0,0,0,0,"statsapi") else "FAIL", first=pa_fill, replay=pa_replay, values=list(pa_values))
+    conn.execute("RESET ROLE")
+    conn.execute("INSERT INTO mlb.player_stats (player_id,game_id,game_date,position) VALUES (206,900206,'2026-09-23',NULL)")
+    conn.execute(f"SET ROLE {WRITER_ROLE}")
+    ineligible_fill = conn.execute("SELECT mlb.safe_fill_player_stats_pa(206,900206,1,0,0,0,0,'statsapi')").fetchone()[0]
+    ineligible_pa = conn.execute("SELECT plate_appearances FROM mlb.player_stats WHERE player_id=206 AND game_id=900206").fetchone()[0]
+    _record(results, "pa_unknown_role_without_batting_evidence_unchanged", "PASS" if ineligible_fill == 0 and ineligible_pa is None else "FAIL", writes=ineligible_fill, retained=ineligible_pa)
+    conflict_row = PaRow(**{**pa_row.__dict__, "plate_appearances": 5, "plate_appearances_direct": 5})
+    conflict_writes = _update_player_stats_pa(conn, [conflict_row], source="statsapi")
+    retained_pa = conn.execute("SELECT plate_appearances FROM mlb.player_stats WHERE player_id=205 AND game_id=900205").fetchone()[0]
+    _record(results, "pa_populated_conflict_reported_and_preserved", "PASS" if conflict_writes == 0 and conflict_row.conflicting_fields == ["plate_appearances"] and retained_pa == 4 else "FAIL", writes=conflict_writes, conflicts=conflict_row.conflicting_fields, retained=retained_pa)
+    conn.execute("SAVEPOINT pa_entrypoint_conflict")
+    try:
+        conn.execute("SELECT mlb.safe_fill_player_stats_pa(205,900205,5,0,0,0,0,'statsapi')")
+    except psycopg.Error as exc:
+        conn.execute("ROLLBACK TO SAVEPOINT pa_entrypoint_conflict")
+        conn.execute("RELEASE SAVEPOINT pa_entrypoint_conflict")
+        _record(results, "pa_entrypoint_populated_conflict_fails_closed", "PASS" if exc.sqlstate == "23514" else "FAIL", sqlstate=exc.sqlstate)
+    else:
+        conn.execute("ROLLBACK TO SAVEPOINT pa_entrypoint_conflict")
+        conn.execute("RELEASE SAVEPOINT pa_entrypoint_conflict")
+        _record(results, "pa_entrypoint_populated_conflict_fails_closed", "FAIL", detail="populated correction was permitted")
+    conn.execute("SAVEPOINT pa_invalid_source")
+    try:
+        conn.execute("SELECT mlb.safe_fill_player_stats_pa(205,900205,4,0,0,0,0,'unverified')")
+    except psycopg.Error as exc:
+        conn.execute("ROLLBACK TO SAVEPOINT pa_invalid_source")
+        conn.execute("RELEASE SAVEPOINT pa_invalid_source")
+        _record(results, "pa_source_restricted_to_statsapi", "PASS" if exc.sqlstate == "22023" else "FAIL", sqlstate=exc.sqlstate)
+    else:
+        conn.execute("ROLLBACK TO SAVEPOINT pa_invalid_source")
+        conn.execute("RELEASE SAVEPOINT pa_invalid_source")
+        _record(results, "pa_source_restricted_to_statsapi", "FAIL", detail="unapproved source was accepted")
+    _expect_denied(results=results, conn=conn, name="pa_function_replace_denied", sql="CREATE OR REPLACE FUNCTION mlb.safe_fill_player_stats_pa(bigint,bigint,integer,integer,integer,integer,integer,text) RETURNS integer LANGUAGE sql AS 'SELECT 0'")
+    _expect_denied(results=results, conn=conn, name="pa_function_drop_denied", sql="DROP FUNCTION mlb.safe_fill_player_stats_pa(bigint,bigint,integer,integer,integer,integer,integer,text)")
 
     conn.execute("RESET ROLE")
     conn.execute("INSERT INTO mlb.player_stats (player_id,game_id,game_date,hits,total_bases) VALUES (202,900202,'2026-09-23',NULL,NULL)")
@@ -267,13 +314,12 @@ def run() -> dict[str, Any]:
     dsn = os.environ.get("NHL_PP_TOI_TEST_DSN")
     parsed = urlsplit(dsn or "")
     username = unquote(parsed.username or "")
+    hostname = (parsed.hostname or "").lower()
+    direct_preview_host = hostname == f"db.{EXPECTED_PROJECT_REF}.supabase.co"
+    preview_pooler = hostname.endswith(".pooler.supabase.com") and username == f"postgres.{EXPECTED_PROJECT_REF}"
     reference_match = bool(
         dsn
-        and (
-            EXPECTED_PROJECT_REF in (parsed.hostname or "")
-            or username.endswith("." + EXPECTED_PROJECT_REF)
-            or username.endswith(EXPECTED_PROJECT_REF)
-        )
+        and (direct_preview_host or preview_pooler)
     )
     if not reference_match:
         return {"project_reference_match": False, "status": "BLOCKED", "reason": "DSN absent or preview reference mismatch"}
@@ -340,6 +386,11 @@ def run() -> dict[str, Any]:
         report["migration_sha256"] = __import__("hashlib").sha256(migration_sql.encode()).hexdigest()
         conn.execute(migration_sql, prepare=False)
         conn.execute(migration_sql, prepare=False)
+        pa_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261018_safe_player_stats_pa_backfill.sql"
+        pa_migration_sql = pa_migration_path.read_text()
+        report["pa_backfill_migration_sha256"] = __import__("hashlib").sha256(pa_migration_sql.encode()).hexdigest()
+        conn.execute(pa_migration_sql, prepare=False)
+        conn.execute(pa_migration_sql, prepare=False)
         _record(report["results"], "migration_idempotent_replay", "PASS")
         report["fixture_object_owners"] = {
             "player_stats": conn.execute("SELECT r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='mlb' AND c.relname='player_stats'").fetchone()[0],
@@ -355,22 +406,31 @@ def run() -> dict[str, Any]:
                  has_column_privilege(%s,'mlb.model_training_props','rolling_result_avg_7','UPDATE'),
                  has_function_privilege(%s,'mlb.safe_upsert_player_stats(jsonb)','EXECUTE'),
                  has_function_privilege(%s,'mlb.safe_fill_player_stats_at_bats(bigint,bigint,integer)','EXECUTE'),
-                 has_function_privilege(%s,'mlb.safe_upsert_model_training_props(jsonb)','EXECUTE')""",
-            (WRITER_ROLE,) * 9,
+                 has_function_privilege(%s,'mlb.safe_upsert_model_training_props(jsonb)','EXECUTE'),
+                 has_function_privilege(%s,'mlb.safe_fill_player_stats_pa(bigint,bigint,integer,integer,integer,integer,integer,text)','EXECUTE')""",
+            (WRITER_ROLE,) * 10,
         ).fetchone()
-        expected_grants = (False, False, False, False, False, True, True, True, True)
+        expected_grants = (False, False, False, False, False, True, True, True, True, True)
         _record(report["results"], "entrypoint_grant_shape", "PASS" if grants == expected_grants else "FAIL", observed=list(grants), expected=list(expected_grants))
         report["phase"] = "restricted_role_behavior"
         _run_role_tests(conn, report["results"])
 
         report["phase"] = "migration_rollback"
         conn.execute("RESET ROLE")
+        pa_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261018_safe_player_stats_pa_backfill_rollback.sql"
+        pa_rollback_sql = pa_rollback_path.read_text()
+        report["pa_backfill_rollback_sha256"] = __import__("hashlib").sha256(pa_rollback_sql.encode()).hexdigest()
+        conn.execute(pa_rollback_sql, prepare=False)
+        pa_functions_remaining = conn.execute(
+            "SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='mlb' AND p.proname='safe_fill_player_stats_pa'"
+        ).fetchone()[0]
+        _record(report["results"], "pa_backfill_rollback_removes_only_entrypoint", "PASS" if pa_functions_remaining == 0 else "FAIL", functions_remaining=pa_functions_remaining)
         rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_safe_stat_training_write_entrypoints_rollback.sql"
         rollback_sql = rollback_path.read_text()
         report["rollback_sha256"] = __import__("hashlib").sha256(rollback_sql.encode()).hexdigest()
         conn.execute(rollback_sql, prepare=False)
         functions_remaining = conn.execute(
-            "SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='mlb' AND p.proname IN ('safe_upsert_player_stats','safe_fill_player_stats_at_bats','safe_upsert_model_training_props')"
+            "SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='mlb' AND p.proname IN ('safe_upsert_player_stats','safe_fill_player_stats_at_bats','safe_fill_player_stats_pa','safe_upsert_model_training_props')"
         ).fetchone()[0]
         direct_dml = conn.execute(
             "SELECT has_table_privilege(%s,'mlb.player_stats','INSERT') OR has_table_privilege(%s,'mlb.player_stats','UPDATE') OR has_table_privilege(%s,'mlb.model_training_props','INSERT')",
