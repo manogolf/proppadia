@@ -1,0 +1,103 @@
+{
+  "canary": "taylor_walls_single_record_rollback_only",
+  "captured_at_utc": "2026-10-17T16:52:03Z",
+  "assessment": "READ_ONLY_PREPARATION",
+  "database": {
+    "pinned_production_project_match": true,
+    "session_user": "postgres",
+    "current_user": "postgres",
+    "postgresql_version": "15.8",
+    "transaction_mode": "READ ONLY"
+  },
+  "official_evidence": {
+    "provider": "MLB StatsAPI",
+    "game_id": 849816,
+    "game_date": "2026-10-17",
+    "player_id": 670764,
+    "player_name": "Taylor Walls",
+    "team_abbreviation": "TB",
+    "team_id": 139,
+    "verification": "MATCHED_IN_PRIOR_READ_ONLY_PREFLIGHT",
+    "evidence_sha256": "aeef6fa435f0a8d121b0076d99d2bedc5df6b243fdbbd17ae7c81e52fbad8dd9"
+  },
+  "row_baseline": {
+    "player_id": 670764,
+    "complete_row": {
+      "id": "b67a06fb-9dc6-447e-bcd6-a64454bde089",
+      "player_name": "Taylor Walls",
+      "team": "139",
+      "player_id": 670764,
+      "created_at": "2025-05-11T22:34:57.248343+00:00",
+      "updated_at": "2026-10-16T23:34:45.248989+00:00",
+      "team_id": 139,
+      "is_placeholder": false
+    },
+    "fingerprint_algorithm": "SHA-256 over UTF-8 bytes of compact JSON with ensure_ascii=false and default=str; JSON object has attnum-ordered column names and corresponding row values; sort_keys=true; separators=(',', ':')",
+    "ordered_columns": [
+      "id",
+      "player_name",
+      "team",
+      "player_id",
+      "created_at",
+      "updated_at",
+      "team_id",
+      "is_placeholder"
+    ],
+    "sha256": "745574cb910ee61ef90543ac0ddb253c3c3945c882dba4ab29dbc8cd07b7ca0e",
+    "prior_owner_supplied_sha256": "e0383a84c751fb9d914ee30d55b89338e0d7e76835c0ef8df3c9f06f41334bde",
+    "prior_hash_method_documented_in_repository": false,
+    "prior_hash_reproduced": false,
+    "visible_source_fields_and_updated_at_match_reviewed_values": true
+  },
+  "deployed_definitions": {
+    "roster_function": {
+      "identity": "mlb.safe_upsert_player_roster(jsonb)",
+      "definition_hash_method": "SHA-256 of exact UTF-8 bytes of pg_proc.prosrc",
+      "sha256": "cac9a86c295e748eef5b75ebeda47c34cfe2b406d327cfef455d0809518a5e3a",
+      "owner": "postgres",
+      "security_definer": true,
+      "reviewed_behavior_match": true,
+      "rollback_side_effect_review": "Existing-row path performs ordinary transactional UPDATE; no sequence, notification, external-call, or nontransactional effect marker found."
+    },
+    "team_normalization_trigger": {
+      "name": "trg_norm_player_ids_team_text",
+      "definition_hash_method": "SHA-256 of exact UTF-8 bytes of pg_get_triggerdef(oid,false)",
+      "definition_sha256": "f763972038e59bcfe008d1db46614fb8d79504de0b546d5c86b0648432d2e2b8",
+      "function_body_hash_method": "SHA-256 of exact UTF-8 bytes of pg_proc.prosrc",
+      "function_body_sha256": "da363b062fcf65047efa8f9d0417625c589f9be8fdfc4b9fff58f606206d3a31",
+      "declaration": "CREATE TRIGGER trg_norm_player_ids_team_text BEFORE INSERT OR UPDATE OF team_id ON mlb.player_ids FOR EACH ROW EXECUTE FUNCTION norm_player_ids_team_text()",
+      "owner": "postgres",
+      "enabled": true,
+      "user_trigger_count_on_player_ids": 1,
+      "reviewed_behavior_match": true,
+      "behavior": "For non-placeholder rows with non-NULL team_id, set team to team_id text; otherwise leave team unchanged."
+    }
+  },
+  "prior_hash_mismatch_classification": {
+    "row_fingerprint": "UNRESOLVED",
+    "trigger_hash": "UNRESOLVED",
+    "note": "No row-fingerprint algorithm or prior full-row snapshot is retained, so the old one-way digest cannot distinguish a serialization difference from a historical row change. The prior trigger hash is not reproducible from tracked evidence; its current declaration and body match the reviewed behavior, and fresh hashes are now recorded with explicit methods. The cause of the old digest mismatch remains unproven."
+  },
+  "rollback_assessment": {
+    "production_function_invoked": false,
+    "rollback_transaction_executed": false,
+    "reason": "Read-only preparation only; no production function invocation was authorized by this task.",
+    "transactional_rollback_persistence_assessment": "The inspected existing-row UPDATE and sole trigger's in-row assignment are PostgreSQL transactional effects; explicit ROLLBACK would undo them. No nontransactional side effect was identified. This is a code/catalog assessment, not a live rollback execution."
+  },
+  "prepared_payload": {
+    "player_id": 670764,
+    "player_name": "Taylor Walls",
+    "team": "TB",
+    "team_id": 139
+  },
+  "prepared_execution_plan": [
+    "Recheck pinned production project, read-only candidate identity, complete-row SHA-256, function prosrc SHA-256, trigger definition SHA-256, and trigger function-body SHA-256 against this receipt.",
+    "On MLB_INGEST_DATABASE_URL, begin a transaction; set bounded lock/statement timeouts; SET LOCAL ROLE proppadia_mlb_ingest; verify session_user and current_user on that connection.",
+    "Invoke mlb.safe_upsert_player_roster once with the exact prepared payload and record the integer result and sanitized SQLSTATE/category.",
+    "Explicitly ROLLBACK on both success and error paths; never COMMIT or retry.",
+    "In a fresh read-only administrative transaction, compare all eight fields and the complete-row fingerprint with this baseline; require updated_at and the full row to be unchanged."
+  ],
+  "function_invocations": 0,
+  "database_write_committed": false,
+  "source_integrity": "UNCHANGED_BY_THIS_READ_ONLY_ASSESSMENT"
+}
