@@ -20,10 +20,14 @@ retroactively by this change. No production acquisition occurs during installati
 | Qualified BvP-dependent scorer | Requires certified same-date state and declared BvP features; no heuristic fallback on dependency block |
 | Independent Totals/market/Hits lanes | Existing execution order and rules unchanged; inline failure is visible WARN, not a false model skip |
 
-Daily and retired prewarm wrappers remain **installed-owned**, not repository-owned.
-Complete `.txt` sources in the reconciliation package are non-executable deployment
-and rollback evidence, not competing executable templates. Existing PostgreSQL
-schemas and historical data are unchanged. Source acquisition target remains
+The maintained daily wrapper source is `bin/proppadia_mlb_refresh_daily.sh`;
+the existing LaunchAgent executes its installed copy at
+`/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh`. Keep the two byte-identical
+when installing or recovering the wrapper. Complete `.txt` sources in the
+reconciliation package are historical, non-executable deployment and rollback
+evidence, not competing executable templates. The retired prewarm wrapper remains
+installed-owned. Existing PostgreSQL schemas and historical data are unchanged.
+Source acquisition target remains
 `mlb-bvp-pvb-refresh` / `refresh_mlb_bvp_pvb.py`; the inline adapter calls its
 canonical implementation directly without running legacy downstream prewarm work.
 

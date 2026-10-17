@@ -211,13 +211,14 @@ writer validation does not authorize a hosted cutover or a different writer.
   bounded normal invocation through the restricted login on 2026-10-17, with
   populated-row behavior and date-wide synchronization verified. A natural
   source/training INSERT or protected NULL fill remains unvalidated. Separately,
-  current installed daily wrapper now opts in only at the roster and inline
-  BvP writer processes. It is installed-owned and has no current complete
-  tracked executable source; the legacy bootstrap block in the Prod12 runbook
-  is explicitly marked unsafe for wholesale replacement and now records the
-  exact routing recovery. The tracked Make target routes only the stat-derived
-  writer child; its validation child and manual/backfill targets remain
-  unchanged. The
+  current installed daily wrapper opts in only at the roster and inline BvP
+  writer processes. Its byte-identical maintained source is tracked at
+  `bin/proppadia_mlb_refresh_daily.sh`; the existing LaunchAgent continues to
+  execute `/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh`. The legacy
+  bootstrap block in the Prod12 runbook is explicitly marked unsafe for
+  wholesale replacement and records the install/recovery and drift-check
+  procedure. The tracked Make target routes only the stat-derived writer child;
+  its validation child and manual/backfill targets remain unchanged. The
   configured `SUPABASE_DB_URL` currently authenticates as `postgres`. The
   natural daily run must still verify the effective writer identities and the
   first natural stat-derived INSERT/protected NULL fill.

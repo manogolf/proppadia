@@ -1025,15 +1025,34 @@ This target runs `backend/mlb/scripts/build_prop_regime_validation.py`, writes `
 ### Installed daily wrapper ownership and restricted writer routing
 
 The active wrapper is installed at
-`/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh`. It is installed-owned;
-the repository has no current executable source or installer for its complete
-contents. The `cat > ...` block below is a legacy bootstrap example. It predates
-the current inline BvP stage and does not contain the current daily phases. Do
-not use it to replace the active wrapper wholesale.
+`/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh`. Its maintained source
+is `bin/proppadia_mlb_refresh_daily.sh` in this repository. The LaunchAgent
+continues to execute the installed copy; the tracked copy is the source of
+truth for future installs and recovery. The current installed and tracked files
+were verified byte-for-byte equal. This task did not replace the installed
+copy. The `cat > ...` block below is a legacy bootstrap example. It predates the
+current inline BvP stage and does not contain the current daily phases. Do not
+use it to replace the active wrapper wholesale.
 The September 18 BvP installation reconciliation script and its complete
 `.txt` installation-evidence snapshot are also historical deployment evidence;
 they do not include later daily-wrapper changes and are not a current restore
 source.
+
+To install or recover the maintained source at the existing path, copy it with
+mode 0755, syntax-check both copies, and verify their hashes:
+
+```sh
+install -m 755 bin/proppadia_mlb_refresh_daily.sh /Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh
+/bin/zsh -n bin/proppadia_mlb_refresh_daily.sh
+/bin/zsh -n /Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh
+shasum -a 256 bin/proppadia_mlb_refresh_daily.sh /Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh
+```
+
+Run the focused routing test for an automated installed/tracked byte comparison:
+
+```sh
+./bin/python -m unittest backend.mlb.tests.test_mlb_daily_restricted_writer_routing -v
+```
 
 Keep these process-scoped opt-ins at the active wrapper's existing call sites:
 
