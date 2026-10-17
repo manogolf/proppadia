@@ -1,0 +1,18 @@
+{
+  "canary": "single_record_roster_identical_replay",
+  "current_user": "proppadia_mlb_ingest",
+  "database_write_committed": false,
+  "diagnostic": "Restricted role session failed before candidate selection completed; no function call or write occurred.",
+  "error_category": "insufficient_privilege",
+  "failure_stage": "restricted_candidate_select_from_mlb_player_ids",
+  "finished_at_utc": "2026-10-17T16:12:06.133891+00:00",
+  "function": "mlb.safe_upsert_player_roster",
+  "function_invoked": false,
+  "player_id_selected": false,
+  "production_project_match": true,
+  "session_user": "proppadia_mlb_ingest_login",
+  "source_observation_checked": false,
+  "sqlstate": "42501",
+  "started_at_utc": "2026-10-17T16:12:05.770144+00:00",
+  "status": "BLOCKED"
+}
