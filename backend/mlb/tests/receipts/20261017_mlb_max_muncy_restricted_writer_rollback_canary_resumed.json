@@ -1,0 +1,247 @@
+{
+  "captured_at_utc": "2026-10-17T17:52:26.854445+00:00",
+  "definitions_after": {
+    "all_match": true,
+    "items": {
+      "mlb.safe_upsert_player_stats(jsonb)": {
+        "matches_reviewed": true,
+        "sha256": "8b60123b6f601407bcb5429864aa2dc7efc7d82f0dc580f5b3cbbd76e8ac6759"
+      },
+      "public.norm_team_ids_ps()": {
+        "matches_reviewed": true,
+        "sha256": "6a48a8af196cc9012cf4a5502f33bd2fe3d2b2dae3ae38d5f145ded34b2321cc"
+      },
+      "public.set_is_starter()": {
+        "matches_reviewed": true,
+        "sha256": "81f07adb540bec32eb7b521c83e4950e4f68256cc553d41976aa692781495d41"
+      },
+      "trg_norm_team_ids_ps": {
+        "enabled": "O",
+        "matches_reviewed": true,
+        "sha256": "e99e5536feab69bb44ec00ea1c8d8fad66d51f41324911d7d0eee5057d872edc"
+      },
+      "trg_set_is_starter": {
+        "enabled": "O",
+        "matches_reviewed": true,
+        "sha256": "5bb6af5f8cc8fe51ab89f3509a70896e1e7e540e1510ae540f2749b1f02b4ef0"
+      }
+    }
+  },
+  "definitions_before": {
+    "all_match": true,
+    "items": {
+      "mlb.safe_upsert_player_stats(jsonb)": {
+        "matches_reviewed": true,
+        "sha256": "8b60123b6f601407bcb5429864aa2dc7efc7d82f0dc580f5b3cbbd76e8ac6759"
+      },
+      "public.norm_team_ids_ps()": {
+        "matches_reviewed": true,
+        "sha256": "6a48a8af196cc9012cf4a5502f33bd2fe3d2b2dae3ae38d5f145ded34b2321cc"
+      },
+      "public.set_is_starter()": {
+        "matches_reviewed": true,
+        "sha256": "81f07adb540bec32eb7b521c83e4950e4f68256cc553d41976aa692781495d41"
+      },
+      "trg_norm_team_ids_ps": {
+        "enabled": "O",
+        "matches_reviewed": true,
+        "sha256": "e99e5536feab69bb44ec00ea1c8d8fad66d51f41324911d7d0eee5057d872edc"
+      },
+      "trg_set_is_starter": {
+        "enabled": "O",
+        "matches_reviewed": true,
+        "sha256": "5bb6af5f8cc8fe51ab89f3509a70896e1e7e540e1510ae540f2749b1f02b4ef0"
+      }
+    }
+  },
+  "diagnostic": null,
+  "integrity": {
+    "after": {
+      "model_training_props_target_outcomes": {
+        "rows": 9,
+        "sha256": "017d9a479d02a7371287df52acefc213c361bf9e27a784ef2316a5412c234129"
+      },
+      "player_derived_stats_date_neighbors": {
+        "rows": 91,
+        "sha256": "82122ca611fcd3cf7c9da25b71e967051716dc6ab922bef02883dea50352054a"
+      },
+      "player_derived_stats_player_other_games": {
+        "rows": 531,
+        "sha256": "5ad025e12d6e09668163236a47b350070ee5ad930b21c0ed0a91d69e6ef8d7e1"
+      },
+      "player_derived_stats_target": {
+        "rows": 1,
+        "sha256": "7a8dda2534fb22e0d489b5df225532de346b1f9b26b66cc40a7a5e700e0209de"
+      },
+      "player_stats_game_neighbors": {
+        "rows": 46,
+        "sha256": "84cbdd041cf47b80a85812580aa7ca156a63d7136e7f3a282ab2c05e6a6a78d5"
+      },
+      "player_stats_target": {
+        "rows": 1,
+        "sha256": "6ba4bc6a317a5696d0740cc8ec63dcb094026087686a4da82ee96eb138fca6b4"
+      }
+    },
+    "all_fingerprints_match": true,
+    "before": {
+      "model_training_props_target_outcomes": {
+        "rows": 9,
+        "sha256": "017d9a479d02a7371287df52acefc213c361bf9e27a784ef2316a5412c234129"
+      },
+      "player_derived_stats_date_neighbors": {
+        "rows": 91,
+        "sha256": "82122ca611fcd3cf7c9da25b71e967051716dc6ab922bef02883dea50352054a"
+      },
+      "player_derived_stats_player_other_games": {
+        "rows": 531,
+        "sha256": "5ad025e12d6e09668163236a47b350070ee5ad930b21c0ed0a91d69e6ef8d7e1"
+      },
+      "player_derived_stats_target": {
+        "rows": 1,
+        "sha256": "7a8dda2534fb22e0d489b5df225532de346b1f9b26b66cc40a7a5e700e0209de"
+      },
+      "player_stats_game_neighbors": {
+        "rows": 46,
+        "sha256": "84cbdd041cf47b80a85812580aa7ca156a63d7136e7f3a282ab2c05e6a6a78d5"
+      },
+      "player_stats_target": {
+        "rows": 1,
+        "sha256": "6ba4bc6a317a5696d0740cc8ec63dcb094026087686a4da82ee96eb138fca6b4"
+      }
+    },
+    "definitions_unchanged": true,
+    "postrollback_read_only": true,
+    "role_state_unchanged": true,
+    "serialization": "Complete rows serialized as PostgreSQL JSONB, ordered by row JSON text; SHA-256 over UTF-8 bytes."
+  },
+  "official_source": {
+    "game_date": "2026-10-15",
+    "game_id": 849810,
+    "live_feed_sha256": "6a56bb88fe8f1f32efc4168e8896b3bf8cf753ce4617a02047ed433b4559ce58",
+    "opponent_team_id": 158,
+    "player_id": 571970,
+    "player_name": "Max Muncy",
+    "provider": "MLB StatsAPI retained live feed",
+    "retained_provenance_match": true,
+    "schedule_sha256": "9aad711bfd60845932316dc2b1e5ee63231aa44c07fe6569c55bda7b9ff4fb85",
+    "source_field_conflicts": [],
+    "source_fields_match_stored_after_team_mapping": true,
+    "team_id": 119
+  },
+  "operations": {
+    "player_derived_stats": {
+      "candidate_keys": [
+        [
+          571970,
+          849810
+        ]
+      ],
+      "invoked": true,
+      "result": 0,
+      "training_sync_invoked": false
+    },
+    "player_stats": {
+      "conflicts": [],
+      "invoked": true,
+      "result": 0
+    }
+  },
+  "preconditions": "PASS",
+  "production": {
+    "database": "postgres",
+    "postgres_version": "15.8",
+    "project_reference_match": true,
+    "readonly_session": {
+      "current_user": "postgres",
+      "session_user": "postgres",
+      "transaction_read_only": "on"
+    }
+  },
+  "role_state_after": {
+    "memberships": [
+      [
+        "proppadia_mlb_ingest_login",
+        "proppadia_mlb_ingest",
+        false
+      ]
+    ],
+    "permissions": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "roles": [
+      [
+        "proppadia_mlb_ingest",
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      [
+        "proppadia_mlb_ingest_login",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    ]
+  },
+  "role_state_before": {
+    "memberships": [
+      [
+        "proppadia_mlb_ingest_login",
+        "proppadia_mlb_ingest",
+        false
+      ]
+    ],
+    "permissions": [
+      true,
+      true,
+      true,
+      true
+    ],
+    "roles": [
+      [
+        "proppadia_mlb_ingest",
+        false,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      [
+        "proppadia_mlb_ingest_login",
+        true,
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ]
+    ]
+  },
+  "status": "PASS",
+  "task": "mlb_max_muncy_restricted_writer_rollback_canary_resumed_v1",
+  "transaction": {
+    "begun": true,
+    "commit_executed": false,
+    "explicit_rollback": true
+  },
+  "writer_session": {
+    "current_user": "proppadia_mlb_ingest",
+    "role_gate": "PASS",
+    "session_user": "proppadia_mlb_ingest_login",
+    "transaction_read_only": "off"
+  }
+}
