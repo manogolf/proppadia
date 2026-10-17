@@ -49,6 +49,40 @@ At the end of the first attempt, no rollback, compensating grant, repair, or
 cleanup had been attempted. The subsequent authorized retry and current
 retained state are recorded below.
 
+## Completed rollback-baseline correction and preview cleanup
+
+The rollback mismatch was a fixture defect. The original grant in
+`20261016_prepare_nhl_write_roles.sql` and the safe-promotion rollback both
+grant ingest UPDATE on the same 27 raw-table columns. Fixture setup had granted
+only `game_date`, `toi_minutes`, and `shots_on_goal`. The rollback SQL was
+correct; its test baseline was incomplete. Commit `bc9e0250` corrected the
+fixture grant, added a contract test requiring setup, original role migration,
+and rollback column sets to match, and strengthened cleanup to verify exact
+ingest and correction UPDATE sets before dropping anything.
+
+Before the rerun, read-only preflight again matched preview reference
+`vbnzmvmhuwvpkijxeuyq`, authenticated as `postgres` on PostgreSQL 15.19, and
+found the expected five empty fixture tables, seven fixture roles, no
+migration functions, no applied migration versions, and the prior exact grants
+and test memberships. The fixture setup was not rerun because these objects
+were already present; their current rolled-back state matched the corrected
+baseline.
+
+| Stage | Result | Evidence |
+| --- | --- | --- |
+| Focused local contract tests | PASS | `./bin/python -m unittest backend.nhl.tests.test_safe_source_promotion_contract`; 7 tests passed. |
+| Safe-promotion migration | PASS | Committed migration applied with `ON_ERROR_STOP`; both fixed functions were created and ACL changes committed. |
+| Behavioral fixture | PASS | Daily-role simulation succeeded. New insert, NULL fills, idempotent replays, conflict preservation, populated-to-NULL denial, direct UPDATE denial, DELETE/TRUNCATE denial, and correction-role isolation assertions completed. Expected correction-role `SET ROLE` denial was caught by the fixture. Fixture DML rolled back. |
+| Rollback | PASS | Committed rollback dropped both functions and restored the original ingest grant. |
+| Exact rollback verification | PASS | Read-only ACL inventory matched all 27 original ingest UPDATE columns and exactly `shot_attempts, pp_toi_minutes` for the correction role; functions absent; fixture tables empty; memberships matched expected test-only state. |
+| Preview cleanup | COMPLETE | Guarded cleanup removed the five fixture tables/schema, seven fixture roles, and both test memberships. |
+| Post-cleanup inventory | PASS | Read-only check matched initial state: no `nhl`/`mlb` schema, Proppadia roles, fixture relations/functions, or migration rows. Supabase reserved roles `anon`, `authenticated`, and `service_role` remained. |
+
+Production was not accessed or changed. The test validates the prepared
+migration and rollback against the disposable fixture; production deployment
+still requires its separately approved deployment procedure and application
+canaries.
+
 ## Authorized retry and retained state
 
 The test harness was corrected locally by adding a fixture-only membership
