@@ -16,6 +16,10 @@ The executable fixture covers these protected and adjacent writer relations:
 - `mlb.player_ids`: roster identity/status and insert-if-absent columns.
 - `mlb.game_info`: current schedule metadata and canonical phase fields.
 - `mlb.prop_features_precomputed`: derived BvP/PvB JSON feature rows.
+- The existing research login/group names are created only as temporary
+  fixture roles. The harness applies
+  `20261017_mlb_bvp_research_read.sql` to the fixture relation and checks the
+  eight verifier columns, denied writes, denied unrelated reads, and rollback.
 - `mlb.player_streak_profiles`: read-only stat-derived dependency. The fixture
   applies `20261022_mlb_ingest_streak_profile_read.sql`; the ingest role may
   select only `player_id`, `prop_type`, `prop_source`, `last_game_date`,
@@ -34,8 +38,11 @@ the real production login, owner, `service_role`, or API roles in this fixture.
 `backend/mlb/tests/run_restricted_writer_postgres_compatibility.py` connects
 only when `NHL_PP_TOI_TEST_DSN` carries the allowlisted preview project
 reference and the initial preview contains no `mlb` or `nhl` schema. It creates
-the schema, minimal writer tables for the covered paths, and temporary NOLOGIN roles (including
-the reviewed `proppadia_mlb_ingest` group name) inside one transaction. It
+the schema, minimal writer tables for the covered paths, and temporary fixture
+roles (including the reviewed `proppadia_mlb_ingest`,
+`proppadia_mlb_research_ro`, and `proppadia_mlb_research_login` names) inside
+one transaction. These are empty test roles with no production credentials or
+connection; they are not the production identities. It
 applies the exact source/training and PA-backfill migrations, calls the actual
 Python stat/training/PA writers, exercises the six-column streak-read contract
 and actual stat-derived streak query, applies the streak-read migration and
@@ -85,6 +92,10 @@ PostgreSQL diagnostic fields. Fixture changes are always rolled back.
   writes remain denied.
 - Verify BvP/PvB JSON feature merge and recomputation through the fixed
   entrypoint; direct `prop_features_precomputed` writes remain denied.
+- Verify the BvP research login can read exactly the verifier's eight target
+  columns, while INSERT/UPDATE/DELETE/TRUNCATE, `lineup_slot`, and
+  `mlb.player_stats` reads remain denied; apply the exact grant migration and
+  verify its rollback removes only that read scope.
 - Verify training-row materialization preserves an established outcome tuple
   (`prop_value`, `line`, `over_under`, `outcome`, `status`, `was_correct`) on
   conflict, while identical-result metadata replay and rolling-result

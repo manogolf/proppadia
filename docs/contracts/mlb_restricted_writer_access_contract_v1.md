@@ -99,6 +99,43 @@ payload keys; canonical phase validation stays with the caller and its
 established authority. BvP/PvB remains recomputable through its JSON merge
 function, without direct target-table DML.
 
+### BvP post-commit verifier read scope
+
+`backend/mlb/scripts/run_mlb_bvp_inline_daily.py::verify_database_rows()`
+reads `mlb.prop_features_precomputed` through the existing
+`MLB_MONEYLINE_AUDIT_DATABASE_URL` route. Its `SELECT` list and composite
+identity filter require exactly these columns:
+
+`prop_type`, `player_id`, `game_id`, `game_date`, `features`,
+`feature_set_tag`, `model_tag`, and `computed_at`.
+
+PostgreSQL column-level `SELECT` is sufficient for that query. The proposed
+`20261017_mlb_bvp_research_read.sql` grants those eight columns to the existing
+`proppadia_mlb_research_ro` group. It does not grant table-level SELECT or any
+write privilege, and it does not change the restricted ingest role, schema
+privileges, role membership, RLS, or policies. The migration fails closed if
+the existing research roles are absent or unsafe, schema USAGE is missing,
+the target relation's reviewed non-RLS shape changed, the required columns
+changed, or the group has an unexpected existing SELECT scope. Its paired
+rollback revokes only this column grant.
+
+Column ACLs restrict fields, not rows: this grant permits those eight columns
+for every row in `prop_features_precomputed`, and `features` exposes the full
+JSONB value. The verifier itself reads only its journaled keys. A stronger
+database-enforced BvP-only row boundary would require a separate view or RLS
+design and is outside this permission correction.
+
+Before production application, confirm the database/project and inspect the
+role membership, role attributes, target columns, RLS/policy shape, and current
+effective SELECT ACLs. Apply the migration as the authorized database owner
+inside the normal reviewed migration process. Then verify that the research
+login can select the eight columns using the retained BvP identity keys, that
+it cannot select `lineup_slot` or `mlb.player_stats`, and that INSERT, UPDATE,
+DELETE, and TRUNCATE remain denied. Confirm the restricted ingest identity
+still has no SELECT on the feature relation. A successful readback certifies
+the existing committed write; it does not require another acquisition or
+writer execution.
+
 The GitHub Actions workflow uses the same roster script and separate secret
 name `SUPABASE_DB_URL`; its value was not inspected. The writer code is
 compatible when its PostgreSQL session has assumed `proppadia_mlb_ingest`, but

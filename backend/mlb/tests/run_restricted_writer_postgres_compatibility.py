@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -27,6 +27,8 @@ from backend.mlb.scripts import refresh_mlb_bvp_pvb as bvp_writer
 EXPECTED_PROJECT_REF = "vbnzmvmhuwvpkijxeuyq"
 WRITER_ROLE = "proppadia_mlb_ingest"
 CORRECTION_ROLE = "proppadia_mlb_fixture_correction_20261016"
+RESEARCH_ROLE = "proppadia_mlb_research_ro"
+RESEARCH_LOGIN = "proppadia_mlb_research_login"
 PLAYER_STATS_FIELDS = writer.PLAYER_STATS_SOURCE_FIELDS
 PROTECTED_RESULT_FIELDS = ("prop_value", "line", "over_under", "outcome", "status", "was_correct")
 
@@ -117,6 +119,10 @@ def _training_row(game_id: int, *, outcome: str = "win", game_date: str = "2026-
 
 def _create_fixture(conn: psycopg.Connection) -> None:
     conn.execute(f"CREATE ROLE {CORRECTION_ROLE} NOLOGIN NOINHERIT NOCREATEROLE NOCREATEDB")
+    conn.execute(f"CREATE ROLE {RESEARCH_ROLE} NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
+    conn.execute(f"CREATE ROLE {RESEARCH_LOGIN} LOGIN INHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS")
+    conn.execute(f"GRANT {RESEARCH_ROLE} TO {RESEARCH_LOGIN}")
+    conn.execute(f"GRANT {RESEARCH_LOGIN} TO postgres")
     conn.execute(f"GRANT {WRITER_ROLE} TO postgres")
     conn.execute("CREATE SCHEMA mlb")
     conn.execute(
@@ -225,7 +231,66 @@ def _create_fixture(conn: psycopg.Connection) -> None:
         "player_ids", "player_streak_profiles",
     ):
         conn.execute(f"ALTER TABLE mlb.{relation} ENABLE ROW LEVEL SECURITY")
-    conn.execute(f"GRANT USAGE ON SCHEMA mlb TO {WRITER_ROLE}")
+    conn.execute(f"GRANT USAGE ON SCHEMA mlb TO {WRITER_ROLE}, {RESEARCH_ROLE}")
+
+
+def _run_bvp_research_read_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> None:
+    conn.execute("RESET ROLE")
+    conn.execute(
+        """INSERT INTO mlb.prop_features_precomputed
+               (prop_type,player_id,game_id,game_date,features,feature_set_tag,model_tag)
+             VALUES ('hits',8001,900801,'2026-09-23',
+                     '{\"bvp_sample\":4,\"bvp_avg\":0.5}'::jsonb,'v1','fixture-v1')"""
+    )
+    conn.execute(f"SET ROLE {RESEARCH_LOGIN}")
+    _expect_denied(
+        conn, "bvp_research_read_denied_before_grant",
+        "SELECT prop_type,player_id,game_id,game_date,features,feature_set_tag,model_tag,computed_at FROM mlb.prop_features_precomputed LIMIT 1",
+        results,
+    )
+    conn.execute("RESET ROLE")
+    migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_mlb_bvp_research_read.sql"
+    migration_sql = migration_path.read_text()
+    conn.execute(migration_sql, prepare=False)
+
+    conn.execute(f"SET ROLE {RESEARCH_LOGIN}")
+    acl_rows = conn.execute(
+        """SELECT a.attname, has_column_privilege(current_user,a.attrelid,a.attname,'SELECT')
+             FROM pg_attribute a
+            WHERE a.attrelid='mlb.prop_features_precomputed'::regclass
+              AND a.attnum>0 AND NOT a.attisdropped
+            ORDER BY a.attname"""
+    ).fetchall()
+    granted = {name for name, allowed in acl_rows if allowed}
+    expected = {"prop_type", "player_id", "game_id", "game_date", "features", "feature_set_tag", "model_tag", "computed_at"}
+    no_write = conn.execute(
+        """SELECT NOT has_table_privilege(current_user,'mlb.prop_features_precomputed','INSERT')
+                    AND NOT has_any_column_privilege(current_user,'mlb.prop_features_precomputed','INSERT'),
+                  NOT has_table_privilege(current_user,'mlb.prop_features_precomputed','UPDATE')
+                    AND NOT has_any_column_privilege(current_user,'mlb.prop_features_precomputed','UPDATE'),
+                  NOT has_table_privilege(current_user,'mlb.prop_features_precomputed','DELETE'),
+                  NOT has_table_privilege(current_user,'mlb.prop_features_precomputed','TRUNCATE')"""
+    ).fetchone()
+    no_table_select = not conn.execute(
+        "SELECT has_table_privilege(current_user,'mlb.prop_features_precomputed','SELECT')"
+    ).fetchone()[0]
+    _record(results, "bvp_research_read_exact_columns_no_writes", "PASS" if granted == expected and no_table_select and no_write == (True, True, True, True) else "FAIL", granted=sorted(granted), table_select_denied=no_table_select, write_denials=list(no_write or ()))
+
+    row = conn.execute(
+        """SELECT prop_type,player_id,game_id,game_date,features,feature_set_tag,model_tag,computed_at
+             FROM mlb.prop_features_precomputed
+            WHERE (prop_type,player_id,game_id,feature_set_tag)=(%s,%s,%s,%s)""",
+        ("hits", 8001, 900801, "v1"),
+    ).fetchone()
+    read_ok = bool(row and row[:7] == ("hits", 8001, 900801, date(2026, 9, 23), {"bvp_sample": 4, "bvp_avg": 0.5}, "v1", "fixture-v1"))
+    _record(results, "bvp_research_verifier_read_succeeds", "PASS" if read_ok else "FAIL", row_count=int(row is not None))
+    _expect_denied(conn, "bvp_research_unrelated_column_read_denied", "SELECT lineup_slot FROM mlb.prop_features_precomputed LIMIT 1", results)
+    _expect_denied(conn, "bvp_research_protected_source_read_denied", "SELECT hits FROM mlb.player_stats LIMIT 1", results)
+    _expect_denied(conn, "bvp_research_insert_denied", "INSERT INTO mlb.prop_features_precomputed (prop_type,player_id,game_id,game_date,features) VALUES ('hits',8002,900802,'2026-09-23','{}')", results)
+    _expect_denied(conn, "bvp_research_update_denied", "UPDATE mlb.prop_features_precomputed SET model_tag='changed' WHERE player_id=8001", results)
+    _expect_denied(conn, "bvp_research_delete_denied", "DELETE FROM mlb.prop_features_precomputed WHERE player_id=8001", results)
+    _expect_denied(conn, "bvp_research_truncate_denied", "TRUNCATE mlb.prop_features_precomputed", results)
+    conn.execute("RESET ROLE")
 
 
 def _run_streak_read_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> None:
@@ -660,7 +725,7 @@ def run() -> dict[str, Any]:
             "model_training_props": "SELECT + fixed function EXECUTE + metadata-only UPDATE; no direct INSERT/protected-tuple UPDATE",
             "player_ids": "fixed roster/identity EXECUTE only; no direct table DML",
             "game_info": "SELECT + fixed metadata EXECUTE; no direct table DML",
-            "prop_features_precomputed": "fixed derived-feature EXECUTE only; no direct table DML",
+            "prop_features_precomputed": "writer fixed derived-feature EXECUTE only; research group gets eight verifier columns SELECT only",
             "correction_role": "NOLOGIN; no membership granted to writer",
         },
         "protected_write_boundary": {
@@ -696,7 +761,7 @@ def run() -> dict[str, Any]:
             "SELECT nspname FROM pg_namespace WHERE nspname IN ('mlb','nhl') ORDER BY nspname"
         ).fetchall()]
         existing_roles = [row[0] for row in conn.execute(
-            "SELECT rolname FROM pg_roles WHERE rolname = ANY(%s)", ([WRITER_ROLE, CORRECTION_ROLE],)
+            "SELECT rolname FROM pg_roles WHERE rolname = ANY(%s)", ([WRITER_ROLE, CORRECTION_ROLE, RESEARCH_ROLE, RESEARCH_LOGIN],)
         ).fetchall()]
         if existing_schemas or existing_roles:
             report.update({"status": "BLOCKED", "reason": "preview fixture baseline is not clean", "existing_schemas": existing_schemas, "existing_test_roles": existing_roles})
@@ -854,9 +919,20 @@ def run() -> dict[str, Any]:
         _run_role_tests(conn, report["results"])
         _run_streak_read_tests(conn, report["results"])
         _run_adjacent_writer_tests(conn, report["results"])
+        _run_bvp_research_read_tests(conn, report["results"])
 
         report["phase"] = "migration_rollback"
         conn.execute("RESET ROLE")
+        bvp_read_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_mlb_bvp_research_read_rollback.sql"
+        bvp_read_rollback_sql = bvp_read_rollback_path.read_text()
+        report["bvp_research_read_rollback_sha256"] = __import__("hashlib").sha256(bvp_read_rollback_sql.encode()).hexdigest()
+        conn.execute(bvp_read_rollback_sql, prepare=False)
+        bvp_read_remains = conn.execute(
+            """SELECT has_any_column_privilege(%s,'mlb.prop_features_precomputed','SELECT')
+                    OR has_table_privilege(%s,'mlb.prop_features_precomputed','SELECT')""",
+            (RESEARCH_ROLE, RESEARCH_ROLE),
+        ).fetchone()[0]
+        _record(report["results"], "bvp_research_read_rollback_removes_grant", "PASS" if not bvp_read_remains else "FAIL", grants_remain=bool(bvp_read_remains))
         streak_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261022_mlb_ingest_streak_profile_read_rollback.sql"
         streak_rollback_sql = streak_rollback_path.read_text()
         report["streak_profile_read_rollback_sha256"] = __import__("hashlib").sha256(streak_rollback_sql.encode()).hexdigest()
@@ -947,7 +1023,7 @@ def run() -> dict[str, Any]:
             "SELECT nspname FROM pg_namespace WHERE nspname IN ('mlb','nhl') ORDER BY nspname"
         ).fetchall()]
         remaining_roles = [row[0] for row in conn.execute(
-            "SELECT rolname FROM pg_roles WHERE rolname = ANY(%s)", ([WRITER_ROLE, CORRECTION_ROLE],)
+            "SELECT rolname FROM pg_roles WHERE rolname = ANY(%s)", ([WRITER_ROLE, CORRECTION_ROLE, RESEARCH_ROLE, RESEARCH_LOGIN],)
         ).fetchall()]
         clean = not remaining_schemas and not remaining_roles
         report["cleanup"] = "COMPLETE" if clean else "PARTIAL"
@@ -961,7 +1037,7 @@ def run() -> dict[str, Any]:
                 "SELECT nspname FROM pg_namespace WHERE nspname IN ('mlb','nhl') ORDER BY nspname"
             ).fetchall()]
             remaining_roles = [row[0] for row in conn.execute(
-                "SELECT rolname FROM pg_roles WHERE rolname = ANY(%s)", ([WRITER_ROLE, CORRECTION_ROLE],)
+                "SELECT rolname FROM pg_roles WHERE rolname = ANY(%s)", ([WRITER_ROLE, CORRECTION_ROLE, RESEARCH_ROLE, RESEARCH_LOGIN],)
             ).fetchall()]
             clean = not remaining_schemas and not remaining_roles
             report["cleanup"] = "COMPLETE" if clean else "PARTIAL"

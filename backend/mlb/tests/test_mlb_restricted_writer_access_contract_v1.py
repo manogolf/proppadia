@@ -16,6 +16,8 @@ ROSTER = ROOT / "backend/mlb/scripts/refresh_mlb_players_rosters.py"
 STAT_DERIVED = ROOT / "backend/mlb/scripts/insert_mlb_stat_derived.py"
 BVP = ROOT / "backend/mlb/scripts/refresh_mlb_bvp_pvb.py"
 WORKFLOW = ROOT / ".github/workflows/mlb-refresh-player-ids.yml"
+BVP_READ_MIGRATION = ROOT / "backend/mlb/sql/migrations/20261017_mlb_bvp_research_read.sql"
+BVP_READ_ROLLBACK = ROOT / "backend/mlb/sql/migrations/20261017_mlb_bvp_research_read_rollback.sql"
 
 
 class MlbRestrictedWriterContractTests(unittest.TestCase):
@@ -146,6 +148,24 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
         self.assertNotIn("GRANT TRUNCATE", migration)
         self.assertIn("REVOKE SELECT (player_id, prop_type, prop_source, last_game_date, streak_type, streak_count)", rollback)
         self.assertIn("DROP POLICY proppadia_mlb_ingest_streak_select", rollback)
+
+    def test_bvp_readback_migration_is_only_the_verifier_column_grant(self):
+        migration = BVP_READ_MIGRATION.read_text()
+        rollback = BVP_READ_ROLLBACK.read_text()
+        expected = "computed_at, feature_set_tag, features, game_date, game_id, model_tag, player_id, prop_type"
+        normalized_migration = re.sub(r"\s+", " ", migration)
+        normalized_rollback = re.sub(r"\s+", " ", rollback)
+        self.assertIn("GRANT SELECT ( prop_type, player_id, game_id, game_date, features, feature_set_tag, model_tag, computed_at ) ON mlb.prop_features_precomputed TO proppadia_mlb_research_ro", normalized_migration)
+        self.assertIn(f"REVOKE SELECT ( {expected} ) ON mlb.prop_features_precomputed FROM proppadia_mlb_research_ro", normalized_rollback)
+        self.assertIn("TO proppadia_mlb_research_ro", migration)
+        self.assertIn("FROM proppadia_mlb_research_ro", rollback)
+        for forbidden in ("CREATE ROLE", "ALTER ROLE", "GRANT USAGE", "GRANT INSERT", "GRANT UPDATE", "GRANT DELETE", "GRANT TRUNCATE", "CREATE POLICY", "ALTER TABLE"):
+            self.assertNotIn(forbidden, migration.upper())
+        self.assertIn("has_table_privilege", migration)
+        self.assertIn("has_column_privilege", migration)
+        self.assertIn("relrowsecurity", migration)
+        self.assertIn("pg_policies", migration)
+        self.assertIn("already has column SELECT", migration)
 
     def test_hosted_workflow_uses_separate_secret_without_secret_inspection(self):
         self.assertIn("secrets.SUPABASE_DB_URL", self.workflow)
