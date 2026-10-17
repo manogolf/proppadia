@@ -299,8 +299,8 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P1.4 Route daily `today_*` materialized-view refresh through a narrow capability
 
-- Status: **ISOLATED POSTGRESQL 15 PREVIEW PROOF COMPLETE — production migration
-  and wrapper routing remain separately authorized work**.
+- Status: **RESTRICTED REFRESH FUNCTION DEPLOYED TO PRODUCTION — wrapper routing
+  remains separately authorized work**.
 - The active wrapper refreshes `mlb.today_market_snapshot`,
   `mlb.today_market_timing_signal`, `mlb.today_player_context`, then
   `mlb.today_workspace_mlb`, using `SUPABASE_DB_URL`. Production PostgreSQL is
@@ -310,8 +310,9 @@ writer validation does not authorize a hosted cutover or a different writer.
   PostgreSQL 15 requires materialized-view ownership for refresh; there is no
   narrow `GRANT REFRESH` privilege. PostgreSQL 17 and later have a `MAINTAIN`
   privilege, but that does not apply to this production server.
-- There is no existing routine mentioning these views that can refresh them.
-  A direct `SET ROLE` route is unavailable. The four views each have a valid,
+- There was no existing routine mentioning these views that could refresh them.
+  The restricted login cannot assume `postgres`; it can switch to its existing
+  `proppadia_mlb_ingest` group. The four views each have a valid,
   nonpartial unique index, so `REFRESH ... CONCURRENTLY` is supported while
   preserving reader access. The current plain refresh may block reads while it
   replaces contents.
@@ -332,6 +333,20 @@ writer validation does not authorize a hosted cutover or a different writer.
   function. Files:
   `backend/mlb/sql/migrations/20261017_mlb_today_workspace_restricted_refresh.sql`
   and `_rollback.sql`.
+- Production deployment: the reviewed migration was applied on 2026-10-17 to
+  project `cnwwhhmpashijqbspvhf`, database `postgres`, PostgreSQL 15.8, as
+  `postgres`. All four guarded targets were still `postgres`-owned materialized
+  views with valid, ready, nonpartial unique indexes. The existing
+  `proppadia_mlb_ingest` group and login membership matched the reviewed
+  assumptions. The function has the fixed `pg_catalog, pg_temp` search path and
+  four-view body, revokes PUBLIC execution, and grants EXECUTE only to the
+  ingest group. Receipt:
+  `docs/operations/mlb_today_materialized_view_restricted_refresh_deployment_receipt_2026-10-17.json`.
+  No production refresh was run. The restricted login is `NOINHERIT` and lacks
+  schema USAGE and inherited function EXECUTE; the future one-connection wrapper
+  command must explicitly `SET ROLE proppadia_mlb_ingest` before calling the
+  routine. After the role switch, the group has schema USAGE and function
+  EXECUTE, while it still cannot assume view ownership.
 - Isolated proof: the exact migration passed against disposable fixture objects
   in the verified preview project on PostgreSQL 15.19. Restricted execution
   refreshed the four views in order. Direct refresh, view alteration, routine
@@ -346,13 +361,14 @@ writer validation does not authorize a hosted cutover or a different writer.
 - Evidence and runner:
   `docs/operations/mlb_today_materialized_view_restricted_refresh_assessment_2026-10-17.md`
   and `backend/mlb/tests/run_today_mv_refresh_preview.py`.
-- Remaining completion criteria: separately authorize/review and apply the
-  migration during an approved window; recheck production view owner/index/role
-  state; capture source/outcome fingerprints; make only the process-scoped
-  wrapper refresh call use `MLB_INGEST_DATABASE_URL` with
-  `MLB_USE_RESTRICTED_INGEST=1`; preserve the four-view order and existing
-  staging build; then verify routine identity, natural-run refresh, unchanged
-  source/outcome fingerprints, downstream `/mlb/today` reads, and actual
+- Remaining completion criteria: separately authorize/review the wrapper
+  change; make only the process-scoped wrapper refresh call use
+  `MLB_INGEST_DATABASE_URL` with `MLB_USE_RESTRICTED_INGEST=1` and execute
+  `SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();`
+  on that connection; preserve the four-view order and existing staging build.
+  Add focused checks for the scoped opt-in, restricted URL, role switch, and
+  non-refresh paths. Then verify routine identity, natural-run refresh,
+  unchanged source/outcome fingerprints, downstream `/mlb/today` reads, and actual
   production duration. Keep this separate from first integrated restricted
   writer validation and the 16:30 PT run. No production object, wrapper, or
   schedule was changed in this proof.

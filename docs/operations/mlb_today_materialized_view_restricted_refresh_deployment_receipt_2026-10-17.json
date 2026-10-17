@@ -1,0 +1,143 @@
+{
+  "schema_version": "MLB_TODAY_MV_RESTRICTED_REFRESH_DEPLOYMENT_V1",
+  "deployment_date": "2026-10-17",
+  "deployment_observed_at_utc": "2026-10-17T21:26:39Z",
+  "production_identity": {
+    "project_ref": "cnwwhhmpashijqbspvhf",
+    "database": "postgres",
+    "session_user": "postgres",
+    "current_user": "postgres",
+    "postgres_version_num": 150008,
+    "postgres_version": "PostgreSQL 15.8",
+    "preview_project_ref": "vbnzmvmhuwvpkijxeuyq",
+    "production_distinct_from_preview": true
+  },
+  "migration": {
+    "path": "backend/mlb/sql/migrations/20261017_mlb_today_workspace_restricted_refresh.sql",
+    "sha256": "a755780dd8eb46a1acbb0e675e7c45aece5b6be7351a503011c43d1100f3b8c1",
+    "source_commit": "62ad593e",
+    "execution_route": "psql SUPABASE_DB_URL -X -v ON_ERROR_STOP=1 -f reviewed_migration",
+    "execution_status": "COMMITTED",
+    "execution_output": [
+      "BEGIN",
+      "DO",
+      "CREATE FUNCTION",
+      "REVOKE",
+      "GRANT",
+      "COMMIT"
+    ],
+    "production_refresh_executed": false
+  },
+  "guard_assumptions": {
+    "postgresql_15_or_later": true,
+    "required_ingest_group_exists": true,
+    "views_owned_by_current_user": true,
+    "views_have_valid_ready_nonpartial_unique_indexes": true,
+    "views": [
+      {
+        "name": "mlb.today_market_snapshot",
+        "owner": "postgres",
+        "index": "idx_today_market_snapshot_key",
+        "unique": true,
+        "valid": true,
+        "ready": true,
+        "nonpartial": true
+      },
+      {
+        "name": "mlb.today_market_timing_signal",
+        "owner": "postgres",
+        "index": "idx_today_market_timing_signal_key",
+        "unique": true,
+        "valid": true,
+        "ready": true,
+        "nonpartial": true
+      },
+      {
+        "name": "mlb.today_player_context",
+        "owner": "postgres",
+        "index": "idx_today_player_context_key",
+        "unique": true,
+        "valid": true,
+        "ready": true,
+        "nonpartial": true
+      },
+      {
+        "name": "mlb.today_workspace_mlb",
+        "owner": "postgres",
+        "index": "idx_today_workspace_mlb_key",
+        "unique": true,
+        "valid": true,
+        "ready": true,
+        "nonpartial": true
+      }
+    ],
+    "ingest_group": {
+      "name": "proppadia_mlb_ingest",
+      "login": false,
+      "superuser": false,
+      "create_role": false,
+      "create_database": false,
+      "inherit": false,
+      "member_of_postgres": false
+    },
+    "restricted_login": {
+      "name": "proppadia_mlb_ingest_login",
+      "login": true,
+      "superuser": false,
+      "create_role": false,
+      "create_database": false,
+      "inherit": false,
+      "member_of_ingest_group": true,
+      "member_of_postgres": false
+    }
+  },
+  "post_deployment_verification": {
+    "function": "mlb.refresh_today_workspace_views()",
+    "owner": "postgres",
+    "security_definer": true,
+    "fixed_search_path": ["pg_catalog", "pg_temp"],
+    "arguments": [],
+    "body_targets_in_order": [
+      "mlb.today_market_snapshot",
+      "mlb.today_market_timing_signal",
+      "mlb.today_player_context",
+      "mlb.today_workspace_mlb"
+    ],
+    "dynamic_sql_or_caller_target": false,
+    "acl_execute_grantees": ["postgres", "proppadia_mlb_ingest"],
+    "public_execute": false,
+    "ingest_group_execute": true,
+    "ingest_login_inherited_execute": false,
+    "ingest_group_schema_usage": true,
+    "ingest_login_schema_usage": false,
+    "restricted_login_set_role_to_ingest_group": "PASS_IN_READ_ONLY_TRANSACTION",
+    "execute_privilege_after_set_role": true,
+    "restricted_group_owned_target_views": 0,
+    "restricted_group_can_assume_postgres": false,
+    "direct_refresh_authorized_for_restricted_group": false,
+    "production_direct_refresh_attempted": false,
+    "alter_view_or_function_privilege_granted": false,
+    "arbitrary_refresh_target_supported": false
+  },
+  "rollback": {
+    "path": "backend/mlb/sql/migrations/20261017_mlb_today_workspace_restricted_refresh_rollback.sql",
+    "sha256": "f8df9b8414341d4779c54d604f7c6f8057703ea294fcc99c0aeda873180c5c9c",
+    "disposition": "RETAINED_NOT_APPLIED"
+  },
+  "wrapper_integration": {
+    "status": "NOT_MODIFIED",
+    "required_scoped_sql": "SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();",
+    "required_connection": "MLB_INGEST_DATABASE_URL",
+    "reason": "The restricted login is NOINHERIT, has no mlb schema USAGE, and does not inherit function EXECUTE. After SET ROLE, the group has schema USAGE and function EXECUTE.",
+    "requires_separate_authorization": true
+  },
+  "boundaries": {
+    "production_view_refresh": false,
+    "other_database_writes": false,
+    "role_or_credential_changes": false,
+    "wrapper_or_scheduler_changes": false,
+    "production_migration_objects_changed": [
+      "mlb.refresh_today_workspace_views()"
+    ]
+  }
+}

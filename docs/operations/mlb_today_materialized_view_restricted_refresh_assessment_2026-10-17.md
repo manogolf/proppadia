@@ -1,10 +1,11 @@
 # MLB `today_*` Materialized-View Restricted Refresh Assessment
 
 Assessment date: 2026-10-17
-Scope: read-only production catalog inspection, local source review, and an
-isolated PostgreSQL 15.19 preview proof using disposable fixture objects. No
-production refresh, production database write, production privilege change,
-ownership change, wrapper change, or scheduler change was performed.
+Scope: read-only production catalog inspection, local source review, an
+isolated PostgreSQL 15.19 preview proof using disposable fixture objects, and
+deployment of the reviewed additive function migration to production. No
+production materialized-view refresh, wrapper change, or scheduler change was
+performed.
 
 ## Current refresh path
 
@@ -70,8 +71,8 @@ ownership requirement and concurrent-refresh unique-index requirement:
 
 Changing ownership of these four views to the ingest role would give that role
 owner powers over the view definitions and lifecycle, which exceeds the daily
-refresh need. The existing restricted role cannot `SET ROLE postgres`, and no
-existing operational identity or function provides a bounded refresh route.
+refresh need. The restricted login cannot `SET ROLE postgres`. It can switch to
+its existing `proppadia_mlb_ingest` group, which owns none of the views.
 
 ## Recommended route
 
@@ -113,11 +114,22 @@ Verified assertions:
   and new contents and maintains indexes.
 - Cleanup completed: no `mlb` schema and no fixture role remained.
 
-The preflight requires execution as the current owner of all four views.
-Production authorization must confirm `postgres` still owns them and
-`proppadia_mlb_ingest` remains the approved, non-owner group. Apply the
-migration and rollback only in an explicitly approved database maintenance
-window. The routine has no dynamic SQL or caller-controlled relation argument.
+The preflight requires execution as the current owner of all four views. The
+reviewed migration was applied on 2026-10-17 to production project
+`cnwwhhmpashijqbspvhf`, database `postgres`, PostgreSQL 15.8, as `postgres`.
+At deployment, all four targets remained `postgres`-owned materialized views
+with valid, ready, nonpartial unique indexes, and the existing
+`proppadia_mlb_ingest` group and login membership matched the preflight. The
+function is owned by `postgres`, has fixed `pg_catalog, pg_temp` search path,
+contains only the four fixed concurrent refresh statements in order, revokes
+PUBLIC execution, and grants EXECUTE only to `proppadia_mlb_ingest`. The group
+cannot assume view ownership. The restricted login is `NOINHERIT`, lacks `mlb`
+schema USAGE and inherited function EXECUTE, and can `SET ROLE
+proppadia_mlb_ingest`, which has both. The deployment and permission evidence
+is preserved in
+`docs/operations/mlb_today_materialized_view_restricted_refresh_deployment_receipt_2026-10-17.json`.
+No production refresh was run. The rollback remains available but was not
+applied. The routine has no dynamic SQL or caller-controlled relation argument.
 
 ## Proposed wrapper integration
 
@@ -127,26 +139,31 @@ process-scoped call equivalent to:
 
 ```bash
 MLB_USE_RESTRICTED_INGEST=1 "$PSQL_BIN" "$MLB_INGEST_DATABASE_URL" \
-  -v ON_ERROR_STOP=1 -c 'SELECT mlb.refresh_today_workspace_views();'
+  -v ON_ERROR_STOP=1 \
+  -c 'SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();'
 ```
 
 Keep it conditional on successful `build_mlb_today_workspace.py` and preserve
-the current status handling. Validate that the restricted URL is present when
-the scoped call runs. Do not export the opt-in or change other daily consumers'
+the current status handling. The explicit role switch is required because the
+restricted login is `NOINHERIT`; the login itself lacks both `mlb` schema USAGE
+and function EXECUTE. Validate that the restricted URL is present when the
+scoped call runs. Do not export the opt-in or change other daily consumers'
 connection routes. This proposal is not implemented.
 
-Before an integrated daily run, review the migration and rollback, verify
-production owner/index/role state again, capture source and outcome
-fingerprints, and explicitly authorize both the database migration and the
-later tracked/installed wrapper change. Then verify function identity,
-sequential refresh success, unchanged source/outcome fingerprints, and
-downstream `/mlb/today` reads on a natural run. Do not combine this with the
-pending first integrated restricted-writer run or the 16:30 PT MLB window.
+Before an integrated daily run, review the rollback, verify production
+owner/index/role state again, capture source and outcome fingerprints, and
+explicitly authorize the tracked/installed wrapper change. Then verify
+function identity, sequential refresh success, unchanged source/outcome
+fingerprints, and downstream `/mlb/today` reads on a natural run. Do not
+combine this with the pending first integrated restricted-writer run or the
+16:30 PT MLB window.
 
 ## Evidence boundaries
 
-The production catalog query was read-only. It confirms point-in-time owners,
-ACLs, indexes, dependencies, PostgreSQL version, and role membership. The
+The production preflight and post-deployment catalog queries were read-only
+apart from the reviewed function DDL and ACL statements. They confirm
+point-in-time owners, ACLs, indexes, dependencies, PostgreSQL version, and role
+membership. The
 preview proof establishes PostgreSQL 15 function behavior and lock-mode effects
 on fixture objects, not production duration, external consumers, or production
 source/outcome invariants. Concurrent refresh is recommended to keep readers
