@@ -305,14 +305,18 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         self.assertEqual(order, ["POINTS", "SAVES", "SOG"])
 
         call_order = []
+        database_accesses = []
         with patch("sys.argv", ["runner", "--slate-date", SLATE, "--env-file", str(self.root / "absent")]), \
              patch.object(mainline, "load_env"), \
+             patch.object(mainline, "database_url",
+                          side_effect=lambda access: database_accesses.append(access) or "fixture-dsn"), \
              patch.object(mainline, "observe_prediction_only_lanes", side_effect=lambda *a: call_order.append("predictions")), \
              patch.object(mainline, "morning_capture_allowed", side_effect=lambda *a: (call_order.append("market_gate") or (False, "fixture"))), \
              patch.object(mainline, "record_morning_not_ready", return_value=self.root / "status.json"), \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(mainline.main(), 0)
         self.assertEqual(call_order, ["predictions", "market_gate"])
+        self.assertEqual(database_accesses, ["research"])
 
 
 if __name__ == "__main__":
