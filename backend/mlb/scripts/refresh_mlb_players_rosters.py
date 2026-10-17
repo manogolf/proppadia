@@ -158,15 +158,30 @@ def _upsert_player(
     player_name: Optional[str],
     team_abbr: str,
     team_id: int,
-) -> None:
+) -> bool:
     payload: Dict[str, object] = {"player_id": player_id}
     # The fixed DB entrypoint filters optional columns against the live table
     # shape, so the restricted login does not need direct player_ids ACLs.
     payload.update({"player_name": player_name, "team": team_abbr, "team_id": team_id})
-    cur.execute(
-        "SELECT mlb.safe_upsert_player_roster(%s::jsonb)",
-        (json.dumps(payload, separators=(",", ":")),),
-    )
+    statement = "SELECT mlb.safe_upsert_player_roster(%s::jsonb)"
+
+    # player_ids has a legacy UNIQUE(player_name, team) index in addition to
+    # its canonical player_id key. Distinct official MLB identities can share
+    # a name and organization, so retry only that collision without the team
+    # display label. Keep the official player_id and team_id in the payload.
+    cur.execute("SAVEPOINT mlb_roster_player_upsert")
+    try:
+        cur.execute(statement, (json.dumps(payload, separators=(",", ":")),))
+    except psycopg.errors.UniqueViolation as exc:
+        if getattr(getattr(exc, "diag", None), "constraint_name", None) != "unique_player_team":
+            raise
+        cur.execute("ROLLBACK TO SAVEPOINT mlb_roster_player_upsert")
+        payload.pop("team", None)
+        cur.execute(statement, (json.dumps(payload, separators=(",", ":")),))
+        cur.execute("RELEASE SAVEPOINT mlb_roster_player_upsert")
+        return True
+    cur.execute("RELEASE SAVEPOINT mlb_roster_player_upsert")
+    return False
 
 
 def _mark_inactive(
@@ -212,6 +227,7 @@ def main() -> int:
     fail = 0
     roster_rows = 0
     upserts = 0
+    team_label_conflicts = 0
     active_ids: Set[int] = set()
 
     with _connect_db(db) as conn:
@@ -238,14 +254,14 @@ def main() -> int:
                     for row in rows:
                         pid = int(row["player_id"])
                         active_ids.add(pid)
-                        _upsert_player(
+                        team_label_conflicts += int(_upsert_player(
                             cur,
                             cols,
                             player_id=pid,
                             player_name=(row.get("player_name") or None),
                             team_abbr=team_abbr,
                             team_id=team_id,
-                        )
+                        ))
                         upserts += 1
 
                 min_success = max(total - 1, 1)
@@ -263,7 +279,8 @@ def main() -> int:
 
     print(
         f"PASS mlb full roster refresh date={target_date} "
-        f"teams_ok={ok}/{total} team_fail={fail} roster_rows={roster_rows} upserts={upserts}"
+        f"teams_ok={ok}/{total} team_fail={fail} roster_rows={roster_rows} upserts={upserts} "
+        f"team_label_conflicts={team_label_conflicts}"
     )
     return 0
 

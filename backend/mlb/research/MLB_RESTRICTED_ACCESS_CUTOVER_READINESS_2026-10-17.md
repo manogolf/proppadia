@@ -14,7 +14,7 @@ configuration was changed for this assessment.
 
 | Workflow | Current route and required access | Restricted status and evidence | Remaining blocker |
 | --- | --- | --- | --- |
-| Local roster refresh | `refresh_mlb_players_rosters.py`; shared aliases by default, process opt-in routes through `MLB_INGEST_DATABASE_URL` and sets `proppadia_mlb_ingest`. Fixed roster functions only; no table DML. | **Canary verified.** Taylor Walls identical-value invocation ran in a rollback-only restricted transaction; source values were restored/unchanged. The standalone roster connection uses tuple rows, compatible with its scalar result handling. | Full scheduled roster run under opt-in has not been observed. Its inactive marker is a production-schema no-op. |
+| Local roster refresh | `refresh_mlb_players_rosters.py`; shared aliases by default, process opt-in routes through `MLB_INGEST_DATABASE_URL` and sets `proppadia_mlb_ingest`. Fixed roster functions only; no table DML. | **Canary verified.** Taylor Walls identical-value invocation ran in a rollback-only restricted transaction; source values were restored/unchanged. The standalone roster connection uses tuple rows, compatible with its scalar result handling. The writer retries the exact legacy `(player_name, team)` uniqueness collision without the team display label, preserving official player and team IDs. | One ordinary restricted roster invocation remains unobserved. The label-collision fallback has offline regression coverage but has not been exercised against production; its inactive marker is a production-schema no-op. |
 | Stat-derived source + scoped derived refresh | `insert_mlb_stat_derived.py` uses `pg_connect(require_streak_read=True)`; restricted mode verifies role, fixed-function permissions, and the six-column streak read. | **Partial.** Preview contract passed; production streak read passed; Max Muncy source and scoped-derived rollback canary passed with unchanged source, derived, neighboring, and outcome fingerprints. | The full workflow also calls scalar safe-write results using integer tuple indexing on `dict_row` connections (at-bats, game metadata, placeholder identity, and training materialization). Those code paths are not covered by the Max Muncy scoped canary and must be made mapping-aware before full routing. Date-wide training synchronization remains excluded from the canary and must be separately assessed as part of normal execution. |
 | Plate-appearance backfill | `backfill_mlb_player_pa.py` uses `pg_connect()` and the same process opt-in. Fixed PA-fill function plus approved derived PA columns. | **Code/access compatible; live production write not verified.** The function result explicitly handles mapping rows and tuples. Preview tested fill, replay, conflict rejection, and rollback. | Routine script commits batches and rolling updates; do not use it as a rollback-only canary. A normal bounded run needs a real eligible candidate and separately authorized execution. |
 | Game metadata | Called inside stat-derived through `safe_upsert_game_info`; role has function EXECUTE and required `game_info` SELECT. | Preview migration/entry point passed. | Caller extracts scalar result with `[0]` despite shared `dict_row`; included in the stat-derived caller blocker. No production invocation observed. |
@@ -52,7 +52,8 @@ contract. The affected paths were not invoked during this read-only review.
 
 1. **Stage local roster refresh first**, after separate owner authorization.
    Invoke it once in a controlled window after confirming the scheduled/local
-   roster process is not already active. The process command is:
+   roster process is not already active and using the reviewed local code
+   revision containing the `unique_player_team` fallback. The process command is:
 
    ```sh
    set -a; source backend/.env; set +a; MLB_USE_RESTRICTED_INGEST=1 make mlb-roster-refresh-all
@@ -61,10 +62,12 @@ contract. The affected paths were not invoked during this read-only review.
    This leaves the file and shared aliases unchanged. Verify on the
    writer session `session_user=proppadia_mlb_ingest_login` and
    `current_user=proppadia_mlb_ingest`; retain team/player counts, function
-   results, conflict counts, and a source-integrity comparison. Success means
-   normal completion, expected coverage, zero unexpected source conflicts,
-   and no protected-value differences. Do not launch a duplicate full refresh
-   to test routing.
+   results, `team_label_conflicts`, and a source-integrity comparison. Success
+   means normal completion, expected coverage, no unexpected identity
+   conflicts, and no protected-value differences. A positive
+   `team_label_conflicts` count means a display label was omitted while
+   canonical player/team IDs were retained. Do not launch a duplicate full
+   refresh to test routing.
 2. If the restricted run fails, preserve its receipt and allow no further
    restricted retries in that run. Leave existing aliases untouched; the next
    normal invocation returns to the established route by omitting the
