@@ -89,6 +89,8 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
         self.assertEqual(conn.test_cursor.statements[0], "SET ROLE proppadia_mlb_ingest")
         self.assertIn("session_user::text", conn.test_cursor.statements[1])
         self.assertIn("current_user::text", conn.test_cursor.statements[1])
+        for alias in _OK_ROW:
+            self.assertIn(f"AS {alias}", conn.test_cursor.statements[1])
         self.assertEqual(
             conn.test_cursor.parameters[1],
             (
@@ -125,6 +127,20 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
         conn = _Connection(row={**_OK_ROW, "current_user": "postgres"})
 
         with self.assertRaisesRegex(RuntimeError, "identity or permission assertion failed"):
+            pg.configure_mlb_ingest_connection(conn)
+
+    def test_wrong_session_login_fails_closed(self):
+        conn = _Connection(row={**_OK_ROW, "session_user": "postgres"})
+
+        with self.assertRaisesRegex(RuntimeError, "identity or permission assertion failed"):
+            pg.configure_mlb_ingest_connection(conn)
+
+    def test_missing_dict_row_field_fails_closed_with_field_name(self):
+        row = dict(_OK_ROW)
+        del row["login_ok"]
+        conn = _Connection(row=row)
+
+        with self.assertRaisesRegex(RuntimeError, "missing result fields: login_ok"):
             pg.configure_mlb_ingest_connection(conn)
 
     def test_permission_drift_fails_closed(self):

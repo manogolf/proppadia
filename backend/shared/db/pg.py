@@ -201,21 +201,22 @@ def configure_mlb_ingest_connection(
                         WHERE m.member = (SELECT oid FROM pg_roles WHERE rolname = current_user)
                     ) AS ok
                 )
-                SELECT session_user::text, current_user::text,
-                       (SELECT ok FROM login_check),
-                       (SELECT ok FROM group_check),
-                       (SELECT ok FROM group_isolation_check),
-                       (SELECT ok FROM membership_check),
-                       has_schema_privilege(current_user, 'mlb', 'USAGE'),
-                       NOT has_schema_privilege(current_user, 'mlb', 'CREATE'),
-                       (SELECT ok FROM function_check),
-                       NOT has_any_column_privilege(current_user, 'mlb.player_stats', 'UPDATE'),
-                       NOT has_any_column_privilege(current_user, 'mlb.player_stats', 'INSERT'),
-                       NOT has_any_column_privilege(current_user, 'mlb.model_training_props', 'INSERT'),
-                       (SELECT ok FROM metadata_check),
-                       (SELECT ok FROM destructive_check),
-                       (SELECT ok FROM adjacent_write_check),
-                       (NOT %s OR (SELECT ok FROM streak_read_check))
+                SELECT session_user::text AS session_user,
+                       current_user::text AS current_user,
+                       (SELECT ok FROM login_check) AS login_ok,
+                       (SELECT ok FROM group_check) AS group_ok,
+                       (SELECT ok FROM group_isolation_check) AS group_isolated,
+                       (SELECT ok FROM membership_check) AS membership_ok,
+                       has_schema_privilege(current_user, 'mlb', 'USAGE') AS schema_usage,
+                       NOT has_schema_privilege(current_user, 'mlb', 'CREATE') AS schema_create_denied,
+                       (SELECT ok FROM function_check) AS functions_ok,
+                       NOT has_any_column_privilege(current_user, 'mlb.player_stats', 'UPDATE') AS source_update_denied,
+                       NOT has_any_column_privilege(current_user, 'mlb.player_stats', 'INSERT') AS source_insert_denied,
+                       NOT has_any_column_privilege(current_user, 'mlb.model_training_props', 'INSERT') AS training_insert_denied,
+                       (SELECT ok FROM metadata_check) AS outcomes_protected,
+                       (SELECT ok FROM destructive_check) AS destructive_denied,
+                       (SELECT ok FROM adjacent_write_check) AS adjacent_direct_writes_denied,
+                       (NOT %s OR (SELECT ok FROM streak_read_check)) AS streak_read_contract
                 """,
                 (
                     list(_MLB_INGEST_FUNCTIONS),
@@ -228,13 +229,20 @@ def configure_mlb_ingest_connection(
             )
             row = cur.fetchone()
         if isinstance(row, dict):
-            values = [row[key] for key in (
+            required_keys = (
                 "session_user", "current_user", "login_ok", "group_ok",
                 "group_isolated", "membership_ok", "schema_usage", "schema_create_denied", "functions_ok",
                 "source_update_denied", "source_insert_denied",
                 "training_insert_denied", "outcomes_protected", "destructive_denied",
                 "adjacent_direct_writes_denied", "streak_read_contract",
-            )]
+            )
+            missing = [key for key in required_keys if key not in row]
+            if missing:
+                raise RuntimeError(
+                    "restricted MLB role assertion is missing result fields: "
+                    + ", ".join(missing)
+                )
+            values = [row[key] for key in required_keys]
         else:
             values = list(row or ())
         if len(values) != 16:
