@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -35,6 +36,12 @@ PROTECTED_RESULT_FIELDS = ("prop_value", "line", "over_under", "outcome", "statu
 
 def _record(results: list[dict[str, Any]], name: str, status: str, **details: Any) -> None:
     results.append({"assertion": name, "status": status, **details})
+
+
+def _execute_fixture_sql(conn: psycopg.Connection, sql: str) -> None:
+    """Keep migration transaction wrappers inside the fixture's outer rollback."""
+    fixture_sql = re.sub(r"(?im)^\s*(?:BEGIN|COMMIT)\s*;\s*$", "", sql)
+    conn.execute(fixture_sql, prepare=False)
 
 
 def _expect_denied(conn: psycopg.Connection, name: str, sql: str, results: list[dict[str, Any]]) -> None:
@@ -226,12 +233,24 @@ def _create_fixture(conn: psycopg.Connection) -> None:
         )
         """
     )
+    conn.execute(
+        """CREATE TABLE mlb.player_team_by_game (
+            player_id bigint NOT NULL, game_id bigint NOT NULL, team_id bigint NOT NULL,
+            updated_at timestamptz DEFAULT now(), PRIMARY KEY(player_id, game_id)
+        )"""
+    )
+    conn.execute("CREATE TABLE public.mlb_team_map (abbr text NOT NULL, team_id bigint PRIMARY KEY)")
     for relation in (
         "player_stats", "player_derived_stats", "model_training_props",
         "player_ids", "player_streak_profiles",
     ):
         conn.execute(f"ALTER TABLE mlb.{relation} ENABLE ROW LEVEL SECURITY")
-    conn.execute(f"GRANT USAGE ON SCHEMA mlb TO {WRITER_ROLE}, {RESEARCH_ROLE}")
+    conn.execute("ALTER TABLE public.mlb_team_map ENABLE ROW LEVEL SECURITY")
+    conn.execute(f"GRANT USAGE ON SCHEMA mlb, public TO {WRITER_ROLE}, {RESEARCH_ROLE}")
+    conn.execute(
+        "CREATE POLICY \"Enable read access for all users\" ON mlb.model_training_props "
+        "FOR SELECT TO PUBLIC USING (true)"
+    )
 
 
 def _run_bvp_research_read_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> None:
@@ -251,7 +270,7 @@ def _run_bvp_research_read_tests(conn: psycopg.Connection, results: list[dict[st
     conn.execute("RESET ROLE")
     migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_mlb_bvp_research_read.sql"
     migration_sql = migration_path.read_text()
-    conn.execute(migration_sql, prepare=False)
+    _execute_fixture_sql(conn, migration_sql)
 
     conn.execute(f"SET ROLE {RESEARCH_LOGIN}")
     acl_rows = conn.execute(
@@ -293,6 +312,107 @@ def _run_bvp_research_read_tests(conn: psycopg.Connection, results: list[dict[st
     conn.execute("RESET ROLE")
 
 
+def _run_research_source_read_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> None:
+    conn.execute("RESET ROLE")
+    conn.execute(
+        "INSERT INTO mlb.player_derived_stats (player_id,game_id,game_date,team,d7_hits,d15_hits,d30_hits,d7_plate_appearances,d15_plate_appearances,d30_plate_appearances,d15_at_bats) "
+        "VALUES (102,900102,'2026-09-24','NYY',2,3,4,4,5,6,3)"
+    )
+    conn.execute("INSERT INTO mlb.player_ids (player_name,team,player_id,team_id) VALUES ('fixture-player-102','NYY',102,147)")
+    conn.execute("INSERT INTO mlb.player_team_by_game (player_id,game_id,team_id) VALUES (102,900102,147)")
+    conn.execute("INSERT INTO public.mlb_team_map (abbr,team_id) VALUES ('NYY',147)")
+    conn.execute(
+        "INSERT INTO mlb.model_training_props (game_id,player_id,team_id,prop_type,game_date,rolling_result_avg_7) "
+        "VALUES (900101,101,147,'hits','2026-09-23',0.7)"
+    )
+
+    migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_mlb_research_source_read.sql"
+    migration_sql = migration_path.read_text()
+    _execute_fixture_sql(conn, migration_sql)
+    policies = conn.execute(
+        "SELECT schemaname,tablename,roles,cmd,qual FROM pg_policies "
+        "WHERE policyname='proppadia_mlb_research_select' ORDER BY schemaname,tablename"
+    ).fetchall()
+    expected_policies = [
+        ("mlb", name, [RESEARCH_ROLE], "SELECT", "true")
+        for name in ("player_derived_stats", "player_ids", "player_stats")
+    ] + [("public", "mlb_team_map", [RESEARCH_ROLE], "SELECT", "true")]
+    _record(results, "research_source_exact_role_targeted_select_policies", "PASS" if policies == expected_policies else "FAIL", policies=[list(row) for row in policies])
+    conn.execute(f"SET ROLE {RESEARCH_LOGIN}")
+
+    expected_columns = {
+        "mlb.player_stats": {
+            "player_id", "game_id", "game_date", "team", "opponent", "position", "hits",
+            "hits_allowed", "outs_recorded", "is_starter", "earned_runs", "strikeouts_pitching",
+            "at_bats", "plate_appearances",
+        },
+        "mlb.player_derived_stats": {
+            "player_id", "game_id", "game_date", "team",
+            *(f"d{window}_{metric}" for window in (7, 15, 30) for metric in (
+                "hits", "runs_scored", "rbis", "home_runs", "singles", "doubles", "triples",
+                "walks", "strikeouts_batting", "stolen_bases", "total_bases", "hits_runs_rbis",
+                "runs_rbis", "outs_recorded", "strikeouts_pitching", "walks_allowed", "earned_runs",
+                "hits_allowed", "at_bats", "plate_appearances",
+            )),
+        },
+        "mlb.player_ids": {"player_id", "player_name", "team", "team_id"},
+        "mlb.player_team_by_game": {"player_id", "game_id", "team_id"},
+        "public.mlb_team_map": {"team_id", "abbr"},
+        "mlb.model_training_props": {"game_date", "game_id", "player_id", "prop_type", "rolling_result_avg_7"},
+    }
+    acl_exact = True
+    no_table_select = True
+    no_writes = True
+    for relation, expected in expected_columns.items():
+        rows = conn.execute(
+            "SELECT a.attname,has_column_privilege(current_user,a.attrelid,a.attname,'SELECT') "
+            "FROM pg_attribute a WHERE a.attrelid=%s::regclass AND a.attnum>0 AND NOT a.attisdropped",
+            (relation,),
+        ).fetchall()
+        granted = {name for name, allowed in rows if allowed}
+        acl_exact = acl_exact and granted == expected
+        no_table_select = no_table_select and not conn.execute(
+            "SELECT has_table_privilege(current_user,%s,'SELECT')", (relation,)
+        ).fetchone()[0]
+        no_writes = no_writes and not conn.execute(
+            "SELECT has_table_privilege(current_user,%s,'INSERT') OR has_table_privilege(current_user,%s,'UPDATE') "
+            "OR has_table_privilege(current_user,%s,'DELETE') OR has_table_privilege(current_user,%s,'TRUNCATE') "
+            "OR has_any_column_privilege(current_user,%s,'INSERT') OR has_any_column_privilege(current_user,%s,'UPDATE')",
+            (relation,) * 6,
+        ).fetchone()[0]
+    _record(results, "research_source_exact_column_grants_no_writes", "PASS" if acl_exact and no_table_select and no_writes else "FAIL", acl_exact=acl_exact, table_select_denied=no_table_select, writes_denied=no_writes)
+
+    readable = conn.execute(
+        "SELECT (SELECT count(*) FROM mlb.player_stats WHERE player_id=101 AND game_id=900101), "
+        "(SELECT count(*) FROM mlb.player_derived_stats WHERE player_id=102 AND game_id=900102), "
+        "(SELECT count(*) FROM mlb.player_ids WHERE player_id=102), "
+        "(SELECT count(*) FROM mlb.player_team_by_game WHERE player_id=102 AND game_id=900102), "
+        "(SELECT count(*) FROM public.mlb_team_map WHERE team_id=147), "
+        "(SELECT count(*) FROM mlb.model_training_props WHERE game_id=900101 AND player_id=101)"
+    ).fetchone()
+    _record(results, "research_source_rls_and_public_training_reads_succeed", "PASS" if readable == (1, 1, 1, 1, 1, 1) else "FAIL", visible_rows=list(readable))
+    _expect_denied(conn, "research_unrelated_player_stats_column_denied", "SELECT total_bases FROM mlb.player_stats LIMIT 1", results)
+    _expect_denied(conn, "research_unrelated_derived_stats_column_denied", "SELECT id FROM mlb.player_derived_stats LIMIT 1", results)
+    _expect_denied(conn, "research_unrelated_player_ids_column_denied", "SELECT is_placeholder FROM mlb.player_ids LIMIT 1", results)
+    _expect_denied(conn, "research_unrelated_player_team_column_denied", "SELECT updated_at FROM mlb.player_team_by_game LIMIT 1", results)
+    _expect_denied(conn, "research_unrelated_training_column_denied", "SELECT outcome FROM mlb.model_training_props LIMIT 1", results)
+    _expect_denied(conn, "research_source_insert_denied", "INSERT INTO mlb.player_ids (player_name,player_id) VALUES ('blocked',900999)", results)
+    _expect_denied(conn, "research_source_update_denied", "UPDATE mlb.player_stats SET hits=hits WHERE player_id=101", results)
+    _expect_denied(conn, "research_source_delete_denied", "DELETE FROM mlb.player_derived_stats WHERE player_id=101", results)
+    _expect_denied(conn, "research_source_truncate_denied", "TRUNCATE mlb.model_training_props", results)
+
+    conn.execute("RESET ROLE")
+    rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_mlb_research_source_read_rollback.sql"
+    rollback_sql = rollback_path.read_text()
+    _execute_fixture_sql(conn, rollback_sql)
+    remaining = conn.execute(
+        "SELECT EXISTS(SELECT 1 FROM pg_policies WHERE policyname='proppadia_mlb_research_select'), "
+        "has_any_column_privilege(%s,'mlb.player_stats','SELECT') OR has_table_privilege(%s,'mlb.player_stats','SELECT'), "
+        "has_any_column_privilege(%s,'mlb.model_training_props','SELECT') OR has_table_privilege(%s,'mlb.model_training_props','SELECT'), "
+        "has_column_privilege(%s,'mlb.prop_features_precomputed','features','SELECT')",
+        (RESEARCH_ROLE, RESEARCH_ROLE, RESEARCH_ROLE, RESEARCH_ROLE, RESEARCH_ROLE),
+    ).fetchone()
+    _record(results, "research_source_rollback_removes_only_new_scope", "PASS" if remaining == (False, False, False, True) else "FAIL", observed=list(remaining))
 def _run_streak_read_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> None:
     # _run_role_tests intentionally leaves the simulated writer role active;
     # seed fixture-only rows as the preview administrator before switching back.
@@ -773,8 +893,8 @@ def run() -> dict[str, Any]:
         role_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261016_mlb_restricted_ingest_role.sql"
         role_migration_sql = role_migration_path.read_text()
         report["role_migration_sha256"] = __import__("hashlib").sha256(role_migration_sql.encode()).hexdigest()
-        conn.execute(role_migration_sql, prepare=False)
-        conn.execute(role_migration_sql, prepare=False)
+        _execute_fixture_sql(conn, role_migration_sql)
+        _execute_fixture_sql(conn, role_migration_sql)
         role_flags = conn.execute(
             "SELECT rolcanlogin, rolinherit, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname=%s",
             (WRITER_ROLE,),
@@ -788,38 +908,38 @@ def run() -> dict[str, Any]:
         migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_safe_stat_training_write_entrypoints.sql"
         migration_sql = migration_path.read_text()
         report["migration_sha256"] = __import__("hashlib").sha256(migration_sql.encode()).hexdigest()
-        conn.execute(migration_sql, prepare=False)
-        conn.execute(migration_sql, prepare=False)
+        _execute_fixture_sql(conn, migration_sql)
+        _execute_fixture_sql(conn, migration_sql)
         pa_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261018_safe_player_stats_pa_backfill.sql"
         pa_migration_sql = pa_migration_path.read_text()
         report["pa_backfill_migration_sha256"] = __import__("hashlib").sha256(pa_migration_sql.encode()).hexdigest()
-        conn.execute(pa_migration_sql, prepare=False)
-        conn.execute(pa_migration_sql, prepare=False)
+        _execute_fixture_sql(conn, pa_migration_sql)
+        _execute_fixture_sql(conn, pa_migration_sql)
         derived_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261018_mlb_derived_stats_writer_grants.sql"
         derived_migration_sql = derived_migration_path.read_text()
         report["derived_writer_migration_sha256"] = __import__("hashlib").sha256(derived_migration_sql.encode()).hexdigest()
-        conn.execute(derived_migration_sql, prepare=False)
-        conn.execute(derived_migration_sql, prepare=False)
+        _execute_fixture_sql(conn, derived_migration_sql)
+        _execute_fixture_sql(conn, derived_migration_sql)
         adjacent_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261019_mlb_adjacent_writer_entrypoints.sql"
         adjacent_migration_sql = adjacent_migration_path.read_text()
         report["adjacent_writer_migration_sha256"] = __import__("hashlib").sha256(adjacent_migration_sql.encode()).hexdigest()
-        conn.execute(adjacent_migration_sql, prepare=False)
-        conn.execute(adjacent_migration_sql, prepare=False)
+        _execute_fixture_sql(conn, adjacent_migration_sql)
+        _execute_fixture_sql(conn, adjacent_migration_sql)
         prediction_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261020_safe_prediction_backfill_entrypoint.sql"
         prediction_migration_sql = prediction_migration_path.read_text()
         report["prediction_backfill_migration_sha256"] = __import__("hashlib").sha256(prediction_migration_sql.encode()).hexdigest()
-        conn.execute(prediction_migration_sql, prepare=False)
-        conn.execute(prediction_migration_sql, prepare=False)
+        _execute_fixture_sql(conn, prediction_migration_sql)
+        _execute_fixture_sql(conn, prediction_migration_sql)
         rls_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261021_mlb_restricted_ingest_rls_policies.sql"
         rls_migration_sql = rls_migration_path.read_text()
         report["rls_policy_migration_sha256"] = __import__("hashlib").sha256(rls_migration_sql.encode()).hexdigest()
-        conn.execute(rls_migration_sql, prepare=False)
-        conn.execute(rls_migration_sql, prepare=False)
+        _execute_fixture_sql(conn, rls_migration_sql)
+        _execute_fixture_sql(conn, rls_migration_sql)
         streak_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261022_mlb_ingest_streak_profile_read.sql"
         streak_migration_sql = streak_migration_path.read_text()
         report["streak_profile_read_migration_sha256"] = __import__("hashlib").sha256(streak_migration_sql.encode()).hexdigest()
-        conn.execute(streak_migration_sql, prepare=False)
-        conn.execute(streak_migration_sql, prepare=False)
+        _execute_fixture_sql(conn, streak_migration_sql)
+        _execute_fixture_sql(conn, streak_migration_sql)
         streak_types = {
             row[0]: row[1] for row in conn.execute(
                 "SELECT column_name,data_type FROM information_schema.columns "
@@ -920,13 +1040,14 @@ def run() -> dict[str, Any]:
         _run_streak_read_tests(conn, report["results"])
         _run_adjacent_writer_tests(conn, report["results"])
         _run_bvp_research_read_tests(conn, report["results"])
+        _run_research_source_read_tests(conn, report["results"])
 
         report["phase"] = "migration_rollback"
         conn.execute("RESET ROLE")
         bvp_read_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_mlb_bvp_research_read_rollback.sql"
         bvp_read_rollback_sql = bvp_read_rollback_path.read_text()
         report["bvp_research_read_rollback_sha256"] = __import__("hashlib").sha256(bvp_read_rollback_sql.encode()).hexdigest()
-        conn.execute(bvp_read_rollback_sql, prepare=False)
+        _execute_fixture_sql(conn, bvp_read_rollback_sql)
         bvp_read_remains = conn.execute(
             """SELECT has_any_column_privilege(%s,'mlb.prop_features_precomputed','SELECT')
                     OR has_table_privilege(%s,'mlb.prop_features_precomputed','SELECT')""",
@@ -936,7 +1057,7 @@ def run() -> dict[str, Any]:
         streak_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261022_mlb_ingest_streak_profile_read_rollback.sql"
         streak_rollback_sql = streak_rollback_path.read_text()
         report["streak_profile_read_rollback_sha256"] = __import__("hashlib").sha256(streak_rollback_sql.encode()).hexdigest()
-        conn.execute(streak_rollback_sql, prepare=False)
+        _execute_fixture_sql(conn, streak_rollback_sql)
         streak_policy_remaining = conn.execute(
             "SELECT count(*) FROM pg_policies WHERE schemaname='mlb' "
             "AND tablename='player_streak_profiles' AND policyname='proppadia_mlb_ingest_streak_select'"
@@ -950,7 +1071,7 @@ def run() -> dict[str, Any]:
         rls_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261021_mlb_restricted_ingest_rls_policies_rollback.sql"
         rls_rollback_sql = rls_rollback_path.read_text()
         report["rls_policy_rollback_sha256"] = __import__("hashlib").sha256(rls_rollback_sql.encode()).hexdigest()
-        conn.execute(rls_rollback_sql, prepare=False)
+        _execute_fixture_sql(conn, rls_rollback_sql)
         rls_policies_remain = conn.execute(
             "SELECT count(*) FROM pg_policies WHERE schemaname='mlb' AND policyname LIKE 'proppadia_mlb_ingest_%'"
         ).fetchone()[0]
@@ -958,13 +1079,13 @@ def run() -> dict[str, Any]:
         prediction_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261020_safe_prediction_backfill_entrypoint_rollback.sql"
         prediction_rollback_sql = prediction_rollback_path.read_text()
         report["prediction_backfill_rollback_sha256"] = __import__("hashlib").sha256(prediction_rollback_sql.encode()).hexdigest()
-        conn.execute(prediction_rollback_sql, prepare=False)
+        _execute_fixture_sql(conn, prediction_rollback_sql)
         prediction_function_remaining = conn.execute("SELECT to_regprocedure('mlb.safe_fill_prediction_backfill(uuid,text,numeric,timestamptz)') IS NOT NULL").fetchone()[0]
         _record(report["results"], "prediction_backfill_rollback_removes_only_entrypoint", "PASS" if not prediction_function_remaining else "FAIL", function_remaining=bool(prediction_function_remaining))
         adjacent_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261019_mlb_adjacent_writer_entrypoints_rollback.sql"
         adjacent_rollback_sql = adjacent_rollback_path.read_text()
         report["adjacent_writer_rollback_sha256"] = __import__("hashlib").sha256(adjacent_rollback_sql.encode()).hexdigest()
-        conn.execute(adjacent_rollback_sql, prepare=False)
+        _execute_fixture_sql(conn, adjacent_rollback_sql)
         adjacent_functions_remaining = conn.execute(
             "SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='mlb' AND p.proname IN ('safe_upsert_player_roster','safe_insert_player_id_if_absent','safe_mark_player_roster_inactive','safe_upsert_game_info','safe_upsert_prop_features_precomputed')"
         ).fetchone()[0]
@@ -980,7 +1101,7 @@ def run() -> dict[str, Any]:
         pa_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261018_safe_player_stats_pa_backfill_rollback.sql"
         pa_rollback_sql = pa_rollback_path.read_text()
         report["pa_backfill_rollback_sha256"] = __import__("hashlib").sha256(pa_rollback_sql.encode()).hexdigest()
-        conn.execute(pa_rollback_sql, prepare=False)
+        _execute_fixture_sql(conn, pa_rollback_sql)
         pa_functions_remaining = conn.execute(
             "SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='mlb' AND p.proname='safe_fill_player_stats_pa'"
         ).fetchone()[0]
@@ -988,7 +1109,7 @@ def run() -> dict[str, Any]:
         derived_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261018_mlb_derived_stats_writer_grants_rollback.sql"
         derived_rollback_sql = derived_rollback_path.read_text()
         report["derived_writer_rollback_sha256"] = __import__("hashlib").sha256(derived_rollback_sql.encode()).hexdigest()
-        conn.execute(derived_rollback_sql, prepare=False)
+        _execute_fixture_sql(conn, derived_rollback_sql)
         derived_dml_remains = conn.execute(
             "SELECT has_any_column_privilege(%s,'mlb.player_derived_stats','INSERT') OR has_any_column_privilege(%s,'mlb.player_derived_stats','UPDATE') OR has_table_privilege(%s,'mlb.player_derived_stats','DELETE') OR has_table_privilege(%s,'mlb.player_derived_stats','TRUNCATE')",
             (WRITER_ROLE,) * 4,
@@ -997,7 +1118,7 @@ def run() -> dict[str, Any]:
         rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_safe_stat_training_write_entrypoints_rollback.sql"
         rollback_sql = rollback_path.read_text()
         report["rollback_sha256"] = __import__("hashlib").sha256(rollback_sql.encode()).hexdigest()
-        conn.execute(rollback_sql, prepare=False)
+        _execute_fixture_sql(conn, rollback_sql)
         functions_remaining = conn.execute(
             "SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='mlb' AND p.proname IN ('safe_upsert_player_stats','safe_fill_player_stats_at_bats','safe_fill_player_stats_pa','safe_upsert_model_training_props')"
         ).fetchone()[0]
@@ -1011,7 +1132,8 @@ def run() -> dict[str, Any]:
         role_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261016_mlb_restricted_ingest_role_rollback.sql"
         role_rollback_sql = role_rollback_path.read_text()
         report["role_rollback_sha256"] = __import__("hashlib").sha256(role_rollback_sql.encode()).hexdigest()
-        conn.execute(role_rollback_sql, prepare=False)
+        conn.execute(f"REVOKE USAGE ON SCHEMA public FROM {WRITER_ROLE}, {RESEARCH_ROLE}")
+        _execute_fixture_sql(conn, role_rollback_sql)
         role_remaining = conn.execute("SELECT count(*) FROM pg_roles WHERE rolname=%s", (WRITER_ROLE,)).fetchone()[0]
         _record(report["results"], "role_rollback_removes_only_fixture_group", "PASS" if role_remaining == 0 else "FAIL", roles_remaining=role_remaining)
 

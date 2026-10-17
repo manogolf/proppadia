@@ -396,7 +396,7 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P2.2 Inventory owner-level database aliases and plan gradual replacement
 
-- Status: **READ-ACCESS ASSESSMENT COMPLETE — scoped grants and process routing remain open**.
+- Status: **READ PERMISSIONS PREPARED — production deployment and process routing remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as
   `session_user=current_user=postgres`. The restricted alias connected as
   `proppadia_mlb_ingest_login`; after the application's required `SET ROLE`,
@@ -466,31 +466,51 @@ writer validation does not authorize a hosted cutover or a different writer.
   `player_team_by_game` and the moneyline/PFP tables have RLS disabled; `mlb`
   schema USAGE is present. No INSERT/UPDATE/DELETE grants were found on the
   inspected relations.
-- Smallest practical plan: reuse the existing research login/group; no role
-  change or new infrastructure is currently needed. For a separately reviewed
-  grant, add SELECT only on the inventoried columns to
-  `proppadia_mlb_research_ro`, and role-targeted SELECT policies for
-  `player_stats`, `player_derived_stats`, `player_ids`, and
-  `public.mlb_team_map`. Decide whether all historical `model_training_props`
-  rows are an acceptable research scope before granting it: the existing
-  PUBLIC `USING (true)` policies mean a grant alone provides no row isolation,
-  and changing them can affect API behavior. Keep broader API-role policy
-  cleanup as a separately tracked P2.3 concern.
+- Smallest practical plan: reuse the existing research login/group; both roles
+  remain `NOBYPASSRLS`, and no new role or infrastructure is needed. The
+  approved design accepts all-row visibility for `mlb.model_training_props`
+  through SELECT on only `game_date, game_id, player_id, prop_type,`
+  `rolling_result_avg_7`; its existing PUBLIC SELECT `USING (true)` policy
+  remains unchanged. The prepared forward/rollback pair is
+  `backend/mlb/sql/migrations/20261017_mlb_research_source_read.sql` and
+  `backend/mlb/sql/migrations/20261017_mlb_research_source_read_rollback.sql`.
+  It grants only the inventoried columns on six relations and adds research
+  group SELECT `USING (true)` policies on `player_stats`,
+  `player_derived_stats`, `player_ids`, and `public.mlb_team_map`. This gives
+  the group all rows in those four relations. `player_team_by_game` has RLS
+  disabled and needs no policy. Broader API-role policy cleanup remains a
+  separately tracked P2.3 concern.
   The daily selector's two wildcard reads have been narrowed to the exact
   61-column projection above. Add a process-only `MLB_RESEARCH_DATABASE_URL`
   override to the shared reader connection path and use it only in the listed
   read-only commands; keep the BvP post-commit verification and moneyline audit
   on their existing dedicated research route. Do not change the generic
   `DATABASE_URL`/`SUPABASE_DB_URL` resolution or the installed wrapper.
-- Verification before cutover: test each query under the research login with
-  RLS enabled and no bypass; confirm returned row scope and expected columns;
-  confirm INSERT/UPDATE/DELETE and write-capable function execution are denied;
-  run focused offline route-isolation tests; then validate recurring hits
-  reporting and reconciliation on a natural run. Offline regressions now cover
-  the selector's 61-column projection and duplicate-row handling alongside the
-  Moneyline audit and BvP readback route contracts. These tests do not establish
-  production row-policy scope. No grants, role attributes, aliases, credentials,
-  or scheduler settings were changed in this assessment.
+- Verification before cutover: the exact migration and rollback passed the
+  established isolated PostgreSQL preview. Under the fixture research login,
+  all six intended relation reads succeeded, unrelated columns and direct
+  INSERT/UPDATE/DELETE/TRUNCATE failed, and rollback removed only the new
+  policies/grants while preserving the BvP read grant. The production catalog
+  inspection confirmed the existing Moneyline (16 prediction plus 9 outcome
+  columns) and BvP (8 feature columns) grants and their dedicated
+  `MLB_MONEYLINE_AUDIT_DATABASE_URL` process routes remain unchanged. Focused
+  offline tests cover the exact grant/rollback column sets, policy count,
+  selector projection, and existing route contracts. These checks do not prove
+  application behavior on a natural daily run. No production grants, policies,
+  role attributes, aliases, credentials, or scheduler settings were changed.
+- Process routing remains a separate follow-up. Add process-only
+  `MLB_RESEARCH_DATABASE_URL` routing for `report_mlb_hits_environment.py`,
+  `run_mlb_hits_lane_selector_daily.py`, `run_mlb_hits_lane_selector_report.py`,
+  `build_mlb_overlap_role_profile_watch.py`,
+  `report_mlb_hits_recency_vs_baseline.py`,
+  `report_mlb_hits_interaction_failure.py`, `audit_mlb_hits_feature_parity.py`,
+  and `assemble_mlb_hits05_2026_season_to_date_evidence_v1.py`. The first uses
+  the shared `pg_fetchall` connection helper; the selector, profile, research
+  reports, and evidence assembler resolve their own URL or engine. Route only
+  these read-only child processes through the research URL, assert the effective
+  login, and preserve `MLB_MONEYLINE_AUDIT_DATABASE_URL` for the Moneyline audit
+  and BvP post-commit readback. Do not change shared default aliases or either
+  daily wrapper.
 - Exceptional maintenance remains a separate owner route: migration/rollback
   and phase activation tools, historical correction/backfill/recompute targets,
   and manual training regeneration. They are not daily scheduled consumers and
@@ -504,10 +524,10 @@ writer validation does not authorize a hosted cutover or a different writer.
   launch-agent definitions.
 - Completion criteria: (1) verify the three process-scoped daily writer routes
   and each effective identity on the next natural run; (2) confirm the research
-  login/group remain `NOBYPASSRLS`, deploy separately reviewed
-  read-only SELECT grants/policies, and route only listed reader processes
-  through the existing research login; (3) verify query row scope, expected results, and
-  write denial under that identity; (4) decide and validate a separately
+  login/group remain `NOBYPASSRLS`, obtain separate authorization to deploy the
+  prepared read-only grants/policies, and route only listed reader processes
+  through the existing research login; (3) verify query row scope, expected
+  results, and write denial under that identity; (4) decide and validate a separately
   approved route for the daily materialized-view refresh; (5) retain the first
   natural restricted source/training INSERT or protected NULL-fill evidence.
   No alias, role, grant, credential, or scheduler change is authorized by this

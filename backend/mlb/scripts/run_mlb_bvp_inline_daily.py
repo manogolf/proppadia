@@ -33,8 +33,8 @@ def _bvp_research_readback_connection():
 
     Never use ``pg_connect`` here: with MLB_USE_RESTRICTED_INGEST=1 it routes
     back to the writer login, which intentionally cannot SELECT the target.
-    The approved research login currently has narrower table grants than this
-    query needs, so permission denial is reported as unavailable verification.
+    The approved research login has column SELECT on this query's eight fields;
+    permission denial still fails verification closed.
     """
     from contextlib import contextmanager
 

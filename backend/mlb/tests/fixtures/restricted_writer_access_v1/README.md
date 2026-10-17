@@ -20,6 +20,11 @@ The executable fixture covers these protected and adjacent writer relations:
   fixture roles. The harness applies
   `20261017_mlb_bvp_research_read.sql` to the fixture relation and checks the
   eight verifier columns, denied writes, denied unrelated reads, and rollback.
+- The research-read permission review applies
+  `20261017_mlb_research_source_read.sql` to fixture versions of the six
+  inventoried relations. It checks the exact column allowlists, four
+  role-targeted RLS policies, successful reads, unrelated-column and direct
+  write denials, and that rollback preserves the separate BvP grant.
 - `mlb.player_streak_profiles`: read-only stat-derived dependency. The fixture
   applies `20261022_mlb_ingest_streak_profile_read.sql`; the ingest role may
   select only `player_id`, `prop_type`, `prop_source`, `last_game_date`,
@@ -66,7 +71,8 @@ privilege results, allowed application writes, and denied direct DML. It also
 exercises roster refresh, game metadata, and BvP/PvB persistence through the
 adjacent-writer migration and calls the existing Python writers for those
 paths. Errors are sanitized to exception class, SQLSTATE, and nonsecret
-PostgreSQL diagnostic fields. Fixture changes are always rolled back.
+PostgreSQL diagnostic fields. Migration transaction wrappers are kept inside
+the fixture's outer transaction; fixture changes are always rolled back.
 
 ## Assertions in the isolated PostgreSQL phase
 
