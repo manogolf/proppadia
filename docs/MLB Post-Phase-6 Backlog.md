@@ -194,3 +194,71 @@ Proposed deliverable:
   - `docs/contracts/mlb_2026_game_phase_sidecar_design_v1/IMPLEMENTATION_SEQUENCE.md:33`
     refers to target `stat-derived` in the regular-selection
     positive-membership-only instruction.
+
+## Restricted Database Writer Migration
+
+This section tracks MLB work only. Existing database routes remain in place
+until each writer has passed its own bounded validation. A completed local
+writer validation does not authorize a hosted cutover or a different writer.
+
+### P1.1 Finish staged restricted-ingest cutover for ordinary writers
+
+- Status: **ACTIVE** — the local roster refresh has been validated through the
+  restricted login; ordinary writer migration remains incomplete.
+- References: `docs/contracts/database_write_isolation_plan.md`;
+  `docs/contracts/mlb_restricted_writer_access_contract_v1.md`.
+- Completion: migrate and validate each ordinary writer separately, recording
+  the effective session identity, protected function/result evidence, and
+  durable row counts. Keep existing routing until that writer passes; do not
+  apply a blanket alias or scheduler change.
+
+### P1.2 One bounded restricted BvP/PvB live validation
+
+- Status: **READY — separate production authorization required**. Commit
+  `ce4f2581` repaired the governed collector hash pin; the three inline
+  certification scenarios were stale hash setup, not BvP/PvB behavior defects.
+  The focused offline bundle passed 108 tests. No live restricted validation
+  has been recorded.
+- Reference: `backend/mlb/config/bvp_inline_acquisition_v1.json` and commit
+  `ce4f2581`.
+- Completion: run one ordinary due-date BvP/PvB invocation under explicit
+  bounded authorization, verify the restricted session identity and certified
+  function result, and retain the run receipt and durable row counts. This
+  does not authorize a general production cutover.
+
+### P1.3 Assess stat-derived and date-wide training synchronization
+
+- Status: **PENDING**.
+- References: `docs/contracts/database_write_isolation_plan.md` and
+  `docs/contracts/mlb_2026_game_phase_sidecar_design_v1/`.
+- Completion: document the normal stat-derived and date-wide training paths,
+  their write scope, transaction/replacement behavior, protected-field rules,
+  and current connection identities; identify a bounded validation and
+  rollback approach before changing either route.
+
+### P2.1 Verify hosted GitHub roster identity and database routing
+
+- Status: **PENDING** — local restricted roster validation does not establish
+  the identity used by hosted workflows.
+- Reference: `.github/workflows/mlb-refresh-player-ids.yml`.
+- Completion: verify the hosted job's effective database identity without
+  exposing credentials, then retain a normal workflow run receipt showing the
+  restricted route and expected roster result. Do not change hosted secrets as
+  part of this backlog item.
+
+### P2.2 Inventory owner-level database aliases and plan gradual replacement
+
+- Status: **PENDING**.
+- Reference: `docs/contracts/database_write_isolation_plan.md`.
+- Completion: inventory active code, scripts, shell commands, and scheduled
+  jobs that use owner-level database aliases; record each consumer, its
+  required operations, and a safe staged replacement order.
+
+### P2.3 Review broad API-role permissions against consumer dependencies
+
+- Status: **PENDING** — dependency review is required before any revocation.
+- Reference: `docs/contracts/database_write_isolation_plan.md`.
+- Completion: map actual hosted and local consumers to the broad API-role
+  grants they require, record verified dependencies and an incremental
+  revocation plan, and obtain the separately authorized change before changing
+  any grant.
