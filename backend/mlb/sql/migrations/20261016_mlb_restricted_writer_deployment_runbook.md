@@ -23,14 +23,21 @@ has been verified:
    identity, context, 57 rolling outputs, and six PA aggregates. DELETE and
    TRUNCATE stay denied.
 5. `20261019_mlb_adjacent_writer_entrypoints.sql` grants EXECUTE on five fixed
-   roster, placeholder-identity, inactive-status, game-metadata, and BvP/PvB
+   roster, placeholder-identity, inactive-marker, game-metadata, and BvP/PvB
    functions. It grants SELECT on `game_info` for the stat-derived loader's
    schedule/phase checks, and no direct DML on `player_ids`, `game_info`, or
    `prop_features_precomputed`.
+6. `20261020_safe_prediction_backfill_entrypoint.sql` grants only EXECUTE on
+   the initial-only prediction materializer; it adds no direct prediction or
+   realized-outcome column writes.
+7. `20261021_mlb_restricted_ingest_rls_policies.sql` adds only the row policies
+   required by existing ingest ACLs on RLS-enabled production relations:
+   source/training reads and derived-table SELECT/INSERT/UPDATE. It adds no
+   SQL privileges, leaves RLS state unchanged, and rejects FORCE RLS.
 
 The protected and adjacent entry-point migrations are intentionally fail-closed
 on rollback: they do not restore direct table DML. Roll back in reverse order:
-adjacent entry points, derived grants, PA function, protected source/training
+RLS policies, prediction entry point, adjacent entry points, derived grants, PA function, protected source/training
 entry points, then the role group after all login memberships are removed. The
 role rollback checks its creation marker and refuses to drop a role with
 memberships. Reapply forward migrations before routing these writer paths
@@ -55,6 +62,17 @@ INSERT/cleanup DELETE and preseason cleanup's training DELETE remain
 exceptional maintenance paths; keep them out of the routine writer group and
 run only under separately reviewed maintenance access.
 
+The production `game_info` relation has only its seven established schedule
+columns. Canonical phase/source fields remain in the exact-game phase authority
+and are validated by the active caller; they are not copied into `game_info`.
+The production `player_stats.is_starter` representation is `smallint` and the
+restricted-writer fixture uses integer `0/1` payloads; the fixed entry point
+rejects other non-NULL values. Production `player_ids.player_name` is NOT NULL
+and the table has no active/status field. Existing identities can preserve NULL
+incoming names; new rows require a verified non-empty name. The inactive marker
+is a guarded no-op for this schema. The prediction backfill uses its separate
+fixed function and never changes `was_correct`.
+
 ## Existing API-role grants
 
 The 2026-10-16 production catalog snapshot showed `anon`, `authenticated`,
@@ -73,11 +91,13 @@ hosted runner and deployed PostgREST consumers are identified and tested.
 ## Preview compatibility probe
 
 The existing rollback-only probe applies the role migration before fixture
-setup, then applies the protected source/training, PA, derived-grant, and
-adjacent-writer migrations twice. It verifies exact role flags and ACLs;
+setup, then applies the protected source/training, PA, derived-grant,
+adjacent-writer, prediction-backfill, and RLS-policy migrations twice. It
+verifies exact role flags, ACLs, and required RLS policy shape;
 fixed source/training operations; derived recompute; roster NULL-fill/replay
-and threshold-gated inactive marking; game metadata NULL-fill, date refresh,
-replay, and phase-conflict rejection; BvP merge/recompute; direct protected
+and threshold-gated inactive-marker behavior (a no-op when production has no
+status column); game metadata NULL-fill, date refresh,
+replay, and phase/source-payload rejection; BvP merge/recompute; direct protected
 writes, DELETE/TRUNCATE, role escalation, and function replacement/drop
 denial; and reverse rollback. The outer transaction is rolled back and the
 probe confirms its schema and fixture roles are absent.
@@ -116,6 +136,32 @@ roles. Receipt:
 (SHA-256 `2d6405c0ac679130f208bb287720c52eac915eae0ccb94d1d073d58a6107eda5`).
 The hosted workflow code uses the same roster writer, but its configured
 database login and a hosted execution remain unverified.
+
+## Production-shape compatibility correction — 2026-10-16
+
+The final rollback-only preview fixture uses the retained production shapes for
+`game_info`, `player_stats`, `player_ids`, `player_derived_stats`, and
+`model_training_props`, including `game_info`'s seven schedule fields plus two
+starting-pitcher IDs, the absent phase/source fields, `is_starter smallint`,
+text/timestamp training fields, and `player_name NOT NULL` with no roster
+active/status field. It enables the same RLS state on source, training,
+derived, and identity tables. The exact catalog-shape checks and protected
+writer behavior all passed.
+
+The restricted ingest RLS migration adds only row policies matching existing
+ACLs: SELECT on player source/training/derived relations, metadata UPDATE on
+training rows, and SELECT/INSERT/UPDATE on recomputable derived rows. It grants
+no privileges and does not change the pre-existing RLS setting. Reverse
+rollback removes only the policies it created.
+
+Final run: 80 assertions passed on the allowlisted preview, PostgreSQL 15.19;
+rollback and cleanup completed with no fixture objects remaining. This covers
+NULL-to-zero/one `is_starter` fills, replay, preserving zero against a
+conflicting one, invalid-state rejection, the real roster `NOT NULL` behavior,
+game metadata compatibility, prediction-only initial fill/replay/conflict,
+RLS and ACL denials, and all existing source/derived writer assertions.
+Production remains unchanged. Receipt SHA-256:
+`7bf2bd02579bba5155a7cdf57be4ca30e6fbc625a35dff6a28cd574f811bd7f7`.
 
 ## MLB schema/ACL backup
 

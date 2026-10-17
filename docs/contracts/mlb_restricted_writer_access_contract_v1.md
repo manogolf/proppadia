@@ -16,10 +16,10 @@ existing NHL restricted routing are out of scope and remain unchanged.
 
 | Writer | Relation | Required operations and columns | Conflict / overwrite behavior |
 | --- | --- | --- | --- |
-| `refresh_mlb_players_rosters.py` | `mlb.player_ids` | `EXECUTE` on fixed roster upsert/inactive entry points. The functions inspect optional columns internally; the ordinary role needs no direct table DML or SELECT. | Conflict key is `player_id`. Incoming NULL name/team/team ID preserves the current value; a non-NULL current roster observation refreshes it. Active/status and timestamp refresh. Marks absent IDs inactive only after at least `total - 1` team fetches succeeded. No DELETE. |
+| `refresh_mlb_players_rosters.py` | `mlb.player_ids` | `EXECUTE` on fixed roster upsert/inactive entry points. The functions inspect optional columns internally; the ordinary role needs no direct table DML or SELECT. | Conflict key is `player_id`. Existing identities accept NULL-preserving name/team/team-ID refreshes; a new identity requires a non-empty verified name because production `player_name` is NOT NULL. Production has no `active` or `status` column, so the inactive marker is a guarded no-op there (no timestamp-only update or implied inactive state). The successful-team threshold remains validated. No DELETE. |
 | `insert_mlb_stat_derived.py` | `mlb.player_stats` | Reads the exact `(player_id, game_id)` row; inserts `player_id`, `game_id`, `game_date`, `team`, `opponent`, `is_home`, `position`, `plate_appearances`, `at_bats`, `hits`, `total_bases`, `rbis`, `runs_scored`, `strikeouts_batting`, `walks`, `singles`, `doubles`, `triples`, `home_runs`, `stolen_bases`, `strikeouts_pitching`, `walks_allowed`, `hits_allowed`, `outs_recorded`, `earned_runs`, `is_starter`; conflict updates only when a NULL can be filled and no populated incoming value disagrees. | Same-key replay is idempotent. Populated official observations are preserved; differing populated incoming fields are returned as field-level conflict evidence and the row is quarantined before training-row materialization. Incoming NULL never replaces a populated value. The separate at-bats repair remains limited to batter rows whose current AB is NULL/zero. |
 | `insert_mlb_stat_derived.py` | `mlb.player_derived_stats` | Reads `player_stats`; locks matching exact-game or player/date rows; writes the identity, context, and all 57 rolling columns plus `updated_at`. | Rolling values remain recomputable and idempotent. The writer no longer deletes collisions. A different exact game already occupying the player/date key raises `LegacyDerivedIdentityCollision` before inserts; the existing row remains intact for identity resolution. A same exact game with a corrected date can be recomputed in place. No unrestricted `DELETE` should be granted. |
-| `insert_mlb_stat_derived.py` | `mlb.game_info` | `SELECT` plus `EXECUTE` on the fixed game metadata entry point. Inputs cover game ID/time/date, team IDs/abbreviations, and canonical phase/source fields. | Team/time/source metadata mostly fills NULLs; accepted official `game_date` replaces stale date. Phase-core disagreements are detected by the caller and rejected again by SQL. `schedule_relationships` is JSON-merged. |
+| `insert_mlb_stat_derived.py` | `mlb.game_info` | `SELECT` plus `EXECUTE` on the fixed game metadata entry point. Inputs are the seven deployed schedule columns: game ID/time/date and home/away team IDs/abbreviations. | Team/time metadata fills NULLs; accepted official `game_date` replaces stale date. Canonical phase/source evidence remains in the established phase-authority source/index and is validated by the caller; it is not duplicated into `game_info`. |
 | `insert_mlb_stat_derived.py` | `mlb.player_ids` | `EXECUTE` on the fixed identity insert-if-absent entry point for `player_id`, `player_name`, and optional `team`, `team_id`, `is_placeholder`. | `ON CONFLICT DO NOTHING`; existing identity rows are preserved. |
 | `insert_mlb_stat_derived.py` | `mlb.model_training_props` | Reads exact outcome rows by `(player_id, game_id, prop_type, prop_source)`; inserts materialization columns; updates team/calendar metadata on replay only when the established result tuple matches. Existing rolling-result synchronization still recalculates `rolling_result_avg_7` from source rows. | `prop_value`, `line`, `over_under`, `outcome`, `status`, and `was_correct` are protected as an established result tuple. A mismatch is reported as `HISTORICAL_OUTCOME_CONFLICT` and quarantined; metadata/date corrections and deterministic replay remain allowed when the tuple is identical. SQL repeats the equality guard to close a race after the read. |
 | `refresh_mlb_bvp_pvb.py` | `mlb.prop_features_precomputed` | `EXECUTE` on the fixed BvP/PvB feature entry point. It writes `prop_type`, `player_id`, `game_id`, `feature_set_tag`, `features`, `model_tag`, and `computed_at`. | Derived-feature refresh, not source correction. The entry point merges JSON `features` and refreshes model tag/time; the ordinary role has no direct target-table DML. |
@@ -86,17 +86,30 @@ The roster, game metadata, and BvP/PvB writes use five fixed entry points in
 `EXECUTE` on those functions and `SELECT` on `game_info` for existing schedule
 and phase checks; it receives no direct `INSERT`, `UPDATE`, `DELETE`, or
 `TRUNCATE` on `player_ids`, `game_info`, or `prop_features_precomputed`.
-Roster functions preserve the current NULL handling, refresh roster
-observations/status, preserve `player_id`, and enforce the successful-team
-threshold before inactive marking. The game metadata function preserves
-official-date refresh, NULL fills, JSON relationship merge, and phase-conflict
-denial. BvP/PvB remains recomputable through its JSON merge function, without
-direct target-table DML.
+Roster functions preserve NULL handling and `player_id`. A new identity needs
+a non-empty verified player name because production declares it `NOT NULL`;
+for existing identities, a NULL incoming name/team/team ID preserves the
+stored value. Production `player_ids` has no active/status column, so inactive
+marking is a threshold-checked no-op and does not update timestamps. The game
+metadata entry point accepts only the seven deployed schedule fields,
+preserves official-date refresh and NULL fills, and rejects phase/source
+payload keys; canonical phase validation stays with the caller and its
+established authority. BvP/PvB remains recomputable through its JSON merge
+function, without direct target-table DML.
 
 The GitHub Actions workflow uses the same roster script and separate secret
 name `SUPABASE_DB_URL`; its value was not inspected. The writer code is
 compatible when its PostgreSQL session has assumed `proppadia_mlb_ingest`, but
 the configured secret identity and a bounded hosted run remain unverified.
+
+The separate `backend/mlb/modeling/backfill_predictions.py` writer uses
+`safe_fill_prediction_backfill(uuid,text,numeric,timestamptz)`. It may populate
+only an empty prediction tuple for a resolved `mlb_api` row, accepts an
+identical replay, and rejects a different already-populated prediction with
+`23514`. It never writes `was_correct`: that field remains part of the
+protected realized-result tuple and is not the model-prediction correctness
+measure. Reports can derive prediction correctness from `predicted_outcome`
+and the realized line/result without mutating the result field.
 After preview verification and separate owner authorization, route the
 workflow to an authorized login with the required group membership/session
 role activation, then verify a bounded run before retiring the old secret.
@@ -113,8 +126,9 @@ prove PostgreSQL ACL behavior.
 Before any live routing change, a disposable PostgreSQL run must prove:
 
 1. New roster/stat rows insert; identical replay is idempotent.
-2. Roster nullable fields preserve populated values and inactive marking runs
-   only after the success threshold.
+2. Roster nullable fields preserve populated values; any available inactive
+   marker is gated by the successful-team threshold and is a no-op on the
+   current production schema, which has no active/status field.
 3. Conflicting populated source stats are reported/quarantined without change;
    verified NULL fills and identical replay succeed. The approved zero-to-value
    at-bats repair remains separately bounded. Direct table UPDATE denial and
@@ -169,11 +183,11 @@ The tested forward migration SHA-256 is
 tested rollback SHA-256 is
 `fe8703d2ef7d8acb210a6ff41c1e01c329df08c6cfd9fe72367e9d5d8a1445a0`.
 No production object, grant, credential, workflow, or schedule was changed.
-This fixture validates the reviewed disposable table contract; production
-compatibility remains unverified for current columns, constraints, owners, RLS,
-triggers, hosted workflow behavior, and unlisted direct writers. Production
-cutover is therefore NOT READY pending a bounded production compatibility
-preflight and separate authorization.
+The production-shape correction verification below supersedes the earlier
+column/RLS fixture limitation. Actual production trigger effects, hosted
+workflow execution and login identity, deployed PostgREST dependencies, and
+unlisted direct writers still require read-only preflight and separate
+authorization; production cutover remains NOT READY.
 
 The PA backfill now routes through its own additive fixed function. A populated
 PA disagreement remains a reported conflict; the current contracts do not
@@ -210,3 +224,35 @@ retained SHA-256 and restore limitations are recorded in the deployment
 runbook. This preview pass does not verify production constraints/triggers,
 the deployed GitHub secret identity, a hosted workflow run, API-role consumers,
 or exceptional completeness/preseason maintenance.
+
+## Production-shape correction verification — 2026-10-16
+
+The final rollback-only preview fixture reflects the retained production
+catalog shape for `game_info`, `player_stats`, `player_ids`,
+`player_derived_stats`, and `model_training_props`. `game_info` has the seven
+schedule columns and two starting-pitcher IDs; its eight absent phase/source
+fields remain in the existing canonical phase authority. `is_starter` is
+`smallint`: NULL is unknown, 0 is a verified non-starter, and 1 is a verified
+starter. The safe entry point fills NULL only, preserves populated 0 on a
+conflicting 1, accepts same-value replay, and rejects other non-NULL states.
+
+The production roster schema has `player_name NOT NULL` but no active/status
+column. The roster fixed function preserves NULL incoming fields on an existing
+identity and requires a non-empty verified name for a new identity. Inactive
+marking validates the team-success threshold but is a no-op on this schema and
+does not alter `updated_at`. The prediction backfill writes only the initial
+prediction tuple through `safe_fill_prediction_backfill`; it does not write
+`was_correct`, which remains part of the protected realized outcome tuple.
+
+The 20261021 RLS-policy migration adds no ACL privileges. It permits the
+restricted role's already-granted reads on source/training/derived tables,
+metadata updates on training rows, and derived-table SELECT/INSERT/UPDATE.
+Direct protected writes, DELETE/TRUNCATE, correction-role assumption,
+privilege escalation, and function replacement/drop remain denied. Preview
+tests ran against the allowlisted branch at PostgreSQL 15.19: all 80 assertions
+passed; migrations replayed idempotently; rollback and cleanup completed with
+no fixture schema, role, or objects remaining. Receipt SHA-256 is
+`7bf2bd02579bba5155a7cdf57be4ca30e6fbc625a35dff6a28cd574f811bd7f7`.
+Production remains unchanged, and this does not verify deployed triggers,
+hosted workflow credentials/execution, external API consumers, or exceptional
+maintenance paths.

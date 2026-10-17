@@ -40,8 +40,9 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
         self.assertIn("ordinary role needs no direct table DML or SELECT", self.contract)
         for field in ("player_name", "team", "team_id", "status", "updated_at"):
             self.assertIn(f"`{field}`", self.contract)
-        self.assertIn("Active/status and timestamp refresh", self.contract)
-        self.assertIn("at least `total - 1` team fetches succeeded", self.contract)
+        self.assertIn("Production has no `active` or `status` column", self.contract)
+        self.assertIn("no timestamp-only update", self.contract)
+        self.assertIn("successful-team threshold remains validated", self.contract)
 
     def test_stat_source_upsert_null_fills_and_quarantines_populated_conflicts(self):
         migration = (ROOT / "backend/mlb/sql/migrations/20261017_safe_stat_training_write_entrypoints.sql").read_text()
@@ -100,12 +101,38 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
 
     def test_game_phase_conflicts_and_bvp_upsert_are_recorded(self):
         migration = (ROOT / "backend/mlb/sql/migrations/20261019_mlb_adjacent_writer_entrypoints.sql").read_text()
-        self.assertIn("CANONICAL_GAME_PHASE_CONFLICT", self.stat)
+        self.assertNotIn("source_game_type", migration)
+        self.assertIn("canonical phase/source evidence remains", self.contract.lower())
         self.assertIn("mlb.safe_upsert_game_info(%s::jsonb)", self.stat)
         self.assertIn("mlb.safe_upsert_prop_features_precomputed(%s::jsonb)", self.bvp)
         self.assertIn("ON CONFLICT(prop_type,player_id,game_id,feature_set_tag)", migration)
-        self.assertIn("IS NOT DISTINCT FROM", migration)
+        self.assertIn("game_date=EXCLUDED.game_date", migration)
+        self.assertIn("home_team_id=COALESCE(mlb.game_info.home_team_id,EXCLUDED.home_team_id)", migration)
         self.assertIn("prop_features_precomputed", self.contract)
+
+    def test_prediction_backfill_uses_initial_only_fixed_entrypoint(self):
+        migration = (ROOT / "backend/mlb/sql/migrations/20261020_safe_prediction_backfill_entrypoint.sql").read_text()
+        rollback = (ROOT / "backend/mlb/sql/migrations/20261020_safe_prediction_backfill_entrypoint_rollback.sql").read_text()
+        backfill = (ROOT / "backend/mlb/modeling/backfill_predictions.py").read_text()
+        self.assertIn("mlb.safe_fill_prediction_backfill", migration)
+        self.assertIn("FOR UPDATE", migration)
+        self.assertIn("USING ERRCODE='23514'", migration)
+        self.assertIn("GRANT EXECUTE", migration)
+        self.assertIn("DROP FUNCTION", rollback)
+        self.assertIn("mlb.safe_fill_prediction_backfill", backfill)
+        self.assertNotIn('"was_correct": was_correct', backfill)
+
+    def test_restricted_ingest_rls_policies_preserve_acl_boundary(self):
+        migration = (ROOT / "backend/mlb/sql/migrations/20261021_mlb_restricted_ingest_rls_policies.sql").read_text()
+        rollback = (ROOT / "backend/mlb/sql/migrations/20261021_mlb_restricted_ingest_rls_policies_rollback.sql").read_text()
+        self.assertIn("FOR SELECT TO proppadia_mlb_ingest", migration)
+        self.assertIn("FOR UPDATE TO proppadia_mlb_ingest", migration)
+        self.assertIn("FOR INSERT TO proppadia_mlb_ingest", migration)
+        self.assertIn("expected RLS-enabled, non-FORCE MLB writer relations", migration)
+        self.assertNotIn("GRANT INSERT", migration)
+        self.assertNotIn("GRANT UPDATE", migration)
+        self.assertIn("DROP POLICY IF EXISTS proppadia_mlb_ingest", rollback)
+        self.assertNotIn("ALTER TABLE", rollback)
 
     def test_hosted_workflow_uses_separate_secret_without_secret_inspection(self):
         self.assertIn("secrets.SUPABASE_DB_URL", self.workflow)

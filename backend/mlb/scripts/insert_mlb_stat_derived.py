@@ -28,8 +28,6 @@ from backend.mlb.shared.team_name_map import (
     normalizeTeamAbbreviation,
 )
 from backend.mlb.season_transition.canonical_phase_v1 import (
-    PHASE_CORE_FIELDS,
-    PHASE_STORAGE_COLUMNS,
     canonical_phase_record,
 )
 from backend.mlb.season_transition.contract_v1 import normalize_source_game_type
@@ -995,7 +993,11 @@ def _upsert_game_info_min(
         away_team.get("abbreviation") or getFullTeamAbbreviationFromID(away_team_id)
     )
 
-    phase = canonical_phase_record(game, source_sha256=source_sha256)
+    # Validate the StatsAPI game-type record through the canonical phase
+    # contract, but keep phase authority in its established source index. The
+    # production game_info table is operational schedule metadata and does not
+    # duplicate the phase/source payload.
+    canonical_phase_record(game, source_sha256=source_sha256)
     row = {
         "game_id": game_id,
         "game_time": game_time,
@@ -1004,78 +1006,18 @@ def _upsert_game_info_min(
         "away_team_id": away_team_id,
         "home_team_abbr": home_team_abbr,
         "away_team_abbr": away_team_abbr,
-        **phase,
     }
-
-    phase_columns = set(PHASE_STORAGE_COLUMNS) | {"game_type_source_sha256"}
+    payload = {key: value for key, value in row.items() if key in {
+        "game_id", "game_time", "game_date", "home_team_id", "away_team_id",
+        "home_team_abbr", "away_team_abbr",
+    }}
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT column_name
-            FROM information_schema.columns
-            WHERE table_schema = 'mlb' AND table_name = 'game_info'
-              AND column_name = ANY(%s)
-            """,
-            (sorted(phase_columns),),
+            "SELECT mlb.safe_upsert_game_info(%s::jsonb)",
+            (json.dumps(payload, separators=(",", ":"), default=str),),
         )
-        available = {
-            str(_row_mapping(cur, item).get("column_name"))
-            for item in cur.fetchall()
-            if _row_mapping(cur, item).get("column_name")
-        }
-    if available != phase_columns:
-        missing = sorted(phase_columns - available)
-        if available:
-            raise RuntimeError(f"CANONICAL_PHASE_SCHEMA_PARTIAL:{','.join(missing)}")
-        raise RuntimeError("CANONICAL_PHASE_SCHEMA_REQUIRED_FOR_RESTRICTED_WRITER")
-
-    if available:
-        if not re.fullmatch(r"[0-9a-f]{64}", source_sha256):
-            raise RuntimeError("GAME_TYPE_SOURCE_SHA256_REQUIRED")
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT source_season, source_game_type, season_phase,
-                       postseason_round, season_name
-                FROM mlb.game_info
-                WHERE game_id = %s
-                """,
-                (game_id,),
-            )
-            existing = cur.fetchone()
-        if existing:
-            existing_row = _row_mapping(cur, existing)
-            conflicts = [
-                field
-                for field in PHASE_CORE_FIELDS
-                if existing_row.get(field) is not None and existing_row.get(field) != row.get(field)
-            ]
-            if conflicts:
-                raise RuntimeError(
-                    f"CANONICAL_GAME_PHASE_CONFLICT:{game_id}:{','.join(conflicts)}"
-                )
-        row["schedule_relationships"] = json.dumps(
-            row["schedule_relationships"], sort_keys=True, separators=(",", ":")
-        )
-        payload = {
-            key: value for key, value in row.items()
-            if key in {
-                "game_id", "game_time", "game_date", "home_team_id", "away_team_id",
-                "home_team_abbr", "away_team_abbr", "source_season", "source_game_type",
-                "season_phase", "postseason_round", "season_name", "source_round",
-                "schedule_relationships", "game_type_source_sha256",
-            }
-        }
-        payload["schedule_relationships"] = json.loads(payload["schedule_relationships"])
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT mlb.safe_upsert_game_info(%s::jsonb)",
-                (json.dumps(payload, separators=(",", ":"), default=str),),
-            )
-            result = cur.fetchone()
-            return int((result or (0,))[0] or 0)
-
-    raise RuntimeError("CANONICAL_PHASE_SCHEMA_REQUIRED_FOR_RESTRICTED_WRITER")
+        result = cur.fetchone()
+        return int((result or (0,))[0] or 0)
 
 
 def _table_has_column(conn, table_name: str, column_name: str) -> bool:

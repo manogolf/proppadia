@@ -5,7 +5,7 @@ Backfills model predictions into the `model_training_props` table.
 - Loads RF + LR models from persistent disk (MODEL_DIR)
 - Builds feature vectors with build_feature_vector(...)
 - Blends probabilities (RF+LR) to set predicted_outcome + confidence_score
-- Updates only predicted_outcome, confidence_score, was_correct, prediction_timestamp
+- Populates only predicted_outcome, confidence_score, and prediction_timestamp
 - Touches only mlb_api, resolved rows where predicted_outcome IS NULL
 
 NOTE: No Supabase Storage calls. Disk-only models.
@@ -29,6 +29,7 @@ import numpy as np
 import joblib
 from dotenv import load_dotenv
 from supabase import create_client
+from backend.shared.db.pg import pg_connect
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Env & clients
@@ -261,6 +262,18 @@ def _actual_label_from_row(row: dict):
     if r < l:  return "under"
     return "push"
 
+
+def _persist_prediction_backfill(row_id, prediction: str, confidence: float, timestamp: str) -> int:
+    """Use the fixed initial-only database entry point; never writes was_correct."""
+    with pg_connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT mlb.safe_fill_prediction_backfill(%s::uuid,%s,%s,%s::timestamptz)",
+                (str(row_id), prediction, float(confidence), timestamp),
+            )
+            result = cur.fetchone()
+            return int((result or (0,))[0] or 0)
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Robust, lazy import of build_feature_vector
 # ──────────────────────────────────────────────────────────────────────────────
@@ -442,18 +455,13 @@ def process_batch(db_prop_type: str, model_prop_type: str, batch_size: int = BAT
                 SUMMARY[db_prop_type]["skipped"] += 1
                 continue
 
-            actual = _actual_label_from_row(row_dict)
-            was_correct = (prediction == actual) if actual in ("over", "under") else None
             timestamp = datetime.now(timezone.utc).isoformat()
 
-            supabase.schema("mlb").table("model_training_props").update({
-                "predicted_outcome": prediction,
-                "confidence_score": float(prob),
-                "was_correct": was_correct,
-                "prediction_timestamp": timestamp,
-            }).eq("id", row_dict["id"]).execute()
+            _persist_prediction_backfill(
+                row_dict["id"], prediction, float(prob), timestamp
+            )
 
-            print(f"✅ {row_dict.get('player_name')} → {prediction} ({prob:.3f}) | Correct? {was_correct}")
+            print(f"✅ {row_dict.get('player_name')} → {prediction} ({prob:.3f})")
             updates += 1
             SUMMARY[db_prop_type]["updated"] += 1
 

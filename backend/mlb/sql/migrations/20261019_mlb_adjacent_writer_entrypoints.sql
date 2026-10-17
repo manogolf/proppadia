@@ -15,12 +15,6 @@ BEGIN
        OR NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute WHERE attrelid='mlb.prop_features_precomputed'::regclass AND attname='feature_set_tag' AND attnum>0 AND NOT attisdropped) THEN
         RAISE EXCEPTION 'required adjacent MLB writer identity column is missing';
     END IF;
-    IF EXISTS (
-        SELECT 1 FROM unnest(ARRAY['source_season','source_game_type','season_phase','postseason_round','season_name','source_round','schedule_relationships','game_type_source_sha256']) AS required(name)
-        WHERE NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid='mlb.game_info'::regclass AND a.attname=required.name AND a.attnum>0 AND NOT a.attisdropped)
-    ) THEN
-        RAISE EXCEPTION 'canonical game_info phase schema is incomplete';
-    END IF;
 END
 $preflight$;
 
@@ -30,6 +24,7 @@ SET search_path=pg_catalog,mlb
 AS $function$
 DECLARE
     c record;
+    v_exists boolean;
     v_cols text := '';
     v_values text := '';
     v_updates text := '';
@@ -40,6 +35,36 @@ BEGIN
        OR p_row - ARRAY['player_id','player_name','team','team_id'] <> '{}'::jsonb
        OR COALESCE(p_row->>'player_id','') !~ '^[1-9][0-9]*$' THEN
         RAISE EXCEPTION 'invalid roster player payload' USING ERRCODE='22023';
+    END IF;
+    PERFORM 1 FROM mlb.player_ids WHERE player_id=(p_row->>'player_id')::bigint FOR UPDATE;
+    v_exists := FOUND;
+    IF v_exists THEN
+        FOR c IN
+            SELECT a.attname FROM pg_catalog.pg_attribute a
+             WHERE a.attrelid='mlb.player_ids'::regclass AND a.attnum>0 AND NOT a.attisdropped
+               AND a.attname=ANY(ARRAY['player_name','team','team_id']) AND p_row ? a.attname
+             ORDER BY array_position(ARRAY['player_name','team','team_id'],a.attname)
+        LOOP
+            v_updates := concat_ws(', ',NULLIF(v_updates,''),
+                format('%1$I=COALESCE((jsonb_populate_record(NULL::mlb.player_ids,$1)).%1$I,mlb.player_ids.%1$I)',c.attname));
+        END LOOP;
+        IF EXISTS (SELECT 1 FROM pg_catalog.pg_attribute WHERE attrelid='mlb.player_ids'::regclass AND attname='active' AND attnum>0 AND NOT attisdropped) THEN
+            v_updates := concat_ws(', ',NULLIF(v_updates,''),'active=TRUE');
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_catalog.pg_attribute WHERE attrelid='mlb.player_ids'::regclass AND attname='status' AND attnum>0 AND NOT attisdropped) THEN
+            v_updates := concat_ws(', ',NULLIF(v_updates,''),'status=''active''');
+        END IF;
+        IF EXISTS (SELECT 1 FROM pg_catalog.pg_attribute WHERE attrelid='mlb.player_ids'::regclass AND attname='updated_at' AND attnum>0 AND NOT attisdropped) THEN
+            v_updates := concat_ws(', ',NULLIF(v_updates,''),'updated_at=clock_timestamp()');
+        END IF;
+        IF v_updates='' THEN RETURN 0; END IF;
+        EXECUTE format('UPDATE mlb.player_ids SET %s WHERE player_id=$2',v_updates)
+          USING p_row,(p_row->>'player_id')::bigint;
+        GET DIAGNOSTICS v_count=ROW_COUNT;
+        RETURN v_count;
+    END IF;
+    IF NULLIF(btrim(p_row->>'player_name'),'') IS NULL THEN
+        RAISE EXCEPTION 'new roster identity requires a verified non-empty player_name' USING ERRCODE='22023';
     END IF;
     FOR c IN
         SELECT a.attname FROM pg_catalog.pg_attribute a
@@ -116,10 +141,13 @@ BEGIN
     IF EXISTS (SELECT 1 FROM pg_catalog.pg_attribute WHERE attrelid='mlb.player_ids'::regclass AND attname='status' AND attnum>0 AND NOT attisdropped) THEN
         v_updates := concat_ws(', ',NULLIF(v_updates,''),'status=''inactive''');
     END IF;
+    -- The retained production player_ids shape has neither active nor status.
+    -- Do not touch updated_at or report affected rows when there is no status
+    -- field to mark; callers must not infer inactive state from a timestamp.
+    IF v_updates='' THEN RETURN 0; END IF;
     IF EXISTS (SELECT 1 FROM pg_catalog.pg_attribute WHERE attrelid='mlb.player_ids'::regclass AND attname='updated_at' AND attnum>0 AND NOT attisdropped) THEN
         v_updates := concat_ws(', ',NULLIF(v_updates,''),'updated_at=clock_timestamp()');
     END IF;
-    IF v_updates='' THEN RETURN 0; END IF;
     EXECUTE format('UPDATE mlb.player_ids SET %s WHERE NOT (player_id=ANY($1))',v_updates) USING p_active_ids;
     GET DIAGNOSTICS v_count=ROW_COUNT;
     RETURN v_count;
@@ -133,44 +161,25 @@ AS $function$
 DECLARE v_count integer;
 BEGIN
     IF jsonb_typeof(p_row) IS DISTINCT FROM 'object'
-       OR p_row - ARRAY['game_id','game_time','game_date','home_team_id','away_team_id','home_team_abbr','away_team_abbr','source_season','source_game_type','season_phase','postseason_round','season_name','source_round','schedule_relationships','game_type_source_sha256'] <> '{}'::jsonb
+       OR p_row - ARRAY['game_id','game_time','game_date','home_team_id','away_team_id','home_team_abbr','away_team_abbr'] <> '{}'::jsonb
        OR COALESCE(p_row->>'game_id','') !~ '^[1-9][0-9]*$'
        OR NULLIF(p_row->>'game_date','') IS NULL THEN
         RAISE EXCEPTION 'invalid game metadata payload' USING ERRCODE='22023';
     END IF;
     INSERT INTO mlb.game_info (
-        game_id,game_time,game_date,home_team_id,away_team_id,home_team_abbr,away_team_abbr,
-        source_season,source_game_type,season_phase,postseason_round,season_name,source_round,
-        schedule_relationships,game_type_source_sha256
-    ) SELECT v.game_id,v.game_time,v.game_date,v.home_team_id,v.away_team_id,v.home_team_abbr,v.away_team_abbr,
-             v.source_season,v.source_game_type,v.season_phase,v.postseason_round,v.season_name,v.source_round,
-             COALESCE(v.schedule_relationships,'{}'::jsonb),v.game_type_source_sha256
+        game_id,game_time,game_date,home_team_id,away_team_id,home_team_abbr,away_team_abbr
+    ) SELECT v.game_id,v.game_time,v.game_date,v.home_team_id,v.away_team_id,v.home_team_abbr,v.away_team_abbr
       FROM jsonb_to_record(p_row) AS v(
         game_id bigint,game_time timestamp without time zone,game_date date,home_team_id bigint,away_team_id bigint,
-        home_team_abbr text,away_team_abbr text,source_season integer,source_game_type text,season_phase text,
-        postseason_round text,season_name text,source_round text,schedule_relationships jsonb,game_type_source_sha256 text
+        home_team_abbr text,away_team_abbr text
       )
     ON CONFLICT (game_id) DO UPDATE SET
         game_time=COALESCE(mlb.game_info.game_time,EXCLUDED.game_time),game_date=EXCLUDED.game_date,
         home_team_id=COALESCE(mlb.game_info.home_team_id,EXCLUDED.home_team_id),
         away_team_id=COALESCE(mlb.game_info.away_team_id,EXCLUDED.away_team_id),
         home_team_abbr=COALESCE(mlb.game_info.home_team_abbr,EXCLUDED.home_team_abbr),
-        away_team_abbr=COALESCE(mlb.game_info.away_team_abbr,EXCLUDED.away_team_abbr),
-        source_season=COALESCE(mlb.game_info.source_season,EXCLUDED.source_season),
-        source_game_type=COALESCE(mlb.game_info.source_game_type,EXCLUDED.source_game_type),
-        season_phase=COALESCE(mlb.game_info.season_phase,EXCLUDED.season_phase),
-        postseason_round=COALESCE(mlb.game_info.postseason_round,EXCLUDED.postseason_round),
-        season_name=COALESCE(mlb.game_info.season_name,EXCLUDED.season_name),
-        source_round=COALESCE(mlb.game_info.source_round,EXCLUDED.source_round),
-        schedule_relationships=mlb.game_info.schedule_relationships || EXCLUDED.schedule_relationships,
-        game_type_source_sha256=COALESCE(mlb.game_info.game_type_source_sha256,EXCLUDED.game_type_source_sha256)
-    WHERE (mlb.game_info.source_season,mlb.game_info.source_game_type,mlb.game_info.season_phase,
-           mlb.game_info.postseason_round,mlb.game_info.season_name)
-      IS NOT DISTINCT FROM
-          (EXCLUDED.source_season,EXCLUDED.source_game_type,EXCLUDED.season_phase,
-           EXCLUDED.postseason_round,EXCLUDED.season_name);
+        away_team_abbr=COALESCE(mlb.game_info.away_team_abbr,EXCLUDED.away_team_abbr);
     GET DIAGNOSTICS v_count=ROW_COUNT;
-    IF v_count=0 THEN RAISE EXCEPTION 'canonical game phase conflict' USING ERRCODE='23514'; END IF;
     RETURN v_count;
 END
 $function$;

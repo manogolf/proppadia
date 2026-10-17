@@ -146,8 +146,7 @@ class _GameInfoConnection:
 
 
 def test_game_info_uses_official_date_and_replaces_stale_conflict_date():
-    phase_columns = set(active.PHASE_STORAGE_COLUMNS) | {"game_type_source_sha256"}
-    conn = _GameInfoConnection(phase_columns)
+    conn = _GameInfoConnection(set())
     game = _game(824785, "2026-09-23", "Final", "F", "F")
     # The UTC timestamp falls on the prior date, as with the postponed/makeup
     # boundary; accepted operational day must come from officialDate.
@@ -159,15 +158,21 @@ def test_game_info_uses_official_date_and_replaces_stale_conflict_date():
     insert_sql = conn.cursor_value.calls[-1]
     row = json.loads(conn.cursor_value.params[-1][0])
     assert row["game_date"] == "2026-09-23"
+    assert set(row) == {
+        "game_id", "game_time", "game_date", "home_team_id", "away_team_id",
+        "home_team_abbr", "away_team_abbr",
+    }
     assert "safe_upsert_game_info" in insert_sql
 
 
-def test_game_info_fails_closed_without_canonical_phase_schema():
+def test_game_info_uses_existing_schema_without_duplicate_phase_columns():
     conn = _GameInfoConnection(set())
     game = _game(824785, "2026-09-23", "Final", "F", "F")
-    with pytest.raises(RuntimeError, match="CANONICAL_PHASE_SCHEMA_REQUIRED_FOR_RESTRICTED_WRITER"):
-        active._upsert_game_info_min(conn, game, source_sha256="a" * 64)
-    assert len(conn.cursor_value.calls) == 1
+    assert active._upsert_game_info_min(conn, game, source_sha256="a" * 64) == 1
+    import json
+    payload = json.loads(conn.cursor_value.params[-1][0])
+    assert "source_game_type" not in payload
+    assert "season_phase" not in payload
 
 
 def test_game_info_fails_closed_without_accepted_official_date():

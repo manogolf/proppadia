@@ -153,14 +153,16 @@ def _mark_inactive(
     *,
     successful_teams: int,
     total_teams: int,
-) -> None:
+) -> int:
     ids = sorted({int(x) for x in active_ids})
     if not ids:
-        return
+        return 0
     cur.execute(
         "SELECT mlb.safe_mark_player_roster_inactive(%s::bigint[],%s,%s)",
         (ids, successful_teams, total_teams),
     )
+    result = cur.fetchone()
+    return int((result or (0,))[0] or 0)
 
 
 def main() -> int:
@@ -225,14 +227,11 @@ def main() -> int:
 
                 min_success = max(total - 1, 1)
                 if ok >= min_success and active_ids:
-                    print(
-                        f"[inactive-mark] applying inactive status for players absent from {len(active_ids)} active ids ...",
-                        flush=True,
-                    )
-                    _mark_inactive(
+                    changed = _mark_inactive(
                         cur, cols, active_ids,
                         successful_teams=ok, total_teams=total,
                     )
+                    print(f"[inactive-mark] marker rows changed={changed}", flush=True)
                     print("[inactive-mark] done", flush=True)
                 else:
                     print(

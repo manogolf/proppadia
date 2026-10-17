@@ -37,6 +37,9 @@ BEGIN
     IF v.player_id IS NULL OR v.game_id IS NULL THEN
         RAISE EXCEPTION 'player_stats identity is required' USING ERRCODE = '22023';
     END IF;
+    IF v.is_starter IS NOT NULL AND v.is_starter NOT IN (0, 1) THEN
+        RAISE EXCEPTION 'is_starter must be NULL, 0, or 1' USING ERRCODE = '22023';
+    END IF;
 
     INSERT INTO mlb.player_stats (
         player_id, game_id, game_date, team, opponent, is_home, position,
