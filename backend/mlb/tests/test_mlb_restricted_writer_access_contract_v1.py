@@ -81,6 +81,21 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
         self.assertIn("No unrestricted `DELETE` should be granted", self.contract)
         self.assertIn("established result tuple", self.contract_one_line)
 
+    def test_restricted_role_provisioning_and_derived_acl_are_narrow(self):
+        role_migration = (ROOT / "backend/mlb/sql/migrations/20261016_mlb_restricted_ingest_role.sql").read_text()
+        role_rollback = (ROOT / "backend/mlb/sql/migrations/20261016_mlb_restricted_ingest_role_rollback.sql").read_text()
+        derived_migration = (ROOT / "backend/mlb/sql/migrations/20261018_mlb_derived_stats_writer_grants.sql").read_text()
+        derived_rollback = (ROOT / "backend/mlb/sql/migrations/20261018_mlb_derived_stats_writer_grants_rollback.sql").read_text()
+        self.assertIn("CREATE ROLE proppadia_mlb_ingest NOLOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS", role_migration)
+        self.assertIn("refusing to drop a role not created by the paired migration", role_rollback)
+        self.assertIn("GRANT INSERT (", derived_migration)
+        self.assertIn("GRANT UPDATE (", derived_migration)
+        self.assertIn("d7_plate_appearances", derived_migration)
+        self.assertIn("REVOKE INSERT, UPDATE, DELETE, TRUNCATE", derived_migration)
+        self.assertIn("REVOKE INSERT, UPDATE, DELETE, TRUNCATE", derived_rollback)
+        self.assertNotIn("GRANT DELETE", derived_migration)
+        self.assertNotIn("GRANT TRUNCATE", derived_migration)
+
     def test_game_phase_conflicts_and_bvp_upsert_are_recorded(self):
         self.assertIn("CANONICAL_GAME_PHASE_CONFLICT", self.stat)
         self.assertIn("INSERT INTO mlb.game_info", self.stat)

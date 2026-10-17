@@ -113,7 +113,6 @@ def _training_row(game_id: int, *, outcome: str = "win", game_date: str = "2026-
 
 
 def _create_fixture(conn: psycopg.Connection) -> None:
-    conn.execute(f"CREATE ROLE {WRITER_ROLE} NOLOGIN NOINHERIT NOCREATEROLE NOCREATEDB")
     conn.execute(f"CREATE ROLE {CORRECTION_ROLE} NOLOGIN NOINHERIT NOCREATEROLE NOCREATEDB")
     conn.execute(f"GRANT {WRITER_ROLE} TO postgres")
     conn.execute("CREATE SCHEMA mlb")
@@ -137,11 +136,14 @@ def _create_fixture(conn: psycopg.Connection) -> None:
         f"{prefix}_{metric} numeric" for prefix in ("d7", "d15", "d30")
         for metric in writer.ROLLING_METRICS
     )
+    pa_aggregate_columns = ", ".join(
+        f"{prefix}_plate_appearances numeric" for prefix in ("d7", "d15", "d30")
+    )
     conn.execute(
         f"""CREATE TABLE mlb.player_derived_stats (
             player_id bigint NOT NULL, game_id bigint NOT NULL, game_date date NOT NULL,
             team text, is_home boolean, {metric_columns}, updated_at timestamptz,
-            PRIMARY KEY(player_id, game_id), UNIQUE(player_id, game_date)
+            {pa_aggregate_columns}, PRIMARY KEY(player_id, game_id), UNIQUE(player_id, game_date)
         )"""
     )
     conn.execute(
@@ -160,17 +162,6 @@ def _create_fixture(conn: psycopg.Connection) -> None:
         """
     )
     conn.execute(f"GRANT USAGE ON SCHEMA mlb TO {WRITER_ROLE}")
-    conn.execute(
-        f"GRANT SELECT ON mlb.player_stats, mlb.player_derived_stats, mlb.model_training_props TO {WRITER_ROLE}"
-    )
-    conn.execute(f"GRANT INSERT ON mlb.player_derived_stats TO {WRITER_ROLE}")
-    # Permit derived feature recomputation, while keeping source observations
-    # and established training outcomes outside the ordinary UPDATE grant.
-    derived_updates = ["game_id", "game_date", "team", "is_home", "updated_at"]
-    derived_updates.extend(f"{prefix}_{metric}" for prefix in ("d7", "d15", "d30") for metric in writer.ROLLING_METRICS)
-    conn.execute(
-        f"GRANT UPDATE ({', '.join(derived_updates)}) ON mlb.player_derived_stats TO {WRITER_ROLE}"
-    )
 
 
 def _run_role_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> None:
@@ -200,6 +191,8 @@ def _run_role_tests(conn: psycopg.Connection, results: list[dict[str, Any]]) -> 
     _expect_denied(conn, "training_outcome_update_denied", "UPDATE mlb.model_training_props SET outcome = 'loss' WHERE player_id = 453286", results)
     _expect_denied(conn, "delete_denied", "DELETE FROM mlb.player_stats WHERE player_id = 101", results)
     _expect_denied(conn, "truncate_denied", "TRUNCATE mlb.player_stats", results)
+    _expect_denied(conn, "derived_delete_denied", "DELETE FROM mlb.player_derived_stats WHERE player_id=1", results)
+    _expect_denied(conn, "derived_truncate_denied", "TRUNCATE mlb.player_derived_stats", results)
     _expect_denied(conn, "correction_role_switch_denied", f"SET ROLE {CORRECTION_ROLE}", results)
     _expect_denied(conn, "role_grant_escalation_denied", f"GRANT {CORRECTION_ROLE} TO {WRITER_ROLE}", results)
     _expect_denied(conn, "function_replace_denied", "CREATE OR REPLACE FUNCTION mlb.safe_upsert_player_stats(jsonb) RETURNS integer LANGUAGE sql AS 'SELECT 0'", results)
@@ -379,6 +372,17 @@ def run() -> dict[str, Any]:
 
         report["initial_state"] = "clean_preview; no mlb/nhl schemas or fixture roles"
         report["phase"] = "fixture_setup"
+        role_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261016_mlb_restricted_ingest_role.sql"
+        role_migration_sql = role_migration_path.read_text()
+        report["role_migration_sha256"] = __import__("hashlib").sha256(role_migration_sql.encode()).hexdigest()
+        conn.execute(role_migration_sql, prepare=False)
+        conn.execute(role_migration_sql, prepare=False)
+        role_flags = conn.execute(
+            "SELECT rolcanlogin, rolinherit, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls FROM pg_roles WHERE rolname=%s",
+            (WRITER_ROLE,),
+        ).fetchone()
+        expected_role_flags = (False, False, False, False, False, False, False)
+        _record(report["results"], "restricted_role_provisioning_idempotent", "PASS" if role_flags == expected_role_flags else "FAIL", flags=list(role_flags), expected=list(expected_role_flags))
         _create_fixture(conn)
         conn.execute("INSERT INTO mlb.player_stats (player_id, game_id, game_date, team, opponent, is_home, position, at_bats, hits, total_bases, singles, is_starter) VALUES (101,900101,'2026-09-23','NYY','BOS',true,'LF',3,2,2,2,false)")
         migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_safe_stat_training_write_entrypoints.sql"
@@ -391,6 +395,11 @@ def run() -> dict[str, Any]:
         report["pa_backfill_migration_sha256"] = __import__("hashlib").sha256(pa_migration_sql.encode()).hexdigest()
         conn.execute(pa_migration_sql, prepare=False)
         conn.execute(pa_migration_sql, prepare=False)
+        derived_migration_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261018_mlb_derived_stats_writer_grants.sql"
+        derived_migration_sql = derived_migration_path.read_text()
+        report["derived_writer_migration_sha256"] = __import__("hashlib").sha256(derived_migration_sql.encode()).hexdigest()
+        conn.execute(derived_migration_sql, prepare=False)
+        conn.execute(derived_migration_sql, prepare=False)
         _record(report["results"], "migration_idempotent_replay", "PASS")
         report["fixture_object_owners"] = {
             "player_stats": conn.execute("SELECT r.rolname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='mlb' AND c.relname='player_stats'").fetchone()[0],
@@ -412,6 +421,18 @@ def run() -> dict[str, Any]:
         ).fetchone()
         expected_grants = (False, False, False, False, False, True, True, True, True, True)
         _record(report["results"], "entrypoint_grant_shape", "PASS" if grants == expected_grants else "FAIL", observed=list(grants), expected=list(expected_grants))
+        derived_acl = conn.execute(
+            """SELECT has_table_privilege(%s,'mlb.player_derived_stats','SELECT'),
+                      has_table_privilege(%s,'mlb.player_derived_stats','INSERT'),
+                      has_any_column_privilege(%s,'mlb.player_derived_stats','INSERT'),
+                      has_table_privilege(%s,'mlb.player_derived_stats','UPDATE'),
+                      has_any_column_privilege(%s,'mlb.player_derived_stats','UPDATE'),
+                      has_table_privilege(%s,'mlb.player_derived_stats','DELETE'),
+                      has_table_privilege(%s,'mlb.player_derived_stats','TRUNCATE')""",
+            (WRITER_ROLE,) * 7,
+        ).fetchone()
+        expected_derived_acl = (True, False, True, False, True, False, False)
+        _record(report["results"], "derived_writer_exact_acl", "PASS" if derived_acl == expected_derived_acl else "FAIL", observed=list(derived_acl), expected=list(expected_derived_acl))
         report["phase"] = "restricted_role_behavior"
         _run_role_tests(conn, report["results"])
 
@@ -425,6 +446,15 @@ def run() -> dict[str, Any]:
             "SELECT count(*) FROM pg_catalog.pg_proc p JOIN pg_catalog.pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='mlb' AND p.proname='safe_fill_player_stats_pa'"
         ).fetchone()[0]
         _record(report["results"], "pa_backfill_rollback_removes_only_entrypoint", "PASS" if pa_functions_remaining == 0 else "FAIL", functions_remaining=pa_functions_remaining)
+        derived_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261018_mlb_derived_stats_writer_grants_rollback.sql"
+        derived_rollback_sql = derived_rollback_path.read_text()
+        report["derived_writer_rollback_sha256"] = __import__("hashlib").sha256(derived_rollback_sql.encode()).hexdigest()
+        conn.execute(derived_rollback_sql, prepare=False)
+        derived_dml_remains = conn.execute(
+            "SELECT has_any_column_privilege(%s,'mlb.player_derived_stats','INSERT') OR has_any_column_privilege(%s,'mlb.player_derived_stats','UPDATE') OR has_table_privilege(%s,'mlb.player_derived_stats','DELETE') OR has_table_privilege(%s,'mlb.player_derived_stats','TRUNCATE')",
+            (WRITER_ROLE,) * 4,
+        ).fetchone()[0]
+        _record(report["results"], "derived_writer_rollback_removes_grants", "PASS" if not derived_dml_remains else "FAIL", grants_remain=bool(derived_dml_remains))
         rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261017_safe_stat_training_write_entrypoints_rollback.sql"
         rollback_sql = rollback_path.read_text()
         report["rollback_sha256"] = __import__("hashlib").sha256(rollback_sql.encode()).hexdigest()
@@ -437,6 +467,14 @@ def run() -> dict[str, Any]:
             (WRITER_ROLE,) * 3,
         ).fetchone()[0]
         _record(report["results"], "fail_closed_migration_rollback", "PASS" if functions_remaining == 0 and not direct_dml else "FAIL", functions_remaining=functions_remaining, direct_dml_restored=bool(direct_dml))
+
+        conn.execute(f"REVOKE {WRITER_ROLE} FROM postgres")
+        role_rollback_path = Path(__file__).resolve().parents[1] / "sql/migrations/20261016_mlb_restricted_ingest_role_rollback.sql"
+        role_rollback_sql = role_rollback_path.read_text()
+        report["role_rollback_sha256"] = __import__("hashlib").sha256(role_rollback_sql.encode()).hexdigest()
+        conn.execute(role_rollback_sql, prepare=False)
+        role_remaining = conn.execute("SELECT count(*) FROM pg_roles WHERE rolname=%s", (WRITER_ROLE,)).fetchone()[0]
+        _record(report["results"], "role_rollback_removes_only_fixture_group", "PASS" if role_remaining == 0 else "FAIL", roles_remaining=role_remaining)
 
         report["fixture"] = "FAIL" if any(item["status"] in {"FAIL", "BLOCKED"} for item in report["results"]) else "PASS"
         report["status"] = "BLOCKED" if report["fixture"] == "FAIL" else "PASS"
