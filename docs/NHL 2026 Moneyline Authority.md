@@ -34,3 +34,13 @@ budget from 6 to 7 markets per region: 21 credits per paid event across the
 current three regions, with a 336-credit ceiling at the 16-game request cap.
 There is still one odds acquisition in the daily path; the Moneyline capture
 reuses that immutable observation.
+
+## Target-specific chronology
+
+Moneyline eligibility is evaluated for each target game. A target is retained
+only when its prediction capture timestamp is strictly before its scheduled
+start. Each historical final may contribute to a target only when both its
+scheduled start and its qualified official-score observation timestamp are
+strictly before that target's start. A final observed after an earlier puck
+drop can therefore support a later target, while the earlier target is
+excluded. The capture status records IDs excluded because they had started.

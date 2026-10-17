@@ -224,6 +224,9 @@ def _team_history(history: pd.DataFrame, team_id: int, target: pd.Series) -> pd.
         & history.game_status.astype(str).str.upper().isin(["FINAL", "OFF", "COMPLETED"])
         & history.scheduled_start_time_utc.lt(target.scheduled_start_time_utc)
     ]
+    if "score_observed_at_utc" in subset:
+        observed = pd.to_datetime(subset.score_observed_at_utc, utc=True, errors="coerce")
+        subset = subset[observed.lt(target.scheduled_start_time_utc)]
     home = subset[subset.home_team_id.eq(team_id)].copy().assign(
         gf=lambda x: x.final_home_goals, ga=lambda x: x.final_away_goals,
         sf=lambda x: x.final_home_shots, sa=lambda x: x.final_away_shots,
@@ -348,6 +351,21 @@ def build_v2_predictions(schedule: pd.DataFrame, history: pd.DataFrame, predicti
             "regular_season_evaluation_eligible": bool(prestart and regular_season_evaluation_eligible(target.game_type_code)),
         })
     return pd.DataFrame(rows), pd.DataFrame(timing)
+
+
+def eligible_targets_at_capture(
+    schedule: pd.DataFrame, capture_timestamp_utc: str,
+) -> tuple[pd.DataFrame, list[int]]:
+    """Keep only targets whose puck drop is strictly after prediction capture."""
+    if schedule.empty:
+        return schedule.copy(), []
+    starts = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True, errors="coerce")
+    if starts.isna().any():
+        raise ValueError("CROSS_MARKET_SCORE_OR_TARGET_TIMING_MISSING")
+    capture_time = parse_utc(capture_timestamp_utc)
+    eligible = starts.gt(capture_time)
+    excluded = sorted(schedule.loc[~eligible, "game_id"].astype(int).tolist())
+    return schedule.loc[eligible].copy().reset_index(drop=True), excluded
 
 
 def build_puck_line_predictions(moneyline_predictions: pd.DataFrame) -> pd.DataFrame:
@@ -894,6 +912,11 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         or not (PRESEASON_START <= slate_date < REGULAR_SEASON_START)
     ):
         raise RuntimeError("PRESEASON_CANARY_SCOPE_VIOLATION")
+    schedule, started_excluded_game_ids = eligible_targets_at_capture(
+        schedule, run_timestamp_utc,
+    )
+    if schedule.empty:
+        raise ValueError("CROSS_MARKET_NO_PREGAME_TARGETS_AT_CAPTURE")
     predictions, timing = build_v2_predictions(schedule, history, run_timestamp_utc)
     puck_predictions = build_puck_line_predictions(predictions)
     puck_v2_predictions = pd.DataFrame()
@@ -1127,6 +1150,7 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
             "parent_daily_odds_observation_manifest_sha256"),
         "run_timestamp_utc": parse_utc(run_timestamp_utc).isoformat(), "substantive_state_sha256": substantive_hash,
         "scheduled_games": len(schedule), "v2_predictions_created": len(predictions),
+        "started_excluded_game_ids": started_excluded_game_ids,
         "puck_line_v1_predictions_created": len(puck_predictions),
         "puck_line_v2_shot_prior_predictions_created": len(puck_v2_predictions),
         "puck_line_v2_shot_prior_feature_policy": POLICY_VERSION if len(puck_v2_predictions) else None,

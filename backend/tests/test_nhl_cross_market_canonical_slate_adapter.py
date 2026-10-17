@@ -12,6 +12,8 @@ from backend.nhl.cross_market_shadow.canonical_slate_adapter import (
     SCHEDULE_COLUMNS,
     adapt_canonical_slate,
 )
+from backend.nhl.cross_market_shadow import core as cross_market_core
+from backend.nhl.cross_market_shadow.shot_prior import build_shot_prior_challenger
 from backend.nhl.daily_capture import CanonicalGame
 from backend.nhl.cross_market_shadow.official_outcomes import load_official_outcomes
 from backend.nhl.official_request_journal import (
@@ -173,6 +175,66 @@ class CrossMarketScoreSourceContractTest(unittest.TestCase):
         duplicate = pd.concat([self.history, self.history], ignore_index=True)
         with self.assertRaisesRegex(ValueError, "CROSS_MARKET_DUPLICATE_FINAL_SCORE_IDENTITY"):
             capture.validate_history_score_source(duplicate, self.schedule)
+
+    def test_observation_after_opener_remains_valid_for_later_target_only(self):
+        self.history["scheduled_start_time_utc"] = "2026-10-16T23:00:00Z"
+        self.history["score_observed_at_utc"] = "2026-10-17T18:34:27.525203Z"
+        schedule = pd.DataFrame({
+            "scheduled_start_time_utc": [
+                "2026-10-17T17:00:00Z", "2026-10-17T19:30:00Z",
+            ],
+        })
+        capture.validate_history_score_source(self.history, schedule)
+        history = self.history.assign(
+            game_type_code=2, final_home_shots=20, final_away_shots=25,
+        )
+        history["scheduled_start_time_utc"] = pd.to_datetime(
+            history.scheduled_start_time_utc, utc=True,
+        )
+        history["score_observed_at_utc"] = pd.to_datetime(
+            history.score_observed_at_utc, utc=True,
+        )
+        early_target = pd.Series({
+            "canonical_season": 2026, "game_type_code": 2,
+            "scheduled_start_time_utc": pd.Timestamp("2026-10-17T17:00:00Z"),
+        })
+        later_target = early_target.copy()
+        later_target["scheduled_start_time_utc"] = pd.Timestamp("2026-10-17T19:30:00Z")
+        self.assertTrue(cross_market_core._team_history(history, 6, early_target).empty)
+        self.assertEqual(len(cross_market_core._team_history(history, 6, later_target)), 1)
+        schedule_rows = pd.DataFrame([
+            {"canonical_season": 2026, "slate_date": "2026-10-17", "game_id": 21,
+             "game_date": "2026-10-17", "scheduled_start_time_utc": "2026-10-17T17:00:00Z",
+             "home_team_id": 6, "home_team": "BOS", "away_team_id": 9, "away_team": "MTL",
+             "game_type_code": 2},
+            {"canonical_season": 2026, "slate_date": "2026-10-17", "game_id": 22,
+             "game_date": "2026-10-17", "scheduled_start_time_utc": "2026-10-17T19:30:00Z",
+             "home_team_id": 6, "home_team": "BOS", "away_team_id": 9, "away_team": "MTL",
+             "game_type_code": 2},
+        ])
+        shot_input, shot_audit = build_shot_prior_challenger(
+            schedule_rows, history, pd.DataFrame({"game_id": [21, 22],
+                                                  "diff_std_shot_diff_pg": [0.0, 0.0]}),
+            pd.DataFrame(columns=["game_type", "database_game_status", "home_team_code",
+                                  "home_shots", "away_shots", "away_team_code"]),
+            prior_source_sha256="prior", prior_outcome_sha256="outcomes",
+        )
+        self.assertEqual(shot_input.game_id.tolist(), [21, 22])
+        self.assertEqual(shot_audit.current_home_games.tolist(), [0, 1])
+
+    def test_capture_excludes_started_target_and_keeps_future_targets(self):
+        schedule = pd.DataFrame({
+            "game_id": [21, 22, 23],
+            "scheduled_start_time_utc": [
+                "2026-10-17T17:00:00Z", "2026-10-17T19:30:00Z",
+                "2026-10-17T20:00:00Z",
+            ],
+        })
+        eligible, excluded = cross_market_core.eligible_targets_at_capture(
+            schedule, "2026-10-17T18:37:33Z",
+        )
+        self.assertEqual(eligible.game_id.tolist(), [22, 23])
+        self.assertEqual(excluded, [21])
 
     def test_null_skater_goals_do_not_affect_official_team_score(self):
         canonical, raw = fixture()

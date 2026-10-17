@@ -118,17 +118,21 @@ def validate_history_score_source(
     target_starts = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True, errors="coerce")
     if observed.isna().any() or target_starts.isna().any() or target_starts.empty:
         raise ValueError("CROSS_MARKET_SCORE_OR_TARGET_TIMING_MISSING")
-    if observed.max() >= target_starts.min():
+    scheduled = pd.to_datetime(history.scheduled_start_time_utc, utc=True, errors="coerce")
+    # A retained final can be usable for a later target even when it was
+    # observed after an earlier game on the same slate had already started.
+    # Downstream feature construction applies this pairwise rule per target.
+    pairwise_prior = scheduled.to_numpy()[:, None] < target_starts.to_numpy()[None, :]
+    pairwise_observed = observed.to_numpy()[:, None] < target_starts.to_numpy()[None, :]
+    if scheduled.isna().any() or not pairwise_prior.any(axis=1).all():
+        raise ValueError("CROSS_MARKET_FINAL_SCORE_NOT_STRICT_PRIOR")
+    if not (pairwise_prior & pairwise_observed).any(axis=1).all():
         raise ValueError("CROSS_MARKET_FINAL_SCORE_NOT_OBSERVED_BEFORE_TARGET")
     for side in ("home", "away"):
         expected = pd.to_numeric(history[f"{side}_team_id"], errors="coerce")
         outcome = pd.to_numeric(history[f"score_{side}_team_id"], errors="coerce")
         if expected.isna().any() or outcome.isna().any() or not expected.eq(outcome).all():
             raise ValueError(f"CROSS_MARKET_FINAL_SCORE_{side.upper()}_IDENTITY_MISMATCH")
-    scheduled = pd.to_datetime(history.scheduled_start_time_utc, utc=True, errors="coerce")
-    target_start = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True, errors="coerce").min()
-    if scheduled.isna().any() or not scheduled.lt(target_start).all():
-        raise ValueError("CROSS_MARKET_FINAL_SCORE_NOT_STRICT_PRIOR")
 
 
 def _prior_day_regular_season_game_ids(dsn: str, prior_slate: str) -> list[int]:

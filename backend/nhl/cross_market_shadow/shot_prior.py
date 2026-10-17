@@ -77,6 +77,11 @@ def build_shot_prior_challenger(
                 (eligible.home_team_id.eq(team_id) | eligible.away_team_id.eq(team_id))
                 & eligible.scheduled_start_time_utc.lt(target_start)
             ].copy().sort_values(["scheduled_start_time_utc", "game_id"])
+            if "score_observed_at_utc" in subset:
+                observed = pd.to_datetime(
+                    subset.score_observed_at_utc, utc=True, errors="coerce"
+                )
+                subset = subset[observed.lt(target_start)]
             team_shots = subset.apply(
                 lambda r: (r.final_home_shots - r.final_away_shots)
                 if int(r.home_team_id) == team_id else (r.final_away_shots - r.final_home_shots), axis=1
