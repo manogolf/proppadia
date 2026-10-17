@@ -299,8 +299,8 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P1.4 Route daily `today_*` materialized-view refresh through a narrow capability
 
-- Status: **ASSESSMENT COMPLETE — implementation requires a separately
-  authorized database function and a process-scoped wrapper routing change**.
+- Status: **ISOLATED POSTGRESQL 15 PREVIEW PROOF COMPLETE — production migration
+  and wrapper routing remain separately authorized work**.
 - The active wrapper refreshes `mlb.today_market_snapshot`,
   `mlb.today_market_timing_signal`, `mlb.today_player_context`, then
   `mlb.today_workspace_mlb`, using `SUPABASE_DB_URL`. Production PostgreSQL is
@@ -323,25 +323,39 @@ writer validation does not authorize a hosted cutover or a different writer.
   caches; it does not issue writes to the source, training, or outcome tables.
 - Assessment record:
   `docs/operations/mlb_today_materialized_view_restricted_refresh_assessment_2026-10-17.md`.
-- Recommended implementation: an owner-controlled `SECURITY DEFINER` routine
-  containing only the four schema-qualified refresh statements, with a pinned
-  safe `search_path`, no caller-supplied relation names, PUBLIC execution
-  revoked, and EXECUTE granted only to the approved operational identity. Use
-  concurrent refresh after proving this fixed function under PostgreSQL 15.8.
-  Change only the wrapper's refresh invocation to use the process-scoped
-  restricted ingest route; retain the four-view sequence and existing
-  `today_*` staging build. Do not change view ownership or grant the ingest
-  identity owner-level rights. This assessment did not create a function,
-  change grants, modify the wrapper, or execute a refresh.
-- Completion: separately authorize and review a migration and rollback;
-  prove the fixed routine in an isolated PostgreSQL 15.8 database, including
-  allowed refreshes, rejected arbitrary targets, and rejected direct refresh
-  by the restricted identity; inspect source/outcome fingerprints before and
-  after; apply only in an approved maintenance window; route only this wrapper
-  call through the scoped identity; and verify successful sequential refresh,
-  downstream `/mlb/today` reads, lock behavior, and effective session identity
-  on a natural run. Do not combine this with the pending integrated restricted
-  writer validation or the 16:30 PT run.
+- Prepared implementation: owner-controlled `SECURITY DEFINER` routine with
+  four fixed schema-qualified concurrent refresh statements, pinned
+  `search_path`, no caller-supplied target, PUBLIC execution revoked, and
+  EXECUTE granted only to `proppadia_mlb_ingest`. Migration preflight checks
+  PostgreSQL 15+, role existence, current ownership of all targets, and a valid
+  ready non-partial unique index per target. Paired rollback only drops this
+  function. Files:
+  `backend/mlb/sql/migrations/20261017_mlb_today_workspace_restricted_refresh.sql`
+  and `_rollback.sql`.
+- Isolated proof: the exact migration passed against disposable fixture objects
+  in the verified preview project on PostgreSQL 15.19. Restricted execution
+  refreshed the four views in order. Direct refresh, view alteration, routine
+  replacement, and direct refresh of an arbitrary fixture target were denied;
+  no caller target argument exists. A missing final view raised `42P01` and
+  rolled back earlier refreshes in the call. Ordinary refresh blocked a second
+  session SELECT under `AccessExclusiveLock`; concurrent refresh allowed it.
+  Fixture cleanup verified no schema or role residue. Three tiny-fixture timing
+  samples were 0.087 seconds ordinary and 0.0285 seconds concurrent medians;
+  they do not establish production speed. Concurrent refresh is selected for
+  reader availability, with production duration still unmeasured.
+- Evidence and runner:
+  `docs/operations/mlb_today_materialized_view_restricted_refresh_assessment_2026-10-17.md`
+  and `backend/mlb/tests/run_today_mv_refresh_preview.py`.
+- Remaining completion criteria: separately authorize/review and apply the
+  migration during an approved window; recheck production view owner/index/role
+  state; capture source/outcome fingerprints; make only the process-scoped
+  wrapper refresh call use `MLB_INGEST_DATABASE_URL` with
+  `MLB_USE_RESTRICTED_INGEST=1`; preserve the four-view order and existing
+  staging build; then verify routine identity, natural-run refresh, unchanged
+  source/outcome fingerprints, downstream `/mlb/today` reads, and actual
+  production duration. Keep this separate from first integrated restricted
+  writer validation and the 16:30 PT run. No production object, wrapper, or
+  schedule was changed in this proof.
 
 ### P2.1 Hosted GitHub roster migration
 

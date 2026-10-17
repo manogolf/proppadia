@@ -1,9 +1,10 @@
 # MLB `today_*` Materialized-View Restricted Refresh Assessment
 
 Assessment date: 2026-10-17
-Scope: read-only production catalog inspection and local source review. No view
-refresh, database write, privilege change, ownership change, wrapper change, or
-scheduler change was performed.
+Scope: read-only production catalog inspection, local source review, and an
+isolated PostgreSQL 15.19 preview proof using disposable fixture objects. No
+production refresh, production database write, production privilege change,
+ownership change, wrapper change, or scheduler change was performed.
 
 ## Current refresh path
 
@@ -74,30 +75,80 @@ existing operational identity or function provides a bounded refresh route.
 
 ## Recommended route
 
-Create a separately reviewed owner-controlled `SECURITY DEFINER` function with
-only the four schema-qualified concurrent refresh statements, in the established
-order. Pin a safe `search_path`, accept no relation names or SQL fragments from
-the caller, revoke execution from PUBLIC, and grant EXECUTE only to the
-specifically approved operational identity. The function should be owned by
-the current view owner so its body has the required authority. Then change only
-the wrapper's refresh block to invoke that function through the scoped database
-route in that process; keep unrelated daily consumers on their existing routes.
+The exact additive migration and rollback are prepared at
+`backend/mlb/sql/migrations/20261017_mlb_today_workspace_restricted_refresh.sql`
+and its `_rollback.sql` companion. The proof runner
+`backend/mlb/tests/run_today_mv_refresh_preview.py` applied the migration to
+minimal fixture relations in the independently verified preview project
+`vbnzmvmhuwvpkijxeuyq` (PostgreSQL 15.19). It created only a temporary
+`proppadia_mlb_ingest` fixture role and the `mlb` schema, four materialized
+views, source fixture table, indexes, and migration function. The fixture role
+was dropped and schema absence verified after execution.
 
-Before production authorization, prove on an isolated PostgreSQL 15.8 database
-that the function can refresh exactly these four views, cannot target an
-arbitrary relation, and leaves the caller unable to issue direct refreshes.
-Verify the function security settings and owner, restricted EXECUTE ACL, source
-and outcome fingerprints, refresh ordering, and `/mlb/today` reads. Use a
-separate reviewed migration and rollback, then an explicitly approved
-maintenance window and natural-run verification. No deployment or runtime
-change is authorized by this assessment.
+Verified assertions:
+
+- The migration preflight accepts PostgreSQL 15, requires the restricted role,
+  verifies all four targets are materialized views owned by the migration
+  identity, and verifies each has a valid, ready, non-partial unique index.
+- `mlb.refresh_today_workspace_views()` is owned by `postgres`, is
+  `SECURITY DEFINER`, has `search_path=pg_catalog, pg_temp`, has no arguments,
+  revokes PUBLIC execution, and grants EXECUTE to `proppadia_mlb_ingest`.
+- Under `SET ROLE proppadia_mlb_ingest`, the fixed routine refreshes the four
+  views in the established order. Direct concurrent refresh, materialized-view
+  alteration, and function replacement fail with SQLSTATE `42501`. A direct
+  refresh of an unrelated fixture view also fails with `42501`; supplying a
+  target argument fails with `42883` because no such signature exists.
+- Removing the last view makes the function fail with `42P01`; the first three
+  refreshes in that function call roll back. All four refreshes are atomic as
+  one function-call statement.
+- In a second session, SELECT from a fixture view timed out under ordinary
+  refresh's `AccessExclusiveLock`; the same SELECT succeeded during concurrent
+  refresh. The observed concurrent locks included `ExclusiveLock`, not
+  `AccessExclusiveLock`.
+- Three timing samples over the tiny fixture had ordinary-refresh median
+  0.087 seconds and concurrent-refresh median 0.0285 seconds. These timings
+  measure fixture overhead and are not production performance evidence. The
+  demonstrated advantage is reader availability. Concurrent refresh requires
+  unique indexes and can take longer on production data because it compares old
+  and new contents and maintains indexes.
+- Cleanup completed: no `mlb` schema and no fixture role remained.
+
+The preflight requires execution as the current owner of all four views.
+Production authorization must confirm `postgres` still owns them and
+`proppadia_mlb_ingest` remains the approved, non-owner group. Apply the
+migration and rollback only in an explicitly approved database maintenance
+window. The routine has no dynamic SQL or caller-controlled relation argument.
+
+## Proposed wrapper integration
+
+After migration approval and deployment, replace only the existing four-command
+`psql` here-document at lines 1526–1531 of the tracked daily wrapper with a
+process-scoped call equivalent to:
+
+```bash
+MLB_USE_RESTRICTED_INGEST=1 "$PSQL_BIN" "$MLB_INGEST_DATABASE_URL" \
+  -v ON_ERROR_STOP=1 -c 'SELECT mlb.refresh_today_workspace_views();'
+```
+
+Keep it conditional on successful `build_mlb_today_workspace.py` and preserve
+the current status handling. Validate that the restricted URL is present when
+the scoped call runs. Do not export the opt-in or change other daily consumers'
+connection routes. This proposal is not implemented.
+
+Before an integrated daily run, review the migration and rollback, verify
+production owner/index/role state again, capture source and outcome
+fingerprints, and explicitly authorize both the database migration and the
+later tracked/installed wrapper change. Then verify function identity,
+sequential refresh success, unchanged source/outcome fingerprints, and
+downstream `/mlb/today` reads on a natural run. Do not combine this with the
+pending first integrated restricted-writer run or the 16:30 PT MLB window.
 
 ## Evidence boundaries
 
-The production catalog query was read-only. Catalog inspection confirms current
-owners, ACLs, indexes, dependencies, PostgreSQL version, and role membership;
-it does not measure refresh duration or lock contention. The repository search
-identifies application reads and refresh code, but cannot establish consumers
-outside this repository. Concurrent refresh is recommended to preserve readers;
-its runtime and source/outcome invariants still require isolated and approved
-production validation.
+The production catalog query was read-only. It confirms point-in-time owners,
+ACLs, indexes, dependencies, PostgreSQL version, and role membership. The
+preview proof establishes PostgreSQL 15 function behavior and lock-mode effects
+on fixture objects, not production duration, external consumers, or production
+source/outcome invariants. Concurrent refresh is recommended to keep readers
+available; production runtime still needs measured verification after separate
+authorization.
