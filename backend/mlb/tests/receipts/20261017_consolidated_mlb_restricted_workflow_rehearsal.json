@@ -1,0 +1,97 @@
+{
+  "assessment": "consolidated_restricted_workflow_rehearsal",
+  "captured_at_utc": "2026-10-17T17:17:31Z",
+  "production_mutations": 0,
+  "production_writer_function_invocations": 0,
+  "production_identity": {
+    "pinned_project_match": true,
+    "database": "postgres",
+    "postgresql_version": "15.8",
+    "admin_read_only_identity": "postgres"
+  },
+  "restricted_login": {
+    "session_user": "proppadia_mlb_ingest_login",
+    "current_user_after_role_switch": "proppadia_mlb_ingest",
+    "login_attributes": "LOGIN, NOINHERIT, non-superuser, no CREATEDB/CREATEROLE/REPLICATION/BYPASSRLS",
+    "membership": ["proppadia_mlb_ingest; no admin option"],
+    "ordinary_restricted_connection_assertions": "PASS",
+    "stat_derived_connection_assertion": "FAIL_CLOSED"
+  },
+  "production_permission_summary": {
+    "fixed_writer_execute": {
+      "roster": true,
+      "player_stats": true,
+      "plate_appearance_backfill": true,
+      "game_metadata": true,
+      "bvp_pvb": true,
+      "prediction_backfill": true,
+      "training_result_materialization": true
+    },
+    "select": {
+      "player_stats": true,
+      "model_training_props": true,
+      "player_derived_stats": true,
+      "game_info": true
+    },
+    "player_derived_stats_column_insert_update": true,
+    "player_derived_stats_delete_truncate": false,
+    "direct_dml_denied": {
+      "player_stats": true,
+      "player_ids": true,
+      "game_info": true,
+      "prop_features_precomputed": true
+    },
+    "protected_training_outcomes": "UPDATE denied; only reviewed metadata/rolling columns are writable",
+    "correction_role_escalation": "not granted to ingest login/group"
+  },
+  "stat_derived_blocker": {
+    "relation": "mlb.player_streak_profiles",
+    "required_columns_without_select": [
+      "player_id",
+      "prop_type",
+      "prop_source",
+      "last_game_date",
+      "streak_type",
+      "streak_count"
+    ],
+    "role_scoped_select_policy_present": false,
+    "rls_enabled": true,
+    "effect": "insert_mlb_stat_derived.py calls pg_connect(require_streak_read=True), which fails closed before the ordinary stat-derived workflow proceeds"
+  },
+  "workflow_results": {
+    "roster_refresh": "FIXED_ENTRYPOINT_AND_ROLE_ASSERTIONS_PASS; separate rollback-only Taylor Walls canary previously passed; no invocation in this rehearsal",
+    "player_stats_and_derived_stats": "PREVIEW_PASS; production restricted connection blocked by missing streak-profile read contract",
+    "plate_appearance_backfill": "PREVIEW_PASS; execute permission present; no production candidate or invocation assessed",
+    "game_metadata_refresh": "PREVIEW_PASS; game_info SELECT and fixed function execute available; no production invocation",
+    "bvp_pvb_refresh": "PREVIEW_PASS; fixed function execute available; no production invocation",
+    "prediction_backfill": "PREVIEW_PASS; fixed function execute available; no production invocation",
+    "reconciliation_and_result_persistence": "PREVIEW_PASS for source/training guards and protected outcome tuple; no production write invocation"
+  },
+  "preview_fixture": {
+    "project_reference_verified": true,
+    "initial_state": "clean; no mlb/nhl schemas or fixture roles",
+    "postgresql_version": "15.19",
+    "assertions_passed": 80,
+    "assertions_failed": 0,
+    "migration_replay": "PASS",
+    "rollback": "PASS",
+    "cleanup": "COMPLETE; no fixture schemas or roles remain",
+    "receipt_path": "artifacts/analysis/mlb/restricted_writer_postgres_compatibility/2026-10-17-consolidated-rehearsal/receipt.json",
+    "receipt_sha256": "7bf2bd02579bba5155a7cdf57be4ca30e6fbc625a35dff6a28cd574f811bd7f7"
+  },
+  "offline_test": {
+    "command": "./bin/python -m unittest backend.mlb.tests.test_mlb_restricted_writer_access_contract_v1",
+    "result": "PASS",
+    "tests_passed": 10
+  },
+  "hosted_and_api_dependencies": {
+    "hosted_roster_workflow": "workflow injects SUPABASE_DB_URL and invokes full roster refresh; no restricted URL/opt-in wiring or hosted effective-role execution verified; secret not inspected",
+    "postgrest_api_grants": "existing broad anon/authenticated/service_role grants remain unchanged; deployed API dependencies remain unverified"
+  },
+  "production_canaries": {
+    "executed": [],
+    "reason": "current authorization covers read-only compatibility analysis and isolated preview testing only"
+  },
+  "status": "PARTIAL",
+  "recommended_next_step": "Review and separately authorize the minimum streak-profile read-only contract (SELECT on the six required columns plus a proppadia_mlb_ingest SELECT RLS policy), or an approved caller change that removes the dependency."
+}
