@@ -214,17 +214,27 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P1.2 One bounded restricted BvP/PvB live validation
 
-- Status: **READY — separate production authorization required**. Commit
-  `ce4f2581` repaired the governed collector hash pin; the three inline
-  certification scenarios were stale hash setup, not BvP/PvB behavior defects.
-  The focused offline bundle passed 108 tests. No live restricted validation
-  has been recorded.
-- Reference: `backend/mlb/config/bvp_inline_acquisition_v1.json` and commit
-  `ce4f2581`.
-- Completion: run one ordinary due-date BvP/PvB invocation under explicit
-  bounded authorization, verify the restricted session identity and certified
-  function result, and retain the run receipt and durable row counts. This
-  does not authorize a general production cutover.
+- Status: **OPEN — restricted write committed, end-to-end validation incomplete**.
+  On 2026-10-17 the authorized BvP-only recovery acquired one official game and
+  committed 286 rows through the restricted fixed function. An approved,
+  read-only owner snapshot matched all 286 journaled keys and feature hashes
+  with zero conflicts, and the historical BvP fingerprint was unchanged. The
+  adapter then failed its post-write verification because the restricted role
+  cannot SELECT the target table; its run is recorded as failed and is not a
+  certified successful refresh. The first attempt stopped before database
+  access after normal schedule retries failed DNS resolution. No owner-level
+  writer fallback or rollback was used.
+- References: `backend/mlb/config/bvp_inline_acquisition_v1.json`, commit
+  `ce4f2581`, and local evidence under
+  `artifacts/ops/bvp_inline_v1/validation/2026-10-17/` and
+  `artifacts/ops/bvp_inline_v1/runs/2026-10-17/` (including
+  `attempt_receipt.json`, the failed run results, and sanitized logs).
+- Completion: provide a supported restricted readback or approved verification
+  mechanism, then record a successful ordinary due-date BvP/PvB run with the
+  required restricted session identity, certified source and request journal,
+  fixed-function count, committed transaction, and before/after row and
+  historical-value checks. This does not authorize a general production
+  cutover.
 
 ### P1.3 Assess stat-derived and date-wide training synchronization
 
