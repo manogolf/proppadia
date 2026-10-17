@@ -3,6 +3,11 @@
 **Status:** preparation only. No production or preview database changes were
 made. Do not use this proposal as authorization to change grants or credentials.
 
+> **Superseding owner decision:** GitHub-hosted MLB roster automation is
+> retired. The local Mac MLB pipeline is the operational authority under
+> restricted ingest. Hosted roster credential and workflow cutover steps below
+> are historical proposal material and must not be carried out.
+
 ## Verified state
 
 On 2026-10-16, secret-safe catalog checks through `backend/.env` confirmed:
@@ -62,7 +67,7 @@ without branch recreation depends on the branch deployment status in step 2.
 | --- | --- | --- |
 | `backend/mlb/scripts/audit_mlb_moneyline_probability_region_premise_v1.py` | Dedicated `MLB_MONEYLINE_AUDIT_DATABASE_URL` override; SELECT-only queries on the two moneyline audit tables. | Already verified under `proppadia_mlb_research_login`; keep its command-scoped route. |
 | `backend/mlb/scripts/run_mlb_hits_lane_selector_daily.py` | `DATABASE_URL` or `SUPABASE_DB_URL`; reads `mlb.player_derived_stats`, `mlb.player_team_by_game`, and `public.mlb_team_map`; writes local reports/uploads, not PostgreSQL. Query code uses `SELECT *` for derived stats. | Read-only group covering required derived-stat columns and only `player_id`, `game_id`, `team_id`, and `abbr` on the mapping join. Narrow its `SELECT *` before granting. |
-| `backend/mlb/scripts/refresh_mlb_players_rosters.py`, Make target `mlb-roster-refresh-all`, and scheduled `.github/workflows/mlb-refresh-player-ids.yml` | Shared local alias or hosted `secrets.SUPABASE_DB_URL`; upserts and marks rows inactive in `mlb.player_ids`. The GitHub secret value/identity is not locally verifiable. | Planned `proppadia_mlb_ingest` scope on `mlb.player_ids`: INSERT/UPDATE only for `player_id` and whichever of `player_name`, `team`, `team_id`, `active`, `status`, `updated_at` exist and are used; SELECT only on conflict/condition columns required by PostgreSQL. Confirm on a disposable schema before routing either local or hosted job. |
+| `backend/mlb/scripts/refresh_mlb_players_rosters.py` and Make target `mlb-roster-refresh-all` | Historical proposal described shared local aliases and a hosted workflow. Current local roster refresh is operational under restricted ingest; hosted automation is retired. | Historical permission scope only. Do not perform hosted provisioning or cutover. |
 
 The hits selector and roster refresh are concrete consumers, not a complete
 inventory of every direct `psycopg`/SQLAlchemy caller. `backend/shared/db/pg.py`
@@ -72,11 +77,10 @@ and one-off activation tools. Do not replace the shared alias globally until
 each scheduled or operational command has a classified permission contract and
 passes a focused compatibility check.
 
-Hosted GitHub Actions remain a separate configuration surface. The roster
-workflow injects `secrets.SUPABASE_DB_URL`; the dispatch-only MLB workflow uses
-Supabase API keys and is not a PostgreSQL DSN consumer. Verify and update the
-hosted roster secret only as part of a separately authorized cutover after its
-restricted replacement login has passed operational verification.
+The historical hosted GitHub roster workflow injected
+`secrets.SUPABASE_DB_URL`; its value was never inspected. The owner retired
+that automation, and the workflow was disabled remotely and removed locally.
+The secret is unchanged. Do not provision or cut over hosted roster access.
 
 ## Minimum closure sequence
 
@@ -89,10 +93,10 @@ restricted replacement login has passed operational verification.
    `proppadia_mlb_ingest` permissions against `refresh_mlb_players_rosters.py`
    and the narrowed hits-selector read queries. Do not use production tables as
    fixtures.
-4. Route only those verified commands to dedicated scoped URLs. Verify local
-   and hosted roster execution, plus reconciliation/scoring dependencies, then
-   consider reducing access on shared aliases in a separate owner-authorized
-   change.
+4. Route only verified commands to dedicated scoped URLs. Preserve the
+   operational local restricted-ingest roster route; do not restore hosted
+   roster execution. Review other alias consumers separately before any
+   owner-authorized alias change.
 5. Keep the production shared aliases intact until every dependent workflow is
    identified and its replacement is proven. Retain the NHL safe-promotion
    source protection and do not grant MLB source-correction privileges.
@@ -101,7 +105,8 @@ restricted replacement login has passed operational verification.
 
 - Supabase branch deployment history/status and the exact failed SQL statement
   are required to decide repair versus recreation and confirm migration order.
-- The exact hosted `SUPABASE_DB_URL` role identity is unverified.
+- The retired hosted `SUPABASE_DB_URL` role identity remains unverified; no
+  hosted verification is planned.
 - The complete set of shared-alias MLB consumers and required table/column
   writes still needs command-level classification before any alias cutover.
 - The existing two-table research login is verified in production, but its

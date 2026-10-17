@@ -11,8 +11,9 @@ If the question is “what is the active runtime path right now?”:
 - MLB command surface: `make mlb-*` targets in `Makefile`
 - NHL command surface: `backend/nhl/cli.py` and `make nhl-*` targets
 - Scheduled workflows expected active:
-  - `.github/workflows/mlb-refresh-player-ids.yml`
   - `.github/workflows/nhl-daily-refresh.yml`
+- MLB roster refresh authority: the Mac-based local MLB pipeline using
+  `make mlb-roster-refresh-all`; hosted GitHub roster automation is retired.
 - Governance checks:
   - `make cron-governance-check`
   - `make ops-operator-summary`

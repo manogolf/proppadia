@@ -48,14 +48,15 @@ Notes:
 
 ### MLB
 
-GitHub Actions workflow:
-- `.github/workflows/mlb-refresh-player-ids.yml`
+The Mac-based local MLB pipeline is the operational authority. Its roster
+refresh runs through the existing Make target and restricted ingest routing:
 
-Required secret:
-- `SUPABASE_DB_URL`
+```bash
+make mlb-roster-refresh-all MLB_ROSTER_DATE=$(date +%F)
+```
 
-Manual dispatch input:
-- `mlb_roster_date` (optional `YYYY-MM-DD`)
+GitHub-hosted MLB roster automation is retired. Do not provision a hosted
+roster credential or use the removed workflow.
 
 ### NHL
 

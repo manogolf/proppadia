@@ -87,9 +87,10 @@ GitHub workflows present:
 
 - Active CI baseline: `.github/workflows/ci-offline-checks.yml`
 - Active NHL daily: `.github/workflows/nhl-daily-refresh.yml`
-- Active roster workflows:
-  - `.github/workflows/mlb-refresh-player-ids.yml`
-  - `.github/workflows/nhl-refresh-rosters.yml`
+- Roster operations:
+  - MLB authority is the Mac-based local pipeline (`make mlb-roster-refresh-all`)
+    under restricted ingest; hosted MLB roster automation is retired.
+  - `.github/workflows/nhl-refresh-rosters.yml` remains the NHL manual helper.
 - Additional legacy MLB workflows still exist and remain callable by schedule/manual dispatch.
 
 ## 5. Current Data Model Behavior (As Implemented)

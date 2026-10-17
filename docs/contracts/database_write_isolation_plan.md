@@ -47,8 +47,11 @@ printed.
   scripts also use those variables directly or `backend/shared/db/pg.py`,
   whose `pg_connect()` resolves the same shared URL. MLB model fitting also
   opens an engine from that URL. As configured locally, readers and writers
-  therefore share the `postgres` role. The MLB GitHub Actions roster workflow
-  injects `secrets.SUPABASE_DB_URL`; it must be cut over. The documented
+  therefore share the `postgres` role in the inspected local configuration.
+  The owner has since retired GitHub-hosted MLB roster automation and the
+  workflow was removed locally; the Mac-based local roster pipeline is the
+  operational authority under restricted ingest. The historical workflow's
+  repository secret consumer is not a reason to change shared aliases. The documented
   `.github/workflows/nhl-daily-refresh.yml` is absent from this checkout.
 - The inspected PostgreSQL cron catalog has nine inactive materialized-view
   refresh jobs and one active `ANALYZE` job; none writes NHL/MLB source rows.
@@ -181,9 +184,9 @@ PRIVILEGES` is proposed until object owners are moved off application roles.
    disagreement; the correction role can update only its authorized columns
    and cannot alter unrelated columns/identities; none can assume owner or
    `BYPASSRLS` roles. Repeat the promotion and assert idempotency.
-5. Verify normal NHL daily and postgame paths, MLB scheduled roster refresh,
-   required database-backed model exports, and API reads with their new
-   identities before removing any old connection secret. Capture role name,
+5. Verify normal NHL daily and postgame paths, the Mac-based local MLB roster
+   pipeline, required database-backed model exports, and API reads with their
+   new identities before removing any old connection secret. Capture role name,
    command, row counts, and outcomes in receipts without secret material.
 
 ### Credential creation and delivery

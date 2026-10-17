@@ -1,11 +1,12 @@
 # Workflow Classification
 
-Snapshot date: February 15, 2026
+Snapshot date: October 17, 2026
 
 ## Operating Model
 
 - NHL control plane: `backend/nhl/cli.py` (CLI-driven)
-- MLB control plane: Makefile + Python script-driven (`make mlb-*`), run manually or via Render cron.
+- MLB control plane: Mac-based local Makefile + Python pipeline (`make mlb-*`).
+  GitHub-hosted MLB roster automation is retired.
 
 ## Status Labels
 
@@ -19,7 +20,6 @@ Snapshot date: February 15, 2026
 ### Keep Active
 
 - `.github/workflows/ci-offline-checks.yml`
-- `.github/workflows/mlb-refresh-player-ids.yml`
 - `.github/workflows/nhl-daily-refresh.yml`
 - `Makefile` MLB operational targets:
   - `mlb-daily-refresh` / `mlb-daily-refresh-strict` / `mlb-daily-refresh-smoke`
@@ -44,6 +44,12 @@ Snapshot date: February 15, 2026
 ### Suspended Valid
 
 - `.github/workflows/nhl-refresh-rosters.yml`
+
+### Retired
+
+- `.github/workflows/mlb-refresh-player-ids.yml` — owner-retired; removed from
+  this local repository. Remote deletion awaits normal reviewed publication.
+  Local MLB roster refresh remains operational under restricted ingest.
 
 ### Suspended Needs Path Fix
 
@@ -111,7 +117,7 @@ Workflow schedule inventory commands:
 Recommended low-risk cadence while season is inactive:
 
 1. `mlb-market-cache-refresh` every 8 hours (already conservative).
-2. `mlb-roster-refresh-all` daily.
+2. `mlb-roster-refresh-all` is run by the local Mac MLB pipeline.
 3. `mlb-insert-stat-derived` daily during active season; optional/suspended in offseason.
 4. `mlb-check-stat-derived` after insert (or at least daily) as volume guard.
    - use `mlb-stat-derived-refresh` to execute both in one run.

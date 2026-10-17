@@ -1,5 +1,11 @@
 # MLB restricted writer deployment and backup runbook
 
+> **Current roster decision:** the owner retired GitHub-hosted MLB roster
+> automation. The Mac-based local MLB pipeline is the roster authority and is
+> operational under restricted ingest. Historical hosted workflow references
+> in this runbook are retained as deployment evidence only; do not provision or
+> cut over a hosted roster credential.
+
 **Status:** protected source/training, PA, derived, roster, game-metadata, and
 BvP/PvB paths passed isolated preview verification; MLB schema/ACL backup is
 captured and verified. The seven reviewed production migrations were applied
@@ -135,8 +141,10 @@ removed its test roles; outer rollback left no `mlb`/`nhl` schema or test
 roles. Receipt:
 `artifacts/analysis/mlb/restricted_writer_postgres_compatibility/2026-10-16-adjacent-writers/receipt.json`
 (SHA-256 `2d6405c0ac679130f208bb287720c52eac915eae0ccb94d1d073d58a6107eda5`).
-The hosted workflow code uses the same roster writer, but its configured
-database login and a hosted execution remain unverified.
+Historical note: the hosted workflow used the same roster writer, but its
+database login and execution were never verified. Hosted roster automation is
+now retired by owner decision; the local Mac pipeline is the operational
+roster authority under restricted ingest.
 
 ## Production-shape compatibility correction — 2026-10-16
 
@@ -369,8 +377,8 @@ role identity, permission failure, non-idempotent result, conflict count, or
 protected-value difference. Keep shared aliases, hosted secrets, and scheduled
 operations unchanged; do not use this canary route to run exceptional
 completeness/preseason maintenance. The hosted roster secret remains
-uninspected, and hosted login identity/run compatibility must be verified in a
-separately authorized later step.
+uninspected and unchanged. Hosted identity verification is not planned because
+the owner retired that automation.
 
 ## Production continuity gates
 
@@ -380,10 +388,9 @@ group: a separately authorized login/membership and session `SET ROLE`
 procedure are required before its grants are active for a connection. Keep
 current connections and schedules intact until production schema/grant
 preflight, role membership, session-role activation, bounded writer canaries,
-hosted workflow identity, and PostgREST/service-role exposure are reviewed.
-The roster workflow's `SUPABASE_DB_URL` secret was not inspected or changed;
-verify its role through an authorized bounded hosted run before changing or
-retiring that secret. The broad existing API-role DML grants were not changed;
+and PostgREST/service-role exposure are reviewed. The roster workflow's
+`SUPABASE_DB_URL` secret was not inspected or changed and remains untouched;
+the workflow has since been retired. The broad existing API-role DML grants were not changed;
 identify hosted runner/PostgREST dependencies before narrowing them.
 
 ## Restricted login activation status — 2026-10-17

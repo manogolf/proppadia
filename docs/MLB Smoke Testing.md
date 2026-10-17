@@ -132,11 +132,9 @@ Optional daily full-team MLB roster refresh:
 make mlb-roster-refresh-all
 ```
 
-GitHub Actions automation:
-- Workflow: `.github/workflows/mlb-refresh-player-ids.yml`
-- Required secret: `SUPABASE_DB_URL`
-- Manual dispatch input: `mlb_roster_date` (optional `YYYY-MM-DD`)
-- Recommended use: manual backfill reruns and offseason spot-refresh checks.
+The Mac-based local MLB pipeline is the roster refresh authority and uses the
+restricted ingest route. GitHub-hosted MLB roster automation is retired; no
+GitHub secret or dispatch input is required.
 
 Optional (warm today + tomorrow):
 

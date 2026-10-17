@@ -15,7 +15,7 @@ FIXTURE = ROOT / "backend/mlb/tests/fixtures/restricted_writer_access_v1/README.
 ROSTER = ROOT / "backend/mlb/scripts/refresh_mlb_players_rosters.py"
 STAT_DERIVED = ROOT / "backend/mlb/scripts/insert_mlb_stat_derived.py"
 BVP = ROOT / "backend/mlb/scripts/refresh_mlb_bvp_pvb.py"
-WORKFLOW = ROOT / ".github/workflows/mlb-refresh-player-ids.yml"
+BUNDLE_WORKFLOW = ROOT / ".github/workflows/mlb-refresh-player-ids.yml"
 BVP_READ_MIGRATION = ROOT / "backend/mlb/sql/migrations/20261017_mlb_bvp_research_read.sql"
 BVP_READ_ROLLBACK = ROOT / "backend/mlb/sql/migrations/20261017_mlb_bvp_research_read_rollback.sql"
 
@@ -30,7 +30,6 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
         cls.roster = ROSTER.read_text()
         cls.stat = STAT_DERIVED.read_text()
         cls.bvp = BVP.read_text()
-        cls.workflow = WORKFLOW.read_text()
 
     def test_roster_writer_conflict_and_inactive_operations_are_documented(self):
         migration = (ROOT / "backend/mlb/sql/migrations/20261019_mlb_adjacent_writer_entrypoints.sql").read_text()
@@ -167,10 +166,9 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
         self.assertIn("pg_policies", migration)
         self.assertIn("already has column SELECT", migration)
 
-    def test_hosted_workflow_uses_separate_secret_without_secret_inspection(self):
-        self.assertIn("secrets.SUPABASE_DB_URL", self.workflow)
-        self.assertIn("its value was not inspected", self.contract_one_line)
-        self.assertIn("identity and a bounded hosted run remain unverified", self.contract_one_line)
+    def test_hosted_roster_workflow_is_retired_and_removed(self):
+        self.assertFalse(BUNDLE_WORKFLOW.exists())
+        self.assertIn("hosted roster automation is retired", self.contract_one_line.lower())
 
     def test_fixture_is_explicitly_disposable_and_denies_destructive_privileges(self):
         self.assertIn("never canonical production tables", self.fixture_one_line)

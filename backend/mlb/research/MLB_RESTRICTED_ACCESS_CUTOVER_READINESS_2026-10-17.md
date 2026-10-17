@@ -1,5 +1,12 @@
 # MLB Restricted Access Cutover Readiness — 2026-10-17
 
+> **Superseding owner decision:** GitHub-hosted MLB roster automation is
+> retired. The Mac-based local MLB pipeline is the operational authority, and
+> its roster refresh is operational under restricted ingest. The hosted
+> workflow was disabled on GitHub and has been removed locally. Historical
+> hosted rows and steps below record the earlier assessment only; no hosted
+> credential provisioning or cutover remains required.
+
 ## Decision
 
 **Readiness: PARTIAL.** The restricted login and role gate are deployed and
@@ -24,7 +31,7 @@ configuration was changed for that assessment.
 | BvP/PvB refresh | `refresh_mlb_bvp_pvb.py` uses `pg_connect()` and the process opt-in; fixed feature upsert function. | Preview tests passed; permission gate covers function access and denies direct target DML. Current caller uses mapping-aware scalar result handling with `AS result_count`; offline result-shape coverage passed. | No ordinary due-date restricted production invocation observed. |
 | Prediction backfill | `_persist_prediction_backfill` uses `pg_connect()` and the process opt-in; `safe_fill_prediction_backfill` only fills an empty prediction tuple. | Preview protected-outcome tests passed. Function does not update `was_correct`. Current caller uses mapping-aware scalar result handling with `AS result_count`; offline result-shape coverage passed. | No ordinary restricted production invocation observed. |
 | Reconciliation, grading, result persistence | Protected realized outcome fields remain behind fixed training entry point; routine result materialization is part of stat-derived. | Preview protections passed; Max Muncy canary confirmed protected training outcome fingerprints unchanged, with training sync not invoked. | No complete restricted production grading/reconciliation invocation was made. Keep exceptional correction and historical maintenance paths on their separately controlled route. |
-| Hosted roster workflow | `.github/workflows/mlb-refresh-player-ids.yml` passes `secrets.SUPABASE_DB_URL` to the full roster command; it does not set `MLB_USE_RESTRICTED_INGEST` or provide a dedicated restricted URL. | Code supports restricted routing when those process variables are present. Secret was not inspected. | Hosted effective identity and restricted session behavior are unverified. Do not change the hosted secret or workflow without separate authorization and a hosted test plan. |
+| Hosted roster workflow (retired) | Historical workflow passed `secrets.SUPABASE_DB_URL` to the full roster command. | Secret value was not inspected. The workflow is disabled on GitHub and removed locally. | No hosted identity verification, credential provisioning, or execution is planned. |
 | Other active shared-alias users | Database-backed model training and read/export/scoring utilities use `DATABASE_URL` or `SUPABASE_DB_URL` directly or through SQLAlchemy. | These are not the scoped restricted writer paths; some are read-only, and some have separate write/materialization needs. | Preserve their current route. Do not globally replace aliases; classify and route them individually only when a dedicated read/operations contract exists. |
 
 The earlier scalar-result findings are stale for the callers described above.
@@ -91,11 +98,8 @@ Production checks remained read-only and did not invoke these writer functions.
    its batch commits and only-missing selection; for BvP and prediction,
    verify the corrected result mapping before invocation. Keep old aliases
    until each route has passed.
-6. Plan hosted roster cutover separately: establish the intended secret
-   identity without exposing its value, wire a process-scoped restricted URL
-   and opt-in only after separate authorization, then verify a single
-   scheduled or manually dispatched run before changing/removing the prior
-   secret. No secret or workflow change is authorized here.
+6. Hosted roster cutover is retired by owner decision; keep the local Mac MLB
+   pipeline as the roster authority.
 
 The reversible first-stage control is process-scoped routing, not a global
 alias replacement. Do not overlap the one-shot command with a scheduled roster
@@ -111,9 +115,8 @@ is still active.
 
 **First workflow:** local roster refresh, because its dedicated route and
 restricted role were verified in the single-record rollback-only canary and it
-does not require direct table DML. The next action should be separate owner
-authorization for one normal scheduled roster run under the process-scoped
-restricted route. The unrelated scalar-result fixes are prerequisites for
-stat-derived, BvP/PvB, and prediction-backfill cutovers, not for roster. Keep
-hosted roster and all other shared-alias consumers unchanged until their own
-identity and compatibility checks are complete.
+does not require direct table DML. The Mac-based local MLB pipeline is now the
+operational roster authority under restricted ingest. The unrelated scalar-result
+fixes are prerequisites for stat-derived, BvP/PvB, and prediction-backfill
+cutovers, not for roster. Keep all other shared-alias consumers unchanged until
+their own identity and compatibility checks are complete.

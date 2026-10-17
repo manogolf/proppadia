@@ -55,7 +55,8 @@ This enforces:
 ## Current Live Scheduling Policy
 
 1. Scheduled GitHub workflows should stay minimal and intentional.
-2. MLB schedules remain conservative.
+2. MLB roster refresh is owned by the Mac-based local pipeline; no GitHub MLB
+   roster schedule remains.
 3. NHL remains primarily local automator-driven until hosted migration is explicitly approved.
 
 Decision rule:
@@ -65,10 +66,9 @@ Decision rule:
 
 ## Current State Snapshot
 
-Scheduled workflows in repo:
-
-1. `.github/workflows/mlb-refresh-player-ids.yml`
-2. `.github/workflows/nhl-daily-refresh.yml`
+No scheduled workflow YAML is present in the current checked-in inventory.
+MLB roster refresh is owned by the Mac-based local pipeline; NHL scheduling is
+outside this MLB replacement runbook.
 
 Manual-only workflows include legacy MLB cron jobs and NHL roster refresh helper.
 

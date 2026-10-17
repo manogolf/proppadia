@@ -10,9 +10,10 @@ identified Supabase preview before production deployment.
 
 ## Scope
 
-The reviewed paths are the local/hosted roster refresh, the MLB daily
-stat-derived refresh, and BvP/PvB feature refresh. NHL connections and the
-existing NHL restricted routing are out of scope and remain unchanged.
+The reviewed paths include the local roster refresh, MLB daily stat-derived
+refresh, and BvP/PvB feature refresh. Hosted roster automation is retired by
+the owner; the Mac-based local MLB pipeline is the operational authority.
+NHL connections and existing NHL restricted routing remain out of scope.
 
 ## Executed SQL and access needs
 
@@ -142,10 +143,10 @@ execution. See
 `docs/operations/mlb_bvp_research_read_production_deployment_2026-10-17.md`
 for the retained evidence.
 
-The GitHub Actions workflow uses the same roster script and separate secret
-name `SUPABASE_DB_URL`; its value was not inspected. The writer code is
-compatible when its PostgreSQL session has assumed `proppadia_mlb_ingest`, but
-the configured secret identity and a bounded hosted run remain unverified.
+Historical note: the removed GitHub Actions workflow used this roster script
+and injected the repository secret named `SUPABASE_DB_URL`. The value was not
+inspected. Hosted roster automation is retired; no hosted compatibility or
+credential cutover is planned.
 
 The separate `backend/mlb/modeling/backfill_predictions.py` writer uses
 `safe_fill_prediction_backfill(uuid,text,numeric,timestamptz)`. It may populate
@@ -185,9 +186,8 @@ Before any live routing change, a disposable PostgreSQL run must prove:
    valid when outcome identity is unchanged. Phase conflicts fail closed.
 6. `DELETE`, `TRUNCATE`, DDL, privileged-role membership, and unapproved
    populated-value overwrites fail under the ordinary writer login.
-7. Hosted roster workflow behavior is compatible when the session assumes the
-   scoped role, without reading or changing its existing secret before
-   authorization.
+7. Local MLB roster refresh is operational under the restricted ingest login.
+   No hosted roster cutover is planned because that automation is retired.
 
 The focused offline test is
 `./bin/python -m unittest backend.mlb.tests.test_mlb_restricted_writer_access_contract_v1`.

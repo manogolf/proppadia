@@ -1,5 +1,13 @@
 # MLB hosted roster restricted-routing assessment — 2026-10-17
 
+> **Superseded decision:** the owner retired GitHub-hosted MLB roster
+> automation. The local Mac MLB pipeline is the operational authority, and the
+> workflow is disabled on GitHub and removed from this local repository;
+> remote deletion remains pending normal reviewed publication. Do not follow
+> the hosted transition or rollback proposal below. This document remains as
+> historical evidence of the routing assessment; the secret value was never
+> inspected or changed.
+
 ## Decision
 
 The GitHub Actions roster job can use the already validated restricted MLB

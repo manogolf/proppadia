@@ -209,13 +209,14 @@ writer validation does not authorize a hosted cutover or a different writer.
   selected one final official game for 2026-10-15, committed its transaction,
   and preserved all captured full-date and neighboring fingerprints. Existing
   source/training rows were unchanged, so a fresh-row/NULL-fill write remains
-  unvalidated; ordinary writer migration remains incomplete. The hosted
-  roster workflow still injects `SUPABASE_DB_URL` without restricted-mode
-  opt-in and has not been run through the restricted identity.
+  unvalidated; ordinary writer migration remains incomplete. The local MLB
+  roster refresh is operational under restricted ingest and is the sole roster
+  automation authority. GitHub-hosted roster automation was retired by the
+  owner; no hosted cutover is part of this backlog.
 - Stat-derived evidence:
   `docs/operations/mlb_stat_derived_restricted_writer_readiness_2026-10-17.md`
   and `artifacts/ops/mlb_stat_derived_restricted_validation_2026-10-17/`.
-- Hosted roster routing assessment:
+- Hosted roster routing assessment (historical; superseded by retirement):
   `docs/operations/mlb_hosted_roster_restricted_routing_assessment_2026-10-17.md`.
 - References: `docs/contracts/database_write_isolation_plan.md`;
   `docs/contracts/mlb_restricted_writer_access_contract_v1.md`.
@@ -285,25 +286,20 @@ writer validation does not authorize a hosted cutover or a different writer.
   approach are documented. It does not authorize a production writer run or
   routing change.
 
-### P2.1 Verify hosted GitHub roster identity and database routing
+### P2.1 Hosted GitHub roster migration
 
-- Status: **ACTIVE — routing assessed; hosted identity and execution remain
-  unverified.** The remote workflow source injects the repository secret
-  `SUPABASE_DB_URL` into the existing roster script without setting
-  `MLB_USE_RESTRICTED_INGEST` or `MLB_INGEST_DATABASE_URL`. Read-only GitHub
-  secret metadata confirms the name exists, but cannot identify its database
-  principal. The workflow was reported `disabled_manually`; no job was
-  launched. Only the roster workflow among the five remote GitHub workflows
-  references this database secret.
-- Reference: `.github/workflows/mlb-refresh-player-ids.yml`.
-- Assessment:
+- Status: **RETIRED** — the owner retired GitHub-hosted MLB roster automation.
+  The local Mac MLB pipeline is the operational authority; its roster refresh
+  has been validated under restricted ingest. The hosted workflow is disabled
+  on GitHub and removed from this local repository. Remote workflow deletion
+  remains pending normal reviewed publication. No hosted roster credential
+  provisioning, workflow change, or execution is required for cutover.
+- Historical routing assessment:
   `docs/operations/mlb_hosted_roster_restricted_routing_assessment_2026-10-17.md`.
-- Completion: verify the hosted job's effective database identity without
-  exposing credentials, provision a separately scoped restricted route without
-  replacing the shared `SUPABASE_DB_URL`, then retain one authorized workflow
-  run receipt showing the restricted route and expected roster result. Secret
-  provisioning, hosted workflow changes, activation, and production execution
-  remain separate authorized actions.
+- The existing repository `SUPABASE_DB_URL` secret is left untouched. The
+  retired workflow was its only GitHub workflow consumer in the inspected
+  repository; this does not imply that local aliases or other GitHub secrets
+  have changed.
 
 ### P2.2 Inventory owner-level database aliases and plan gradual replacement
 

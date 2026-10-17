@@ -12,8 +12,10 @@
 - `backend/scripts/` — smoke checks, post-deploy checks, ops helpers
 - `.github/workflows/` — CI/CD & crons
   - `nhl-daily-refresh.yml` (scheduled NHL refresh pipeline)
-  - `mlb-refresh-player-ids.yml` (scheduled + manual MLB full-team roster refresh)
   - `nhl-refresh-rosters.yml` (manual NHL full-team roster refresh)
+- MLB full-team roster refresh is run by the Mac-based local pipeline through
+  `make mlb-roster-refresh-all` under restricted ingest; no hosted roster
+  workflow is active.
 - `frontend/` — Vite + JS/JSX frontend
 
 ## Environments / Secrets
