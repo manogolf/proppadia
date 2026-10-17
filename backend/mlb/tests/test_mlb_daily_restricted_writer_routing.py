@@ -12,9 +12,27 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
 DAILY_WRAPPER = Path.home() / "bin/proppadia_mlb_refresh_daily.sh"
+OPERATIONS_RUNBOOK = ROOT / "docs/Prod12 Automation Runbook.md"
 
 
 class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
+    def test_runbook_preserves_installed_wrapper_routing_recovery(self):
+        runbook = OPERATIONS_RUNBOOK.read_text()
+        normalized_runbook = " ".join(runbook.split())
+        self.assertIn("/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh", runbook)
+        self.assertIn("no current executable source or installer", normalized_runbook)
+        self.assertIn(
+            "Do not use it to replace the active wrapper wholesale", normalized_runbook
+        )
+        self.assertIn("Do not export this flag in the parent wrapper", normalized_runbook)
+        self.assertIn(
+            'MLB_USE_RESTRICTED_INGEST=1 bin/mlb_bvp_inline_daily_hook.sh "$MLB_DATE_ET"',
+            runbook,
+        )
+        self.assertIn(
+            "backend.mlb.tests.test_mlb_daily_restricted_writer_routing", runbook
+        )
+
     def test_daily_wrapper_scopes_flag_to_roster_and_bvp_writer_calls(self):
         if not DAILY_WRAPPER.exists():
             self.skipTest(f"installed daily wrapper not present: {DAILY_WRAPPER}")

@@ -1010,7 +1010,9 @@ This LaunchAgent runs the local daily chain end-to-end:
 - `mlb-daily-ops-brief` (human-readable daily consolidated summary)
 - `mlb-prod12-track-daily` + `mlb-prod12-ops-log` (local daily history snapshots; best effort)
 
-`mlb-bvp-pvb-refresh` + `mlb-bvp-impact-report` run in a separate prewarm LaunchAgent 90 minutes before the first daily run so core daily build latency stays predictable.
+The daily wrapper runs the governed inline BvP stage immediately after roster
+refresh. The dedicated BvP prewarm LaunchAgent is retired; its historical
+installation instructions below are not part of the daily path.
 
 Prop Outlook context refresh command:
 
@@ -1020,7 +1022,58 @@ make mlb-prop-regime-validation
 
 This target runs `backend/mlb/scripts/build_prop_regime_validation.py`, writes `artifacts/analysis/mlb/prop_regime_validation/prop_regime_combined_signal.csv`, and updates the deployed copy at `backend/mlb/data/prop_regime_validation/prop_regime_combined_signal.csv`.
 
-Create/update runner script:
+### Installed daily wrapper ownership and restricted writer routing
+
+The active wrapper is installed at
+`/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh`. It is installed-owned;
+the repository has no current executable source or installer for its complete
+contents. The `cat > ...` block below is a legacy bootstrap example. It predates
+the current inline BvP stage and does not contain the current daily phases. Do
+not use it to replace the active wrapper wholesale.
+The September 18 BvP installation reconciliation script and its complete
+`.txt` installation-evidence snapshot are also historical deployment evidence;
+they do not include later daily-wrapper changes and are not a current restore
+source.
+
+Keep these process-scoped opt-ins at the active wrapper's existing call sites:
+
+```zsh
+MLB_USE_RESTRICTED_INGEST=1 MLB_ROSTER_DATE="$MLB_DATE_ET" \
+  make mlb-roster-refresh-all
+
+MLB_USE_RESTRICTED_INGEST=1 bin/mlb_bvp_inline_daily_hook.sh "$MLB_DATE_ET" "$MLB_RUN_TAG" \
+  "$MLB_WRAPPER_RUN_STARTED_AT_UTC" "$MLB_BVP_INLINE_RESULT" \
+  "AUTOMATIC_DAILY_WRAPPER"
+```
+
+The roster line stays inside the existing roster retry loop. The BvP line stays
+immediately after successful roster refresh and before dependent feature or
+scoring work. Preserve the surrounding retries, arguments, locks, status capture,
+and receipt handling. The tracked `mlb-stat-derived-refresh` Make target already
+sets the flag only for the writer submake; its validation child keeps the
+inherited route. Do not export this flag in the parent wrapper or alter global
+database aliases. The four owner-owned `today_*` materialized-view refreshes
+remain a separate dependency.
+
+If the installed wrapper is replaced or these prefixes disappear, restore only
+the two prefixes above at their existing call sites in
+`/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh`. Do not restore the
+September rollback snapshot as a whole: it predates the current inline BvP
+workflow. Then verify the exact wrapper syntax and process boundaries:
+
+```sh
+/bin/zsh -n /Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh
+./bin/python -m unittest backend.mlb.tests.test_mlb_daily_restricted_writer_routing -v
+```
+
+For the next ordinary daily run, inspect writer output and existing receipt/log
+evidence for each path's role assertion, committed row counts, and read-back
+evidence. For stat-derived, confirm the writer used the restricted ingest
+login and effective role, and inspect the date-wide synchronization result;
+capture a natural INSERT or protected NULL-fill result when one occurs. No
+daily run or database action is part of this recovery check.
+
+Historical runner bootstrap example (not the current installer):
 
 ```bash
 mkdir -p "$HOME/bin" "$HOME/Projects/proppadia/artifacts/ops" "$HOME/Library/LaunchAgents"

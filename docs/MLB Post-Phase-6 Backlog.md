@@ -211,13 +211,13 @@ writer validation does not authorize a hosted cutover or a different writer.
   bounded normal invocation through the restricted login on 2026-10-17, with
   populated-row behavior and date-wide synchronization verified. A natural
   source/training INSERT or protected NULL fill remains unvalidated. Separately,
-  inspection of the current daily wrapper found it sources `backend/.env` and
-  invokes the roster and BvP/PvB writer processes without setting
-  `MLB_USE_RESTRICTED_INGEST=1`; the shared connection helper therefore falls
-  back to `DATABASE_URL`/`SUPABASE_DB_URL` unless its caller environment sets
-  the opt-in. This change adds process-scoped routing at those daily call sites
-  and routes only the stat-derived writer child of `mlb-stat-derived-refresh`;
-  its validation child and manual/backfill targets remain unchanged. The
+  current installed daily wrapper now opts in only at the roster and inline
+  BvP writer processes. It is installed-owned and has no current complete
+  tracked executable source; the legacy bootstrap block in the Prod12 runbook
+  is explicitly marked unsafe for wholesale replacement and now records the
+  exact routing recovery. The tracked Make target routes only the stat-derived
+  writer child; its validation child and manual/backfill targets remain
+  unchanged. The
   configured `SUPABASE_DB_URL` currently authenticates as `postgres`. The
   natural daily run must still verify the effective writer identities and the
   first natural stat-derived INSERT/protected NULL fill.
