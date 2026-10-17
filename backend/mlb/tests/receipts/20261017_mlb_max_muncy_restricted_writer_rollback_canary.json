@@ -1,0 +1,147 @@
+{
+  "definitions": {
+    "function_sha256": {
+      "mlb.safe_upsert_player_stats(jsonb)": "8b60123b6f601407bcb5429864aa2dc7efc7d82f0dc580f5b3cbbd76e8ac6759",
+      "public.norm_team_ids_ps()": "6a48a8af196cc9012cf4a5502f33bd2fe3d2b2dae3ae38d5f145ded34b2321cc",
+      "public.set_is_starter()": "81f07adb540bec32eb7b521c83e4950e4f68256cc553d41976aa692781495d41"
+    },
+    "player_stats_triggers": {
+      "trg_norm_team_ids_ps": {
+        "enabled": "O",
+        "function": "norm_team_ids_ps()",
+        "function_sha256": "6a48a8af196cc9012cf4a5502f33bd2fe3d2b2dae3ae38d5f145ded34b2321cc",
+        "trigger_sha256": "e99e5536feab69bb44ec00ea1c8d8fad66d51f41324911d7d0eee5057d872edc"
+      },
+      "trg_set_is_starter": {
+        "enabled": "O",
+        "function": "set_is_starter()",
+        "function_sha256": "81f07adb540bec32eb7b521c83e4950e4f68256cc553d41976aa692781495d41",
+        "trigger_sha256": "5bb6af5f8cc8fe51ab89f3509a70896e1e7e540e1510ae540f2749b1f02b4ef0"
+      }
+    }
+  },
+  "diagnostics": {
+    "integrity_error": null,
+    "operation_error": {
+      "category": "application_role_gate_dict_row_key_mismatch",
+      "detail": "configure_mlb_ingest_connection executes SET ROLE and its permission query, then looks up named dict_row keys (login_ok, group_ok, etc.) that the SELECT does not alias. The check raises before the canary transaction or writer helpers begin.",
+      "wrapped_cause_type": "KeyError",
+      "sqlstate": null
+    }
+  },
+  "integrity": {
+    "after": {
+      "model_training_props_target_outcomes": {
+        "rows": 9,
+        "sha256": "017d9a479d02a7371287df52acefc213c361bf9e27a784ef2316a5412c234129"
+      },
+      "player_derived_stats_date_neighbors": {
+        "rows": 90,
+        "sha256": "4946bc8221f9c47ff8b914e92dc14a6261d73510dfa24daf4959ba7f499c87cc"
+      },
+      "player_derived_stats_player_other_games": {
+        "rows": 531,
+        "sha256": "5ad025e12d6e09668163236a47b350070ee5ad930b21c0ed0a91d69e6ef8d7e1"
+      },
+      "player_derived_stats_target": {
+        "rows": 1,
+        "sha256": "7a8dda2534fb22e0d489b5df225532de346b1f9b26b66cc40a7a5e700e0209de"
+      },
+      "player_stats_game_neighbors": {
+        "rows": 45,
+        "sha256": "e1337ec30619a39af126a8f82c4e1836eb21978f96414c8cbf976ae9d5a9e98f"
+      },
+      "player_stats_target": {
+        "rows": 1,
+        "sha256": "6ba4bc6a317a5696d0740cc8ec63dcb094026087686a4da82ee96eb138fca6b4"
+      }
+    },
+    "all_row_fingerprints_match": true,
+    "before": {
+      "model_training_props_target_outcomes": {
+        "rows": 9,
+        "sha256": "017d9a479d02a7371287df52acefc213c361bf9e27a784ef2316a5412c234129"
+      },
+      "player_derived_stats_date_neighbors": {
+        "rows": 90,
+        "sha256": "4946bc8221f9c47ff8b914e92dc14a6261d73510dfa24daf4959ba7f499c87cc"
+      },
+      "player_derived_stats_player_other_games": {
+        "rows": 531,
+        "sha256": "5ad025e12d6e09668163236a47b350070ee5ad930b21c0ed0a91d69e6ef8d7e1"
+      },
+      "player_derived_stats_target": {
+        "rows": 1,
+        "sha256": "7a8dda2534fb22e0d489b5df225532de346b1f9b26b66cc40a7a5e700e0209de"
+      },
+      "player_stats_game_neighbors": {
+        "rows": 45,
+        "sha256": "e1337ec30619a39af126a8f82c4e1836eb21978f96414c8cbf976ae9d5a9e98f"
+      },
+      "player_stats_target": {
+        "rows": 1,
+        "sha256": "6ba4bc6a317a5696d0740cc8ec63dcb094026087686a4da82ee96eb138fca6b4"
+      }
+    },
+    "function_definitions_match_before_after": true,
+    "restricted_role_and_permission_state_match_before_after": true,
+    "serialization": "PostgreSQL jsonb_agg(to_jsonb(row) ORDER BY row_json::text)::text; SHA-256 over UTF-8 bytes. This preserves complete rows, and sorted JSONB serialization makes the fingerprint reproducible."
+  },
+  "official_source": {
+    "game_date": "2026-10-15",
+    "game_id": 849810,
+    "opponent": "MIL",
+    "opponent_id": 158,
+    "player_id": 571970,
+    "player_name": "Max Muncy",
+    "provider": "MLB StatsAPI retained live feed",
+    "schedule_path": "artifacts/ops/mlb_stat_derived_natural_run_evidence_v1/stat-derived-20261016T200721Z-f521cc7da3/2026-10-15/schedule_2026-10-15.json",
+    "schedule_sha256": "9aad711bfd60845932316dc2b1e5ee63231aa44c07fe6569c55bda7b9ff4fb85",
+    "source_path": "artifacts/ops/mlb_stat_derived_natural_run_evidence_v1/stat-derived-20261016T200721Z-f521cc7da3/2026-10-15/live_feed_game_849810.json",
+    "source_payload_sha256": "e071d73b910287766f0842ebf4da0415915d8ce4cbfa8d9563565ff86e5dab0c",
+    "source_sha256": "6a56bb88fe8f1f32efc4168e8896b3bf8cf753ce4617a02047ed433b4559ce58",
+    "team": "LAD",
+    "team_and_opponent_mapping_verified": true,
+    "team_id": 119
+  },
+  "operations": {
+    "player_derived_stats": {
+      "candidate_keys": [],
+      "helper": "_refresh_player_game_derived_stats",
+      "result": null,
+      "training_sync_invoked": false
+    },
+    "player_stats": {
+      "conflicts": [],
+      "database_entrypoint": "mlb.safe_upsert_player_stats(jsonb)",
+      "helper": "_upsert_player_stats_row",
+      "result": null
+    },
+    "transaction": {
+      "bounded_lock_timeout_ms": 3000,
+      "bounded_statement_timeout_ms": 30000,
+      "commit_executed": false,
+      "canary_transaction_started": false,
+      "explicit_rollback": false,
+      "rollback_call_attempted": true,
+      "writer_connection_closed": true
+    }
+  },
+  "production": {
+    "database": "postgres",
+    "postgres_version": "15.8",
+    "preconditions": "BLOCKED_AT_APPLICATION_ROLE_GATE",
+    "project_reference_match": true,
+    "read_only_preflight_session": "postgres",
+    "database_mutations": 0,
+    "writer_function_invocations": 0,
+    "read_only_role_diagnostic": {
+      "session_user": "proppadia_mlb_ingest_login",
+      "current_user_after_set_role": "proppadia_mlb_ingest",
+      "permission_assertions": "PASS"
+    },
+    "restricted_writer_session": null
+  },
+  "status": "BLOCKED",
+  "task": "mlb_max_muncy_restricted_writer_rollback_canary_v1"
+}
