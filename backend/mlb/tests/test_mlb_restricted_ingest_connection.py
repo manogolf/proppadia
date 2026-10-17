@@ -155,12 +155,29 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
         self.assertNotIn("fake secret", str(raised.exception))
 
     def test_blank_override_does_not_fall_back_to_shared_alias(self):
-        with patch.dict(os.environ, {pg.MLB_INGEST_DATABASE_URL_ENV: "   "}), patch.object(
-            pg, "get_database_url", return_value="shared-url"
-        ), patch.object(pg.psycopg, "connect") as connect:
-            with self.assertRaisesRegex(RuntimeError, "override is present but empty"):
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_OPT_IN_ENV: "1", pg.MLB_INGEST_DATABASE_URL_ENV: "   "},
+        ), patch.object(pg, "get_database_url", return_value="shared-url"), patch.object(
+            pg.psycopg, "connect"
+        ) as connect:
+            with self.assertRaisesRegex(RuntimeError, "opt-in is set but its URL is missing"):
                 pg._connect()
         connect.assert_not_called()
+
+    def test_stored_override_does_not_change_shared_routing_without_process_opt_in(self):
+        conn = _Connection(row=_OK_ROW)
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url"},
+            clear=True,
+        ), patch.object(pg, "get_database_url", return_value="shared-url"), patch.object(
+            pg.psycopg, "connect", return_value=conn
+        ) as connect:
+            self.assertIs(pg._connect(), conn)
+
+        self.assertEqual(connect.call_args.args[0], "shared-url")
+        self.assertEqual(conn.cursor_count, 0)
 
     def test_shared_alias_behavior_is_unchanged_when_override_is_absent(self):
         conn = _Connection(row=_OK_ROW)
@@ -176,9 +193,10 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
         class _DatabaseError(Exception):
             sqlstate = "28P01"
 
-        with patch.dict(os.environ, {pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url"}), patch.object(
-            pg, "verify_mlb_ingest_production_target"
-        ) as verify_target, patch.object(
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_OPT_IN_ENV: "1", pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url"},
+        ), patch.object(pg, "verify_mlb_ingest_production_target") as verify_target, patch.object(
             pg.psycopg, "connect", side_effect=_DatabaseError("contains a fake secret DSN")
         ) as connect:
             with self.assertRaises(RuntimeError) as raised:
@@ -190,7 +208,10 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
         self.assertNotIn("fake secret", str(raised.exception))
 
     def test_project_reference_mismatch_fails_before_connect(self):
-        with patch.dict(os.environ, {pg.MLB_INGEST_DATABASE_URL_ENV: "wrong-target"}), patch.object(
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_OPT_IN_ENV: "1", pg.MLB_INGEST_DATABASE_URL_ENV: "wrong-target"},
+        ), patch.object(
             pg, "verify_mlb_ingest_production_target", side_effect=RuntimeError("project reference mismatch")
         ), patch.object(pg.psycopg, "connect") as connect:
             with self.assertRaisesRegex(RuntimeError, "project reference mismatch"):
@@ -200,8 +221,21 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
     def test_roster_uses_explicit_override_without_shared_alias_fallback(self):
         from backend.mlb.scripts import refresh_mlb_players_rosters as roster
 
-        with patch.dict(os.environ, {pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url"}):
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_OPT_IN_ENV: "1", pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url"},
+        ):
             self.assertEqual(roster._db_url(), "restricted-url?sslmode=require&gssencmode=disable")
+
+    def test_roster_keeps_shared_alias_when_only_restricted_dsn_is_stored(self):
+        from backend.mlb.scripts import refresh_mlb_players_rosters as roster
+
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url", "SUPABASE_DB_URL": "shared-url"},
+            clear=True,
+        ):
+            self.assertEqual(roster._db_url(), "shared-url?sslmode=require&gssencmode=disable")
 
     def test_roster_shared_alias_fallback_is_unchanged_without_override(self):
         from backend.mlb.scripts import refresh_mlb_players_rosters as roster
@@ -222,7 +256,10 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
             order.append("connect")
             return conn
 
-        with patch.dict(os.environ, {pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url"}), patch.object(
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_OPT_IN_ENV: "1", pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url"},
+        ), patch.object(
             roster, "verify_mlb_ingest_production_target", side_effect=verify
         ), patch.object(roster.psycopg, "connect", side_effect=connect), patch.object(
             roster, "configure_mlb_ingest_connection", wraps=pg.configure_mlb_ingest_connection
@@ -236,7 +273,10 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
     def test_roster_target_mismatch_prevents_connection(self):
         from backend.mlb.scripts import refresh_mlb_players_rosters as roster
 
-        with patch.dict(os.environ, {pg.MLB_INGEST_DATABASE_URL_ENV: "wrong-target"}), patch.object(
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_OPT_IN_ENV: "1", pg.MLB_INGEST_DATABASE_URL_ENV: "wrong-target"},
+        ), patch.object(
             roster, "verify_mlb_ingest_production_target", side_effect=RuntimeError("project reference mismatch")
         ), patch.object(roster.psycopg, "connect") as connect:
             with self.assertRaisesRegex(RuntimeError, "project reference mismatch"):

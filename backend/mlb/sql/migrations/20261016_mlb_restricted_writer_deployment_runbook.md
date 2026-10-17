@@ -271,8 +271,11 @@ change API grants as part of this migration-only deployment.
 ## Restricted login activation and canary preparation
 
 `backend/shared/db/pg.py` supports the process-scoped
-`MLB_INGEST_DATABASE_URL` override. With the variable absent, existing shared
-alias resolution is unchanged. When it is present, the connection path:
+`MLB_INGEST_DATABASE_URL` override, activated only when that canary process
+also sets `MLB_USE_RESTRICTED_INGEST=1`. Storing the restricted URL in
+`backend/.env` alone does not change existing writer routing. With the opt-in
+absent, shared alias resolution is unchanged. When enabled, the connection
+path:
 
 1. Rejects an empty value and verifies the URL against the pinned MLB
    production project reference before connecting.
@@ -285,12 +288,10 @@ alias resolution is unchanged. When it is present, the connection path:
    report only a safe category or SQLSTATE, never the DSN or server message.
 
 The roster caller has its own direct psycopg connection and uses the same
-override, production-reference check, role activation, and assertions. The
+explicitly opted-in override, production-reference check, role activation, and assertions. The
 stat-derived, PA, BvP/PvB, and prediction callers use `pg_connect()` and inherit
-the same opt-in behavior. An unset override preserves normal production
-behavior. Do not put the dedicated DSN in `backend/.env`; supply it only to an
-individually authorized canary process using the already approved credential
-source.
+the same opt-in behavior. Keep `MLB_USE_RESTRICTED_INGEST` out of
+`backend/.env`; set it only for an individually authorized canary process.
 
 The active stat-derived caller also reads
 `mlb.player_streak_profiles` (`player_id`, `prop_type`, `prop_source`,

@@ -15,6 +15,7 @@ from backend.supabase.supabase_utils import get_database_url
 
 
 MLB_INGEST_DATABASE_URL_ENV = "MLB_INGEST_DATABASE_URL"
+MLB_INGEST_OPT_IN_ENV = "MLB_USE_RESTRICTED_INGEST"
 MLB_INGEST_LOGIN = "proppadia_mlb_ingest_login"
 MLB_INGEST_ROLE = "proppadia_mlb_ingest"
 
@@ -52,13 +53,21 @@ def _sqlstate(exc: BaseException) -> Optional[str]:
 
 
 def _restricted_connection_url() -> Optional[str]:
-    """Return the process-scoped canary URL, failing closed when blank."""
-    if MLB_INGEST_DATABASE_URL_ENV not in os.environ:
+    """Return the canary URL only after an explicit per-process opt-in."""
+    opt_in = os.environ.get(MLB_INGEST_OPT_IN_ENV)
+    if opt_in is None:
         return None
+    if opt_in != "1":
+        raise RuntimeError("MLB restricted connection opt-in must be exactly 1 or unset")
     url = os.environ.get(MLB_INGEST_DATABASE_URL_ENV, "").strip()
     if not url:
-        raise RuntimeError("MLB restricted connection override is present but empty")
+        raise RuntimeError("MLB restricted connection opt-in is set but its URL is missing")
     return url
+
+
+def mlb_ingest_restricted_mode_enabled() -> bool:
+    """Whether this process explicitly opted into the restricted writer route."""
+    return _restricted_connection_url() is not None
 
 
 def verify_mlb_ingest_production_target(url: str) -> None:

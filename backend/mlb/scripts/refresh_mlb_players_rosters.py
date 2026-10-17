@@ -30,6 +30,7 @@ from urllib3.util.retry import Retry
 
 from backend.shared.db.pg import (
     configure_mlb_ingest_connection,
+    mlb_ingest_restricted_mode_enabled,
     verify_mlb_ingest_production_target,
 )
 
@@ -46,11 +47,8 @@ def _target_date(raw: Optional[str]) -> str:
 
 
 def _db_url() -> str:
-    restricted_url = os.getenv("MLB_INGEST_DATABASE_URL")
-    if restricted_url is not None:
-        db = restricted_url.strip()
-        if not db:
-            raise RuntimeError("MLB restricted connection override is present but empty")
+    if mlb_ingest_restricted_mode_enabled():
+        db = os.getenv("MLB_INGEST_DATABASE_URL", "").strip()
     else:
         db = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
     if not db:
@@ -63,7 +61,7 @@ def _db_url() -> str:
 
 
 def _connect_db(db: str):
-    restricted_ingest = os.getenv("MLB_INGEST_DATABASE_URL") is not None
+    restricted_ingest = mlb_ingest_restricted_mode_enabled()
     if restricted_ingest:
         verify_mlb_ingest_production_target(db)
     conn = psycopg.connect(db, prepare_threshold=0)
