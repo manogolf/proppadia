@@ -46,6 +46,34 @@ DEFAULT_QUICK_CARD_ROOT = Path("backend/mlb/exports/quick_card")
 DEFAULT_OUT_DIR = Path("backend/mlb/exports/model_v2/lanes/today")
 DEFAULT_UPLOAD_DIR = Path("backend/mlb/exports/model_v2/upload")
 
+PLAYER_DERIVED_STATS_SELECTOR_COLUMNS = (
+    "player_id",
+    "game_id",
+    "game_date",
+    "team",
+    *(f"d{window}_{stat}" for window in (7, 15, 30) for stat in (
+        "hits",
+        "runs_scored",
+        "rbis",
+        "home_runs",
+        "singles",
+        "doubles",
+        "triples",
+        "walks",
+        "strikeouts_batting",
+        "stolen_bases",
+        "total_bases",
+        "hits_runs_rbis",
+        "runs_rbis",
+        "outs_recorded",
+        "strikeouts_pitching",
+        "walks_allowed",
+        "earned_runs",
+        "hits_allowed",
+    )),
+    *(f"d{window}_at_bats" for window in (7, 15, 30)),
+)
+
 EXCLUDE_EXACT = {
     "actual_value",
     "residual",
@@ -282,7 +310,10 @@ def _load_player_derived_stats(engine, game_ids: list[int], chunk_size: int) -> 
     with engine.connect() as conn:
         for chunk in _chunks(game_ids, chunk_size):
             part = pd.read_sql(
-                text("SELECT * FROM mlb.player_derived_stats WHERE game_id = ANY(:game_ids)"),
+                text(
+                    "SELECT " + ", ".join(PLAYER_DERIVED_STATS_SELECTOR_COLUMNS)
+                    + " FROM mlb.player_derived_stats WHERE game_id = ANY(:game_ids)"
+                ),
                 conn,
                 params={"game_ids": chunk},
             )
@@ -304,8 +335,9 @@ def _load_latest_player_derived_stats(engine, player_ids: list[int], date_value:
         for chunk in _chunks(player_ids, chunk_size):
             part = pd.read_sql(
                 text(
-                    """
-                    SELECT DISTINCT ON (player_id) *
+                    "SELECT DISTINCT ON (player_id) "
+                    + ", ".join(PLAYER_DERIVED_STATS_SELECTOR_COLUMNS)
+                    + """
                     FROM mlb.player_derived_stats
                     WHERE player_id = ANY(:player_ids)
                       AND game_date::date <= CAST(:date_value AS date)

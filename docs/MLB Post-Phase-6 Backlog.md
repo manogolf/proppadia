@@ -430,7 +430,7 @@ writer validation does not authorize a hosted cutover or a different writer.
   | Consumer group | PostgreSQL relations and required columns | Classification / note |
   | --- | --- | --- |
   | Daily `mlb-daily-refresh` → `mlb-hits-environment-report` / `report_mlb_hits_environment.py` | `mlb.player_stats`: `game_date, game_id, team, hits, player_id, opponent, hits_allowed, outs_recorded, is_starter, position, earned_runs, strikeouts_pitching`; `mlb.player_derived_stats`: `player_id, game_id, d7_hits_allowed, d15_hits_allowed, d30_hits_allowed`; `mlb.player_ids`: `player_id, player_name, team, team_id`. | SELECT-only PostgreSQL access; writes local report and history artifacts. This is the recurring reporting dependency. |
-  | Daily selector and reconciliation → `run_mlb_hits_lane_selector_daily.py` / `run_mlb_hits_lane_selector_report.py` | `mlb.player_derived_stats`: current `SELECT *` selects all 68 catalog columns: `id, player_id, game_id, game_date, team, is_home, created_at, updated_at, d7_hits, d7_runs_scored, d7_rbis, d7_home_runs, d7_singles, d7_doubles, d7_triples, d7_walks, d7_strikeouts_batting, d7_stolen_bases, d7_total_bases, d7_hits_runs_rbis, d7_runs_rbis, d7_outs_recorded, d7_strikeouts_pitching, d7_walks_allowed, d7_earned_runs, d7_hits_allowed, d15_hits, d15_runs_scored, d15_rbis, d15_home_runs, d15_singles, d15_doubles, d15_triples, d15_walks, d15_strikeouts_batting, d15_stolen_bases, d15_total_bases, d15_hits_runs_rbis, d15_runs_rbis, d15_outs_recorded, d15_strikeouts_pitching, d15_walks_allowed, d15_earned_runs, d15_hits_allowed, d30_hits, d30_runs_scored, d30_rbis, d30_home_runs, d30_singles, d30_doubles, d30_triples, d30_walks, d30_strikeouts_batting, d30_stolen_bases, d30_total_bases, d30_hits_runs_rbis, d30_runs_rbis, d30_outs_recorded, d30_strikeouts_pitching, d30_walks_allowed, d30_earned_runs, d30_hits_allowed, d7_at_bats, d15_at_bats, d30_at_bats, d7_plate_appearances, d15_plate_appearances, d30_plate_appearances`; `mlb.player_team_by_game`: `player_id, game_id, team_id`; `public.mlb_team_map`: `team_id, abbr`; `mlb.player_stats`: `player_id, game_date, position, at_bats`. | SELECT-only PostgreSQL access; emits local selector/reconciliation outputs. The two `SELECT *` statements require all 68 columns as written; narrowing and checking the generated selector rows is part of the minimum grant design. |
+  | Daily selector and reconciliation → `run_mlb_hits_lane_selector_daily.py` / `run_mlb_hits_lane_selector_report.py` | `mlb.player_derived_stats`: selector projection `player_id, game_id, game_date, team`, plus `d7_*`, `d15_*`, and `d30_*` for `hits, runs_scored, rbis, home_runs, singles, doubles, triples, walks, strikeouts_batting, stolen_bases, total_bases, hits_runs_rbis, runs_rbis, outs_recorded, strikeouts_pitching, walks_allowed, earned_runs, hits_allowed, at_bats` (61 columns total); `mlb.player_team_by_game`: `player_id, game_id, team_id`; `public.mlb_team_map`: `team_id, abbr`; `mlb.player_stats`: `player_id, game_date, position, at_bats`. | SELECT-only PostgreSQL access; emits local selector/reconciliation outputs. Both selector reads now use the same explicit 61-column projection. It covers every rolling-stat field in the frozen over-model feature file and under-model audit fallback; omits `id, is_home, created_at, updated_at, d7_plate_appearances, d15_plate_appearances, d30_plate_appearances`, which do not flow into selector scores or selection exports. |
   | Overlap role profile watch → `build_mlb_overlap_role_profile_watch.py` | `mlb.player_derived_stats`: `player_id, game_id, game_date, d7_plate_appearances, d15_plate_appearances, d30_plate_appearances, d15_at_bats`; `mlb.player_stats`: `player_id, game_date, position, at_bats`. | SELECT-only PostgreSQL access; writes local report artifacts. |
   | Hits recency, interaction, and feature parity research → `report_mlb_hits_recency_vs_baseline.py`, `report_mlb_hits_interaction_failure.py`, `audit_mlb_hits_feature_parity.py` | `mlb.model_training_props`: `game_date, game_id, player_id, prop_type, rolling_result_avg_7`; `mlb.player_derived_stats`: `player_id, game_id, game_date, d7_hits, d15_hits, d30_hits`; `mlb.prop_features_precomputed`: `player_id, game_id, game_date, prop_type, features, feature_set_tag, model_tag`. | SELECT-only queries and local diagnostic outputs. The current `prop_features_precomputed` grant already covers its required columns. |
   | Season-to-date outcome evidence → `assemble_mlb_hits05_2026_season_to_date_evidence_v1.py` | `mlb.player_stats`: `game_date, game_id, player_id, hits, plate_appearances`. | SELECT-only historical evidence extract; writes local evidence artifacts. |
@@ -444,29 +444,40 @@ writer validation does not authorize a hosted cutover or a different writer.
   database mutations or invoke write-capable routines in at least one supported
   mode. A dry-run option does not make a dual-mode repair program a read-only
   principal.
-- Production roles currently are not safe for broader reader grants. Both
+- Fresh production catalog inspection on 2026-10-17 found both
   `proppadia_mlb_research_login` and its inherited `proppadia_mlb_research_ro`
-  group have `BYPASSRLS`; the login is a member of that group. The research
-  roles have no direct INSERT/UPDATE/DELETE grants on the inspected relations,
-  but `BYPASSRLS` would bypass row policies wherever SELECT is granted. The
-  inspected RLS relations include `player_stats` (ingest-only SELECT policy),
-  `player_derived_stats` (ingest policies), `player_ids` (RLS enabled, no
-  policy), and `public.mlb_team_map` (RLS enabled, no policy). `model_training_props`
-  has permissive public SELECT policies; granting the research group SELECT
-  would therefore expose all rows unless a role-applicable restrictive policy
-  is added or the broad policy is revised. The role lacks its table SELECT grant.
-  The inspected non-RLS relations include `player_team_by_game` and the
-  moneyline tables. `mlb` schema USAGE is present.
-- Smallest practical design: reuse the existing research login and group, with
-  no new role or infrastructure, after removing `BYPASSRLS` from both existing
-  research roles. Grant SELECT only on the grouped columns above (and retain
-  the existing moneyline/PFP grants); add explicit, reviewed SELECT policies
-  for the RLS-protected relations required by these consumers, including a
-  restrictive row boundary for `model_training_props` or a reviewed revision
-  of its permissive public policies. Keep broader API-role policy cleanup as a
-  separately tracked P2.3 concern.
-  Narrow the daily selector's two `SELECT *` statements before settling the
-  `player_derived_stats` grant. Add a process-only `MLB_RESEARCH_DATABASE_URL`
+  group already have `NOBYPASSRLS`; the login is an inheriting member of the
+  group. This differs from the earlier catalog snapshot, which reported
+  `BYPASSRLS`; this assessment made no production changes. The group holds the
+  existing column SELECT grants for `prop_features_precomputed` and both
+  moneyline tables, inherited by the login. Those three relations have RLS
+  disabled, so the Moneyline audit and BvP post-commit readback remain
+  compatible without bypass. Neither role has SELECT or write grants on the
+  newly inventoried source relations.
+- Exact current RLS behavior with the non-bypass login: `player_stats` has only
+  a permissive SELECT policy for `proppadia_mlb_ingest`, and
+  `player_derived_stats` has ingest-only SELECT/INSERT/UPDATE policies; the
+  research role matches none. `player_ids` and `public.mlb_team_map` have RLS
+  enabled and no policies. After a future SELECT grant, reads of those four
+  relations return no rows for research until a role-applicable SELECT policy
+  is added. `model_training_props` has permissive SELECT policies for `PUBLIC`
+  with `USING (true)` (plus an `anon` policy); after a SELECT grant the
+  research role sees all rows. There is no existing row boundary to reuse.
+  `player_team_by_game` and the moneyline/PFP tables have RLS disabled; `mlb`
+  schema USAGE is present. No INSERT/UPDATE/DELETE grants were found on the
+  inspected relations.
+- Smallest practical plan: reuse the existing research login/group; no role
+  change or new infrastructure is currently needed. For a separately reviewed
+  grant, add SELECT only on the inventoried columns to
+  `proppadia_mlb_research_ro`, and role-targeted SELECT policies for
+  `player_stats`, `player_derived_stats`, `player_ids`, and
+  `public.mlb_team_map`. Decide whether all historical `model_training_props`
+  rows are an acceptable research scope before granting it: the existing
+  PUBLIC `USING (true)` policies mean a grant alone provides no row isolation,
+  and changing them can affect API behavior. Keep broader API-role policy
+  cleanup as a separately tracked P2.3 concern.
+  The daily selector's two wildcard reads have been narrowed to the exact
+  61-column projection above. Add a process-only `MLB_RESEARCH_DATABASE_URL`
   override to the shared reader connection path and use it only in the listed
   read-only commands; keep the BvP post-commit verification and moneyline audit
   on their existing dedicated research route. Do not change the generic
@@ -475,8 +486,11 @@ writer validation does not authorize a hosted cutover or a different writer.
   RLS enabled and no bypass; confirm returned row scope and expected columns;
   confirm INSERT/UPDATE/DELETE and write-capable function execution are denied;
   run focused offline route-isolation tests; then validate recurring hits
-  reporting and reconciliation on a natural run. No grants, role attributes,
-  aliases, credentials, or scheduler settings were changed in this assessment.
+  reporting and reconciliation on a natural run. Offline regressions now cover
+  the selector's 61-column projection and duplicate-row handling alongside the
+  Moneyline audit and BvP readback route contracts. These tests do not establish
+  production row-policy scope. No grants, role attributes, aliases, credentials,
+  or scheduler settings were changed in this assessment.
 - Exceptional maintenance remains a separate owner route: migration/rollback
   and phase activation tools, historical correction/backfill/recompute targets,
   and manual training regeneration. They are not daily scheduled consumers and
@@ -489,10 +503,10 @@ writer validation does not authorize a hosted cutover or a different writer.
   `backend/shared/db/pg.py`, the active daily wrapper, and the two MLB DH
   launch-agent definitions.
 - Completion criteria: (1) verify the three process-scoped daily writer routes
-  and each effective identity on the next natural run; (2) correct the existing
-  research login/group RLS-bypass attributes, deploy reviewed read-only SELECT
-  policies/grants, and route only the listed reader processes through the
-  existing research login; (3) verify query row scope, expected results, and
+  and each effective identity on the next natural run; (2) confirm the research
+  login/group remain `NOBYPASSRLS`, deploy separately reviewed
+  read-only SELECT grants/policies, and route only listed reader processes
+  through the existing research login; (3) verify query row scope, expected results, and
   write denial under that identity; (4) decide and validate a separately
   approved route for the daily materialized-view refresh; (5) retain the first
   natural restricted source/training INSERT or protected NULL-fill evidence.
