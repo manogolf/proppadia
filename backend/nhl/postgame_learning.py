@@ -428,6 +428,8 @@ def ensure_prior_learning(
         "puck_line_grade_counts": {str(key): int(value) for key, value in pl.grading_status.value_counts().items()},
         "challenger_grade_status": grade_status, "cross_market_grade_package": grade_path,
         "sog_grade_counts": prop_counts["sog"], "points_grade_counts": prop_counts["points"],
+        "points_status": summary.get("points_status"),
+        "points_warning": summary.get("points_warning"),
         "saves_grade_counts": prop_counts["saves"],
         "unresolved_counts": {lane: sum(value for key, value in counts.items()
                                           if "UNRESOLVED" in key or "STATUS_UNRESOLVED" in key)

@@ -290,6 +290,30 @@ def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
     }
 
 
+def _resolve_prop_prediction_source(*, runs: list[Path], lane: str,
+                                    slate_date: str,
+                                    schedule: pd.DataFrame) -> dict[str, Any]:
+    """Resolve a prospective Points/Saves card without hiding corrupt sources.
+
+    An entirely absent prospective Points publication means that there is no
+    immutable prediction to grade. It is an explicit zero-grade outcome, not
+    a retrospective prediction opportunity. Saves retains its exact-one
+    requirement. Any present card is fully validated, and competing cards
+    remain fatal for both lanes.
+    """
+    if len(runs) > 1:
+        raise RuntimeError(f"IMMUTABLE_{lane}_FINAL_PREGAME_RUN_CARDINALITY:{len(runs)}")
+    if not runs:
+        if lane == "POINTS":
+            return {
+                "status": "NOT_GRADEABLE_NO_PREDICTION",
+                "reason": "NO_VALID_IMMUTABLE_FINAL_PREGAME_PREDICTION",
+            }
+        raise RuntimeError(f"IMMUTABLE_{lane}_FINAL_PREGAME_RUN_CARDINALITY:0")
+    return _verify_prop_source(run=runs[0], lane=lane, slate_date=slate_date,
+                               schedule=schedule)
+
+
 def _require_columns(frame: pd.DataFrame, columns: set[str], label: str) -> None:
     missing = sorted(columns - set(frame))
     if missing:
@@ -582,15 +606,11 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
     else:
         points_runs = list((operational_root / "points_prediction_only" / "season=2026" / f"slate_date={slate_date}" / "phase=FINAL_PREGAME").glob("run_id=*"))
         saves_runs = list((operational_root / "saves_prediction_only" / "season=2026" / f"slate_date={slate_date}" / "phase=FINAL_PREGAME").glob("run_id=*"))
-        if len(points_runs) != 1:
-            raise RuntimeError(f"IMMUTABLE_POINTS_FINAL_PREGAME_RUN_CARDINALITY:{len(points_runs)}")
-        if len(saves_runs) != 1:
-            raise RuntimeError(f"IMMUTABLE_SAVES_FINAL_PREGAME_RUN_CARDINALITY:{len(saves_runs)}")
-        points = _verify_prop_source(
-            run=points_runs[0], lane="POINTS", slate_date=slate_date,
+        points = _resolve_prop_prediction_source(
+            runs=points_runs, lane="POINTS", slate_date=slate_date,
             schedule=schedule)
-        saves = _verify_prop_source(
-            run=saves_runs[0], lane="SAVES", slate_date=slate_date,
+        saves = _resolve_prop_prediction_source(
+            runs=saves_runs, lane="SAVES", slate_date=slate_date,
             schedule=schedule)
 
     observed = pd.to_datetime(sog_meta["prediction_timestamp_utc"], utc=True)
@@ -1010,6 +1030,16 @@ def _grade_saves(run: Path, schedule: pd.DataFrame,
             "saves_input_exclusions": input_exclusions}
 
 
+def _grade_points_source(points_status: dict[str, Any], schedule: pd.DataFrame,
+                        skaters: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+    if points_status["status"] in {
+            "NO_PROSPECTIVE_POINTS_PREDICTIONS", "NOT_GRADEABLE_NO_PREDICTION"}:
+        return _zero_evidence_surface(points_status["status"], points_status["reason"]), {}
+    point_grades = _grade_points(Path(points_status["run"]), schedule, skaters)
+    points = point_grades.pop("points")
+    return points, point_grades
+
+
 def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataFrame,
                               games: pd.DataFrame, skaters: pd.DataFrame,
                               goalies: pd.DataFrame, observed_at: str) -> dict[str, pd.DataFrame]:
@@ -1072,11 +1102,8 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
     points_status = source_binding["points"]
     saves_status = source_binding["saves"]
     extra: dict[str, pd.DataFrame] = {}
-    if points_status["status"] == "NO_PROSPECTIVE_POINTS_PREDICTIONS":
-        points = _zero_evidence_surface(points_status["status"], points_status["reason"])
-    else:
-        point_grades = _grade_points(Path(points_status["run"]), schedule, skaters)
-        points = point_grades.pop("points"); extra.update(point_grades)
+    points, point_grades = _grade_points_source(points_status, schedule, skaters)
+    extra.update(point_grades)
     if saves_status["status"] == "NO_PROSPECTIVE_SAVES_PREDICTIONS":
         saves = _zero_evidence_surface(saves_status["status"], saves_status["reason"])
     else:
@@ -1166,6 +1193,11 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             phase_grade_status = "NO_IMMUTABLE_CROSS_MARKET_SOURCE"
         else:
             phase_grade_status = "MIXED_OR_UNRESOLVED_GAME_PHASE"
+        points_missing_warning = (
+            "NO_VALID_IMMUTABLE_FINAL_PREGAME_PREDICTION; Points grading skipped"
+            if source_binding and source_binding["points"]["status"] ==
+            "NOT_GRADEABLE_NO_PREDICTION" else None
+        )
         summary = {
             "contract_version": CONTRACT, "slate_date": slate_date,
             "status": "COMPLETE", "substantive_identity": identity,
@@ -1197,6 +1229,7 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             summary["points_reason"] = source_binding["points"].get("reason")
             summary["saves_reason"] = source_binding["saves"].get("reason")
             summary["points_status"] = source_binding["points"]["status"]
+            summary["points_warning"] = points_missing_warning
             summary["saves_status"] = source_binding["saves"]["status"]
             summary["sog_evaluation_populations"] = {
                 str(key): int(value) for key, value in grades["sog"].evaluation_lane.value_counts().items()
@@ -1221,7 +1254,9 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
         (staging / "report.md").write_text(
             f"# NHL postgame reconciliation — {slate_date}\n\n"
             f"Status: COMPLETE\n\nGames: {len(games)}; skaters: {len(skaters)}; goalies: {len(goalies)}.\n\n"
-            + (("Prospective SOG is graded by separate contract arm; Points/Saves are graded from their bound prospective sources. "
+            + (("WARNING: no valid immutable FINAL_PREGAME Points prediction existed; Points grading was skipped. "
+                if points_missing_warning else "")
+             + ("Prospective SOG is graded by separate contract arm; Points/Saves are graded from their bound prospective sources. "
               if source_binding and source_binding["points"]["status"] == "PROSPECTIVE_SOURCE_BOUND"
               else "Prospective SOG is graded by separate contract arm; absent pre-activation Points/Saves remain zero-row evidence. "
               if source_binding else "September 19 SOG is outcome-only and has no prediction grade. ")

@@ -100,9 +100,16 @@ not prospectively active before September 21, September 20 publishes
 schema-valid zero-row grading surfaces with, respectively,
 `NO_PROSPECTIVE_POINTS_PREDICTIONS` and
 `NO_PROSPECTIVE_SAVES_PREDICTIONS`, both carrying reason
-`PROSPECTIVE_NOT_BEFORE_2026-09-21`. Missing Points or Saves sources on
-September 21 or later fail closed unless a separately approved contract says
-otherwise.
+`PROSPECTIVE_NOT_BEFORE_2026-09-21`. For September 21 or later, an entirely
+absent Points `FINAL_PREGAME` card is classified
+`NOT_GRADEABLE_NO_PREDICTION`: reconciliation records a warning and a
+schema-valid zero-row Points surface, skips Points grading, and continues the
+other reconciliation lanes. This means no valid immutable prediction was
+published; it is distinct from a bound prediction whose outcome is
+unavailable. A present Points card still undergoes all manifest, identity,
+provenance, and strict-pregame checks, and conflicting cards still fail
+closed. Saves retains its exact-one prospective-card requirement. No
+retrospective prediction or grade is created.
 
 Only retained prospective SOG rows are graded. D is reported as the champion;
 A, B, C, and G remain separate operational-shadow populations; F, if present,

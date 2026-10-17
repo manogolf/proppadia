@@ -25,6 +25,8 @@ from backend.nhl.postgame_reconcile.core import (
     _select_cross_market_final_run,
     _grade_points,
     _grade_saves,
+    _grade_points_source,
+    _resolve_prop_prediction_source,
     _settle_ladder,
     publish_reconciliation,
     reconciliation_lock,
@@ -547,6 +549,74 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(len(save_grades["saves_predicted_relief_appearances"]), 429)
         self.assertEqual(len(save_grades["saves_unpredicted_starters"]), 0)
         self.assertEqual(len(save_grades["saves_unpredicted_relief_appearances"]), 0)
+
+    def test_october_16_missing_points_card_is_ungradeable_and_nonblocking(self):
+        # Retained Oct. 17 daily evidence records this exact prior-day failure.
+        receipt = (Path(__file__).resolve().parents[2] / "artifacts/operational/nhl/daily_runs"
+                   / "run_id=nhldaily_20261017T180823803335Z_ca8a4636/parent_receipt.json")
+        retained = json.loads(receipt.read_text())
+        self.assertIn("IMMUTABLE_POINTS_FINAL_PREGAME_RUN_CARDINALITY:0",
+                      json.dumps(retained))
+
+        operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
+        with patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
+             patch("backend.nhl.scripts.run_nhl_postgame_reconciliation.psycopg.connect") as database:
+            actual = resolve_operational_sources(
+                slate_date="2026-10-16", operational_root=operational)
+        database.assert_not_called()
+        self.assertEqual(actual["points"]["status"], "NOT_GRADEABLE_NO_PREDICTION")
+        self.assertEqual(actual["saves"]["status"], "PROSPECTIVE_SOURCE_BOUND")
+        self.assertEqual(actual["cross_market"]["status"], "REQUIRED_CARD_PRESENT")
+        self.assertEqual(actual["canonical_games"], 2)
+
+        points = _resolve_prop_prediction_source(
+            runs=[], lane="POINTS", slate_date="2026-10-16", schedule=pd.DataFrame())
+        self.assertEqual(points, {
+            "status": "NOT_GRADEABLE_NO_PREDICTION",
+            "reason": "NO_VALID_IMMUTABLE_FINAL_PREGAME_PREDICTION",
+        })
+        with patch("backend.nhl.postgame_reconcile.core._grade_points") as grade:
+            surface, extra = _grade_points_source(points, pd.DataFrame(), pd.DataFrame())
+        grade.assert_not_called()
+        self.assertEqual(extra, {})
+        self.assertEqual(len(surface), 0)
+        self.assertEqual(surface.attrs["status"], "NOT_GRADEABLE_NO_PREDICTION")
+
+    def test_absent_or_competing_saves_points_cards_remain_blocking(self):
+        for lane in ("SAVES",):
+            with self.assertRaisesRegex(RuntimeError,
+                                        f"IMMUTABLE_{lane}_FINAL_PREGAME_RUN_CARDINALITY:0"):
+                _resolve_prop_prediction_source(
+                    runs=[], lane=lane, slate_date="2026-10-16", schedule=pd.DataFrame())
+        for lane in ("POINTS", "SAVES"):
+            with self.assertRaisesRegex(RuntimeError,
+                                        f"IMMUTABLE_{lane}_FINAL_PREGAME_RUN_CARDINALITY:2"):
+                _resolve_prop_prediction_source(
+                    runs=[Path("run-a"), Path("run-b")], lane=lane,
+                    slate_date="2026-10-16", schedule=pd.DataFrame())
+
+    def test_present_points_card_is_still_fully_validated(self):
+        run = Path("run_id=present")
+        with patch("backend.nhl.postgame_reconcile.core._verify_prop_source",
+                   side_effect=RuntimeError("IMMUTABLE_POINTS_RUN_IDENTITY_MISMATCH")) as verify:
+            with self.assertRaisesRegex(RuntimeError, "IMMUTABLE_POINTS_RUN_IDENTITY_MISMATCH"):
+                _resolve_prop_prediction_source(
+                    runs=[run], lane="POINTS", slate_date="2026-10-16",
+                    schedule=pd.DataFrame())
+        verify.assert_called_once()
+        self.assertEqual(verify.call_args.kwargs["run"], run)
+        self.assertEqual(verify.call_args.kwargs["lane"], "POINTS")
+        self.assertEqual(verify.call_args.kwargs["slate_date"], "2026-10-16")
+
+    def test_bound_points_with_unavailable_outcome_remains_distinct(self):
+        bound = {"status": "PROSPECTIVE_SOURCE_BOUND", "run": "valid-card"}
+        unresolved = pd.DataFrame([{"grading_status": "PARTICIPATION_STATUS_UNRESOLVED"}])
+        with patch("backend.nhl.postgame_reconcile.core._grade_points",
+                   return_value={"points": unresolved, "points_unresolved": unresolved}) as grade:
+            surface, extra = _grade_points_source(bound, pd.DataFrame(), pd.DataFrame())
+        grade.assert_called_once()
+        self.assertEqual(surface.grading_status.iloc[0], "PARTICIPATION_STATUS_UNRESOLVED")
+        self.assertIn("points_unresolved", extra)
 
     def test_ladder_grading_preserves_pushes(self):
         frame = pd.DataFrame([{
