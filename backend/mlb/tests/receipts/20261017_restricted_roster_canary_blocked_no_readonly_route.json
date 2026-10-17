@@ -1,0 +1,15 @@
+{
+  "assessed_at_utc": "2026-10-17T16:15:24.702703+00:00",
+  "canary": "single_record_roster_identical_replay",
+  "candidate_selected": false,
+  "credentials_changed": false,
+  "database_grants_changed": false,
+  "database_write_committed": false,
+  "function": "mlb.safe_upsert_player_roster",
+  "function_invoked": false,
+  "production_connection_opened": false,
+  "reason": "No configured approved MLB read-only connection has documented SELECT scope for mlb.player_ids; owner-level connection not used.",
+  "restricted_writer_session_opened": false,
+  "source_provider_request_made": false,
+  "status": "BLOCKED_READ_ONLY_ROUTE_UNAVAILABLE"
+}
