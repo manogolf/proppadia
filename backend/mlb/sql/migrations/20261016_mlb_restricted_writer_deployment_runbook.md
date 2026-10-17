@@ -375,3 +375,23 @@ The roster workflow's `SUPABASE_DB_URL` secret was not inspected or changed;
 verify its role through an authorized bounded hosted run before changing or
 retiring that secret. The broad existing API-role DML grants were not changed;
 identify hosted runner/PostgREST dependencies before narrowing them.
+
+## Restricted login activation status — 2026-10-17
+
+A read-only production catalog check connected to the MLB production database
+as `postgres` on PostgreSQL 15.8. `proppadia_mlb_ingest` exists as NOLOGIN,
+NOINHERIT, non-superuser, without CREATEDB, CREATEROLE, REPLICATION, or
+BYPASSRLS. `proppadia_mlb_ingest_login` is absent, and no membership involving
+either ingest role exists. The observed `postgres` role remains LOGIN,
+INHERIT, non-superuser, with its existing elevated role attributes and
+memberships. No changes were made by this check.
+
+The repository documents a requirement to use an existing owner-approved
+credential method but does not identify a concrete method or approved secret
+destination for the new login. Therefore activation must stop before creating
+the login: creating a passwordless login without a verified secure way to
+authenticate it would not satisfy the activation contract. Once the owner
+identifies the existing approved credential-provisioning method, repeat the
+read-only absence and group-isolation checks, then perform only the separately
+authorized login creation and single membership grant. Do not place the
+password or restricted DSN in this runbook, receipts, or tracked files.
