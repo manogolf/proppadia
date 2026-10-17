@@ -1,0 +1,67 @@
+{
+  "canary": "taylor_walls_single_record_rollback_only",
+  "database_write_committed": false,
+  "explicit_rollback": true,
+  "finished_at_utc": "2026-10-17T16:57:32.787272+00:00",
+  "function_invocations": 1,
+  "function_result": 1,
+  "post_rollback": {
+    "complete_row": {
+      "created_at": "2025-05-11T22:34:57.248343+00:00",
+      "id": "b67a06fb-9dc6-447e-bcd6-a64454bde089",
+      "is_placeholder": false,
+      "player_id": 670764,
+      "player_name": "Taylor Walls",
+      "team": "139",
+      "team_id": 139,
+      "updated_at": "2026-10-16T23:34:45.248989+00:00"
+    },
+    "fingerprint": "745574cb910ee61ef90543ac0ddb253c3c3945c882dba4ab29dbc8cd07b7ca0e",
+    "matches_baseline_fingerprint": true,
+    "matches_baseline_row": true,
+    "ordered_columns_match": true,
+    "read_only_identity": {
+      "current_user": "postgres",
+      "session_user": "postgres"
+    },
+    "row_exists": true
+  },
+  "post_rollback_integrity": true,
+  "preflight": {
+    "admin_identity_match": true,
+    "admin_project_match": true,
+    "function_hash": "cac9a86c295e748eef5b75ebeda47c34cfe2b406d327cfef455d0809518a5e3a",
+    "function_matches_baseline": true,
+    "official_game_player_evidence_match": true,
+    "production_session": {
+      "current_user": "postgres",
+      "database": "postgres",
+      "postgresql_version": "15.8",
+      "session_user": "postgres"
+    },
+    "row_columns_match_baseline": true,
+    "row_exact_match": true,
+    "row_exists": true,
+    "row_fingerprint": "745574cb910ee61ef90543ac0ddb253c3c3945c882dba4ab29dbc8cd07b7ca0e",
+    "row_fingerprint_match": true,
+    "trigger_matches_baseline": true,
+    "trigger_observed": {
+      "definition_sha256": "f763972038e59bcfe008d1db46614fb8d79504de0b546d5c86b0648432d2e2b8",
+      "enabled": true,
+      "function_body_sha256": "da363b062fcf65047efa8f9d0417625c589f9be8fdfc4b9fff58f606206d3a31",
+      "name": "trg_norm_player_ids_team_text",
+      "owner": "postgres"
+    },
+    "writer_project_match": true
+  },
+  "sql_error_category": null,
+  "sqlstate": null,
+  "started_at_utc": "2026-10-17T16:57:31.202874+00:00",
+  "status": "PASS",
+  "unexpected_changes": [],
+  "writer_session": {
+    "current_user": "proppadia_mlb_ingest",
+    "roster_function_execute": true,
+    "session_user": "proppadia_mlb_ingest_login"
+  }
+}
