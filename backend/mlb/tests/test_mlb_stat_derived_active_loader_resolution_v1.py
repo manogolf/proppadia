@@ -378,6 +378,8 @@ class _PlayerStatsCursor:
 
     def fetchone(self):
         if "safe_upsert_player_stats" in self.last_sql:
+            if isinstance(self.function_result, dict):
+                return self.function_result
             return (self.function_result,)
         return dict(self.existing) if self.existing is not None else None
 
@@ -407,6 +409,18 @@ def test_max_muncy_idempotent_replay_reaches_fixed_source_entrypoint():
     incoming = _player_stats_row(team="LAD", opponent="MIL")
     cursor = _PlayerStatsCursor(existing, function_result=0)
     result = active._upsert_player_stats_row(_Connection(cursor), incoming)
+    assert result == 0
+    assert not result.conflicts
+    assert any("mlb.safe_upsert_player_stats" in call for call in cursor.calls)
+
+
+def test_player_stats_safe_write_result_accepts_psycopg_dict_row():
+    existing = _player_stats_row(team="119", opponent="158")
+    incoming = _player_stats_row(team="LAD", opponent="MIL")
+    cursor = _PlayerStatsCursor(existing, function_result={"safe_upsert_player_stats": 0})
+
+    result = active._upsert_player_stats_row(_Connection(cursor), incoming)
+
     assert result == 0
     assert not result.conflicts
     assert any("mlb.safe_upsert_player_stats" in call for call in cursor.calls)

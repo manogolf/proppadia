@@ -634,7 +634,14 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
             "SELECT mlb.safe_upsert_player_stats(%s::jsonb)",
             (json.dumps(row, default=_json_payload_default, sort_keys=True),),
         )
-        written = int(cur.fetchone()[0] or 0)
+        result_row = cur.fetchone()
+        if isinstance(result_row, dict):
+            if len(result_row) != 1:
+                raise RuntimeError("SAFE_PLAYER_STATS_WRITE_RESULT_INVALID")
+            result_value = next(iter(result_row.values()))
+        else:
+            result_value = (result_row or [0])[0]
+        written = int(result_value or 0)
         if not written:
             # A concurrent insert can win after the FOR UPDATE found no row.
             # Re-read the conflict target so a rejected race is not mistaken
