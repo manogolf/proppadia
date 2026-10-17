@@ -1,0 +1,29 @@
+{
+  "canary": "single_record_roster_identical_replay",
+  "database_write_committed": false,
+  "failure_stage": "candidate_selection",
+  "function": "mlb.safe_upsert_player_roster",
+  "function_invocations": 0,
+  "official_source": {
+    "as_of_date": "2026-10-17",
+    "provider": "MLB StatsAPI",
+    "roster_type": "active",
+    "exact_match_candidates": 0
+  },
+  "production_identity": {
+    "project_reference_match": true,
+    "session_user": "postgres",
+    "current_user": "postgres",
+    "postgresql_version": "15.8",
+    "transaction_mode": "READ ONLY"
+  },
+  "restricted_writer_connection_opened": false,
+  "status": "BLOCKED_NO_EXACT_MATCH",
+  "comparison": [
+    "player_id",
+    "player_name",
+    "team_abbreviation",
+    "team_id"
+  ],
+  "diagnostic": "No current official active-roster observation matched all existing populated player_ids fields exactly; no writer connection was opened and no database write occurred."
+}
