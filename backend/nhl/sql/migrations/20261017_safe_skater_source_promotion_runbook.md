@@ -13,19 +13,34 @@ retains its existing two-column UPDATE grant and remains `NOLOGIN`.
 ## Deployment
 
 1. Confirm the application revision containing the fixed stage and PP-TOI
-   callers is ready, and take a schema/ACL backup using the established
-   database-owner procedure.
-2. In an approved database-owner session, apply
+   callers is ready. Run
+   `./bin/python backend/nhl/scripts/create_safe_promotion_schema_backup.py`.
+   The script verifies the production project reference, PostgreSQL identity
+   and version, and pre-migration raw-table ACL baseline in a read-only
+   transaction. It then uses the installed `pg_dump` to create an NHL
+   schema-only custom archive with ownership and ACLs, and verifies it with
+   `pg_restore --list` and a rendered SQL inspection. The archive and JSON
+   evidence go to the ignored owner-only directory
+   `artifacts/activation/nhl_safe_promotion/pre_migration/` (directory mode
+   0700; files mode 0600). Never copy the backup into Git or ordinary research
+   artifacts.
+2. Review `pre_migration_manifest.json`: record the backup path, size, UTC
+   timestamp, SHA-256, database identity, PostgreSQL version, exact effective
+   raw-table grants, relevant role memberships, and archive verification.
+   Confirm there are no table-data entries and that rendered ACLs include the
+   exact pre-migration ingest and correction column grants. Stop if any check
+   fails.
+3. In an approved database-owner session, apply
    `20261017_safe_skater_source_promotion.sql` with `ON_ERROR_STOP` enabled.
    Do not use the ordinary daily, research, or operations login to apply it.
    From the repository root, run
    `psql --no-psqlrc --set=ON_ERROR_STOP=1 --file backend/nhl/sql/migrations/20261017_safe_skater_source_promotion.sql`.
-3. Run `../tests/nhl_write_role_permission_assertions.sql`. It must pass and
+4. Run `../tests/nhl_write_role_permission_assertions.sql`. It must pass and
    show that ingest can INSERT the protected fields but cannot UPDATE them,
    only ingest can execute the safe-fill functions, and research/operations
    retain their existing boundaries. From the repository root, run
    `psql --no-psqlrc --set=ON_ERROR_STOP=1 --file backend/nhl/sql/tests/nhl_write_role_permission_assertions.sql`.
-4. Before production scheduling resumes on the new code, run the disposable
+5. Before production scheduling resumes on the new code, run the disposable
    PostgreSQL fixture described below and then one controlled daily and one
    postgame canary. Review the conflict counts and exact-key diagnostics,
    protected-value before/after checks, reconciliation, and scoring receipts.
@@ -85,3 +100,23 @@ the code issue is fixed; do not treat rollback state as protected mode.
 No source rows are changed by either migration. The migration itself does not
 grant correction-role membership or modify research, operations, or MLB
 permissions.
+
+## Backup recovery limits
+
+The protected archive contains NHL schema definitions, functions, ownership,
+and schema/object ACLs, but no table rows and no global role definitions. The
+manifest captures the pre-migration raw-table effective INSERT/UPDATE
+columns, explicit table and column ACLs, NHL schema/default ACLs, and
+memberships involving the listed NHL/Supabase roles. It is evidence for the
+pre-migration state, not a full-database recovery image. It omits MLB and
+Supabase-managed schemas, database-wide settings, and unrelated role
+memberships.
+
+For a failed deployment, stop NHL writers through the existing operational
+control and revert application callers before using the committed migration
+rollback in an approved owner session. Verify both functions are absent and
+compare restored grants with the manifest and permission assertions. Use the
+archive for selective recovery only after testing against a disposable
+PostgreSQL 15 database. Never run `pg_restore --clean` against production as
+an automatic rollback; any broader object restore requires a separately
+reviewed and authorized recovery plan.
