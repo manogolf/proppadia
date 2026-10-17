@@ -2,8 +2,9 @@
 
 **Status:** protected source/training, PA, derived, roster, game-metadata, and
 BvP/PvB paths passed isolated preview verification; MLB schema/ACL backup is
-captured and verified. Production role, grant, credential, and writer-routing
-changes still require separate authorization.
+captured and verified. The seven reviewed production migrations were applied
+on 2026-10-17. Login membership, credential routing, API grant changes, and
+writer cutover remain deferred pending separate authorization and canaries.
 
 ## Intended migration sequence
 
@@ -201,6 +202,71 @@ prefer the paired reverse migration sequence above; use backup DDL/ACL only
 after review of the exact drift. The archive does not recreate roles or
 memberships, which are recorded separately, and has not itself been restored
 in this preparation task.
+
+## Production migration deployment record — 2026-10-17
+
+The owner-authorized migration-only deployment applied these seven files in the
+sequence above, each with `psql` fail-fast and a separate single transaction.
+All seven completed successfully. The production target was positively
+verified before execution as the pinned MLB production project, database
+`postgres`, PostgreSQL 15.8, authenticated as `postgres`. No production source
+or outcome DML, canary, credential routing, login membership, API grant change,
+or scheduler change was performed.
+
+Forward migration SHA-256 values verified at deployment:
+
+| Migration | SHA-256 |
+| --- | --- |
+| `20261016_mlb_restricted_ingest_role.sql` | `e49df6ffd2471fc46ad46efafbca2c0fbac765ada4bf2a3cc5dc27c66c0b37ac` |
+| `20261017_safe_stat_training_write_entrypoints.sql` | `d216f84cb77f38c73c0103f30869b352eafe428606a41f3cfc79e98cb2bdd157` |
+| `20261018_safe_player_stats_pa_backfill.sql` | `7e99ce01765a8f97c2585cd13118def4268c90e5fb1796db8890c74f9b405914` |
+| `20261018_mlb_derived_stats_writer_grants.sql` | `81f69e3193ecfeddcd1978be67b96ffe0400e1a0af9b2adeda7ecc6baa9ac081` |
+| `20261019_mlb_adjacent_writer_entrypoints.sql` | `43df522467de21d4a0468c3fe659dda0ce95ba87ba1825e8df5f55555ec65934` |
+| `20261020_safe_prediction_backfill_entrypoint.sql` | `5bf14d88f588737b7249ad81ae9d11c9660a7fb4ef90ebb4de55eaadc315ed91` |
+| `20261021_mlb_restricted_ingest_rls_policies.sql` | `bd131986386ae1d7a6665c72392694f8d84d9248a74350dd2b3dc70e7862f089` |
+
+Read-only post-deployment verification confirmed:
+
+- `proppadia_mlb_ingest` exists as `NOLOGIN`, `NOINHERIT`, non-superuser,
+  non-`BYPASSRLS`, without database/role creation or replication privileges.
+  It has no login membership. The existing research login to research-read-only
+  membership remains unchanged.
+- All ten fixed writer functions exist, are owned by `postgres`, are
+  `SECURITY DEFINER`, pin `search_path` to `pg_catalog` (and `mlb` only where
+  needed), grant EXECUTE to the ingest group, and deny EXECUTE to `anon` and
+  `authenticated`.
+- Direct `player_stats` UPDATE is unavailable to the ingest group. On
+  `model_training_props`, UPDATE is limited to documented metadata/rolling
+  columns; `outcome`, `result`, `was_correct`, `predicted_outcome`,
+  `confidence_score`, and `corrected_result` remain non-updatable. DELETE and
+  TRUNCATE are denied on all six covered relations. The only direct
+  `player_derived_stats` writes are the documented recomputable columns.
+- The six expected ingest RLS policies exist on the three RLS-enabled target
+  relations. RLS settings remain unchanged; `game_info` and
+  `prop_features_precomputed` remain without RLS; the ingest role has no direct
+  DML there and writes only through the fixed entry points.
+- Existing `anon`, `authenticated`, and `service_role` table ACLs remain at
+  the preflight baseline: 126 table-privilege entries across 18 role/relation
+  pairs. These broad API grants were not changed and still require a separate
+  dependency review before any reduction.
+- No active MLB database sessions were observed after the deployment.
+
+The reviewed migration files contain DDL, ACL, function-definition, and policy
+statements only; no fixed writer function was invoked. Therefore the migration
+execution itself made no source/outcome row changes. No separate row-value
+fingerprint was captured in the deployment receipt. The production Supabase
+`schema_migrations` ledger still contains only the pre-existing
+`20261016225834 remote_schema` record because this approved run applied the
+repository's `backend/mlb/sql/migrations` files directly with `psql`; do not
+replay them through another deployment path without checking their current
+state first.
+
+This deployment does not activate the ingest group for any connection. Keep
+all existing MLB credentials, aliases, hosted secrets, and schedules intact.
+Before routing any writer, separately authorize and verify a restricted login
+membership/`SET ROLE` path, then run the bounded production canaries and
+validate hosted workflow and PostgREST dependencies. Do not create a login or
+change API grants as part of this migration-only deployment.
 
 ## Production continuity gates
 
