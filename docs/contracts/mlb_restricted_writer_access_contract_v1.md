@@ -86,3 +86,29 @@ Before any live routing change, a disposable PostgreSQL run must prove:
 
 The focused offline test is
 `./bin/python -m unittest backend.mlb.tests.test_mlb_restricted_writer_access_contract_v1`.
+
+## PostgreSQL compatibility result — 2026-10-16
+
+The rollback-only fixture ran against the allowlisted Supabase preview
+(`vbnzmvmhuwvpkijxeuyq`), PostgreSQL 15.19, as the preview `postgres` role.
+The initial state had no MLB/NHL schemas, no fixture roles, and zero migration
+history rows. The fixture rolled back completely and verified those schemas
+and roles were absent afterward. No production objects were accessed or
+changed.
+
+Under the restricted fixture grants, plain source and training INSERTs passed;
+populated-value UPDATE, DELETE, TRUNCATE, correction-role assumption, and role
+grant attempts were denied with SQLSTATE `42501`. Derived recomputation and
+same-value replay passed, and a player/date identity collision was preserved.
+However, the actual `player_stats` and `model_training_props` UPSERT functions
+were denied with SQLSTATE `42501` when UPDATE on protected columns was absent.
+Temporarily granting those columns inside the rollback-only fixture allowed
+NULL-fill, replay, and application conflict preservation, but direct SQL
+overwrites also succeeded. Therefore the current callers cannot meet both
+writer compatibility and PostgreSQL-level overwrite denial using table grants
+alone. MLB production cutover remains blocked until a fixed database entry
+point or equivalent approved database enforcement is implemented and tested.
+
+The sanitized receipt is retained at
+`artifacts/analysis/mlb/restricted_writer_postgres_compatibility/2026-10-16/receipt.json`;
+it is a local ignored evidence artifact, not a migration or production change.

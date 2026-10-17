@@ -1,4 +1,4 @@
-# MLB restricted writer fixture (preparation only)
+# MLB restricted writer PostgreSQL fixture
 
 This fixture directory records disposable PostgreSQL test cases; it does not
 contain production credentials and must never be pointed at production.
@@ -26,7 +26,33 @@ schema, never canonical production tables. Start from empty fixture tables and
 drop only fixture-owned objects after recording the test result. Do not grant
 the real production login, owner, `service_role`, or API roles in this fixture.
 
-## Assertions to implement in the isolated PostgreSQL phase
+## Rollback-only PostgreSQL probe
+
+`backend/mlb/tests/run_restricted_writer_postgres_compatibility.py` connects
+only when `NHL_PP_TOI_TEST_DSN` carries the allowlisted preview project
+reference and the initial preview contains no `mlb` or `nhl` schema. It creates
+the schema, three minimal writer tables, and two NOLOGIN test roles inside one
+transaction. Every run ends with `ROLLBACK` and verifies the test schema and
+roles are absent afterward. It does not use production tables or role names.
+
+Run with the local authoritative environment loaded without echoing it:
+
+```sh
+set +x
+set -a
+source backend/.env >/dev/null 2>&1
+set +a
+MLB_WRITER_PG_RECEIPT=artifacts/analysis/mlb/restricted_writer_postgres_compatibility/receipt.json \
+  ./bin/python -m backend.mlb.tests.run_restricted_writer_postgres_compatibility
+```
+
+The probe contrasts restricted column grants with a temporary fixture-only
+UPDATE grant. It records whether actual application upserts can run without
+UPDATE on protected columns and whether arbitrary direct UPDATE then remains
+denied. A compatibility blocker is retained in the receipt while all preview
+fixture changes are rolled back.
+
+## Assertions in the isolated PostgreSQL phase
 
 - Apply test-only NOLOGIN writer/read roles to fixture objects.
 - Exercise the exact roster upsert, schema-optional columns, inactive marking,
@@ -48,6 +74,6 @@ the real production login, owner, `service_role`, or API roles in this fixture.
 - Verify direct UPDATE of protected/populated source fields, DELETE, TRUNCATE,
   DDL, and role assumption fail for the ordinary application login.
 
-No PostgreSQL server or database connection is implicitly selected by these
-notes. The offline test only validates the checked-in writer contract and
-fixture requirements.
+The PostgreSQL probe is distinct from the offline tests: it validates SQL and
+ACL behavior on the allowlisted disposable preview, then verifies rollback
+cleanup. It must never be pointed at production.
