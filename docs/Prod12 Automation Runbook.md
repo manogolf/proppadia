@@ -1028,9 +1028,11 @@ The active wrapper is installed at
 `/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh`. Its maintained source
 is `bin/proppadia_mlb_refresh_daily.sh` in this repository. The LaunchAgent
 continues to execute the installed copy; the tracked copy is the source of
-truth for future installs and recovery. The current installed and tracked files
-were verified byte-for-byte equal. This task did not replace the installed
-copy. The `cat > ...` block below is a legacy bootstrap example. It predates the
+truth for future installs and recovery. Before the restricted today-view
+integration was prepared, the installed and tracked files were verified
+byte-for-byte equal. The prepared tracked source now differs intentionally;
+the installed copy remains unchanged until its separately authorized install.
+The `cat > ...` block below is a legacy bootstrap example. It predates the
 current inline BvP stage and does not contain the current daily phases. Do not
 use it to replace the active wrapper wholesale.
 The September 18 BvP installation reconciliation script and its complete
@@ -1071,8 +1073,38 @@ scoring work. Preserve the surrounding retries, arguments, locks, status capture
 and receipt handling. The tracked `mlb-stat-derived-refresh` Make target already
 sets the flag only for the writer submake; its validation child keeps the
 inherited route. Do not export this flag in the parent wrapper or alter global
-database aliases. The four owner-owned `today_*` materialized-view refreshes
-remain a separate dependency.
+database aliases. The `/mlb/today` workspace refresh in the tracked wrapper
+uses the deployed restricted function. Its opt-in is scoped to the single
+`psql` command using `MLB_INGEST_DATABASE_URL`; that command runs
+`SET ROLE proppadia_mlb_ingest` and then
+`SELECT mlb.refresh_today_workspace_views()`. The installed wrapper is not yet
+updated, so the LaunchAgent continues using its existing refresh until the
+tracked source is installed under separate authorization. No owner-level
+fallback is permitted if the restricted call fails.
+
+#### Today-workspace restricted refresh installation (prepared, not installed)
+
+Install the tracked wrapper only after the later installation is explicitly
+authorized. Do not replace the active wrapper with the legacy bootstrap block.
+From the repository root, run:
+
+```sh
+/bin/zsh -n bin/proppadia_mlb_refresh_daily.sh
+./bin/python -m unittest backend.mlb.tests.test_mlb_daily_restricted_writer_routing -v
+install -m 755 bin/proppadia_mlb_refresh_daily.sh /Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh
+/bin/zsh -n bin/proppadia_mlb_refresh_daily.sh
+/bin/zsh -n /Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh
+cmp bin/proppadia_mlb_refresh_daily.sh /Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh
+shasum -a 256 bin/proppadia_mlb_refresh_daily.sh /Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh
+./bin/python -m unittest backend.mlb.tests.test_mlb_daily_restricted_writer_routing -v
+```
+
+The two SHA-256 values must match, `cmp` must succeed, and the focused routing
+test must pass after installation. Before installation, the test accepts the
+intentional tracked/installed difference; after installation, it requires byte
+equality. Installation changes only the existing executable file; it does not
+change its LaunchAgent, schedule, credentials, or database aliases. Do not run
+the daily wrapper as part of installation verification.
 
 If the installed wrapper is replaced or these prefixes disappear, restore only
 the two prefixes above at their existing call sites in

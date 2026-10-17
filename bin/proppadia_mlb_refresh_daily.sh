@@ -1523,13 +1523,15 @@ today_workspace_build_rc=$?
 today_workspace_mv_rc=0
 if [[ "$today_workspace_build_rc" -eq 0 ]]; then
   echo "[$(date -u +%FT%TZ)] START mlb-today workspace materialized view refresh (slate_date=${MLB_DATE_ET})"
-  "$PSQL_BIN" "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
-REFRESH MATERIALIZED VIEW mlb.today_market_snapshot;
-REFRESH MATERIALIZED VIEW mlb.today_market_timing_signal;
-REFRESH MATERIALIZED VIEW mlb.today_player_context;
-REFRESH MATERIALIZED VIEW mlb.today_workspace_mlb;
-SQL
-  today_workspace_mv_rc=$?
+  if [[ -z "${MLB_INGEST_DATABASE_URL:-}" ]]; then
+    echo "[$(date -u +%FT%TZ)] ERROR MLB_INGEST_DATABASE_URL is required for the today workspace refresh" >&2
+    today_workspace_mv_rc=78
+  else
+    MLB_USE_RESTRICTED_INGEST=1 "$PSQL_BIN" "$MLB_INGEST_DATABASE_URL" \
+      -v ON_ERROR_STOP=1 \
+      -c 'SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();'
+    today_workspace_mv_rc=$?
+  fi
 else
   echo "[$(date -u +%FT%TZ)] WARN mlb-today workspace build failed rc=${today_workspace_build_rc}; continuing to daily reports/uploads" >&2
 fi

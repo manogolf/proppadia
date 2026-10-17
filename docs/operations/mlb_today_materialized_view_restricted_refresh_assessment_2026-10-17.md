@@ -131,11 +131,10 @@ is preserved in
 No production refresh was run. The rollback remains available but was not
 applied. The routine has no dynamic SQL or caller-controlled relation argument.
 
-## Proposed wrapper integration
+## Prepared wrapper integration
 
-After migration approval and deployment, replace only the existing four-command
-`psql` here-document at lines 1526–1531 of the tracked daily wrapper with a
-process-scoped call equivalent to:
+The migration has been deployed. The tracked wrapper replaces only the prior
+four-command `psql` here-document with a process-scoped call equivalent to:
 
 ```bash
 MLB_USE_RESTRICTED_INGEST=1 "$PSQL_BIN" "$MLB_INGEST_DATABASE_URL" \
@@ -143,16 +142,23 @@ MLB_USE_RESTRICTED_INGEST=1 "$PSQL_BIN" "$MLB_INGEST_DATABASE_URL" \
   -c 'SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();'
 ```
 
-Keep it conditional on successful `build_mlb_today_workspace.py` and preserve
+The wrapper guards the restricted URL and sets status 78 if it is absent. Keep
+the call conditional on successful `build_mlb_today_workspace.py` and preserve
 the current status handling. The explicit role switch is required because the
 restricted login is `NOINHERIT`; the login itself lacks both `mlb` schema USAGE
 and function EXECUTE. Validate that the restricted URL is present when the
 scoped call runs. Do not export the opt-in or change other daily consumers'
-connection routes. This proposal is not implemented.
+connection routes. The tracked wrapper now contains this single-command call;
+the installed executable remains unchanged. The call is conditioned on a
+successful workspace build and retains the existing `psql` status capture and
+best-effort continuation behavior. An offline routing test verifies the
+restricted URL, process-scoped opt-in, role/function SQL, captured failure
+status, and absence of an owner-level fallback. Installation follows the
+procedure in `docs/Prod12 Automation Runbook.md` and remains a separate step.
 
 Before an integrated daily run, review the rollback, verify production
 owner/index/role state again, capture source and outcome fingerprints, and
-explicitly authorize the tracked/installed wrapper change. Then verify
+explicitly authorize installation of the tracked wrapper. Then verify
 function identity, sequential refresh success, unchanged source/outcome
 fingerprints, and downstream `/mlb/today` reads on a natural run. Do not
 combine this with the pending first integrated restricted-writer run or the

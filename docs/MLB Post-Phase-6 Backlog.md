@@ -299,12 +299,13 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P1.4 Route daily `today_*` materialized-view refresh through a narrow capability
 
-- Status: **RESTRICTED REFRESH FUNCTION DEPLOYED TO PRODUCTION — wrapper routing
-  remains separately authorized work**.
-- The active wrapper refreshes `mlb.today_market_snapshot`,
+- Status: **RESTRICTED REFRESH FUNCTION DEPLOYED; TRACKED WRAPPER CHANGE
+  PREPARED — installation remains separate**.
+- The installed wrapper refreshes `mlb.today_market_snapshot`,
   `mlb.today_market_timing_signal`, `mlb.today_player_context`, then
-  `mlb.today_workspace_mlb`, using `SUPABASE_DB_URL`. Production PostgreSQL is
-  15.8. All four materialized views are owned by `postgres`; their ACLs grant
+  `mlb.today_workspace_mlb`, using `SUPABASE_DB_URL`. The prepared tracked
+  wrapper routes this block through the restricted function. Production
+  PostgreSQL is 15.8. All four materialized views are owned by `postgres`; their ACLs grant
   privileges only to that owner. The restricted login is only a member of
   `proppadia_mlb_ingest`, which is not the owner and cannot assume `postgres`.
   PostgreSQL 15 requires materialized-view ownership for refresh; there is no
@@ -361,17 +362,21 @@ writer validation does not authorize a hosted cutover or a different writer.
 - Evidence and runner:
   `docs/operations/mlb_today_materialized_view_restricted_refresh_assessment_2026-10-17.md`
   and `backend/mlb/tests/run_today_mv_refresh_preview.py`.
-- Remaining completion criteria: separately authorize/review the wrapper
-  change; make only the process-scoped wrapper refresh call use
+- The tracked wrapper now makes only the process-scoped refresh call use
   `MLB_INGEST_DATABASE_URL` with `MLB_USE_RESTRICTED_INGEST=1` and execute
   `SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();`
-  on that connection; preserve the four-view order and existing staging build.
-  Add focused checks for the scoped opt-in, restricted URL, role switch, and
-  non-refresh paths. Then verify routine identity, natural-run refresh,
+  on that connection. The workspace-build condition, exit-status capture,
+  logging, and best-effort continuation remain as before; there is no
+  owner-level fallback. Focused offline routing checks cover the scoped opt-in,
+  restricted URL, role switch, failure status, and fallback absence. The exact
+  later copy/hash verification procedure is documented in the Prod12 runbook.
+- Remaining completion criteria: install the tracked wrapper under separate
+  authorization, preserve the four-view order and existing staging build, then
+  verify routine identity, natural-run refresh,
   unchanged source/outcome fingerprints, downstream `/mlb/today` reads, and actual
   production duration. Keep this separate from first integrated restricted
-  writer validation and the 16:30 PT run. No production object, wrapper, or
-  schedule was changed in this proof.
+  writer validation and the 16:30 PT run. No production object, installed
+  wrapper, or schedule was changed during preparation.
 
 ### P2.1 Hosted GitHub roster migration
 

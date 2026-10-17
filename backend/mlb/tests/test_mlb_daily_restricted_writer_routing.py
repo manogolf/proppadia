@@ -11,16 +11,25 @@ import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
-DAILY_WRAPPER = Path.home() / "bin/proppadia_mlb_refresh_daily.sh"
 TRACKED_WRAPPER = ROOT / "bin/proppadia_mlb_refresh_daily.sh"
+INSTALLED_WRAPPER = Path.home() / "bin/proppadia_mlb_refresh_daily.sh"
 OPERATIONS_RUNBOOK = ROOT / "docs/Prod12 Automation Runbook.md"
 
 
 class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
-    def test_installed_wrapper_matches_tracked_source(self):
-        if not DAILY_WRAPPER.exists():
-            self.skipTest(f"installed daily wrapper not present: {DAILY_WRAPPER}")
-        self.assertEqual(DAILY_WRAPPER.read_bytes(), TRACKED_WRAPPER.read_bytes())
+    def test_installed_wrapper_matches_tracked_source_after_install(self):
+        if not INSTALLED_WRAPPER.exists():
+            self.skipTest(f"installed daily wrapper not present: {INSTALLED_WRAPPER}")
+        if INSTALLED_WRAPPER.read_bytes() == TRACKED_WRAPPER.read_bytes():
+            return
+
+        # Before the separately authorized installation, only the tracked copy
+        # should contain the new restricted refresh call.
+        tracked = TRACKED_WRAPPER.read_text()
+        installed = INSTALLED_WRAPPER.read_text()
+        self.assertIn("SELECT mlb.refresh_today_workspace_views();", tracked)
+        self.assertNotIn("SELECT mlb.refresh_today_workspace_views();", installed)
+        self.assertIn("REFRESH MATERIALIZED VIEW mlb.today_market_snapshot;", installed)
 
     def test_runbook_preserves_installed_wrapper_routing_recovery(self):
         runbook = OPERATIONS_RUNBOOK.read_text()
@@ -34,6 +43,10 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
         )
         self.assertIn("Do not export this flag in the parent wrapper", normalized_runbook)
         self.assertIn(
+            "Today-workspace restricted refresh installation (prepared, not installed)",
+            runbook,
+        )
+        self.assertIn(
             'MLB_USE_RESTRICTED_INGEST=1 bin/mlb_bvp_inline_daily_hook.sh "$MLB_DATE_ET"',
             runbook,
         )
@@ -42,9 +55,7 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
         )
 
     def test_daily_wrapper_scopes_flag_to_roster_and_bvp_writer_calls(self):
-        if not DAILY_WRAPPER.exists():
-            self.skipTest(f"installed daily wrapper not present: {DAILY_WRAPPER}")
-        wrapper = DAILY_WRAPPER.read_text()
+        wrapper = TRACKED_WRAPPER.read_text()
         self.assertIn(
             'MLB_USE_RESTRICTED_INGEST=1 MLB_ROSTER_DATE="$MLB_DATE_ET" \\\n  make mlb-roster-refresh-all',
             wrapper,
@@ -55,19 +66,90 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
         )
         stat_call = wrapper.split("make mlb-stat-derived-refresh \\\n", 1)[1].split("\n", 1)[0]
         self.assertNotIn("MLB_USE_RESTRICTED_INGEST", stat_call)
-        for view in (
-            "today_market_snapshot",
-            "today_market_timing_signal",
-            "today_player_context",
-            "today_workspace_mlb",
-        ):
-            self.assertIn(f"REFRESH MATERIALIZED VIEW mlb.{view};", wrapper)
+        self.assertIn("SELECT mlb.refresh_today_workspace_views();", wrapper)
+        self.assertNotIn("REFRESH MATERIALIZED VIEW mlb.today_", wrapper)
+
+    def test_today_workspace_refresh_is_scoped_fixed_and_has_no_owner_fallback(self):
+        wrapper = TRACKED_WRAPPER.read_text()
+        command_start = wrapper.index('  if [[ -z "${MLB_INGEST_DATABASE_URL:-}" ]]')
+        command_end = wrapper.index("\n  fi\nelse\n", command_start) + len("\n  fi")
+        command_block = wrapper[command_start:command_end]
+        self.assertIn("SET ROLE proppadia_mlb_ingest;", command_block)
+        self.assertIn("SELECT mlb.refresh_today_workspace_views();", command_block)
+        self.assertNotIn("SUPABASE_DB_URL", command_block)
+        self.assertNotIn("REFRESH MATERIALIZED VIEW", command_block)
+        self.assertIn("today_workspace_mv_rc=78", command_block)
+
+        with tempfile.TemporaryDirectory(prefix="mlb-today-refresh-route-") as temp_dir:
+            temp = Path(temp_dir)
+            log = temp / "calls.log"
+            fake_psql = temp / "psql"
+            fake_psql.write_text(
+                "#!/bin/sh\n"
+                "printf 'url=%s\\n' \"$1\" >> \"$ROUTING_TEST_LOG\"\n"
+                "printf 'flag=%s\\n' \"${MLB_USE_RESTRICTED_INGEST-unset}\" >> \"$ROUTING_TEST_LOG\"\n"
+                "shift\n"
+                "printf 'args=%s\\n' \"$*\" >> \"$ROUTING_TEST_LOG\"\n"
+                "exit \"${PSQL_TEST_RC:-0}\"\n"
+            )
+            fake_psql.chmod(0o755)
+            env = os.environ.copy()
+            env.pop("MLB_USE_RESTRICTED_INGEST", None)
+            env.update(
+                {
+                    "PSQL_BIN": str(fake_psql),
+                    "MLB_INGEST_DATABASE_URL": "restricted-test-url",
+                    "SUPABASE_DB_URL": "owner-test-url",
+                    "ROUTING_TEST_LOG": str(log),
+                    "PSQL_TEST_RC": "42",
+                }
+            )
+            script = (
+                "set +e\n"
+                f"{command_block}\n"
+                "printf 'captured_rc=%s\\n' \"$today_workspace_mv_rc\"\n"
+                "printf 'parent_flag=%s\\n' \"${MLB_USE_RESTRICTED_INGEST-unset}\"\n"
+            )
+            result = subprocess.run(
+                ["/bin/zsh", "-c", script],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("captured_rc=42", result.stdout)
+            self.assertIn("parent_flag=unset", result.stdout)
+            calls = log.read_text().splitlines()
+            self.assertEqual(calls[0], "url=restricted-test-url")
+            self.assertEqual(calls[1], "flag=1")
+            self.assertIn(
+                "SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();",
+                calls[2],
+            )
+            self.assertNotIn("owner-test-url", "\n".join(calls))
+            self.assertEqual(sum(line.startswith("url=") for line in calls), 1)
+
+            log.unlink()
+            missing_url_env = env.copy()
+            missing_url_env.pop("MLB_INGEST_DATABASE_URL")
+            missing = subprocess.run(
+                ["/bin/zsh", "-c", script],
+                cwd=ROOT,
+                env=missing_url_env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(missing.returncode, 0, missing.stdout + missing.stderr)
+            self.assertIn("captured_rc=78", missing.stdout)
+            self.assertIn("MLB_INGEST_DATABASE_URL is required", missing.stderr)
+            self.assertFalse(log.exists())
 
     @unittest.skipUnless(shutil.which("make"), "GNU make is required")
     def test_wrapper_roster_and_bvp_calls_deliver_flag_to_only_the_child(self):
-        if not DAILY_WRAPPER.exists():
-            self.skipTest(f"installed daily wrapper not present: {DAILY_WRAPPER}")
-        wrapper = DAILY_WRAPPER.read_text()
+        wrapper = TRACKED_WRAPPER.read_text()
         with tempfile.TemporaryDirectory(prefix="mlb-wrapper-route-") as temp_dir:
             temp = Path(temp_dir)
             (temp / "bin").mkdir()
