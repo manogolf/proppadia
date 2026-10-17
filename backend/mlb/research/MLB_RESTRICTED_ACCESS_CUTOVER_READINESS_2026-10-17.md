@@ -5,30 +5,34 @@
 **Readiness: PARTIAL.** The restricted login and role gate are deployed and
 verified. The roster path has a rollback-only production canary, and the
 stat-derived source plus player-game-scoped derived path has a rollback-only
-production canary. Do not route the complete ordinary writer set yet: several
-fixed-entry-point callers still index `dict_row` results as tuples, and hosted
-roster execution has not been verified under the restricted role. No production
-configuration was changed for this assessment.
+production canary. No ordinary stat-derived run has yet been certified under
+the restricted role, and hosted roster execution remains unverified. The
+earlier stat-derived `dict_row` blocker below is stale: current callsites and
+focused tests support mapping results. See
+`docs/operations/mlb_stat_derived_restricted_writer_readiness_2026-10-17.md`
+for the current stat-derived assessment and its date-wide scope. No production
+configuration was changed for that assessment.
 
 ## Workflow matrix
 
 | Workflow | Current route and required access | Restricted status and evidence | Remaining blocker |
 | --- | --- | --- | --- |
 | Local roster refresh | `refresh_mlb_players_rosters.py`; shared aliases by default, process opt-in routes through `MLB_INGEST_DATABASE_URL` and sets `proppadia_mlb_ingest`. Fixed roster functions only; no table DML. | **Canary verified.** Taylor Walls identical-value invocation ran in a rollback-only restricted transaction; source values were restored/unchanged. The standalone roster connection uses tuple rows, compatible with its scalar result handling. The writer retries the exact legacy `(player_name, team)` uniqueness collision without the team display label, preserving official player and team IDs. | One ordinary restricted roster invocation remains unobserved. The label-collision fallback has offline regression coverage but has not been exercised against production; its inactive marker is a production-schema no-op. |
-| Stat-derived source + scoped derived refresh | `insert_mlb_stat_derived.py` uses `pg_connect(require_streak_read=True)`; restricted mode verifies role, fixed-function permissions, and the six-column streak read. | **Partial.** Preview contract passed; production streak read passed; Max Muncy source and scoped-derived rollback canary passed with unchanged source, derived, neighboring, and outcome fingerprints. | The full workflow also calls scalar safe-write results using integer tuple indexing on `dict_row` connections (at-bats, game metadata, placeholder identity, and training materialization). Those code paths are not covered by the Max Muncy scoped canary and must be made mapping-aware before full routing. Date-wide training synchronization remains excluded from the canary and must be separately assessed as part of normal execution. |
+| Stat-derived source + derived refresh + training synchronization | `insert_mlb_stat_derived.py` uses `pg_connect(require_streak_read=True)`; process opt-in routes through `MLB_INGEST_DATABASE_URL`. | **Permission-ready; not production-certified.** Production role gate and six-column streak read passed. Max Muncy source and exact player/game derived rollback canary passed with unchanged source, derived, neighboring, and outcome fingerprints. Current result-shape and loader tests pass. | No ordinary restricted run has exercised game metadata, placeholder identity, at-bats repair, training materialization, or normal date-wide derived/training synchronization. A one-game cap does not bound the latter two to one player/game. The scoped validation plan and whole-date accounting requirements are documented in the linked assessment. |
 | Plate-appearance backfill | `backfill_mlb_player_pa.py` uses `pg_connect()` and the same process opt-in. Fixed PA-fill function plus approved derived PA columns. | **Code/access compatible; live production write not verified.** The function result explicitly handles mapping rows and tuples. Preview tested fill, replay, conflict rejection, and rollback. | Routine script commits batches and rolling updates; do not use it as a rollback-only canary. A normal bounded run needs a real eligible candidate and separately authorized execution. |
-| Game metadata | Called inside stat-derived through `safe_upsert_game_info`; role has function EXECUTE and required `game_info` SELECT. | Preview migration/entry point passed. | Caller extracts scalar result with `[0]` despite shared `dict_row`; included in the stat-derived caller blocker. No production invocation observed. |
-| BvP/PvB refresh | `refresh_mlb_bvp_pvb.py` uses `pg_connect()` and the process opt-in; fixed feature upsert function. | Preview tests passed; permission gate covers function access and denies direct target DML. | `_upsert_rows_on_connection` indexes the scalar `dict_row` result with `[0]`; this is a deterministic caller/result-shape mismatch. No production restricted invocation observed. |
-| Prediction backfill | `_persist_prediction_backfill` uses `pg_connect()` and the process opt-in; `safe_fill_prediction_backfill` only fills an empty prediction tuple. | Preview protected-outcome tests passed. Function does not update `was_correct`. | Caller indexes `dict_row` result with `[0]`; production execution can raise after calling the function. Connection context rollback should prevent commit on that exception, but the restricted workflow is not ready until the result handling is corrected and tested. |
+| Game metadata | Called inside stat-derived through `safe_upsert_game_info`; role has function EXECUTE and required `game_info` SELECT. | Preview migration/entry point passed. Current caller uses `scalar_int_result` with `AS result_count`; offline result-shape coverage passed. | No ordinary restricted production invocation observed. |
+| BvP/PvB refresh | `refresh_mlb_bvp_pvb.py` uses `pg_connect()` and the process opt-in; fixed feature upsert function. | Preview tests passed; permission gate covers function access and denies direct target DML. Current caller uses mapping-aware scalar result handling with `AS result_count`; offline result-shape coverage passed. | No ordinary due-date restricted production invocation observed. |
+| Prediction backfill | `_persist_prediction_backfill` uses `pg_connect()` and the process opt-in; `safe_fill_prediction_backfill` only fills an empty prediction tuple. | Preview protected-outcome tests passed. Function does not update `was_correct`. Current caller uses mapping-aware scalar result handling with `AS result_count`; offline result-shape coverage passed. | No ordinary restricted production invocation observed. |
 | Reconciliation, grading, result persistence | Protected realized outcome fields remain behind fixed training entry point; routine result materialization is part of stat-derived. | Preview protections passed; Max Muncy canary confirmed protected training outcome fingerprints unchanged, with training sync not invoked. | No complete restricted production grading/reconciliation invocation was made. Keep exceptional correction and historical maintenance paths on their separately controlled route. |
 | Hosted roster workflow | `.github/workflows/mlb-refresh-player-ids.yml` passes `secrets.SUPABASE_DB_URL` to the full roster command; it does not set `MLB_USE_RESTRICTED_INGEST` or provide a dedicated restricted URL. | Code supports restricted routing when those process variables are present. Secret was not inspected. | Hosted effective identity and restricted session behavior are unverified. Do not change the hosted secret or workflow without separate authorization and a hosted test plan. |
 | Other active shared-alias users | Database-backed model training and read/export/scoring utilities use `DATABASE_URL` or `SUPABASE_DB_URL` directly or through SQLAlchemy. | These are not the scoped restricted writer paths; some are read-only, and some have separate write/materialization needs. | Preserve their current route. Do not globally replace aliases; classify and route them individually only when a dedicated read/operations contract exists. |
 
-The `dict_row` issue is based on the actual `pg_connect()` configuration and
-the inspected result consumers, not on a database permission failure. For a
-single-column `SELECT function(...)`, the mapping key is the function/result
-column name; integer `[0]` lookup is not the shared helper's supported access
-contract. The affected paths were not invoked during this read-only review.
+The earlier scalar-result findings are stale for the callers described above.
+Current at-bats, game metadata, placeholder identity, training materialization,
+BvP/PvB, and prediction-backfill callers use mapping-aware result handling;
+the player-stats source entrypoint validates its one-column mapping shape.
+Focused offline tests cover the restricted access contract and result shapes.
+Production checks remained read-only and did not invoke these writer functions.
 
 ## Protection and continuity notes
 

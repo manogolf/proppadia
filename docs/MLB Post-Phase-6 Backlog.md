@@ -259,13 +259,19 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P1.3 Assess stat-derived and date-wide training synchronization
 
-- Status: **PENDING**.
+- Status: **COMPLETE — assessment documented; normal restricted writer run remains pending**.
 - References: `docs/contracts/database_write_isolation_plan.md` and
-  `docs/contracts/mlb_2026_game_phase_sidecar_design_v1/`.
-- Completion: document the normal stat-derived and date-wide training paths,
-  their write scope, transaction/replacement behavior, protected-field rules,
-  and current connection identities; identify a bounded validation and
-  rollback approach before changing either route.
+  `docs/contracts/mlb_2026_game_phase_sidecar_design_v1/`; findings are in
+  `docs/operations/mlb_stat_derived_restricted_writer_readiness_2026-10-17.md`.
+- Production read-only checks confirmed the restricted login/group identity,
+  role gate, six-column streak read, fixed-function execution, RLS policies,
+  and direct-write boundaries. Offline checks passed 97 focused tests. The
+  normal writer remains uncertified until one authorized due-date execution
+  records its committed counts and verifies whole-date derived/training effects.
+- Completion for this assessment means the normal path, date-wide write scope,
+  transaction behavior, protected fields, identities, and bounded validation
+  approach are documented. It does not authorize a production writer run or
+  routing change.
 
 ### P2.1 Verify hosted GitHub roster identity and database routing
 
