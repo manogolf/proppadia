@@ -268,6 +268,100 @@ membership/`SET ROLE` path, then run the bounded production canaries and
 validate hosted workflow and PostgREST dependencies. Do not create a login or
 change API grants as part of this migration-only deployment.
 
+## Restricted login activation and canary preparation
+
+`backend/shared/db/pg.py` supports the process-scoped
+`MLB_INGEST_DATABASE_URL` override. With the variable absent, existing shared
+alias resolution is unchanged. When it is present, the connection path:
+
+1. Rejects an empty value and verifies the URL against the pinned MLB
+   production project reference before connecting.
+2. Executes `SET ROLE proppadia_mlb_ingest` on each writer connection.
+3. Checks `session_user`, `current_user`, the login's safe attributes and sole
+   non-admin membership, isolation of the ingest group from further role
+   memberships, schema access, all ten fixed function grants, protected
+   outcome/source restrictions, and absence of DELETE/TRUNCATE.
+4. Closes the connection and fails closed if any check fails. Connection errors
+   report only a safe category or SQLSTATE, never the DSN or server message.
+
+The roster caller has its own direct psycopg connection and uses the same
+override, production-reference check, role activation, and assertions. The
+stat-derived, PA, BvP/PvB, and prediction callers use `pg_connect()` and inherit
+the same opt-in behavior. An unset override preserves normal production
+behavior. Do not put the dedicated DSN in `backend/.env`; supply it only to an
+individually authorized canary process using the already approved credential
+source.
+
+The active stat-derived caller also reads
+`mlb.player_streak_profiles` (`player_id`, `prop_type`, `prop_source`,
+`last_game_date`, `streak_type`, `streak_count`) before building training rows.
+The 2026-10-17 production catalog check found no ingest SELECT grant or ingest
+SELECT RLS policy on that RLS-enabled relation. The connection assertion
+therefore requires this narrow read contract and fails closed today. Do not
+run the stat-derived canary under the restricted login until a separately
+reviewed migration provides column-level SELECT on those six fields plus a
+role-scoped SELECT policy, or an approved caller change removes the dependency.
+No write permission on `player_streak_profiles` is needed or proposed.
+
+The exact proposed login and membership SQL, to execute only after separate
+owner authorization and a fresh read-only conflict check, is:
+
+```sql
+DO $provision$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_catalog.pg_roles
+        WHERE rolname = 'proppadia_mlb_ingest_login'
+    ) THEN
+        RAISE EXCEPTION 'proppadia_mlb_ingest_login already exists; inspect before proceeding';
+    END IF;
+
+    CREATE ROLE proppadia_mlb_ingest_login
+        LOGIN NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE
+        NOREPLICATION NOBYPASSRLS;
+END
+$provision$;
+
+GRANT proppadia_mlb_ingest TO proppadia_mlb_ingest_login;
+```
+
+Do not add a password literal or `ADMIN OPTION`. Provision authentication
+through the existing owner-approved credential method, outside tracked files
+and receipts. Before granting membership, verify the login is absent (or stop
+for review if it already exists), the group remains NOLOGIN/NOINHERIT and
+nonprivileged, and neither role has unexpected membership edges. Afterward,
+verify the login is a member only of `proppadia_mlb_ingest`, without admin
+option; it must not be a member of `postgres`, `service_role`,
+`supabase_admin`, research, or correction roles.
+
+Canaries are not authorized or executed by this preparation. For a separately
+authorized run, retain one receipt per path with project-reference match,
+`session_user` and `current_user` read with
+`backend.shared.db.pg.mlb_ingest_session_identity(conn)` on the same writer
+connection, login and group privilege assertions, exact record keys,
+official-input evidence hash,
+function result, conflict/quarantine counts, and deterministic before/after
+fingerprints of protected fields. Never store DSNs or full credentials.
+
+| Path | Bounded candidate and expected behavior |
+| --- | --- |
+| Roster | One existing player ID with a current official roster observation; replay the same payload through `safe_upsert_player_roster`. Do not invoke the full-league refresh or inactive marker for this canary. |
+| Stat-derived | One final game with one-day date bounds and `--max-games-per-date 1`; retain all exact player/game keys and conflict receipts. Existing populated disagreements must remain unchanged and quarantined. |
+| PA fill | First run one date with `--limit-games 1 --only-missing-pa --dry-run`. Execute only if a genuine eligible NULL row and retained StatsAPI payload/hash exist; otherwise mark live fill pending. |
+| Game metadata | Use the same single final game; replay its existing official seven-field schedule payload or fill verified NULL fields only. |
+| BvP/PvB | Build one eligible current feature row from a single-date dry run, then call the existing one-row `_upsert_rows` path; verify the derived feature key and row result. |
+| Prediction backfill | Select one real unresolved prediction tuple with a read-only query and call `_persist_prediction_backfill` once. If no valid initial-fill candidate exists, do not fabricate one; report pending. |
+
+For each path, take the pre-write record snapshot after identity resolution,
+execute only the selected operation through the verified restricted session,
+then re-read the same keys and compare protected columns. Stop on unexpected
+role identity, permission failure, non-idempotent result, conflict count, or
+protected-value difference. Keep shared aliases, hosted secrets, and scheduled
+operations unchanged; do not use this canary route to run exceptional
+completeness/preseason maintenance. The hosted roster secret remains
+uninspected, and hosted login identity/run compatibility must be verified in a
+separately authorized later step.
+
 ## Production continuity gates
 
 Do not route an existing scheduler or shared `DATABASE_URL`/

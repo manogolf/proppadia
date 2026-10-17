@@ -1492,7 +1492,7 @@ def run(
     starter_inferred_flags = 0
     at_bats_backfilled = 0
 
-    with pg_connect() as conn:
+    with pg_connect(require_streak_read=True) as conn:
         mtp_has_game_type = _table_has_column(conn, "model_training_props", "game_type")
         if not quiet:
             print(f"ℹ️ model_training_props.game_type column detected: {mtp_has_game_type}")

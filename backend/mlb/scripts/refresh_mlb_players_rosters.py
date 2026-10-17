@@ -28,6 +28,11 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
+from backend.shared.db.pg import (
+    configure_mlb_ingest_connection,
+    verify_mlb_ingest_production_target,
+)
+
 
 ET = ZoneInfo("America/New_York")
 MLB_API = "https://statsapi.mlb.com/api/v1"
@@ -41,7 +46,13 @@ def _target_date(raw: Optional[str]) -> str:
 
 
 def _db_url() -> str:
-    db = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+    restricted_url = os.getenv("MLB_INGEST_DATABASE_URL")
+    if restricted_url is not None:
+        db = restricted_url.strip()
+        if not db:
+            raise RuntimeError("MLB restricted connection override is present but empty")
+    else:
+        db = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
     if not db:
         raise RuntimeError("Missing SUPABASE_DB_URL / DATABASE_URL")
     if "?sslmode=" not in db and "&sslmode=" not in db:
@@ -49,6 +60,20 @@ def _db_url() -> str:
     if "?gssencmode=" not in db and "&gssencmode=" not in db:
         db += ("&" if "?" in db else "?") + "gssencmode=disable"
     return db
+
+
+def _connect_db(db: str):
+    restricted_ingest = os.getenv("MLB_INGEST_DATABASE_URL") is not None
+    if restricted_ingest:
+        verify_mlb_ingest_production_target(db)
+    conn = psycopg.connect(db, prepare_threshold=0)
+    if restricted_ingest:
+        try:
+            configure_mlb_ingest_connection(conn)
+        except Exception:
+            conn.close()
+            raise
+    return conn
 
 
 def _session() -> requests.Session:
@@ -191,7 +216,7 @@ def main() -> int:
     upserts = 0
     active_ids: Set[int] = set()
 
-    with psycopg.connect(db, prepare_threshold=0) as conn:
+    with _connect_db(db) as conn:
         try:
             conn.prepare_threshold = 0  # type: ignore[attr-defined]
         except Exception:

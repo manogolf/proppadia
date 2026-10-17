@@ -1,10 +1,11 @@
 # MLB Restricted Writer Access Contract v1
 
-**Status: preview-verified; production not deployed.** No production role,
-grant, credential, alias, or configuration changes are authorized by this
-document. The fixed write-entrypoint migration has passed on the independently
-identified NHL protection preview; production rollout remains a separate
-authorization.
+**Status: preview-verified; restricted writer migrations deployed to MLB
+production on 2026-10-17.** The `proppadia_mlb_ingest` group and fixed write
+entry points are installed, but no writer login, membership, credential
+routing, or canary has been activated. Those actions require separate owner
+authorization. The fixed write-entrypoint migration passed on the independently
+identified Supabase preview before production deployment.
 
 ## Scope
 
