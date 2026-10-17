@@ -1,0 +1,51 @@
+{
+  "after_row_sha256": null,
+  "after_source_values": null,
+  "before_relevant_metadata": {
+    "updated_at": "2026-10-16T23:34:45.248989+00:00"
+  },
+  "before_row_sha256": "73f98fd194d3376ac54e54fd24c70a563ca0bcfc5bbacef459d37f9369320040",
+  "before_source_values": {
+    "player_id": 434378,
+    "player_name": "Justin Verlander",
+    "team": "116",
+    "team_id": 116
+  },
+  "canary": "single_record_roster_identical_replay",
+  "database_write_committed": false,
+  "diagnostic": "precondition mismatch; no compensating or repeat operation attempted",
+  "failure_stage": "prewrite_official_source_match",
+  "finished_at_utc": "2026-10-17T16:29:09.125046+00:00",
+  "function_invocations": 0,
+  "function_result": null,
+  "official_evidence_sha256": "e4991ad533666f4a42929b77010ab9a070963f663275f6cce0de102c2fb99c9f",
+  "official_observation": {
+    "as_of_date": "2026-10-17",
+    "player_id": 434378,
+    "player_name": "Justin Verlander",
+    "provider": "MLB StatsAPI",
+    "roster_endpoint": "https://statsapi.mlb.com/api/v1/teams/116/roster?rosterType=active&date=2026-10-17",
+    "roster_type": "active",
+    "team_abbreviation": "DET",
+    "team_id": 116
+  },
+  "permitted_metadata_changes": [],
+  "player_id": 434378,
+  "production_project_match": true,
+  "read_only_identity": {
+    "current_user": "postgres",
+    "postgresql_version": "15.8",
+    "session_user": "postgres"
+  },
+  "row_count_after": null,
+  "row_count_before": 1,
+  "source_date": "2026-10-17",
+  "source_fields_unchanged": null,
+  "source_provider": "MLB StatsAPI",
+  "sqlstate": null,
+  "started_at_utc": "2026-10-17T16:29:08.507968+00:00",
+  "status": "BLOCKED",
+  "stop_reason": "Stored player_ids.team value did not exactly match the current official StatsAPI team abbreviation; no writer session was opened.",
+  "unexpected_changes": [],
+  "writer_identity": null
+}
