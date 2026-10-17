@@ -1,0 +1,33 @@
+{
+  "schema_version": "MLB_TODAY_RESTRICTED_REFRESH_WRAPPER_INSTALLATION_V1",
+  "installed_at_utc": "2026-10-17T21:37:17Z",
+  "source_commit": "9280b8927b30a00a823d5095125dc5a328b6e74a",
+  "tracked_source": "bin/proppadia_mlb_refresh_daily.sh",
+  "installed_path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+  "backup_path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh.pre_restricted_refresh_20261017T213708Z",
+  "pre_install_sha256": "8e78998fb9ca528698556dd89ab22d778a3605d1b94a84c00f91bc74c133c88c",
+  "backup_sha256": "8e78998fb9ca528698556dd89ab22d778a3605d1b94a84c00f91bc74c133c88c",
+  "tracked_sha256": "db1c97f5558b1bcfc93c99c1719077c0621ce7b9f7572a438ee7c9576847b549",
+  "installed_sha256": "db1c97f5558b1bcfc93c99c1719077c0621ce7b9f7572a438ee7c9576847b549",
+  "installed_mode": "0755",
+  "verification": {
+    "scheduled_wrapper_processes_active_before_install": false,
+    "tracked_and_installed_cmp": "PASS",
+    "tracked_shell_syntax": "PASS",
+    "installed_shell_syntax": "PASS",
+    "focused_routing_tests": {
+      "command": "./bin/python -m unittest backend.mlb.tests.test_mlb_daily_restricted_writer_routing -v",
+      "result": "PASS",
+      "tests_passed": 6
+    },
+    "launchagent_plist": "~/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist",
+    "launchagent_label": "com.proppadia.mlb.refresh.daily",
+    "launchagent_program_path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+    "calendar_schedule_present": true,
+    "launchagent_or_schedule_modified": false
+  },
+  "production_daily_run_launched": false,
+  "production_materialized_view_refresh_executed": false,
+  "database_writes_performed": false,
+  "rollback": "Not needed; install and all validations passed. Restore the timestamped backup if a later rollback is required."
+}

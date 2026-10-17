@@ -148,8 +148,11 @@ the current status handling. The explicit role switch is required because the
 restricted login is `NOINHERIT`; the login itself lacks both `mlb` schema USAGE
 and function EXECUTE. Validate that the restricted URL is present when the
 scoped call runs. Do not export the opt-in or change other daily consumers'
-connection routes. The tracked wrapper now contains this single-command call;
-the installed executable remains unchanged. The call is conditioned on a
+connection routes. The tracked wrapper contains this single-command call and
+was installed at the existing operational path after the scheduled run exited.
+The installation receipt is recorded in
+`docs/operations/mlb_today_materialized_view_restricted_refresh_installation_receipt_2026-10-17.json`.
+The call is conditioned on a
 successful workspace build and retains the existing `psql` status capture and
 best-effort continuation behavior. An offline routing test verifies the
 restricted URL, process-scoped opt-in, role/function SQL, captured failure

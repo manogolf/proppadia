@@ -1077,16 +1077,19 @@ database aliases. The `/mlb/today` workspace refresh in the tracked wrapper
 uses the deployed restricted function. Its opt-in is scoped to the single
 `psql` command using `MLB_INGEST_DATABASE_URL`; that command runs
 `SET ROLE proppadia_mlb_ingest` and then
-`SELECT mlb.refresh_today_workspace_views()`. The installed wrapper is not yet
-updated, so the LaunchAgent continues using its existing refresh until the
-tracked source is installed under separate authorization. No owner-level
-fallback is permitted if the restricted call fails.
+`SELECT mlb.refresh_today_workspace_views()`. The tracked wrapper was installed
+at `/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh` on 2026-10-17 after
+the scheduled run had exited. The timestamped pre-install backup and validation
+evidence are recorded in
+`docs/operations/mlb_today_materialized_view_restricted_refresh_installation_receipt_2026-10-17.json`.
+The LaunchAgent plist still references the same installed path and calendar
+schedule. No owner-level fallback is permitted if the restricted call fails.
 
-#### Today-workspace restricted refresh installation (prepared, not installed)
+#### Today-workspace restricted refresh installation
 
-Install the tracked wrapper only after the later installation is explicitly
-authorized. Do not replace the active wrapper with the legacy bootstrap block.
-From the repository root, run:
+The installation was authorized and completed after confirming the scheduled
+MLB run and its children had exited. For a future reinstall, do not replace the
+active wrapper with the legacy bootstrap block. From the repository root, run:
 
 ```sh
 /bin/zsh -n bin/proppadia_mlb_refresh_daily.sh
@@ -1100,11 +1103,10 @@ shasum -a 256 bin/proppadia_mlb_refresh_daily.sh /Users/jerrystrain/bin/proppadi
 ```
 
 The two SHA-256 values must match, `cmp` must succeed, and the focused routing
-test must pass after installation. Before installation, the test accepts the
-intentional tracked/installed difference; after installation, it requires byte
-equality. Installation changes only the existing executable file; it does not
-change its LaunchAgent, schedule, credentials, or database aliases. Do not run
-the daily wrapper as part of installation verification.
+test must pass after installation. Installation changes only the existing
+executable file; it does not change its LaunchAgent, schedule, credentials, or
+database aliases. Do not run the daily wrapper as part of installation
+verification.
 
 If the installed wrapper is replaced or these prefixes disappear, restore only
 the two prefixes above at their existing call sites in

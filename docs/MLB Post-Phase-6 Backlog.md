@@ -299,12 +299,11 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P1.4 Route daily `today_*` materialized-view refresh through a narrow capability
 
-- Status: **RESTRICTED REFRESH FUNCTION DEPLOYED; TRACKED WRAPPER CHANGE
-  PREPARED — installation remains separate**.
-- The installed wrapper refreshes `mlb.today_market_snapshot`,
+- Status: **RESTRICTED REFRESH FUNCTION DEPLOYED; TRACKED WRAPPER INSTALLED**.
+- Before integration, the installed wrapper refreshed `mlb.today_market_snapshot`,
   `mlb.today_market_timing_signal`, `mlb.today_player_context`, then
-  `mlb.today_workspace_mlb`, using `SUPABASE_DB_URL`. The prepared tracked
-  wrapper routes this block through the restricted function. Production
+  `mlb.today_workspace_mlb`, using `SUPABASE_DB_URL`. The installed tracked
+  wrapper now routes this block through the restricted function. Production
   PostgreSQL is 15.8. All four materialized views are owned by `postgres`; their ACLs grant
   privileges only to that owner. The restricted login is only a member of
   `proppadia_mlb_ingest`, which is not the owner and cannot assume `postgres`.
@@ -369,14 +368,16 @@ writer validation does not authorize a hosted cutover or a different writer.
   logging, and best-effort continuation remain as before; there is no
   owner-level fallback. Focused offline routing checks cover the scoped opt-in,
   restricted URL, role switch, failure status, and fallback absence. The exact
-  later copy/hash verification procedure is documented in the Prod12 runbook.
-- Remaining completion criteria: install the tracked wrapper under separate
-  authorization, preserve the four-view order and existing staging build, then
-  verify routine identity, natural-run refresh,
+  copy/hash verification procedure is documented in the Prod12 runbook. The
+  installed executable now matches the tracked source; installation evidence
+  is preserved in
+  `docs/operations/mlb_today_materialized_view_restricted_refresh_installation_receipt_2026-10-17.json`.
+- Remaining completion criteria: preserve the four-view order and existing
+  staging build, then verify routine identity, natural-run refresh,
   unchanged source/outcome fingerprints, downstream `/mlb/today` reads, and actual
   production duration. Keep this separate from first integrated restricted
-  writer validation and the 16:30 PT run. No production object, installed
-  wrapper, or schedule was changed during preparation.
+  writer validation and the 16:30 PT run. No production refresh, database
+  write, object, or schedule change was performed during installation.
 
 ### P2.1 Hosted GitHub roster migration
 

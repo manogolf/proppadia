@@ -43,7 +43,7 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
         )
         self.assertIn("Do not export this flag in the parent wrapper", normalized_runbook)
         self.assertIn(
-            "Today-workspace restricted refresh installation (prepared, not installed)",
+            "Today-workspace restricted refresh installation",
             runbook,
         )
         self.assertIn(
