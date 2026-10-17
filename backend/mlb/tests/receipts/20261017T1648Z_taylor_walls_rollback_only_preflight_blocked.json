@@ -1,0 +1,62 @@
+{
+  "canary": "taylor_walls_single_record_rollback_only",
+  "started_at_utc": "2026-10-17T16:48:18Z",
+  "status": "BLOCKED_PREWRITE",
+  "production_identity": {
+    "project_reference_match": true,
+    "session_user": "postgres",
+    "current_user": "postgres",
+    "postgresql_version": "15.8",
+    "transaction": "READ ONLY"
+  },
+  "official_source": {
+    "provider": "MLB StatsAPI",
+    "game_id": 849816,
+    "date": "2026-10-17",
+    "away_team_id": 139,
+    "home_team_id": 114,
+    "player_id": 670764,
+    "player_name": "Taylor Walls",
+    "team_abbreviation": "TB",
+    "team_id": 139,
+    "game_and_player_match": true,
+    "evidence_sha256_match": true
+  },
+  "candidate_before_state": {
+    "row_exists": true,
+    "player_id": 670764,
+    "player_name": "Taylor Walls",
+    "team": "139",
+    "team_id": 139,
+    "is_placeholder": false,
+    "updated_at": "2026-10-16T23:34:45.248989+00:00",
+    "row_field_count": 8,
+    "owner_supplied_fingerprint": "e0383a84c751fb9d914ee30d55b89338e0d7e76835c0ef8df3c9f06f41334bde",
+    "local_compact_json_fingerprint": "3938003b57ac8a86db9a0c7b815795a4776724cc39426e211c3d5ef76b59d82f",
+    "local_default_json_fingerprint": "e8fd4fce3bccf6e2ffd83f68f48ee26680a7bd298833e91aaa4d44bf60164ed2",
+    "fingerprint_match": false
+  },
+  "deployed_objects": {
+    "roster_function_security_definer_owner": "postgres",
+    "roster_function_sha256": "cac9a86c295e748eef5b75ebeda47c34cfe2b406d327cfef455d0809518a5e3a",
+    "roster_function_matches_reviewed_hash": true,
+    "team_normalization_trigger_found": true,
+    "team_normalization_trigger_enabled": true,
+    "team_normalization_trigger_owner": "postgres",
+    "expected_trigger_definition_sha256": "f763972038e59bcfe008d1db46614fb8d79504de0b546d5c86b0648432d2e8",
+    "observed_trigger_definition_sha256": "f763972038e59bcfe008d1db46614fb8d79504de0b546d5c86b0648432d2e2b8",
+    "trigger_hash_match": false
+  },
+  "concurrency_check": {
+    "player_ids_writer_locks_found": 0
+  },
+  "writer_session": null,
+  "function_invocations": 0,
+  "transaction_started": false,
+  "rollback_confirmed": null,
+  "database_write_committed": false,
+  "source_integrity": "NO_WRITE_ATTEMPTED; READ_ONLY_PRESTATE_RETAINED",
+  "sqlstate": null,
+  "diagnostic": "Stopped before opening a writer session because the supplied complete-row fingerprint and reviewed trigger-definition hash did not match the current read-only catalog results.",
+  "unexpected_changes": []
+}
