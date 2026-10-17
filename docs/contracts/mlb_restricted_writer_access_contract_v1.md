@@ -1,7 +1,8 @@
 # MLB Restricted Writer Access Contract v1
 
-**Status: preview-verified; restricted writer migrations deployed to MLB
-production on 2026-10-17.** The `proppadia_mlb_ingest` group and fixed write
+**Status: preview-verified; restricted writer migrations and the BvP research
+read grant deployed to MLB production on 2026-10-17.** The
+`proppadia_mlb_ingest` group and fixed write
 entry points are installed, but no writer login, membership, credential
 routing, or canary has been activated. Those actions require separate owner
 authorization. The fixed write-entrypoint migration passed on the independently
@@ -109,8 +110,9 @@ identity filter require exactly these columns:
 `prop_type`, `player_id`, `game_id`, `game_date`, `features`,
 `feature_set_tag`, `model_tag`, and `computed_at`.
 
-PostgreSQL column-level `SELECT` is sufficient for that query. The proposed
-`20261017_mlb_bvp_research_read.sql` grants those eight columns to the existing
+PostgreSQL column-level `SELECT` is sufficient for that query. The guarded
+`20261017_mlb_bvp_research_read.sql` was applied to production on 2026-10-17
+and grants those eight columns to the existing
 `proppadia_mlb_research_ro` group. It does not grant table-level SELECT or any
 write privilege, and it does not change the restricted ingest role, schema
 privileges, role membership, RLS, or policies. The migration fails closed if
@@ -125,16 +127,20 @@ JSONB value. The verifier itself reads only its journaled keys. A stronger
 database-enforced BvP-only row boundary would require a separate view or RLS
 design and is outside this permission correction.
 
-Before production application, confirm the database/project and inspect the
-role membership, role attributes, target columns, RLS/policy shape, and current
-effective SELECT ACLs. Apply the migration as the authorized database owner
-inside the normal reviewed migration process. Then verify that the research
-login can select the eight columns using the retained BvP identity keys, that
-it cannot select `lineup_slot` or `mlb.player_stats`, and that INSERT, UPDATE,
-DELETE, and TRUNCATE remain denied. Confirm the restricted ingest identity
-still has no SELECT on the feature relation. A successful readback certifies
-the existing committed write; it does not require another acquisition or
-writer execution.
+On 2026-10-17, the owner-side production preflight confirmed the migration's
+database, role membership and attributes, target columns, RLS/policy shape,
+and existing SELECT ACL assumptions. The migration was applied as the
+authorized database owner. The research login then read all 286 retained BvP
+rows with all eight selected fields matching the post-commit snapshot.
+Catalog checks and direct read probes confirmed the denials above, including
+no SELECT for `proppadia_mlb_ingest`. The target has RLS disabled and no
+policies, so the grant permits all rows through its eight approved columns and
+`features` includes the full JSONB object. The rollback was not run because
+deployment and verification succeeded. A successful readback certifies the
+existing committed write; it does not require another acquisition or writer
+execution. See
+`docs/operations/mlb_bvp_research_read_production_deployment_2026-10-17.md`
+for the retained evidence.
 
 The GitHub Actions workflow uses the same roster script and separate secret
 name `SUPABASE_DB_URL`; its value was not inspected. The writer code is
