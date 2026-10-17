@@ -261,8 +261,9 @@ def test_candidate_validation_rejects_duplicate_exact_and_daily_keys_before_muta
 
 
 class _Cursor:
-    def __init__(self, candidates, *, insert_rowcount=1, fail_insert=False):
+    def __init__(self, candidates, *, insert_rowcount=1, fail_insert=False, locked_rows=()):
         self.candidates = candidates
+        self.locked_rows = list(locked_rows)
         self.insert_rowcount = insert_rowcount
         self.fail_insert = fail_insert
         self.calls = []
@@ -283,8 +284,8 @@ class _Cursor:
         if "FROM target t" in sql:
             self._rows = self.candidates
             self.rowcount = 0
-        elif "FOR UPDATE" in sql or "DELETE FROM mlb.player_derived_stats" in sql:
-            self._rows = []
+        elif "FOR UPDATE" in sql:
+            self._rows = self.locked_rows
             self.rowcount = 0
         elif "INSERT INTO mlb.player_derived_stats" in sql:
             if self.fail_insert:
@@ -304,7 +305,7 @@ class _Connection:
         return self._cursor
 
 
-def test_active_legacy_writer_orders_lock_delete_then_insert_and_is_repeat_safe():
+def test_active_legacy_writer_locks_then_recomputes_without_deleting_and_is_repeat_safe():
     row = {"player_id": 7, "game_id": 824785, "game_date": "2026-09-23", "team": "NYY", "is_home": True}
     for metric in active.ROLLING_METRICS:
         row[f"d7_{metric}"] = 0
@@ -313,8 +314,8 @@ def test_active_legacy_writer_orders_lock_delete_then_insert_and_is_repeat_safe(
     cur = _Cursor([row])
     assert active._refresh_player_derived_stats(_Connection(cur), "2026-09-23", "2026-09-23") == 1
     ordered = "\n".join(cur.calls)
-    assert ordered.index("FOR UPDATE") < ordered.index("DELETE FROM mlb.player_derived_stats")
-    assert ordered.index("DELETE FROM mlb.player_derived_stats") < ordered.index("INSERT INTO mlb.player_derived_stats")
+    assert ordered.index("FOR UPDATE") < ordered.index("INSERT INTO mlb.player_derived_stats")
+    assert "DELETE FROM mlb.player_derived_stats" not in ordered
     assert "purged_conflicts" not in ordered
     assert "MAX(ps.game_id)" not in ordered
 
@@ -365,6 +366,29 @@ def test_active_legacy_writer_blocks_before_write_and_propagates_transaction_fai
         )
 
 
+def test_derived_identity_collision_is_preserved_and_reported_before_insert():
+    row = {"player_id": 8, "game_id": 824785, "game_date": "2026-09-23", "team": "NYY", "is_home": True}
+    for metric in active.ROLLING_METRICS:
+        row[f"d7_{metric}"] = row[f"d15_{metric}"] = row[f"d30_{metric}"] = 0
+    prior = {"player_id": 8, "game_id": 824784, "game_date": "2026-09-23"}
+    cur = _Cursor([row], locked_rows=[prior])
+    with pytest.raises(active.LegacyDerivedIdentityCollision, match="824784:824785"):
+        active._refresh_player_derived_stats(_Connection(cur), "2026-09-23", "2026-09-23")
+    assert not any("INSERT INTO mlb.player_derived_stats" in call for call in cur.calls)
+
+
+def test_same_exact_game_date_correction_remains_an_upsert_without_delete():
+    row = {"player_id": 8, "game_id": 824785, "game_date": "2026-09-23", "team": "NYY", "is_home": True}
+    for metric in active.ROLLING_METRICS:
+        row[f"d7_{metric}"] = row[f"d15_{metric}"] = row[f"d30_{metric}"] = 0
+    prior = {"player_id": 8, "game_id": 824785, "game_date": "2026-09-22"}
+    cur = _Cursor([row], locked_rows=[prior])
+    assert active._refresh_player_derived_stats(_Connection(cur), "2026-09-23", "2026-09-23") == 1
+    upsert = next(call for call in cur.calls if "INSERT INTO mlb.player_derived_stats" in call)
+    assert "game_date = EXCLUDED.game_date" in upsert
+    assert "DELETE FROM mlb.player_derived_stats" not in upsert
+
+
 def test_active_path_keeps_exact_feature_state_outside_legacy_writer_and_rolls_back_date_failure():
     source = inspect.getsource(active)
     run_source = inspect.getsource(active.run)
@@ -385,6 +409,8 @@ class _TrainingCursor:
         self.logical_rows = logical_rows
         self.rowcount = 0
         self.params = None
+        self._rows = []
+        self.description = ()
 
     def __enter__(self):
         return self
@@ -393,10 +419,16 @@ class _TrainingCursor:
         return False
 
     def execute(self, sql, params=None):
-        assert "INSERT INTO mlb.model_training_props" in sql
-        assert "ON CONFLICT (player_id, game_id, prop_type, prop_source)" in sql
         self.params = params
         key = (int(params["player_id"]), int(params["game_id"]), params["prop_type"], params["prop_source"])
+        if sql.lstrip().startswith("SELECT prop_value"):
+            prior = self.logical_rows.get(key)
+            self._rows = [dict(prior)] if prior is not None else []
+            self.description = [(name,) for name in (prior or {}).keys()]
+            return
+        assert "INSERT INTO mlb.model_training_props" in sql
+        assert "ON CONFLICT (player_id, game_id, prop_type, prop_source)" in sql
+        assert "IS NOT DISTINCT FROM" in sql
         comparable = {
             field: params.get(field)
             for field in (
@@ -412,6 +444,9 @@ class _TrainingCursor:
         else:
             self.logical_rows[key] = comparable
             self.rowcount = 1
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
 
 
 class _TrainingConnection:
@@ -492,6 +527,28 @@ def test_mtp_conflict_replaces_stale_calendar_date_for_exact_game_key():
     conn = _TrainingConnection(logical_rows)
     assert active._upsert_training_row(conn, row) == 1
     assert logical_rows[(453286, 824785, "hits", "mlb_api")]["game_date"] == "2026-09-23"
+
+
+def test_mtp_historical_outcome_conflict_is_quarantined_without_replacement():
+    row = _training_row(824785, "win")
+    established = copy.deepcopy(row)
+    established["outcome"] = "loss"
+    established["was_correct"] = False
+    key = (453286, 824785, "hits", "mlb_api")
+    logical_rows = {key: {
+        field: established.get(field)
+        for field in (
+            "prop_value", "line", "over_under", "outcome", "status", "was_correct",
+            "game_date", "game_time", "game_day_of_week", "time_of_day_bucket", "streak_type",
+            "streak_count", "team", "opponent", "team_id", "opponent_team_id",
+            "opponent_encoded", "is_home", "game_type",
+        )
+    }}
+    before = copy.deepcopy(logical_rows[key])
+    result = active._upsert_training_row(_TrainingConnection(logical_rows), row)
+    assert result == 0
+    assert result.conflicts[0]["conflicting_fields"] == ("outcome", "was_correct")
+    assert logical_rows[key] == before
 
 
 def test_natural_evidence_source_files_are_hash_bound_private_and_non_overwriting(tmp_path):

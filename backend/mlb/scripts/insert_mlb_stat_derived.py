@@ -551,10 +551,78 @@ def _existing_game_ids(conn, game_ids: List[int]) -> set[int]:
         return out
 
 
+class SafeWriterResult(int):
+    """Integer-compatible write count with bounded conflict evidence."""
+
+    def __new__(cls, rowcount: int, conflicts: Iterable[Dict[str, Any]] = ()):
+        value = int.__new__(cls, rowcount)
+        value.conflicts = tuple(dict(item) for item in conflicts)
+        return value
+
+
+PLAYER_STATS_SOURCE_FIELDS = (
+    "game_date", "team", "opponent", "is_home", "position",
+    "plate_appearances", "at_bats", "hits", "total_bases", "rbis",
+    "runs_scored", "strikeouts_batting", "walks", "singles", "doubles",
+    "triples", "home_runs", "stolen_bases", "strikeouts_pitching",
+    "walks_allowed", "hits_allowed", "outs_recorded", "earned_runs", "is_starter",
+)
+
+
+def _player_stats_conflicting_fields(existing: Dict[str, Any], incoming: Dict[str, Any]) -> List[str]:
+    conflicts = []
+    for field in PLAYER_STATS_SOURCE_FIELDS:
+        old_value, new_value = existing.get(field), incoming.get(field)
+        if old_value is None or new_value is None:
+            continue
+        if field == "game_date":
+            old_value, new_value = str(old_value)[:10], str(new_value)[:10]
+        if old_value != new_value:
+            conflicts.append(field)
+    return conflicts
+
+
+def _select_existing_player_stats(cur: Any, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    cur.execute(
+        """
+        SELECT game_date, team, opponent, is_home, position,
+               plate_appearances, at_bats, hits, total_bases, rbis,
+               runs_scored, strikeouts_batting, walks, singles, doubles,
+               triples, home_runs, stolen_bases, strikeouts_pitching,
+               walks_allowed, hits_allowed, outs_recorded, earned_runs, is_starter
+          FROM mlb.player_stats
+         WHERE player_id = %(player_id)s AND game_id = %(game_id)s
+         FOR UPDATE
+        """,
+        row,
+    )
+    existing = cur.fetchone()
+    return _row_mapping(cur, existing) if existing is not None else None
+
+
 def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
+    """Insert official observations, NULL-fill, and quarantine disagreements."""
+    conflict_fields: List[str] = []
+    fill_predicate = " OR ".join(
+        f"(player_stats.{field} IS NULL AND EXCLUDED.{field} IS NOT NULL)"
+        for field in PLAYER_STATS_SOURCE_FIELDS
+    )
+    safe_conflict_predicate = " AND ".join(
+        f"(player_stats.{field} IS NULL OR EXCLUDED.{field} IS NULL OR player_stats.{field} = EXCLUDED.{field})"
+        for field in PLAYER_STATS_SOURCE_FIELDS
+    )
     with conn.cursor() as cur:
+        existing_row = _select_existing_player_stats(cur, row)
+        if existing_row is not None:
+            conflict_fields = _player_stats_conflicting_fields(existing_row, row)
+            if conflict_fields:
+                return SafeWriterResult(0, ({
+                    "player_id": int(row["player_id"]),
+                    "game_id": int(row["game_id"]),
+                    "conflicting_fields": tuple(conflict_fields),
+                },))
         cur.execute(
-            """
+            f"""
             INSERT INTO mlb.player_stats (
                 player_id, game_id, game_date, team, opponent, is_home, position,
                 plate_appearances, at_bats, hits, total_bases, rbis, runs_scored, strikeouts_batting, walks,
@@ -568,34 +636,68 @@ def _upsert_player_stats_row(conn, row: Dict[str, Any]) -> int:
             )
             ON CONFLICT (player_id, game_id)
             DO UPDATE SET
-                game_date = EXCLUDED.game_date,
-                team = EXCLUDED.team,
-                opponent = EXCLUDED.opponent,
-                is_home = EXCLUDED.is_home,
-                position = COALESCE(EXCLUDED.position, player_stats.position),
+                game_date = COALESCE(player_stats.game_date, EXCLUDED.game_date),
+                team = COALESCE(player_stats.team, EXCLUDED.team),
+                opponent = COALESCE(player_stats.opponent, EXCLUDED.opponent),
+                is_home = COALESCE(player_stats.is_home, EXCLUDED.is_home),
+                position = COALESCE(player_stats.position, EXCLUDED.position),
                 plate_appearances = COALESCE(player_stats.plate_appearances, EXCLUDED.plate_appearances),
-                at_bats = EXCLUDED.at_bats,
-                hits = EXCLUDED.hits,
-                total_bases = EXCLUDED.total_bases,
-                rbis = EXCLUDED.rbis,
-                runs_scored = EXCLUDED.runs_scored,
-                strikeouts_batting = EXCLUDED.strikeouts_batting,
-                walks = EXCLUDED.walks,
-                singles = EXCLUDED.singles,
-                doubles = EXCLUDED.doubles,
-                triples = EXCLUDED.triples,
-                home_runs = EXCLUDED.home_runs,
-                stolen_bases = EXCLUDED.stolen_bases,
-                strikeouts_pitching = EXCLUDED.strikeouts_pitching,
-                walks_allowed = EXCLUDED.walks_allowed,
-                hits_allowed = EXCLUDED.hits_allowed,
-                outs_recorded = EXCLUDED.outs_recorded,
-                earned_runs = EXCLUDED.earned_runs,
-                is_starter = EXCLUDED.is_starter
+                at_bats = COALESCE(player_stats.at_bats, EXCLUDED.at_bats),
+                hits = COALESCE(player_stats.hits, EXCLUDED.hits),
+                total_bases = COALESCE(player_stats.total_bases, EXCLUDED.total_bases),
+                rbis = COALESCE(player_stats.rbis, EXCLUDED.rbis),
+                runs_scored = COALESCE(player_stats.runs_scored, EXCLUDED.runs_scored),
+                strikeouts_batting = COALESCE(player_stats.strikeouts_batting, EXCLUDED.strikeouts_batting),
+                walks = COALESCE(player_stats.walks, EXCLUDED.walks),
+                singles = COALESCE(player_stats.singles, EXCLUDED.singles),
+                doubles = COALESCE(player_stats.doubles, EXCLUDED.doubles),
+                triples = COALESCE(player_stats.triples, EXCLUDED.triples),
+                home_runs = COALESCE(player_stats.home_runs, EXCLUDED.home_runs),
+                stolen_bases = COALESCE(player_stats.stolen_bases, EXCLUDED.stolen_bases),
+                strikeouts_pitching = COALESCE(player_stats.strikeouts_pitching, EXCLUDED.strikeouts_pitching),
+                walks_allowed = COALESCE(player_stats.walks_allowed, EXCLUDED.walks_allowed),
+                hits_allowed = COALESCE(player_stats.hits_allowed, EXCLUDED.hits_allowed),
+                outs_recorded = COALESCE(player_stats.outs_recorded, EXCLUDED.outs_recorded),
+                earned_runs = COALESCE(player_stats.earned_runs, EXCLUDED.earned_runs),
+                is_starter = COALESCE(player_stats.is_starter, EXCLUDED.is_starter)
+            WHERE (
+                player_stats.game_date, player_stats.team, player_stats.opponent,
+                player_stats.is_home, player_stats.position, player_stats.plate_appearances,
+                player_stats.at_bats, player_stats.hits, player_stats.total_bases,
+                player_stats.rbis, player_stats.runs_scored, player_stats.strikeouts_batting,
+                player_stats.walks, player_stats.singles, player_stats.doubles,
+                player_stats.triples, player_stats.home_runs, player_stats.stolen_bases,
+                player_stats.strikeouts_pitching, player_stats.walks_allowed,
+                player_stats.hits_allowed, player_stats.outs_recorded, player_stats.earned_runs,
+                player_stats.is_starter
+            ) IS DISTINCT FROM (
+                EXCLUDED.game_date, EXCLUDED.team, EXCLUDED.opponent, EXCLUDED.is_home,
+                EXCLUDED.position, EXCLUDED.plate_appearances, EXCLUDED.at_bats,
+                EXCLUDED.hits, EXCLUDED.total_bases, EXCLUDED.rbis, EXCLUDED.runs_scored,
+                EXCLUDED.strikeouts_batting, EXCLUDED.walks, EXCLUDED.singles,
+                EXCLUDED.doubles, EXCLUDED.triples, EXCLUDED.home_runs,
+                EXCLUDED.stolen_bases, EXCLUDED.strikeouts_pitching, EXCLUDED.walks_allowed,
+                EXCLUDED.hits_allowed, EXCLUDED.outs_recorded, EXCLUDED.earned_runs,
+                EXCLUDED.is_starter
+            ) AND ({fill_predicate}) AND ({safe_conflict_predicate})
             """,
             row,
         )
-        return int(cur.rowcount or 0)
+        written = int(cur.rowcount or 0)
+        if not written:
+            # A concurrent insert can win after the FOR UPDATE found no row.
+            # Re-read the conflict target so a rejected race is not mistaken
+            # for an ordinary unchanged replay by downstream materialization.
+            existing_row = _select_existing_player_stats(cur, row)
+            if existing_row is not None:
+                conflict_fields = _player_stats_conflicting_fields(existing_row, row)
+                if conflict_fields:
+                    return SafeWriterResult(0, ({
+                        "player_id": int(row["player_id"]),
+                        "game_id": int(row["game_id"]),
+                        "conflicting_fields": tuple(conflict_fields),
+                    },))
+        return SafeWriterResult(written)
 
 
 def _backfill_player_stats_at_bats(
@@ -628,6 +730,10 @@ def _backfill_player_stats_at_bats(
 
 class ActiveLoaderFinalityError(RuntimeError):
     """The active loader has no safe exact-game candidate set."""
+
+
+class LegacyDerivedIdentityCollision(RuntimeError):
+    """A player/date legacy key is already owned by another exact game."""
 
 
 def _row_mapping(cursor: Any, row: Any) -> Dict[str, Any]:
@@ -696,7 +802,7 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
     insert_cols = ", ".join(candidate_columns + ["updated_at"])
     insert_values = ", ".join([f"%({column})s" for column in candidate_columns] + ["now()"])
     update_cols = ",\n                ".join(
-        ["game_id = EXCLUDED.game_id", "team = EXCLUDED.team", "is_home = EXCLUDED.is_home", "updated_at = now()"]
+        ["game_id = EXCLUDED.game_id", "game_date = EXCLUDED.game_date", "team = EXCLUDED.team", "is_home = EXCLUDED.is_home", "updated_at = now()"]
         + [f"d7_{m} = EXCLUDED.d7_{m}" for m in ROLLING_METRICS]
         + [f"d15_{m} = EXCLUDED.d15_{m}" for m in ROLLING_METRICS]
         + [f"d30_{m} = EXCLUDED.d30_{m}" for m in ROLLING_METRICS]
@@ -785,21 +891,12 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
         )
     """
     lock_sql = incoming_cte + """
-        SELECT p.player_id, p.game_id
+        SELECT p.player_id, p.game_id, p.game_date
         FROM mlb.player_derived_stats p
         JOIN incoming i ON i.player_id = p.player_id
           AND (i.game_id = p.game_id OR i.game_date = p.game_date)
         ORDER BY p.player_id, p.game_id
         FOR UPDATE
-    """
-    delete_sql = incoming_cte + """
-        DELETE FROM mlb.player_derived_stats p
-        USING incoming i
-        WHERE p.player_id = i.player_id
-          AND (
-                (p.game_id = i.game_id AND p.game_date IS DISTINCT FROM i.game_date)
-             OR (p.game_date = i.game_date AND p.game_id IS DISTINCT FROM i.game_id)
-          )
     """
     insert_sql = f"""
         INSERT INTO mlb.player_derived_stats ({insert_cols})
@@ -825,12 +922,21 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
     """
     writes = 0
     with conn.cursor() as cur:
-        # Ordered statements deliberately replace the legacy sibling
-        # DELETE/INSERT CTE.  The transaction held by run() rolls all of these
-        # statements back if any lock, delete, insert, or validation fails.
+        # Lock and inspect the exact/day identity neighborhood before the
+        # idempotent upsert. The enclosing transaction rolls back on collision.
         cur.execute(lock_sql, (keys_json,))
-        cur.fetchall()
-        cur.execute(delete_sql, (keys_json,))
+        locked = [_row_mapping(cur, row) for row in cur.fetchall()]
+        incoming_by_player_date = {
+            (int(row["player_id"]), str(row["game_date"])[:10]): int(row["game_id"])
+            for row in candidates
+        }
+        for prior in locked:
+            key = (int(prior["player_id"]), str(prior["game_date"])[:10])
+            incoming_game_id = incoming_by_player_date.get(key)
+            if incoming_game_id is not None and int(prior["game_id"]) != incoming_game_id:
+                raise LegacyDerivedIdentityCollision(
+                    f"LEGACY_DERIVED_IDENTITY_COLLISION:{key[0]}:{key[1]}:{prior['game_id']}:{incoming_game_id}"
+                )
         for candidate in candidates:
             cur.execute(insert_sql, candidate)
             writes += int(cur.rowcount or 0)
@@ -1195,14 +1301,42 @@ def _normalize_training_row_team_fields(row: Dict[str, Any]) -> None:
 
 
 def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool = False) -> int:
-    """Persist synthetic historical outcome/training rows, never predictions."""
+    """Persist synthetic outcomes without replacing an established result."""
     _normalize_training_row_team_fields(row)
+    protected_result_fields = ("prop_value", "line", "over_under", "outcome", "status", "was_correct")
     extra_insert_col = ", game_type" if include_game_type else ""
     extra_insert_val = ", %(game_type)s" if include_game_type else ""
     extra_update_set = ", game_type = EXCLUDED.game_type" if include_game_type else ""
     extra_current_tuple = ", model_training_props.game_type" if include_game_type else ""
     extra_excluded_tuple = ", EXCLUDED.game_type" if include_game_type else ""
+    conflicts = []
     with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT prop_value, line, over_under, outcome, status, was_correct
+              FROM mlb.model_training_props
+             WHERE player_id = %(player_id)s AND game_id = %(game_id)s
+               AND prop_type = %(prop_type)s AND prop_source = %(prop_source)s
+             FOR UPDATE
+            """,
+            row,
+        )
+        existing = cur.fetchone()
+        if existing is not None:
+            existing_row = _row_mapping(cur, existing)
+            changed = [
+                field for field in protected_result_fields
+                if existing_row.get(field) != row.get(field)
+            ]
+            if changed:
+                conflicts.append({
+                    "player_id": int(row["player_id"]),
+                    "game_id": int(row["game_id"]),
+                    "prop_type": str(row["prop_type"]),
+                    "prop_source": str(row["prop_source"]),
+                    "conflicting_fields": tuple(changed),
+                })
+                return SafeWriterResult(0, conflicts)
         cur.execute(
             f"""
             INSERT INTO mlb.model_training_props (
@@ -1247,7 +1381,15 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
                 model_training_props.over_under,
                 model_training_props.outcome,
                 model_training_props.status,
-                model_training_props.was_correct,
+                model_training_props.was_correct
+            ) IS NOT DISTINCT FROM (
+                EXCLUDED.prop_value,
+                EXCLUDED.line,
+                EXCLUDED.over_under,
+                EXCLUDED.outcome,
+                EXCLUDED.status,
+                EXCLUDED.was_correct
+            ) AND (
                 model_training_props.game_date,
                 model_training_props.game_time,
                 model_training_props.game_day_of_week,
@@ -1261,12 +1403,6 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
                 model_training_props.opponent_encoded,
                 model_training_props.is_home{extra_current_tuple}
             ) IS DISTINCT FROM (
-                EXCLUDED.prop_value,
-                EXCLUDED.line,
-                EXCLUDED.over_under,
-                EXCLUDED.outcome,
-                EXCLUDED.status,
-                EXCLUDED.was_correct,
                 EXCLUDED.game_date,
                 EXCLUDED.game_time,
                 EXCLUDED.game_day_of_week,
@@ -1283,8 +1419,36 @@ def _upsert_training_row(conn, row: Dict[str, Any], *, include_game_type: bool =
             """,
             row,
         )
-        # rowcount is 1 for insert/update, 0 when ON CONFLICT DO UPDATE ... WHERE skips.
-        return int(cur.rowcount or 0)
+        # rowcount is 1 for insert/update, 0 when the guarded conflict clause
+        # rejects an established result or sees an idempotent replay.
+        written = int(cur.rowcount or 0)
+        if not written:
+            cur.execute(
+                """
+                SELECT prop_value, line, over_under, outcome, status, was_correct
+                  FROM mlb.model_training_props
+                 WHERE player_id = %(player_id)s AND game_id = %(game_id)s
+                   AND prop_type = %(prop_type)s AND prop_source = %(prop_source)s
+                 FOR UPDATE
+                """,
+                row,
+            )
+            current = cur.fetchone()
+            if current is not None:
+                current_row = _row_mapping(cur, current)
+                changed = [
+                    field for field in protected_result_fields
+                    if current_row.get(field) != row.get(field)
+                ]
+                if changed:
+                    return SafeWriterResult(0, ({
+                        "player_id": int(row["player_id"]),
+                        "game_id": int(row["game_id"]),
+                        "prop_type": str(row["prop_type"]),
+                        "prop_source": str(row["prop_source"]),
+                        "conflicting_fields": tuple(changed),
+                    },))
+        return SafeWriterResult(written)
 
 
 def _is_pitcher(position: Optional[str], has_pitch: bool) -> bool:
@@ -1498,6 +1662,7 @@ def _new_training_row_counts() -> Dict[str, Any]:
         "written_rows": 0,
         "unchanged_rows": 0,
         "rejection_reasons": {},
+        "conflicts": [],
         "row_semantics": "SYNTHETIC_MODEL_TRAINING_OUTCOME_ROWS_NOT_PREGAME_PREDICTIONS",
     }
 
@@ -1736,6 +1901,7 @@ def run(
                         "player_stats": {
                             "candidate_rows": 0, "admitted_rows": 0, "quarantined_rows": 0,
                             "written_rows": 0, "unchanged_rows": 0, "rejection_reasons": {},
+                            "conflicts": [],
                         },
                         "model_training_props": _new_training_row_counts(),
                     }
@@ -1932,7 +2098,6 @@ def run(
                                 has_placeholder_col=player_ids_has_placeholder,
                             )
 
-                            player_counts["admitted_rows"] += 1
                             stats_written = _upsert_player_stats_row(
                                 conn,
                                 _extract_player_stats_row(
@@ -1947,6 +2112,11 @@ def run(
                                     is_starter=bool(is_starter),
                                 ),
                             )
+                            if stats_written.conflicts:
+                                player_counts["conflicts"].extend(stats_written.conflicts)
+                                _quarantine_training_candidate(player_counts, "POPULATED_SOURCE_STAT_CONFLICT")
+                                continue
+                            player_counts["admitted_rows"] += 1
                             player_stats_upserts += stats_written
                             player_counts["written_rows"] += stats_written
                             if not stats_written:
@@ -2028,7 +2198,6 @@ def run(
                                     "game_type": game_type,
                                 }
                                 try:
-                                    training_counts["admitted_rows"] += 1
                                     training_written = _upsert_training_row(
                                         conn,
                                         row,
@@ -2062,6 +2231,11 @@ def run(
                                             "⚠️ recovered mtp_team_text_numeric row"
                                             f" game_id={game_id} player_id={pid} prop={prop_type}"
                                         )
+                                if training_written.conflicts:
+                                    training_counts["conflicts"].extend(training_written.conflicts)
+                                    _quarantine_training_candidate(training_counts, "HISTORICAL_OUTCOME_CONFLICT")
+                                    continue
+                                training_counts["admitted_rows"] += 1
                                 attempted_upserts += 1
                                 training_counts["written_rows"] += training_written
                                 if not training_written:

@@ -41,22 +41,25 @@ class MlbRestrictedWriterContractTests(unittest.TestCase):
             self.assertIn(f"`{field}`", self.contract)
         self.assertIn("at least `total - 1` team fetches succeeded", self.contract)
 
-    def test_stat_source_upsert_is_classified_as_overwrite_risk(self):
+    def test_stat_source_upsert_null_fills_and_quarantines_populated_conflicts(self):
         self.assertIn("INSERT INTO mlb.player_stats", self.stat)
         self.assertIn("ON CONFLICT (player_id, game_id)", self.stat)
-        self.assertIn("at_bats = EXCLUDED.at_bats", self.stat)
-        self.assertIn("hits = EXCLUDED.hits", self.stat)
+        self.assertIn("at_bats = COALESCE(player_stats.at_bats, EXCLUDED.at_bats)", self.stat)
+        self.assertIn("hits = COALESCE(player_stats.hits, EXCLUDED.hits)", self.stat)
+        self.assertIn("POPULATED_SOURCE_STAT_CONFLICT", self.stat)
         self.assertIn("COALESCE(at_bats, 0) = 0", self.stat)
-        self.assertIn("would permit historical overwrites", self.contract)
-        self.assertIn("expected to fail the protected-overwrite assertion", self.fixture_one_line)
+        self.assertIn("differing populated incoming fields", self.contract_one_line)
+        self.assertIn("verified NULL fill should pass", self.fixture_one_line)
 
-    def test_derived_delete_and_training_row_writes_are_not_granted_as_general_ingest(self):
-        self.assertIn("DELETE FROM mlb.player_derived_stats", self.stat)
+    def test_derived_collision_quarantines_and_training_outcomes_are_protected(self):
+        self.assertNotIn("DELETE FROM mlb.player_derived_stats", self.stat)
+        self.assertIn("LegacyDerivedIdentityCollision", self.stat)
         self.assertIn("INSERT INTO mlb.player_derived_stats", self.stat)
         self.assertIn("UPDATE mlb.model_training_props", self.stat)
         self.assertIn("ON CONFLICT (player_id, game_id, prop_type, prop_source)", self.stat)
+        self.assertIn("HISTORICAL_OUTCOME_CONFLICT", self.stat)
         self.assertIn("No unrestricted `DELETE` should be granted", self.contract)
-        self.assertIn("Exclude from routine ingestion grants", self.contract)
+        self.assertIn("established result tuple", self.contract_one_line)
 
     def test_game_phase_conflicts_and_bvp_upsert_are_recorded(self):
         self.assertIn("CANONICAL_GAME_PHASE_CONFLICT", self.stat)

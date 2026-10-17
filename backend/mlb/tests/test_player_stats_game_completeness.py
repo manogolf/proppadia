@@ -69,15 +69,61 @@ def test_primary_importer_parses_direct_plate_appearances():
 def test_primary_importer_only_fills_blank_pa_on_conflict():
  class Cursor:
   rowcount=1
+  description=()
   def __enter__(self):return self
   def __exit__(self,*args):return False
-  def execute(self,sql,row):self.sql=sql
+  def execute(self,sql,row):
+   self.sql=sql
+   if sql.lstrip().startswith('SELECT game_date'):
+    self.result=None
+  def fetchone(self):return getattr(self,'result',None)
  class Conn:
   def __init__(self):self.cur=Cursor()
   def cursor(self):return self.cur
  conn=Conn();row=_extract_player_stats_row(player_id=1,game_id=10,game_date='2026-08-14',team_abbr='NYY',opponent_abbr='BOS',is_home=True,position='LF',stats={'batting':{'plateAppearances':5}},is_starter=True)
  assert _upsert_player_stats_row(conn,row)==1
  assert 'plate_appearances = COALESCE(player_stats.plate_appearances, EXCLUDED.plate_appearances)' in conn.cur.sql
+ assert 'at_bats = COALESCE(player_stats.at_bats, EXCLUDED.at_bats)' in conn.cur.sql
+ assert 'AND (' in conn.cur.sql and 'player_stats.at_bats = EXCLUDED.at_bats' in conn.cur.sql
+
+def test_player_stats_conflicting_populated_official_value_is_reported_and_not_upserted():
+ class Cursor:
+  rowcount=0
+  def __init__(self):self.calls=[];self.description=[(name,) for name in ('game_date','team','opponent','is_home','position','plate_appearances','at_bats','hits','total_bases','rbis','runs_scored','strikeouts_batting','walks','singles','doubles','triples','home_runs','stolen_bases','strikeouts_pitching','walks_allowed','hits_allowed','outs_recorded','earned_runs','is_starter')]
+  def __enter__(self):return self
+  def __exit__(self,*args):return False
+  def execute(self,sql,params):self.calls.append(sql)
+  def fetchone(self):return {'game_date':'2026-08-14','team':'NYY','opponent':'BOS','is_home':True,'position':'LF','plate_appearances':5,'at_bats':4,'hits':1,'total_bases':1,'rbis':0,'runs_scored':0,'strikeouts_batting':1,'walks':0,'singles':1,'doubles':0,'triples':0,'home_runs':0,'stolen_bases':0,'strikeouts_pitching':None,'walks_allowed':None,'hits_allowed':None,'outs_recorded':None,'earned_runs':None,'is_starter':False}
+ class Conn:
+  def __init__(self):self.cur=Cursor()
+  def cursor(self):return self.cur
+ conn=Conn()
+ row={'player_id':1,'game_id':10,'game_date':'2026-08-14','team':'NYY','opponent':'BOS','is_home':True,'position':'LF','plate_appearances':5,'at_bats':4,'hits':2,'total_bases':2,'rbis':0,'runs_scored':0,'strikeouts_batting':1,'walks':0,'singles':1,'doubles':0,'triples':0,'home_runs':0,'stolen_bases':0,'strikeouts_pitching':None,'walks_allowed':None,'hits_allowed':None,'outs_recorded':None,'earned_runs':None,'is_starter':False}
+ result=_upsert_player_stats_row(conn,row)
+ assert result==0
+ assert result.conflicts[0]['conflicting_fields']==('hits','total_bases')
+ assert len(conn.cur.calls)==1
+
+def test_player_stats_verified_null_fill_and_identical_replay_are_non_destructive():
+ fields=('game_date','team','opponent','is_home','position','plate_appearances','at_bats','hits','total_bases','rbis','runs_scored','strikeouts_batting','walks','singles','doubles','triples','home_runs','stolen_bases','strikeouts_pitching','walks_allowed','hits_allowed','outs_recorded','earned_runs','is_starter')
+ incoming={'player_id':1,'game_id':10,'game_date':'2026-08-14','team':'NYY','opponent':'BOS','is_home':True,'position':'LF','plate_appearances':5,'at_bats':4,'hits':2,'total_bases':2,'rbis':0,'runs_scored':0,'strikeouts_batting':1,'walks':0,'singles':1,'doubles':0,'triples':0,'home_runs':0,'stolen_bases':0,'strikeouts_pitching':None,'walks_allowed':None,'hits_allowed':None,'outs_recorded':None,'earned_runs':None,'is_starter':False}
+ class Cursor:
+  def __init__(self,existing,rowcount):self.existing=existing;self.rowcount=rowcount;self.calls=[];self.description=[(name,) for name in fields]
+  def __enter__(self):return self
+  def __exit__(self,*args):return False
+  def execute(self,sql,params):self.calls.append(sql)
+  def fetchone(self):return self.existing
+ class Conn:
+  def __init__(self,cursor):self.cur=cursor
+  def cursor(self):return self.cur
+ existing={name:incoming.get(name) for name in fields};existing['hits']=None;existing['total_bases']=None
+ fill=Conn(Cursor(existing,1));assert _upsert_player_stats_row(fill,incoming)==1
+ insert_sql=fill.cur.calls[1]
+ assert 'hits = COALESCE(player_stats.hits, EXCLUDED.hits)' in insert_sql
+ assert '(player_stats.hits IS NULL AND EXCLUDED.hits IS NOT NULL)' in insert_sql
+ stable={name:incoming.get(name) for name in fields}
+ replay=Conn(Cursor(stable,0));assert _upsert_player_stats_row(replay,incoming)==0
+ assert 'DO UPDATE SET' in replay.cur.calls[1]
 
 def test_blank_only_pa_backfill_does_not_overwrite_populated_pa():
  class Cursor:

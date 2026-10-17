@@ -32,16 +32,19 @@ the real production login, owner, `service_role`, or API roles in this fixture.
 - Exercise the exact roster upsert, schema-optional columns, inactive marking,
   and partial-fetch guard.
 - Exercise official stat insert, replay, same-key conflict, NULL/zero AB fill,
-  and conflicting populated stat values. The current writer's unconditional
-  conflict assignments are expected to fail the protected-overwrite assertion;
-  do not adjust the expectation to pass. That result requires a reviewed writer
-  refactor before the production role can be granted those UPDATE columns.
+  and conflicting populated stat values. Identical replay and verified NULL
+  fill should pass; populated disagreements must be reported/quarantined with
+  canonical values unchanged. The approved at-bats NULL/zero repair remains a
+  separately bounded operation.
 - Exercise derived recompute twice and an identity collision. The ordinary
-  writer must not have direct DELETE or TRUNCATE; collision behavior must be
-  explicitly quarantined or mediated by a fixed reviewed entry point.
+  writer must not have direct DELETE or TRUNCATE; a collision must be visible
+  and preserve both the existing derived row and source identity for review.
 - Verify phase disagreement raises before source metadata is changed.
-- Verify training-row materialization and BvP feature writes use only their
-  separately approved operations.
+- Verify training-row materialization preserves an established outcome tuple
+  (`prop_value`, `line`, `over_under`, `outcome`, `status`, `was_correct`) on
+  conflict, while identical-result metadata replay and rolling-result
+  recalculation remain valid. BvP feature writes use their separately approved
+  operations.
 - Verify direct UPDATE of protected/populated source fields, DELETE, TRUNCATE,
   DDL, and role assumption fail for the ordinary application login.
 
