@@ -6,7 +6,11 @@ from pathlib import Path
 
 from backend.nhl.daily_orchestration import DailyRunRecorder
 from backend.nhl.cli import _structured_child_summary
-from backend.nhl.points_shadow.core import verify_feature_contract_identity
+from backend.nhl.points_shadow.core import (
+    verify_feature_contract_identity,
+    verify_fixed_input_parity,
+    verify_frozen_identity,
+)
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -31,6 +35,21 @@ class PhoenixAttemptContractTests(unittest.TestCase):
     def test_frozen_contract_still_rejects_changed_export_sql(self):
         with self.assertRaisesRegex(RuntimeError, "POINTS_FEATURE_CONSTRUCTION_HASH_DRIFT"):
             verify_feature_contract_identity()
+
+    def test_explicit_shadow_contract_reuses_frozen_model_without_repinning_it(self):
+        identity = json.loads(CONTRACT_PATH.read_text())
+        identity["_identity_path"] = str(CONTRACT_PATH)
+        verified = verify_frozen_identity(identity)
+        self.assertEqual(verified["feature_contract"]["version"],
+                         "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2_ATTEMPT_MISSINGNESS_V1")
+        self.assertEqual(verified["model_version"], "phoenix_v1_frozen_2026_control")
+        self.assertEqual(verify_fixed_input_parity(identity)["status"], "EXACT_BYTE_PARITY")
+
+    def test_explicit_contract_override_rejects_unapproved_identity_path(self):
+        identity = json.loads(CONTRACT_PATH.read_text())
+        identity["_identity_path"] = str(ROOT / "unreviewed_points_contract.json")
+        with self.assertRaisesRegex(RuntimeError, "POINTS_EXPLICIT_FEATURE_CONTRACT_PATH_NOT_APPROVED"):
+            verify_frozen_identity(identity)
 
     def test_daily_receipt_retains_bounded_attempt_source_and_promotion_evidence(self):
         recorder = DailyRunRecorder(run_id="receipt-test", command=["daily"], phase="EARLY")

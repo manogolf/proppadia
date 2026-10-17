@@ -26,6 +26,9 @@ from backend.nhl.scripts.run_nhl_sog_prediction_only_warn_only import phase_for
 
 ROOT = Path(__file__).resolve().parents[3]
 SQL = ROOT / "backend/nhl/sql"
+POINTS_OBSERVER_FEATURE_CONTRACT = (
+    ROOT / "backend/nhl/points_shadow/phoenix_shadow_attempt_missingness_v1.json"
+)
 
 
 def utc_now() -> datetime:
@@ -75,6 +78,13 @@ def _query(connection: psycopg.Connection, sql: str, params: tuple) -> pd.DataFr
     with connection.cursor() as cursor:
         cursor.execute(sql, params)
         return pd.DataFrame(cursor.fetchall(), columns=[item.name for item in cursor.description])
+
+
+def _points_observer_feature_identity() -> dict:
+    """Load the reviewed shadow-only feature identity used by Points cards."""
+    identity = json.loads(POINTS_OBSERVER_FEATURE_CONTRACT.read_text())
+    identity["_identity_path"] = str(POINTS_OBSERVER_FEATURE_CONTRACT.resolve())
+    return identity
 
 
 def _canonical_and_identity(dsn: str, season: int, slate_date: str,
@@ -207,6 +217,7 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
                 observation_timestamp_utc=observation_timestamp.isoformat(),
                 input_cutoff_timestamp_utc=observation_timestamp.isoformat(),
                 canonical_run_identifier=run_identifier,
+                feature_contract_identity=_points_observer_feature_identity(),
             ) if lane == "POINTS" else publisher(
                 games=games, goalies=features, output_root=output_root, season=season,
                 slate_date=slate_date, phase=phase,

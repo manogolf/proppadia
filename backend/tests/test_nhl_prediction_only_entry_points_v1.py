@@ -7,7 +7,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -87,7 +87,13 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         stack = contextlib.ExitStack()
         stack.enter_context(patch.object(core, "validate_points_inputs"))
         stack.enter_context(patch.object(core, "verify_points_parity", return_value={"status": "EXACT_BYTE_PARITY"}))
-        stack.enter_context(patch.object(core, "verify_points_identity", return_value={"model_version": "fixture_v1"}))
+        stack.enter_context(patch.object(core, "verify_points_identity", return_value={
+            "model_version": "fixture_v1",
+            "feature_contract": {"version": "FIXTURE_CONTRACT",
+                                  "training_semantics_comparability": "FROZEN_CONTRACT"},
+            "feature_contract_sha256": "a" * 64,
+            "feature_construction": {"sha256": "b" * 64},
+        }))
         stack.enter_context(patch.object(core, "score_points", return_value=point_scores()))
         stack.enter_context(patch.object(core, "evaluate_ladder_coherence", return_value=ladder(decision)))
         return stack
@@ -124,8 +130,34 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         metadata = json.loads((destination / "run_metadata.json").read_text())
         self.assertEqual(metadata["market_requests"], 0)
         self.assertFalse(metadata["bookmaker_credential_access"])
+        self.assertEqual(metadata["feature_contract_version"], "FIXTURE_CONTRACT")
+        self.assertEqual(metadata["feature_contract_sha256"], "a" * 64)
         self.assertEqual(pd.read_csv(destination / "market_qualified_population.csv").shape[0], 0)
         self.assertEqual(pd.read_csv(destination / "candidate_population.csv").shape[0], 0)
+
+    def test_explicit_corrected_shadow_contract_is_published_with_model_lineage(self):
+        identity_path = Path(__file__).resolve().parents[2] / (
+            "backend/nhl/points_shadow/phoenix_shadow_attempt_missingness_v1.json")
+        identity = json.loads(identity_path.read_text())
+        identity["_identity_path"] = str(identity_path.resolve())
+        with patch.object(core, "validate_points_inputs"), \
+             patch.object(core, "score_points", return_value=point_scores()), \
+             patch.object(core, "evaluate_ladder_coherence", return_value=ladder()):
+            destination, status = core.publish_points(
+                games=games(), players=points_features(), output_root=self.root / "explicit-points",
+                season=2026, slate_date=SLATE, phase="FINAL_PREGAME",
+                observation_timestamp_utc=OBSERVED, input_cutoff_timestamp_utc=OBSERVED,
+                canonical_run_identifier="explicit-shadow-contract",
+                feature_contract_identity=identity,
+            )
+        metadata = json.loads((destination / "run_metadata.json").read_text())
+        self.assertEqual(status, "COMPLETE_NEW_APPEND_ONLY")
+        self.assertEqual(metadata["feature_contract_version"],
+                         "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2_ATTEMPT_MISSINGNESS_V1")
+        self.assertEqual(metadata["feature_construction_sha256"],
+                         identity["feature_construction"]["sha256"])
+        self.assertEqual(metadata["training_semantics_comparability"],
+                         identity["feature_contract"]["training_semantics_comparability"])
 
     def test_empty_slate_is_a_governed_noop(self):
         now = datetime.fromisoformat(OBSERVED.replace("Z", "+00:00"))
@@ -163,6 +195,49 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         self.assertEqual(payload["status"], "FAILED_WARN_ONLY")
         self.assertIn("WHOLE_SLATE_PRESTART_GATE_FAILED", payload["failure"])
 
+    def test_current_cutoff_excludes_started_game_without_publishing_partial_slate(self):
+        now = datetime.fromisoformat("2026-10-17T18:19:54+00:00")
+        slate = pd.DataFrame([{
+            "canonical_season": 2026, "slate_date": "2026-10-17", "game_id": 2026020100 + index,
+            "scheduled_start_time_utc": (now - timedelta(minutes=79) if index == 0 else
+                                          now + timedelta(minutes=10 * index)).isoformat(),
+            "game_type_code": 2,
+        } for index in range(14)])
+        eligible = slate[pd.to_datetime(slate.scheduled_start_time_utc, utc=True) > pd.Timestamp(now)]
+        self.assertEqual(len(eligible), 13)
+        with self.assertRaisesRegex(RuntimeError, "WHOLE_SLATE_PRESTART_GATE_FAILED_PARTIAL_SLATE_FORBIDDEN"):
+            core._validate_common(
+                games=slate, season=2026, slate_date="2026-10-17", phase="FINAL_PREGAME",
+                observation_timestamp_utc=now.isoformat(), input_cutoff_timestamp_utc=now.isoformat(),
+                canonical_run_identifier="oct17-partial-forbidden",
+            )
+
+    def test_observer_binds_points_card_to_explicit_corrected_shadow_contract(self):
+        now = datetime.fromisoformat(OBSERVED.replace("Z", "+00:00"))
+        captured = {}
+        run = self.root / "captured" / "run_id=fixture"
+        run.mkdir(parents=True)
+        (run / "run_metadata.json").write_text(json.dumps({"prediction_rows": 3}))
+
+        def publish(**kwargs):
+            captured.update(kwargs)
+            return run, "COMPLETE_NEW_APPEND_ONLY"
+
+        with patch.object(observer, "export_lane_inputs", return_value=(games(), points_features())), \
+             patch.object(observer, "publish_points", side_effect=publish):
+            status = observer.observe(
+                lane="POINTS", season=2026, slate_date=SLATE, requested_phase="FINAL_PREGAME",
+                observation_timestamp=now, canonical_run_identifier="explicit-contract",
+                dsn="fixture", output_root=self.root / "observer",
+            )
+        payload = json.loads(status.read_text())
+        self.assertEqual(payload["status"], "CAPTURED")
+        contract = captured["feature_contract_identity"]
+        self.assertEqual(contract["feature_contract"]["version"],
+                         "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2_ATTEMPT_MISSINGNESS_V1")
+        self.assertEqual(contract["feature_construction"]["sha256"],
+                         "61ac83bf6049bdfe5a12b895667fcbe6efa82f5aa2c960171bfcf3a95e7df43d")
+
     def test_duplicate_rerun_is_idempotent_and_conflicting_identity_fails(self):
         first, state1 = self.publish_points()
         second, state2 = self.publish_points()
@@ -171,6 +246,12 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         self.assertEqual(state2, "IDEMPOTENT_EXISTING_ZERO_INSERTS")
         with self.assertRaisesRegex(RuntimeError, "CONFLICTING_PREDICTION_IDENTITY"):
             self.publish_points("different-run")
+
+    def test_existing_card_with_different_feature_contract_fails_closed(self):
+        self.publish_points()
+        with self.assertRaisesRegex(RuntimeError, "CONFLICTING_PREDICTION_FEATURE_CONTRACT"):
+            core._existing(self.root / "points", 2026, SLATE, "MIDDAY", "fixture-run",
+                           feature_contract_sha256="c" * 64)
 
     def test_points_ladder_exclusion_is_retained_and_not_qualified(self):
         destination, _ = self.publish_points(decision="BLOCKED_MATERIAL_LADDER_INCOHERENCE")

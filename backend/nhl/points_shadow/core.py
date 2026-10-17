@@ -18,6 +18,8 @@ from backend.nhl.scripts.score_points_phoenix import load_line_model
 
 ROOT = Path(__file__).resolve().parents[3]
 IDENTITY_PATH = Path(__file__).with_name("frozen_points_v1.json")
+APPROVED_SHADOW_FEATURE_CONTRACT_PATH = Path(__file__).with_name(
+    "phoenix_shadow_attempt_missingness_v1.json")
 GAME_TYPES = {1: "PRESEASON", 2: "REGULAR_SEASON", 3: "POSTSEASON"}
 RUN_TYPES = {"MIDDAY", "FINAL_PREGAME"}
 LINES = [0.5, 1.5, 2.5]
@@ -85,9 +87,38 @@ def verify_feature_contract_identity(identity: dict[str, Any] | None = None) -> 
     }
 
 
-def verify_frozen_identity() -> dict[str, Any]:
+def verify_frozen_identity(
+    feature_contract_identity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     identity = frozen_identity()
-    verify_feature_contract_identity(identity)
+    if feature_contract_identity is None:
+        verify_feature_contract_identity(identity)
+    else:
+        if Path(feature_contract_identity.get("_identity_path", "")).resolve() != \
+                APPROVED_SHADOW_FEATURE_CONTRACT_PATH.resolve():
+            raise RuntimeError("POINTS_EXPLICIT_FEATURE_CONTRACT_PATH_NOT_APPROVED")
+        approved = json.loads(APPROVED_SHADOW_FEATURE_CONTRACT_PATH.read_text())
+        if (feature_contract_identity.get("feature_contract") != approved.get("feature_contract")
+                or feature_contract_identity.get("feature_construction")
+                != approved.get("feature_construction")
+                or feature_contract_identity.get("feature_contract_sha256")
+                != approved.get("feature_contract_sha256")):
+            raise RuntimeError("POINTS_EXPLICIT_FEATURE_CONTRACT_IDENTITY_MISMATCH")
+        # The corrected source-missingness contract is explicitly shadow-only:
+        # it reuses the frozen scorer and weights without claiming historical
+        # feature comparability or changing authority.
+        verified_contract = verify_feature_contract_identity(feature_contract_identity)
+        contract = feature_contract_identity.get("feature_contract") or {}
+        if (contract.get("base_contract") != identity["feature_contract"].get("version")
+                or contract.get("model_role") != "PHOENIX_INCUMBENT_SHADOW_ONLY"
+                or contract.get("frozen_model_or_authority_change") is not False
+                or not str(contract.get("training_semantics_comparability", "")).startswith(
+                    "NOT_ESTABLISHED: retained Phoenix historical training feature frame is unavailable")):
+            raise RuntimeError("POINTS_EXPLICIT_FEATURE_CONTRACT_NOT_APPROVED_SHADOW")
+        identity["feature_construction"] = feature_contract_identity["feature_construction"]
+        identity["feature_contract"] = contract
+        identity["feature_contract_sha256"] = verified_contract["sha256"]
+        identity["feature_contract_identity_path"] = verified_contract["identity_path"]
     scorer = ROOT / identity["scorer_path"]
     model_root = ROOT / identity["model_root"]
     if sha256_file(scorer) != identity["scorer_sha256"]:
@@ -188,8 +219,10 @@ def construct_coherent_ladders(predictions: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def verify_fixed_input_parity() -> dict[str, Any]:
-    identity = verify_frozen_identity()
+def verify_fixed_input_parity(
+    feature_contract_identity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    identity = verify_frozen_identity(feature_contract_identity)
     input_path, output_path = ROOT / identity["fixed_input"]["path"], ROOT / identity["fixed_output"]["path"]
     if sha256_file(input_path) != identity["fixed_input"]["sha256"]:
         raise RuntimeError("POINTS_FIXED_INPUT_HASH_DRIFT")

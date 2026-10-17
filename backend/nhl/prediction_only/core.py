@@ -136,7 +136,8 @@ def prediction_lock(root: Path, lane: str, slate_date: str, phase: str):
 
 
 def _existing(root: Path, season: int, slate_date: str, phase: str,
-              canonical_run_identifier: str) -> tuple[Path | None, str | None]:
+              canonical_run_identifier: str,
+              feature_contract_sha256: str | None = None) -> tuple[Path | None, str | None]:
     phase_root = root / f"season={season}" / f"slate_date={slate_date}" / f"phase={phase}"
     runs = sorted(phase_root.glob("run_id=*"))
     if len(runs) > 1:
@@ -147,6 +148,9 @@ def _existing(root: Path, season: int, slate_date: str, phase: str,
     metadata = json.loads((runs[0] / "run_metadata.json").read_text())
     if metadata.get("canonical_run_identifier") != canonical_run_identifier:
         raise RuntimeError("CONFLICTING_PREDICTION_IDENTITY")
+    if (feature_contract_sha256 is not None
+            and metadata.get("feature_contract_sha256") != feature_contract_sha256):
+        raise RuntimeError("CONFLICTING_PREDICTION_FEATURE_CONTRACT")
     return runs[0], "IDEMPOTENT_EXISTING_ZERO_INSERTS"
 
 
@@ -157,7 +161,8 @@ def _empty_surface(run_id: str) -> pd.DataFrame:
 def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: Path,
                    season: int, slate_date: str, phase: str,
                    observation_timestamp_utc: str, input_cutoff_timestamp_utc: str,
-                   canonical_run_identifier: str) -> tuple[Path, str]:
+                   canonical_run_identifier: str,
+                   feature_contract_identity: dict[str, Any] | None = None) -> tuple[Path, str]:
     observation, cutoff = _validate_common(
         games=games, season=season, slate_date=slate_date, phase=phase,
         observation_timestamp_utc=observation_timestamp_utc,
@@ -165,11 +170,16 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
         canonical_run_identifier=canonical_run_identifier,
     )
     with prediction_lock(output_root, "POINTS", slate_date, phase):
-        old, disposition = _existing(output_root, season, slate_date, phase, canonical_run_identifier)
+        expected_feature_contract = (feature_contract_identity or {}).get("feature_contract_sha256")
+        old, disposition = _existing(
+            output_root, season, slate_date, phase, canonical_run_identifier,
+            feature_contract_sha256=expected_feature_contract,
+        )
         if old is not None:
             return old, disposition or "IDEMPOTENT_EXISTING_ZERO_INSERTS"
         validate_points_inputs(games, players, slate_date, observation)
-        parity, identity = verify_points_parity(), verify_points_identity()
+        parity = verify_points_parity(feature_contract_identity)
+        identity = verify_points_identity(feature_contract_identity)
         raw = construct_coherent_ladders(score_points(players, identity))
         ladder = evaluate_ladder_coherence(raw, identity)
         predictions = raw.merge(players[PLAYER_IDENTITY_COLUMNS], on=["game_id", "player_id"], validate="many_to_one")
@@ -228,6 +238,12 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
                 "candidate_rows": 0, "provider_event_dependency": "NONE",
                 "bookmaker_credential_access": False, "market_requests": 0, "paid_credits": 0,
                 "model_fixture_status": parity["status"], "status": "COMPLETE_PREDICTION_ONLY",
+                "feature_contract_version": identity["feature_contract"].get("version"),
+                "feature_contract_sha256": identity.get("feature_contract_sha256"),
+                "feature_construction_sha256": identity["feature_construction"].get("sha256"),
+                "feature_contract_identity_path": identity.get("feature_contract_identity_path"),
+                "training_semantics_comparability": identity["feature_contract"].get(
+                    "training_semantics_comparability", "FROZEN_CONTRACT"),
                 "points_probability_construction": "EQUAL_WEIGHT_ISOTONIC_EXCEEDANCE_V1",
                 "points_line_meanings": {"0.5": "P(points>=1)", "1.5": "P(points>=2)", "2.5": "P(points>=3)"},
                 "first_eligible_live_date": PROSPECTIVE_NOT_BEFORE,
