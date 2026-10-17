@@ -575,9 +575,29 @@ def _player_stats_conflicting_fields(existing: Dict[str, Any], incoming: Dict[st
             continue
         if field == "game_date":
             old_value, new_value = str(old_value)[:10], str(new_value)[:10]
+        elif field in {"team", "opponent"}:
+            if _team_identity_token(old_value) == _team_identity_token(new_value):
+                continue
         if old_value != new_value:
             conflicts.append(field)
     return conflicts
+
+
+def _team_identity_token(value: Any) -> Tuple[str, Any]:
+    """Compare MLB team labels and numeric IDs through the canonical map.
+
+    This is comparison-only: it never rewrites the stored row or incoming
+    source payload. Unknown labels remain distinct from numeric identities and
+    from other unknown labels, so unresolved mappings fail closed.
+    """
+    text = str(value).strip()
+    if text.isdigit():
+        return ("id", int(text))
+    normalized = normalizeTeamAbbreviation(text)
+    team_id = getTeamIdFromAbbr(normalized)
+    if team_id is not None:
+        return ("id", int(team_id))
+    return ("label", normalized)
 
 
 def _select_existing_player_stats(cur: Any, row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -702,7 +722,30 @@ def _validate_legacy_derived_candidates(candidates: List[Dict[str, Any]]) -> Non
         daily_keys.add(daily)
 
 
-def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
+def _refresh_player_derived_stats(
+    conn,
+    from_date: str,
+    to_date: str,
+    *,
+    player_id: Optional[int] = None,
+    game_id: Optional[int] = None,
+) -> int:
+    """Recompute legacy rolling rows, optionally for one exact player-game.
+
+    With no key arguments the existing date-wide behavior is unchanged. When
+    scoped, both canonical IDs are required. History for the selected player
+    remains available to the rolling windows, but only the selected target
+    game can be locked or inserted/updated.
+    """
+    if (player_id is None) != (game_id is None):
+        raise ValueError("SCOPED_DERIVED_REQUIRES_PLAYER_AND_GAME_ID")
+    scoped = player_id is not None
+    if scoped:
+        player_id = int(player_id)
+        game_id = int(game_id)
+        if player_id <= 0 or game_id <= 0:
+            raise ValueError("SCOPED_DERIVED_IDS_MUST_BE_POSITIVE")
+
     agg_metric_exprs: List[str] = []
     for metric in ROLLING_METRICS:
         source_expr = ROLLING_METRIC_SOURCE_SQL.get(metric, f"COALESCE(ps.{metric}, 0)")
@@ -749,6 +792,7 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
             FROM mlb.player_stats
             WHERE game_date >= %s::date
               AND game_date <= %s::date
+              {"AND player_id = %s::bigint" if scoped else ""}
         ),
         single_game_days AS (
             SELECT
@@ -796,14 +840,18 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
             FROM rolled
             WHERE game_date >= %s::date
               AND game_date <= %s::date
+              {"AND player_id = %s::bigint AND game_id = %s::bigint" if scoped else ""}
         )
         SELECT
             {candidate_select_cols}
         FROM target t
         ORDER BY t.player_id, t.game_id
     """
+    params = (from_date, to_date, player_id, from_date, to_date, player_id, game_id) if scoped else (
+        from_date, to_date, from_date, to_date
+    )
     with conn.cursor() as cur:
-        cur.execute(sql, (from_date, to_date, from_date, to_date))
+        cur.execute(sql, params)
         candidates = [_row_mapping(cur, row) for row in cur.fetchall()]
 
     # No mutation is possible before the whole target-date candidate population
@@ -876,6 +924,19 @@ def _refresh_player_derived_stats(conn, from_date: str, to_date: str) -> int:
             cur.execute(insert_sql, candidate)
             writes += int(cur.rowcount or 0)
     return writes
+
+
+def _refresh_player_game_derived_stats(
+    conn, *, player_id: int, game_id: int, game_date: str
+) -> int:
+    """Refresh one derived player-game without date-wide training sync."""
+    return _refresh_player_derived_stats(
+        conn,
+        game_date,
+        game_date,
+        player_id=player_id,
+        game_id=game_id,
+    )
 
 
 def _sync_training_rows_rolling_result_avg(conn, from_date: str, to_date: str) -> int:

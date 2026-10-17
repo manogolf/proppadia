@@ -282,6 +282,7 @@ class _Cursor:
         self.fail_insert = fail_insert
         self.calls = []
         self.parameters = []
+        self.insert_parameters = []
         self.rowcount = 0
         self.description = ()
         self._rows = []
@@ -297,11 +298,19 @@ class _Cursor:
         self.parameters.append(params)
         if "FROM target t" in sql:
             self._rows = self.candidates
+            if "AND player_id = %s::bigint AND game_id = %s::bigint" in sql:
+                target_player_id, target_game_id = params[-2:]
+                self._rows = [
+                    row for row in self._rows
+                    if int(row["player_id"]) == int(target_player_id)
+                    and int(row["game_id"]) == int(target_game_id)
+                ]
             self.rowcount = 0
         elif "FOR UPDATE" in sql:
             self._rows = self.locked_rows
             self.rowcount = 0
         elif "INSERT INTO mlb.player_derived_stats" in sql:
+            self.insert_parameters.append(params)
             if self.fail_insert:
                 raise RuntimeError("synthetic insert failure")
             self._rows = []
@@ -317,6 +326,100 @@ class _Connection:
 
     def cursor(self):
         return self._cursor
+
+
+def _player_stats_row(*, team="119", opponent="158"):
+    return {
+        "player_id": 571970,
+        "game_id": 849810,
+        "game_date": "2026-10-15",
+        "team": team,
+        "opponent": opponent,
+        "is_home": True,
+        "position": "3B",
+        "plate_appearances": 3,
+        "at_bats": 3,
+        "hits": 1,
+        "total_bases": 1,
+        "rbis": 0,
+        "runs_scored": 0,
+        "strikeouts_batting": 2,
+        "walks": 0,
+        "singles": 1,
+        "doubles": 0,
+        "triples": 0,
+        "home_runs": 0,
+        "stolen_bases": 0,
+        "strikeouts_pitching": 0,
+        "walks_allowed": 0,
+        "hits_allowed": 0,
+        "outs_recorded": 0,
+        "earned_runs": 0,
+        "is_starter": 0,
+    }
+
+
+class _PlayerStatsCursor:
+    def __init__(self, existing, function_result=0):
+        self.existing = existing
+        self.function_result = function_result
+        self.calls = []
+        self.last_sql = ""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def execute(self, sql, _params=None):
+        self.last_sql = sql
+        self.calls.append(sql)
+
+    def fetchone(self):
+        if "safe_upsert_player_stats" in self.last_sql:
+            return (self.function_result,)
+        return dict(self.existing) if self.existing is not None else None
+
+
+def test_player_stats_team_and_opponent_compare_by_authoritative_team_id():
+    existing = _player_stats_row(team="119", opponent="158")
+    incoming = _player_stats_row(team="LAD", opponent="MIL")
+    assert active._player_stats_conflicting_fields(existing, incoming) == []
+
+
+def test_player_stats_genuine_team_identity_disagreement_stays_a_conflict():
+    existing = _player_stats_row(team="119", opponent="158")
+    incoming = _player_stats_row(team="BOS", opponent="MIL")
+    assert active._player_stats_conflicting_fields(existing, incoming) == ["team"]
+
+
+def test_player_stats_unmapped_labels_fail_closed_but_case_aliases_compare():
+    existing = _player_stats_row(team="unmapped-team", opponent="158")
+    same_unknown_label = _player_stats_row(team="UNMAPPED-TEAM", opponent="MIL")
+    different_unknown_label = _player_stats_row(team="another-unmapped-team", opponent="MIL")
+    assert active._player_stats_conflicting_fields(existing, same_unknown_label) == []
+    assert active._player_stats_conflicting_fields(existing, different_unknown_label) == ["team"]
+
+
+def test_max_muncy_idempotent_replay_reaches_fixed_source_entrypoint():
+    existing = _player_stats_row(team="119", opponent="158")
+    incoming = _player_stats_row(team="LAD", opponent="MIL")
+    cursor = _PlayerStatsCursor(existing, function_result=0)
+    result = active._upsert_player_stats_row(_Connection(cursor), incoming)
+    assert result == 0
+    assert not result.conflicts
+    assert any("mlb.safe_upsert_player_stats" in call for call in cursor.calls)
+
+
+def test_genuine_team_disagreement_is_quarantined_before_entrypoint():
+    existing = _player_stats_row(team="119", opponent="158")
+    incoming = _player_stats_row(team="BOS", opponent="MIL")
+    cursor = _PlayerStatsCursor(existing)
+    result = active._upsert_player_stats_row(_Connection(cursor), incoming)
+    assert result == 0
+    assert result.conflicts[0]["conflicting_fields"] == ("team",)
+    assert not any("mlb.safe_upsert_player_stats" in call for call in cursor.calls)
 
 
 def test_active_legacy_writer_locks_then_recomputes_without_deleting_and_is_repeat_safe():
@@ -357,8 +460,61 @@ def test_exact_candidate_query_executes_through_fake_cursor_and_reaches_validati
     assert "target AS (" in query
     assert ")\n        SELECT\n" in query
     assert "),\n        SELECT" not in query
+    assert "AND player_id = %s::bigint" not in query
+    assert "AND player_id = %s::bigint AND game_id = %s::bigint" not in query
     assert cur.parameters[0] == ("2026-09-23", "2026-09-23", "2026-09-23", "2026-09-23")
     assert observed == [[candidate]]
+
+
+def test_scoped_derived_refresh_limits_candidate_and_write_to_one_player_game():
+    selected = {"player_id": 571970, "game_id": 849810, "game_date": "2026-10-15"}
+    other_player = {"player_id": 660271, "game_id": 849810, "game_date": "2026-10-15"}
+    other_game = {"player_id": 571970, "game_id": 849818, "game_date": "2026-10-15"}
+    cur = _Cursor([selected, other_player, other_game])
+
+    assert active._refresh_player_game_derived_stats(
+        _Connection(cur), player_id=571970, game_id=849810, game_date="2026-10-15"
+    ) == 1
+
+    candidate_query = cur.calls[0]
+    assert "AND player_id = %s::bigint" in candidate_query
+    assert "AND player_id = %s::bigint AND game_id = %s::bigint" in candidate_query
+    assert cur.parameters[0] == (
+        "2026-10-15", "2026-10-15", 571970,
+        "2026-10-15", "2026-10-15", 571970, 849810,
+    )
+    assert len(cur.insert_parameters) == 1
+    assert cur.insert_parameters[0]["player_id"] == 571970
+    assert cur.insert_parameters[0]["game_id"] == 849810
+
+
+def test_scoped_derived_refresh_rejects_partial_or_invalid_identity_before_sql():
+    cur = _Cursor([])
+    with pytest.raises(ValueError, match="SCOPED_DERIVED_REQUIRES_PLAYER_AND_GAME_ID"):
+        active._refresh_player_derived_stats(
+            _Connection(cur), "2026-10-15", "2026-10-15", player_id=571970
+        )
+    with pytest.raises(ValueError, match="SCOPED_DERIVED_IDS_MUST_BE_POSITIVE"):
+        active._refresh_player_game_derived_stats(
+            _Connection(cur), player_id=571970, game_id=0, game_date="2026-10-15"
+        )
+    assert cur.calls == []
+
+
+def test_scoped_canary_wrapper_does_not_run_date_wide_training_sync(monkeypatch):
+    row = {"player_id": 571970, "game_id": 849810, "game_date": "2026-10-15", "team": "119", "is_home": True}
+    for metric in active.ROLLING_METRICS:
+        row[f"d7_{metric}"] = row[f"d15_{metric}"] = row[f"d30_{metric}"] = 0
+    monkeypatch.setattr(
+        active,
+        "_sync_training_rows_rolling_result_avg",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("date-wide training sync invoked")),
+    )
+    assert active._refresh_player_game_derived_stats(
+        _Connection(_Cursor([row])), player_id=571970, game_id=849810, game_date="2026-10-15"
+    ) == 1
+    run_source = inspect.getsource(active.run)
+    assert "_sync_training_rows_rolling_result_avg(" in run_source
 
 
 def test_active_legacy_writer_blocks_before_write_and_propagates_transaction_failure():
