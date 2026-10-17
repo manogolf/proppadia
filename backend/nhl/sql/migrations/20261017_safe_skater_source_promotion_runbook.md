@@ -44,9 +44,121 @@ retains its existing two-column UPDATE grant and remains `NOLOGIN`.
    PostgreSQL fixture described below and then one controlled daily and one
    postgame canary. Review the conflict counts and exact-key diagnostics,
    protected-value before/after checks, reconciliation, and scoring receipts.
-5. Confirm the routine connection identities remain the restricted daily,
+6. Confirm the routine connection identities remain the restricted daily,
    research, and operations logins. Do not grant correction-role membership
    to any application login.
+
+## Production writer quiescence
+
+The local writer-capable LaunchAgents are registered in `gui/501`:
+
+- `com.proppadia.nhl.morning-orchestration` runs daily at 07:30 local. It
+  waits for each `subprocess.run` stage, including the morning CLI and failure
+  sentinel, before its parent exits.
+- `com.proppadia.nhl.mainline-cross-market-shadow` runs every 900 seconds and
+  has `RunAtLoad=true`. It waits for its subprocesses, including prior-day
+  reconciliation, before its parent exits. Bootstrapping it after deployment
+  starts a capture immediately; account for that in the canary window.
+
+Neither wrapper intentionally detaches children. A normally completed parent
+has waited for its children. A forcibly terminated parent can leave a child
+running, so launchd state alone is not proof of quiescence; inspect the process
+tree and PostgreSQL after pausing. PostgreSQL rolls back an open transaction
+when its client connection closes, but a surviving child may own a separate
+connection and continue writing after its parent exits.
+
+Use a maintenance window away from 07:30 and the next 900-second shadow tick.
+Record the original `launchctl print` output/state and both plist schedules.
+If either `active count` is nonzero, wait for completion and recheck before
+pausing. From the repository host, unload each already-idle agent:
+
+```sh
+launchctl bootout gui/501 /Users/jerrystrain/Library/LaunchAgents/com.proppadia.nhl.morning-orchestration.plist
+launchctl bootout gui/501 /Users/jerrystrain/Library/LaunchAgents/com.proppadia.nhl.mainline-cross-market-shadow.plist
+```
+
+Confirm both labels are absent from the loaded `gui/501` domain. Check local
+processes by PID and parent PID without copying command-line arguments into
+receipts; classify each `backend.nhl`/`backend/nhl` process and inspect the
+process tree of every writer-capable process. `pgrep -f '[b]ackend/nhl/|[b]ackend\.nhl'` returns only
+candidate PIDs; inspect each with `ps -p PID -o pid=,ppid=,lstart=,etime=,stat=,comm=`
+and enumerate descendants with `pgrep -P PID`. Repeat for descendants. Do not
+use `pgrep -fl` or retain full command lines, which may expose arguments.
+
+Check PostgreSQL in a read-only transaction for client sessions using the
+daily, research, or operations login and any NHL-named application session,
+including idle-in-transaction sessions. Do not select or record query text.
+The following query set records no query text and can be run from a trusted
+shell where `backend/.env` has been loaded without echoing it:
+
+```sh
+set -a
+source backend/.env
+set +a
+psql "$SUPABASE_DB_URL" --no-psqlrc --set=ON_ERROR_STOP=1 --pset=pager=off <<'SQL'
+BEGIN READ ONLY;
+SELECT current_database(), current_user, session_user,
+       version(), current_setting('transaction_read_only');
+SELECT pid, usename, application_name, state,
+       (xact_start IS NOT NULL) AS has_open_transaction,
+       wait_event_type, wait_event
+FROM pg_stat_activity
+WHERE datname = current_database()
+  AND pid <> pg_backend_pid()
+  AND backend_type = 'client backend'
+  AND (usename IN ('proppadia_nhl_daily_login',
+                   'proppadia_nhl_research_login',
+                   'proppadia_nhl_operations_login')
+       OR application_name ILIKE '%nhl%')
+ORDER BY pid;
+SELECT l.pid, a.usename, a.application_name, n.nspname, c.relname,
+       l.mode, l.granted
+FROM pg_locks AS l
+JOIN pg_class AS c ON c.oid = l.relation
+JOIN pg_namespace AS n ON n.oid = c.relnamespace
+LEFT JOIN pg_stat_activity AS a ON a.pid = l.pid
+WHERE n.nspname = 'nhl'
+  AND l.pid <> pg_backend_pid()
+ORDER BY l.pid, c.relname, l.mode;
+ROLLBACK;
+SQL
+```
+
+Quiescence passes only when no NHL application session or unfinished
+transaction remains, no unclassified or writer-capable NHL process remains,
+and no unexpected NHL relation lock is present.
+PostgreSQL service sessions unrelated to NHL are not grounds to terminate
+anything. Check and record the safe-promotion migration checksum and compare
+the backup archive checksum with the protected manifest before applying.
+
+Before deployment, recheck the production project reference, server version,
+current role, read-only state, safe-promotion migration checksum, and the
+protected backup checksum/manifest. Apply the migration only through the
+approved owner session. Run the committed role assertions, then a bounded
+acquisition and permitted NULL-fill canary, followed by one selected
+reconciliation and scoring canary. Capture run IDs, source keys, row counts,
+conflict diagnostics, protected-field before/after values, receipts, and
+function/privilege assertions. Do not run the pending historical PP-TOI
+correction as a canary.
+
+Resume only after all checks pass and the original state showed both agents
+loaded. Bootstrap their existing plists:
+
+```sh
+launchctl bootstrap gui/501 /Users/jerrystrain/Library/LaunchAgents/com.proppadia.nhl.morning-orchestration.plist
+launchctl bootstrap gui/501 /Users/jerrystrain/Library/LaunchAgents/com.proppadia.nhl.mainline-cross-market-shadow.plist
+```
+
+Verify the labels, schedules, and log paths with `launchctl print`. The shadow
+will run immediately because of `RunAtLoad`; verify its receipt and database
+identity. Do not bootstrap an agent that was originally unregistered.
+
+If migration assertions, canaries, source-value checks, or identity checks
+fail, stop further canaries and leave both agents unloaded. Preserve logs,
+receipts, migration output, grant snapshots, and before/after evidence for
+owner review. Do not restore broader UPDATE grants automatically; use the
+committed rollback only after a separate owner decision, because it restores
+the direct overwrite exposure. Keep MLB scheduling and operations untouched.
 
 ## Disposable fixture
 
