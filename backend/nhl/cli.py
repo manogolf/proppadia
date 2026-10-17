@@ -2715,7 +2715,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1",
          "-v", "VERBOSITY=verbose", "-c",
          "SELECT 'NHL_PROTECTED_SOURCE_NULL_FILLS=' || "
-         f"nhl.promote_skater_game_log_protected_fields(DATE '{yday}');"])
+         f"nhl.promote_skater_game_log_protected_fields(DATE '{yday}');"],
+        database_write_capable=True, database_access="ingestion")
 
     # A3a) Build manpower segments (PP/PK windows) for this slate date (required for PP TOI)
     run([PY, SCRIPTS_DIR / "backfill_game_manpower_segments.py", "--start-date", yday, "--end-date", yday, "--season", str(season)])

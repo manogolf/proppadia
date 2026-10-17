@@ -105,6 +105,16 @@ class SafeSourcePromotionContractTests(unittest.TestCase):
         self.assertNotIn("shot_attempts=excluded.shot_attempts", postgame)
         self.assertNotIn("SET pp_toi_minutes = %s", fill)
 
+    def test_fixed_security_definer_fill_uses_ingestion_route(self):
+        cli = (ROOT / "backend/nhl/cli.py").read_text()
+        tail = cli.split(
+            "nhl.promote_skater_game_log_protected_fields(DATE '{yday}');", 1
+        )[1][:200]
+        self.assertRegex(
+            tail,
+            r'\],\s*database_write_capable=True,\s*database_access="ingestion"\)',
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
