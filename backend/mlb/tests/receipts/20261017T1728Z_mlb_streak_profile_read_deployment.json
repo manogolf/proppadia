@@ -1,0 +1,67 @@
+{
+  "task": "MLB restricted streak-profile read migration deployment",
+  "verified_at_utc": "2026-10-17T17:28:06Z",
+  "status": "PASS",
+  "production_identity": {
+    "pinned_project_reference_match": true,
+    "database": "postgres",
+    "postgresql_version": "15.8",
+    "administrative_session_user": "postgres",
+    "administrative_current_user": "postgres"
+  },
+  "migration": {
+    "path": "backend/mlb/sql/migrations/20261022_mlb_ingest_streak_profile_read.sql",
+    "source_commit": "6cac791a",
+    "sha256": "459b84c051e7a6adb5175d44c69f22a7812c7e9d86576045d78a9b7eaf923fb4",
+    "matches_preview_tested_sha256": true,
+    "execution": "psql -v ON_ERROR_STOP=1; lock_timeout=5000ms; statement_timeout=30000ms",
+    "result": "PASS"
+  },
+  "preflight": {
+    "ingest_group_attributes_restricted": true,
+    "all_six_column_select_grants_absent": true,
+    "named_policy_absent": true,
+    "rls_enabled": true,
+    "force_rls": false,
+    "conflicting_relation_locks": 0,
+    "required_column_types_match": true
+  },
+  "post_deployment": {
+    "select_columns_exactly": [
+      "player_id",
+      "prop_type",
+      "prop_source",
+      "last_game_date",
+      "streak_type",
+      "streak_count"
+    ],
+    "other_columns_select_denied": true,
+    "rls_policy": {
+      "name": "proppadia_mlb_ingest_streak_select",
+      "role": "proppadia_mlb_ingest",
+      "command": "SELECT",
+      "predicate": "prop_source = 'mlb_api' AND last_game_date IS NOT NULL"
+    },
+    "insert_update_delete_truncate_denied": true,
+    "schema_create_denied": true,
+    "ingest_group_attributes_unchanged": true,
+    "ingest_login_sole_membership_unchanged": true,
+    "safe_write_function_execute_grants_unchanged": true,
+    "administrative_and_research_role_access_unchanged": true,
+    "conflicting_relation_locks": 0
+  },
+  "restricted_read_verification": {
+    "project_reference_match": true,
+    "connection_gate": "PASS",
+    "session_user": "proppadia_mlb_ingest_login",
+    "current_user": "proppadia_mlb_ingest",
+    "stat_derived_streak_lookup": "ROW_RETURNED",
+    "ungranted_column_denial": {
+      "result": "DENIED_AS_EXPECTED",
+      "sqlstate": "42501"
+    },
+    "write_canary_invoked": false
+  },
+  "production_data_mutated": false,
+  "credentials_or_connection_strings_recorded": false
+}
