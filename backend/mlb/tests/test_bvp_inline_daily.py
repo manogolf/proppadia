@@ -1,6 +1,7 @@
 """Offline contracts, concurrency, crash recovery and isolated shell fixtures."""
 from datetime import datetime, timezone
 import ast
+from contextlib import contextmanager, nullcontext
 from concurrent.futures import ThreadPoolExecutor
 import json
 import io
@@ -198,6 +199,76 @@ def test_delayed_dispatch_retains_actual_window_and_collection_time():
     assert adapter.natural_window("2026-09-19T15:40:00Z")=="0830"
 
 
+def _readback_fixture(prepared, *, result_rows=None, execute_error=None):
+    row={"prop_type":prepared[0],"player_id":prepared[1],"game_id":prepared[2],
+            "game_date":prepared[3],"features":prepared[4],"feature_set_tag":prepared[5],
+            "model_tag":prepared[6],"computed_at":"2026-10-17T19:38:58.789978+00:00"}
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def execute(self,sql,params=()):
+            self.sql=sql
+            if execute_error is not None and "FROM mlb.prop_features_precomputed" in sql:
+                raise execute_error
+        def fetchall(self): return result_rows if result_rows is not None else [row]
+    class Connection:
+        def cursor(self): return Cursor()
+    @contextmanager
+    def connect(): yield Connection()
+    return connect
+
+
+def test_bvp_committed_readback_uses_research_connection_and_verifies_row(monkeypatch):
+    from backend.mlb.shared import bvp_identity
+    prepared=("hits",123,456,DAY,{"bvp_hits":2.0},"v1","bvp_pvb_refresh_v1")
+    monkeypatch.setattr(bvp_identity,"forward_source_identity_valid",lambda row,journals:True)
+    verified=adapter.verify_database_rows([prepared],[[]],connect_factory=_readback_fixture(prepared))
+    assert len(verified)==1
+    assert verified[0]["game_id"]==456
+    assert verified[0]["bvp_features_sha256"]==bvp_identity.stable_hash(prepared[4])
+
+
+def test_bvp_readback_reports_missing_research_access_without_writer_fallback(monkeypatch):
+    monkeypatch.delenv("MLB_MONEYLINE_AUDIT_DATABASE_URL",raising=False)
+    monkeypatch.setenv("MLB_USE_RESTRICTED_INGEST","1")
+    with pytest.raises(adapter.DatabaseReadbackUnavailable,match="RESEARCH_READBACK_CONNECTION_NOT_CONFIGURED"):
+        with adapter._bvp_research_readback_connection():
+            pass
+
+
+def test_bvp_readback_permission_denial_is_unavailable_not_writer_fallback(monkeypatch):
+    from backend.mlb.shared import bvp_identity
+    prepared=("hits",123,456,DAY,{"bvp_hits":2.0},"v1","bvp_pvb_refresh_v1")
+    class PermissionDenied(Exception):
+        sqlstate="42501"
+    monkeypatch.setattr(bvp_identity,"forward_source_identity_valid",lambda row,journals:True)
+    with pytest.raises(adapter.DatabaseReadbackUnavailable,match="RESEARCH_READBACK_PERMISSION_DENIED"):
+        adapter.verify_database_rows([prepared],[[]],
+            connect_factory=_readback_fixture(prepared,execute_error=PermissionDenied()))
+
+
+def test_bvp_committed_readback_mismatch_is_distinct_from_unavailable(monkeypatch):
+    from backend.mlb.shared import bvp_identity
+    prepared=("hits",123,456,DAY,{"bvp_hits":2.0},"v1","bvp_pvb_refresh_v1")
+    monkeypatch.setattr(bvp_identity,"forward_source_identity_valid",lambda row,journals:True)
+    mismatched={"prop_type":"hits","player_id":123,"game_id":456,"game_date":DAY,
+        "features":{"bvp_hits":9.0},"feature_set_tag":"v1","model_tag":"bvp_pvb_refresh_v1",
+        "computed_at":"2026-10-17T19:38:58.789978+00:00"}
+    with pytest.raises(adapter.AcquisitionCertificationFailure) as caught:
+        adapter.verify_database_rows([prepared],[[]],connect_factory=_readback_fixture(prepared,result_rows=[mismatched]))
+    assert caught.value.audit_evidence["reason"]=="COMMITTED_ROW_IDENTITY_OR_SOURCE_RECEIPT_MISMATCH"
+
+
+def test_post_commit_verification_failure_keeps_committed_disposition(tmp_path):
+    def committed_but_unverified(claim):
+        raise adapter.AcquisitionCertificationFailure("POST_COMMIT_READBACK_UNAVAILABLE",
+            {"database_transaction_disposition":"COMMITTED","fixed_function_result_count":286})
+    result=run(tmp_path/"state.db",acquire=committed_but_unverified)
+    assert result["status"]=="BVP_INLINE_POST_COMMIT_VERIFICATION_FAILED"
+    assert result["database_transaction_disposition"]=="COMMITTED"
+    assert not b.certified_success(DAY,tmp_path/"state.db")
+
+
 def test_explicit_automatic_authority_survives_launchd_environment_loss(monkeypatch):
     monkeypatch.delenv("XPC_SERVICE_NAME", raising=False)
     called=Mock(return_value=b.result("BVP_INLINE_NOT_DUE", "FIXTURE_ACCEPTED"))
@@ -354,6 +425,7 @@ def test_canonical_adapter_offline_commit_certification_and_journals(tmp_path,mo
     q.fetchall.side_effect=fetched
     connection=Mock(); connection.__enter__=Mock(return_value=connection); connection.__exit__=Mock(return_value=False); connection.cursor.return_value=q
     monkeypatch.setattr(pg,"pg_connect",lambda:connection)
+    monkeypatch.setattr(adapter,"_bvp_research_readback_connection",lambda:nullcontext(connection))
     record=run(b.STATE_PATH,acquire=adapter.canonical_acquire)
     if mode in {"off_date","partial","missing_journal"}:
         assert not record["certified"] and not b.certified_success(DAY,b.STATE_PATH)
@@ -363,7 +435,7 @@ def test_canonical_adapter_offline_commit_certification_and_journals(tmp_path,mo
         assert record["counts"]["local_game_id_unmapped"]==1  # Optional enrichment does not substitute ID.
         if mode=="missing_starter": assert record["starter_exclusions"][0]["team_id"]==108
         if mode=="empty": assert len(record["empty_responses"])==2 and writes==[]
-        if writes: assert any(call.args[0]=="SET TRANSACTION READ ONLY" for call in q.execute.call_args_list)
+        if writes: assert any("FROM mlb.prop_features_precomputed" in call.args[0] for call in q.execute.call_args_list)
 
 
 def test_retired_wrapper_never_reaches_original_body():

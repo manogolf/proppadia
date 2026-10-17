@@ -24,6 +24,53 @@ class AcquisitionCertificationFailure(RuntimeError):
         self.audit_evidence={"reason":reason,**evidence}
 
 
+class DatabaseReadbackUnavailable(RuntimeError):
+    """The dedicated research connection cannot perform the committed readback."""
+
+
+def _bvp_research_readback_connection():
+    """Open the existing command-scoped, read-only research connection.
+
+    Never use ``pg_connect`` here: with MLB_USE_RESTRICTED_INGEST=1 it routes
+    back to the writer login, which intentionally cannot SELECT the target.
+    The approved research login currently has narrower table grants than this
+    query needs, so permission denial is reported as unavailable verification.
+    """
+    from contextlib import contextmanager
+
+    @contextmanager
+    def connection():
+        url=os.environ.get("MLB_MONEYLINE_AUDIT_DATABASE_URL", "").strip()
+        if not url:
+            raise DatabaseReadbackUnavailable("RESEARCH_READBACK_CONNECTION_NOT_CONFIGURED")
+        try:
+            import psycopg
+            import psycopg.rows
+            conn=psycopg.connect(url,row_factory=psycopg.rows.dict_row,
+                prepare_threshold=None,options="-c search_path=mlb,public")
+        except Exception:
+            raise DatabaseReadbackUnavailable("RESEARCH_READBACK_CONNECTION_FAILED") from None
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SET TRANSACTION READ ONLY")
+                cur.execute("SELECT session_user::text AS session_user,current_user::text AS current_user")
+                row=cur.fetchone()
+            if (not isinstance(row,dict) or row.get("session_user")!="proppadia_mlb_research_login"
+                or row.get("current_user")!="proppadia_mlb_research_login"):
+                raise DatabaseReadbackUnavailable("RESEARCH_READBACK_IDENTITY_MISMATCH")
+            yield conn
+        except DatabaseReadbackUnavailable:
+            raise
+        except Exception as error:
+            sqlstate=getattr(error,"sqlstate",None) or getattr(getattr(error,"diag",None),"sqlstate",None)
+            if sqlstate=="42501":
+                raise DatabaseReadbackUnavailable("RESEARCH_READBACK_PERMISSION_DENIED") from None
+            raise
+        finally:
+            conn.close()
+    return connection()
+
+
 class SanitizedCollectorLog:
     """Never persist raw exception messages, provider URLs, DSNs or proxy IDs."""
     def __init__(self, output):
@@ -88,21 +135,26 @@ def file_sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def verify_database_rows(prepared, journals):
-    from backend.shared.db.pg import pg_connect
+def verify_database_rows(prepared, journals, *, connect_factory=None):
     from backend.mlb.shared import bvp_identity as identity
+    connect_factory=connect_factory or _bvp_research_readback_connection
     expected={(r[0],r[1],r[2],r[5]):r for r in prepared}
     found=[]
-    with pg_connect() as conn,conn.cursor() as q:
-        q.execute("SET TRANSACTION READ ONLY")
+    with connect_factory() as conn,conn.cursor() as q:
         q.execute("SET LOCAL statement_timeout='60s'")
         keys=list(expected)
         for offset in range(0,len(keys),500):
             batch=keys[offset:offset+500]
             placeholders=",".join("(%s,%s,%s,%s)" for _ in batch)
-            q.execute("SELECT prop_type,player_id,game_id,game_date,features,feature_set_tag,model_tag,computed_at FROM mlb.prop_features_precomputed WHERE (prop_type,player_id,game_id,feature_set_tag) IN ("+placeholders+")",
-                      tuple(v for key in batch for v in key))
-            found.extend(q.fetchall())
+            try:
+                q.execute("SELECT prop_type,player_id,game_id,game_date,features,feature_set_tag,model_tag,computed_at FROM mlb.prop_features_precomputed WHERE (prop_type,player_id,game_id,feature_set_tag) IN ("+placeholders+")",
+                          tuple(v for key in batch for v in key))
+                found.extend(q.fetchall())
+            except Exception as error:
+                sqlstate=getattr(error,"sqlstate",None) or getattr(getattr(error,"diag",None),"sqlstate",None)
+                if sqlstate=="42501":
+                    raise DatabaseReadbackUnavailable("RESEARCH_READBACK_PERMISSION_DENIED") from None
+                raise
     if len(found)!=len(expected):
         raise AcquisitionCertificationFailure("COMMITTED_ROW_COUNT_MISMATCH",{"expected":len(expected),"verified":len(found)})
     admitted=[]
@@ -158,6 +210,9 @@ def canonical_acquire(claim):
                     path=audit.path
             written=collector._upsert_rows(rows,batch_size=int(os.getenv("MLB_BVP_BATCH_SIZE","1000")))
             evidence["counts"]["rows_written"]=written
+            evidence["database_transaction_disposition"]="COMMITTED"
+            evidence["database_writer_invoked"]=True
+            evidence["fixed_function_result_count"]=written
             if written!=len(rows):
                 raise AcquisitionCertificationFailure("PARTIAL_DATABASE_WRITE",evidence)
             commit={"contract":identity.CONTRACT,"reason_code":"DATABASE_WRITE_COMMITTED",
@@ -169,7 +224,26 @@ def canonical_acquire(claim):
                 or any(j.get("reason_code") in {"CANONICAL_IDENTITY_UNRESOLVED","BVP_REQUEST_FAILED","ROSTER_FETCH_FAILED",
                     "EMPTY_BVP_RESPONSE_UNVERIFIABLE","OFF_DATE_GAME_REJECTED"} for j in journals)):
                 raise AcquisitionCertificationFailure("REQUEST_JOURNAL_NOT_CERTIFIABLE",evidence)
-            admitted=verify_database_rows(rows,journals)
+            try:
+                admitted=verify_database_rows(rows,journals)
+            except DatabaseReadbackUnavailable as error:
+                evidence["validation"]={"canonical_identity_valid":True,"committed_request_journal_valid":True,
+                    "identity_contract":identity.CONTRACT,"durable_database_rows_verified":0,
+                    "readback_status":"UNAVAILABLE","readback_reason":str(error),
+                    "journal_path":str(Path(path).relative_to(state.ROOT)),"journal_sha256":file_sha(path),
+                    "canonical_game_ids":sorted({j["game_id"] for j in journals if j.get("reason_code")=="CANONICAL_SLATE_IDENTITY_VALID"}),
+                    "prepared_row_stream_sha256":identity.stable_hash(rows)}
+                raise AcquisitionCertificationFailure("POST_COMMIT_READBACK_UNAVAILABLE",evidence) from None
+            except AcquisitionCertificationFailure as error:
+                evidence["validation"]={"readback_status":"MISMATCH","readback_reason":error.audit_evidence.get("reason"),
+                    "journal_path":str(Path(path).relative_to(state.ROOT)),"journal_sha256":file_sha(path),
+                    "prepared_row_stream_sha256":identity.stable_hash(rows)}
+                raise AcquisitionCertificationFailure("POST_COMMIT_READBACK_MISMATCH",evidence) from None
+            except Exception as error:
+                evidence["validation"]={"readback_status":"ERROR","readback_reason":type(error).__name__,
+                    "journal_path":str(Path(path).relative_to(state.ROOT)),"journal_sha256":file_sha(path),
+                    "prepared_row_stream_sha256":identity.stable_hash(rows)}
+                raise AcquisitionCertificationFailure("POST_COMMIT_READBACK_ERROR",evidence) from None
             evidence["admitted_rows"]=admitted
             evidence["validation"]={"canonical_identity_valid":True,"committed_request_journal_valid":True,
                 "identity_contract":identity.CONTRACT,"durable_database_rows_verified":len(admitted),

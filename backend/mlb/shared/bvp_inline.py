@@ -284,12 +284,16 @@ def run_inline(slate_date, run_tag, window, acquire, *, path=STATE_PATH,
                 else:
                     completed={**receipt,"certified":True,"receipt_sha256":digest(receipt)}
             except Exception as error:
-                failure_reason=getattr(error,"audit_evidence",{}).get("reason","")
-                failure_status=("BVP_INLINE_IDENTITY_VALIDATION_FAILED" if any(t in failure_reason for t in ("IDENTITY","JOURNAL","ROW_COUNT_MISMATCH"))
+                failure_evidence=getattr(error,"audit_evidence",{})
+                failure_reason=failure_evidence.get("reason","")
+                committed=failure_evidence.get("database_transaction_disposition")=="COMMITTED"
+                failure_status=("BVP_INLINE_POST_COMMIT_VERIFICATION_FAILED" if committed
+                    else "BVP_INLINE_IDENTITY_VALIDATION_FAILED" if any(t in failure_reason for t in ("IDENTITY","JOURNAL","ROW_COUNT_MISMATCH"))
                     else "BVP_INLINE_PRIMARY_FAILED" if attempt_type=="PRIMARY" else "BVP_INLINE_RECOVERY_FAILED")
                 completed=result(failure_status,
-                    "ACQUISITION_TECHNICAL_FAILURE",**claim,error_class=type(error).__name__,
-                    completion_timestamp_utc=stamp(clock()),acquisition_evidence=getattr(error,"audit_evidence",{}))
+                    failure_reason or "ACQUISITION_TECHNICAL_FAILURE",**claim,error_class=type(error).__name__,
+                    database_transaction_disposition=failure_evidence.get("database_transaction_disposition","NOT_CONFIRMED"),
+                    completion_timestamp_utc=stamp(clock()),acquisition_evidence=failure_evidence)
             db.execute("BEGIN IMMEDIATE")
             db.execute("INSERT INTO results VALUES (?,?,?)",(claim["attempt_id"],encoded(completed),digest(completed)))
             if completed["certified"]:

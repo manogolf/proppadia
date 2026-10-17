@@ -214,27 +214,37 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P1.2 One bounded restricted BvP/PvB live validation
 
-- Status: **OPEN — restricted write committed, end-to-end validation incomplete**.
+- Status: **OPEN — committed write retrospectively verified; adapter readback
+  route remains unavailable**.
   On 2026-10-17 the authorized BvP-only recovery acquired one official game and
   committed 286 rows through the restricted fixed function. An approved,
   read-only owner snapshot matched all 286 journaled keys and feature hashes
   with zero conflicts, and the historical BvP fingerprint was unchanged. The
-  adapter then failed its post-write verification because the restricted role
-  cannot SELECT the target table; its run is recorded as failed and is not a
-  certified successful refresh. The first attempt stopped before database
+  fixed-function result, retained source identity and request journal, plus the
+  independent snapshot are sufficient to certify that bounded committed write
+  retrospectively. The adapter's original run remains recorded as failed after
+  commit because its post-write verifier used the restricted login, which
+  cannot SELECT the target table. The first attempt stopped before database
   access after normal schedule retries failed DNS resolution. No owner-level
   writer fallback or rollback was used.
+- The adapter now routes only its post-commit readback through the existing
+  command-scoped `MLB_MONEYLINE_AUDIT_DATABASE_URL`, validates that the session
+  is `proppadia_mlb_research_login`, and reports unavailable readback separately
+  from a committed writer result. The research role's approved SELECT scope
+  covers only the moneyline audit relations, not
+  `mlb.prop_features_precomputed`; therefore this code correction does not yet
+  enable live BvP certification. Restricted ingest has no new grants.
 - References: `backend/mlb/config/bvp_inline_acquisition_v1.json`, commit
   `ce4f2581`, and local evidence under
   `artifacts/ops/bvp_inline_v1/validation/2026-10-17/` and
   `artifacts/ops/bvp_inline_v1/runs/2026-10-17/` (including
   `attempt_receipt.json`, the failed run results, and sanitized logs).
-- Completion: provide a supported restricted readback or approved verification
-  mechanism, then record a successful ordinary due-date BvP/PvB run with the
-  required restricted session identity, certified source and request journal,
-  fixed-function count, committed transaction, and before/after row and
-  historical-value checks. This does not authorize a general production
-  cutover.
+- Completion: provide an approved read-only research route for the BvP feature
+  relation (without granting SELECT to restricted ingest), then record a
+  successful ordinary due-date BvP/PvB run with the required restricted session
+  identity, certified source and request journal, fixed-function count,
+  committed transaction, and before/after row and historical-value checks. This
+  does not authorize a general production cutover.
 
 ### P1.3 Assess stat-derived and date-wide training synchronization
 
