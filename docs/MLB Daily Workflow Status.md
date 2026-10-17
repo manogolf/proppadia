@@ -182,3 +182,31 @@ Patch 1B and Patch 1C did not change:
 - wager matching
 - overlap logic
 - final 8rain upload schema
+
+## October 16, 2026 Rainout Reconciliation Disposition
+
+Classification: **NO_RECONCILIATION_REQUIRED — POSTPONED_NO_COMPLETED_GAME_OR_RETAINED_WAGER_INPUTS**.
+
+- The official MLB schedule response for October 16 contains one game,
+  gamePk `849817` (Tampa Bay at Cleveland), with status `Postponed`, status
+  code `DR`, reason `Rain`, and a reschedule date of October 18, 2026.
+- The production `mlb.game_info` table has no row for game `849817` and stores
+  schedule metadata only; it has no official game-status column. Production
+  also has zero `mlb.player_stats` and `mlb.model_training_props` rows for that
+  game. This is consistent with the postponed game and is not evidence of a
+  missing completed-game result.
+- The October 16 inputs required by the existing actual-wager comparison are
+  absent: ranking and Quick Card upload files, the graded 8Rain download, and
+  the date-scoped reconcile rows. The V1 steam upload is optional and is also
+  absent. The comparison requires the ranking and Quick Card files, graded
+  download, and reconcile rows before it can report actual wagers.
+- The completed-slate path requires at least one resolved outcome row. With no
+  completed game, it must not be run to manufacture an empty performance
+  report. No prediction, wager, outcome, or replacement artifact was created.
+
+This disposition records the absence of a completed-game population and of a
+retained actual-wager input population. It does not assert that no external
+wager was placed outside the repository's retained inputs. If a complete
+graded wager export later establishes an October 16 wager population, reopen
+the actual-wager reconciliation for those rows only; do not reconstruct or
+backfill the postponed game's outcomes.

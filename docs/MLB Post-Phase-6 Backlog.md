@@ -176,3 +176,21 @@ Proposed deliverable:
 - Resume Phase 6.2 execution near preseason/opening-day window.
 - Keep current player-surface regression bundle as maintenance baseline:
   `make mlb-player-surface-checks`.
+
+## Deferred Documentation Maintenance
+
+### MLB/Repository documentation audit cleanup
+
+- Priority: **DEFERRED** — this does not block daily operations or database
+  isolation work.
+- `make docs-make-target-audit` reports two unknown Make target references in
+  pre-existing documentation. They were discovered while completing AGENTS.md
+  commit `639d08b8`.
+- Later documentation-maintenance task: verify and correct these references;
+  do not treat them as current executable targets:
+  - `docs/Prod12 Automation Runbook.md:870` refers to target
+    `retrain/recompute` in the weekly-run hard-fail instruction
+    (`MLB_WEEKLY_RETRAIN_CADENCE_REQUIRED=1`).
+  - `docs/contracts/mlb_2026_game_phase_sidecar_design_v1/IMPLEMENTATION_SEQUENCE.md:33`
+    refers to target `stat-derived` in the regular-selection
+    positive-membership-only instruction.
