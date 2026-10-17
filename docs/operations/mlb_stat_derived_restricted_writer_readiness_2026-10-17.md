@@ -2,18 +2,19 @@
 
 ## Decision
 
-**Status: permission-ready, not yet production-certified.** The existing
-restricted login can pass the stat-derived role gate and read the six streak
-profile columns. Offline tests cover the writer SQL/result handling and current
-team-ID comparison. A rollback-only canary exercised the protected source
-writer and an exact player/game derived refresh. No ordinary stat-derived run
-has yet completed under the restricted login, so the writer is not ready for
-routine routing.
+**Status: bounded normal production validation passed; fresh-row and changed-row
+coverage remain unproven.** The restricted login passed the stat-derived role
+gate and completed one exact-date normal invocation. It exercised the source,
+training, identity, game-info, and date-wide synchronization paths against
+already populated rows. Only the fixed game-info call reported a touched row;
+the complete before/after fingerprints were unchanged. This validates the
+idempotent populated-row path, but does not establish successful insertion or
+protected NULL-fill behavior for new source/training rows.
 
-This assessment used production only for read-only role, privilege, RLS, and
-restricted-session checks. It performed no acquisition, writer invocation,
-data mutation, backfill, grant change, role change, alias change, or scheduler
-change.
+The initial assessment used production only for read-only role, privilege, RLS,
+and restricted-session checks. The separately authorized bounded validation
+and its read-only verification are recorded below. No grant, role, credential,
+alias, or scheduler change was made.
 
 ## Production identity and read-only checks
 
@@ -129,23 +130,75 @@ did not collect because it imports the removed `backend.scripts` module path;
 `./bin/check-python-env` passed, and the canonical MLB-scoped tests above
 collected and passed.
 
-## Recommended bounded production validation
+## Bounded production validation — 2026-10-17
 
-After separate authorization for a normal restricted writer run, choose one
-ordinary due date and run the existing stat-derived command once with the
-process-scoped opt-in, an exact from/to date, `MLB_STAT_MAX_GAMES=1`, and
-`MLB_STAT_SKIP_EXISTING_DATES=0`. Confirm no scheduled stat-derived process is
-active before starting and do not overlap the scheduled window. Keep the
-existing database aliases and scheduler unchanged.
+The one authorized normal invocation used the existing
+`backend/mlb/scripts/insert_mlb_stat_derived.py` entry point and the unchanged
+production aliases. Its exact range was 2026-10-15 through 2026-10-15, with
+`MLB_USE_RESTRICTED_INGEST=1`, `MLB_STAT_MAX_GAMES=1`, and
+`MLB_STAT_SKIP_EXISTING_DATES=0`. It ran through `./bin/python` with the script's
+one-game cap. No full MLB wrapper or other writer was invoked. The normal daily
+launcher had already completed its stat-derived stage; its only remaining
+child was local artifact indexing, with no active stat-derived/database writer.
 
-Before the run, establish the selected exact game and capture read-only
-fingerprints for its source row, same-date derived/training rows, and protected
-outcomes. After completion, retain the effective writer identity, schedule and
-source evidence hashes, per-operation counts, conflict/quarantine evidence,
-and committed receipt; compare the same fingerprints and verify no protected
-outcome changed. Interpret the one-game cap correctly: the date-wide derived
-and rolling synchronization still needs whole-date before/after accounting.
-If any step fails, preserve the receipt/error and let the date transaction's
-rollback behavior stand; do not broaden privileges or retry in the same run.
+The official schedule contained two final postseason games. The fresh run
+selected game **849810 (NLCS Game 4, Milwaukee Brewers at Los Angeles Dodgers)**
+and recorded game 849818 as `REJECTED / NOT_PROCESSED` because of the one-game
+cap. The selected game was final (`gameType=L`, official date 2026-10-15). The
+schedule SHA-256 was
+`9aad711bfd60845932316dc2b1e5ee63231aa44c07fe6569c55bda7b9ff4fb85`; the
+selected live-feed SHA-256 was
+`6a56bb88fe8f1f32efc4168e8896b3bf8cf753ce4617a02047ed433b4559ce58`. The
+feed contains the official boxscore data used by the normal loader.
 
-This validation is a readiness recommendation only; it was not run here.
+The writer's `pg_connect()` path enforces the process opt-in, pins the
+restricted URL to the production project, activates the ingest group, and
+asserts `session_user=proppadia_mlb_ingest_login` plus
+`current_user=proppadia_mlb_ingest` and the reviewed privilege boundaries.
+A post-run read-only connection through the same route passed that gate and
+recorded those exact identities. The writer committed with
+`COMMITTED_AFTER_COUNT_RECONCILIATION` and exited 0.
+
+| Operation | Writer-reported result | Full-date before/after |
+| --- | ---: | --- |
+| `safe_upsert_game_info(jsonb) AS result_count` | 1 selected-game row result | 2 rows; fingerprint unchanged |
+| `safe_insert_player_id_if_absent(jsonb) AS result_count` | 0 inserts | Selected game's post-run identity set: 46 rows |
+| `safe_upsert_player_stats(jsonb)` | 46 admitted, 0 changed, 6 quarantined | 91 rows; fingerprint unchanged |
+| `safe_upsert_model_training_props(jsonb) AS result_count` | 189 admitted/unchanged, 0 changed, 81 quarantined | 368 rows including outcomes; fingerprint unchanged |
+| Date-wide `player_derived_stats` refresh | 0 changed | 91 rows; fingerprint unchanged |
+| Date-wide `rolling_result_avg_7` synchronization | 0 changed | Training outcome fingerprint unchanged |
+| `safe_fill_player_stats_at_bats(...) AS result_count` | 0 backfills | Source fingerprint unchanged |
+
+The six source quarantines were `NO_BATTING_OR_PITCHING_STATS`; 81 training
+quarantines were `STAT_VALUE_MISSING`. There were no source-stat or protected
+training-outcome conflicts. The entire October 15 `player_stats`,
+`player_derived_stats`, and `model_training_props` rows matched before and after.
+The protected training values (`prop_value`, `line`, `over_under`, `outcome`,
+`status`, and `was_correct`) are included in the complete-row fingerprint.
+Prior-30-day player-stat, derived, and training neighborhoods also matched.
+
+The before-state capture's separate `player_ids` fingerprint was initially
+scoped to game 849818 based on the prior routine receipt; the fresh run selected
+849810. The before-state still fingerprints all 91 exact-date source rows,
+including their player IDs. The insert-if-absent fixed function reported zero
+inserts, and the post-run 849810 identity set contains 46 rows. Thus no identity
+row was changed, but the separately scoped pre-run `player_ids` fingerprint
+does not independently cover 849810. This limitation is retained in the
+validation evidence rather than presented as a direct identity hash comparison.
+
+The retained receipt is
+`artifacts/ops/mlb_stat_derived_restricted_validation_2026-10-17/natural_receipts/restricted-stat-derived-validation-20261017T131300-849818/2026-10-15/receipt.json`
+(SHA-256 `74ded511c8f1baa1eba75b20188d911078cf87ba6a82ccc526c58eca4cbe62d0`).
+The repeatable-read snapshots, comparison, restricted-session verification,
+and invocation output are under
+`artifacts/ops/mlb_stat_derived_restricted_validation_2026-10-17/`.
+
+## Remaining validation need
+
+The remaining blocker for full routine certification is a normal restricted
+run whose selected official source yields an actual `player_stats` or training
+row insert or protected NULL fill. The October 15 run proved the already
+populated/idempotent path and date-wide synchronization, with zero net row
+changes. Keep routine aliases and scheduler unchanged until that evidence is
+available; do not force a new or historical source row merely to manufacture a
+write.

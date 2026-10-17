@@ -204,7 +204,15 @@ writer validation does not authorize a hosted cutover or a different writer.
 ### P1.1 Finish staged restricted-ingest cutover for ordinary writers
 
 - Status: **ACTIVE** — the local roster refresh has been validated through the
-  restricted login; ordinary writer migration remains incomplete.
+  restricted login, and the stat-derived path passed one bounded normal
+  production invocation through the restricted login on 2026-10-17. That run
+  selected one final official game for 2026-10-15, committed its transaction,
+  and preserved all captured full-date and neighboring fingerprints. Existing
+  source/training rows were unchanged, so a fresh-row/NULL-fill write remains
+  unvalidated; ordinary writer migration remains incomplete.
+- Stat-derived evidence:
+  `docs/operations/mlb_stat_derived_restricted_writer_readiness_2026-10-17.md`
+  and `artifacts/ops/mlb_stat_derived_restricted_validation_2026-10-17/`.
 - References: `docs/contracts/database_write_isolation_plan.md`;
   `docs/contracts/mlb_restricted_writer_access_contract_v1.md`.
 - Completion: migrate and validate each ordinary writer separately, recording
