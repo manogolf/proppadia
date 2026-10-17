@@ -54,11 +54,64 @@ LANE_NAMES = (
 _URI_CREDENTIAL_RE = re.compile(
     r"\bpostgres(?:ql)?(?:\+[a-z0-9]+)?:\/\/[^\s'\"<>]+", re.I
 )
+_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\b(password|passwd|token|api[_-]?key|secret)\b\s*([=:])\s*([^\s,;]+)"
+)
+_SQLSTATE_RE = re.compile(r"(?i)(?:SQLSTATE\s*[:=]?\s*|\bERROR:\s*)([0-9A-Z]{5})(?=\s|:|$)")
 
 
 def redact_sensitive_text(value: object) -> str:
     """Remove PostgreSQL connection URIs before diagnostic text reaches logs/receipts."""
-    return _URI_CREDENTIAL_RE.sub("<redacted-db-uri>", str(value))
+    redacted = _URI_CREDENTIAL_RE.sub("<redacted-db-uri>", str(value))
+    return _SECRET_ASSIGNMENT_RE.sub(r"\1\2<redacted>", redacted)
+
+
+def postgres_error_diagnostic(stderr: object) -> dict[str, str]:
+    """Return bounded, secret-safe PostgreSQL failure metadata for a child receipt.
+
+    Only the server/client error line is retained. DETAIL, CONTEXT, and
+    STATEMENT lines can contain source values or SQL parameters, so they are
+    intentionally excluded from the receipt.
+    """
+    raw_lines = str(stderr or "").splitlines()
+    safe_errors: list[str] = []
+    sqlstate: str | None = None
+    for line in raw_lines:
+        match = _SQLSTATE_RE.search(line)
+        if match and sqlstate is None:
+            sqlstate = match.group(1).upper()
+        stripped = line.strip()
+        upper = stripped.upper()
+        if upper.startswith(("ERROR:", "FATAL:", "PSQL: ERROR:")):
+            safe_errors.append(redact_sensitive_text(stripped)[:1000])
+
+    if sqlstate:
+        if sqlstate == "42501":
+            category = "INSUFFICIENT_PRIVILEGE"
+        elif sqlstate.startswith("08"):
+            category = "CONNECTION_EXCEPTION"
+        elif sqlstate.startswith("28"):
+            category = "AUTHENTICATION_FAILURE"
+        elif sqlstate.startswith("23"):
+            category = "INTEGRITY_CONSTRAINT"
+        elif sqlstate.startswith("40"):
+            category = "TRANSACTION_ROLLBACK"
+        elif sqlstate.startswith("42"):
+            category = "SQL_SYNTAX_OR_ACCESS_RULE"
+        else:
+            category = "POSTGRESQL_ERROR"
+    elif any(line.strip().lower().startswith("psql:") for line in raw_lines):
+        category = "PSQL_CLIENT_ERROR"
+    elif safe_errors:
+        category = "POSTGRESQL_ERROR"
+    else:
+        category = "UNCLASSIFIED_PROCESS_FAILURE"
+
+    return {
+        "postgres_error_category": category,
+        "postgres_sqlstate": sqlstate or "",
+        "sanitized_stderr": "\n".join(safe_errors)[:2000],
+    }
 
 
 def safe_called_process_error(error: BaseException, command: Iterable[object] | None = None):
@@ -247,6 +300,7 @@ class DailyRunRecorder:
             "database_write_capable", "database_write_status",
             "transaction_disposition", "database_row_counts",
             "database_row_counts_complete", "error_type",
+            "postgres_error_category", "postgres_sqlstate", "sanitized_stderr",
             # Bounded source-integrity evidence emitted by the NHL skater-log
             # acquisition and promotion children. Detailed conflict rows and
             # per-game hashes remain in the run-bound diagnostic artifact.

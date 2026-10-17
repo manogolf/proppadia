@@ -696,6 +696,9 @@ def run(
                 "status": "FAILED",
                 "database_write_capable": write_capable,
             }
+            if "promote_skater_game_log_protected_fields" in cmd_for_log:
+                from backend.nhl.daily_orchestration import postgres_error_diagnostic
+                summary.update(postgres_error_diagnostic(exc.stderr or exc.stdout))
             summary.update(_structured_child_summary(exc.stdout))
             summary["database_write_capable"] = bool(
                 write_capable or summary.get("database_write_capable"))
@@ -2709,7 +2712,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         _ACTIVE_DAILY_RECORDER.record_child(pp_toi_summary)
     print("NHL_PP_TOI_PROMOTION_CONFLICTS=" + json.dumps(pp_toi_summary, sort_keys=True))
     run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
-    run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c",
+    run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1",
+         "-v", "VERBOSITY=verbose", "-c",
          "SELECT 'NHL_PROTECTED_SOURCE_NULL_FILLS=' || "
          f"nhl.promote_skater_game_log_protected_fields(DATE '{yday}');"])
 
