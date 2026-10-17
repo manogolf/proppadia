@@ -209,10 +209,14 @@ writer validation does not authorize a hosted cutover or a different writer.
   selected one final official game for 2026-10-15, committed its transaction,
   and preserved all captured full-date and neighboring fingerprints. Existing
   source/training rows were unchanged, so a fresh-row/NULL-fill write remains
-  unvalidated; ordinary writer migration remains incomplete.
+  unvalidated; ordinary writer migration remains incomplete. The hosted
+  roster workflow still injects `SUPABASE_DB_URL` without restricted-mode
+  opt-in and has not been run through the restricted identity.
 - Stat-derived evidence:
   `docs/operations/mlb_stat_derived_restricted_writer_readiness_2026-10-17.md`
   and `artifacts/ops/mlb_stat_derived_restricted_validation_2026-10-17/`.
+- Hosted roster routing assessment:
+  `docs/operations/mlb_hosted_roster_restricted_routing_assessment_2026-10-17.md`.
 - References: `docs/contracts/database_write_isolation_plan.md`;
   `docs/contracts/mlb_restricted_writer_access_contract_v1.md`.
 - Completion: migrate and validate each ordinary writer separately, recording
@@ -283,13 +287,23 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P2.1 Verify hosted GitHub roster identity and database routing
 
-- Status: **PENDING** — local restricted roster validation does not establish
-  the identity used by hosted workflows.
+- Status: **ACTIVE — routing assessed; hosted identity and execution remain
+  unverified.** The remote workflow source injects the repository secret
+  `SUPABASE_DB_URL` into the existing roster script without setting
+  `MLB_USE_RESTRICTED_INGEST` or `MLB_INGEST_DATABASE_URL`. Read-only GitHub
+  secret metadata confirms the name exists, but cannot identify its database
+  principal. The workflow was reported `disabled_manually`; no job was
+  launched. Only the roster workflow among the five remote GitHub workflows
+  references this database secret.
 - Reference: `.github/workflows/mlb-refresh-player-ids.yml`.
+- Assessment:
+  `docs/operations/mlb_hosted_roster_restricted_routing_assessment_2026-10-17.md`.
 - Completion: verify the hosted job's effective database identity without
-  exposing credentials, then retain a normal workflow run receipt showing the
-  restricted route and expected roster result. Do not change hosted secrets as
-  part of this backlog item.
+  exposing credentials, provision a separately scoped restricted route without
+  replacing the shared `SUPABASE_DB_URL`, then retain one authorized workflow
+  run receipt showing the restricted route and expected roster result. Secret
+  provisioning, hosted workflow changes, activation, and production execution
+  remain separate authorized actions.
 
 ### P2.2 Inventory owner-level database aliases and plan gradual replacement
 
