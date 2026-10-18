@@ -31,6 +31,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+MODEL_AUTHORITY_PATH = REPO_ROOT / "backend/mlb/config/model_authority.json"
+SKIPPED_NO_QUALIFIED_PREDICTION_SLATE = 3
+
 from backend.app.services.mlb.market_odds_service import get_market_to_prop_map
 from backend.mlb.scripts.build_mlb_reconcile_rows import (
     _build_team_name_reverse,
@@ -55,6 +58,12 @@ class SnapshotRef:
 
 def _et_today() -> str:
     return datetime.now(ET).date().isoformat()
+
+
+def _model_authority_status() -> Optional[str]:
+    payload = json.loads(MODEL_AUTHORITY_PATH.read_text(encoding="utf-8"))
+    status = payload.get("authority_status")
+    return str(status) if status is not None else None
 
 
 def _clean_str(value: object) -> Optional[str]:
@@ -626,6 +635,18 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     args = ap.parse_args(list(argv) if argv is not None else None)
 
     slate_date = str(args.slate_date).strip()
+
+    # Current slate outputs are model-derived. When production authority blocks
+    # all models, odds and schedule artifacts alone are not sufficient inputs to
+    # the existing workspace contract; report an intentional skip before file
+    # lookup or any database connection is attempted.
+    if _model_authority_status() == "NO_QUALIFIED_MLB_MODEL":
+        print(
+            "[mlb-today-workspace] SKIP status=NO_QUALIFIED_PREDICTION_SLATE "
+            f"reason=NO_QUALIFIED_MLB_MODEL slate_date={slate_date}"
+        )
+        return SKIPPED_NO_QUALIFIED_PREDICTION_SLATE
+
     day_dir = Path(str(args.odds_root)).expanduser() / slate_date
     if not day_dir.exists():
         raise FileNotFoundError(f"odds day folder not found: {day_dir}")

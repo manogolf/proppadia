@@ -680,19 +680,29 @@ writer validation does not authorize a hosted cutover or a different writer.
 - Follow-up trace confirms the missing slate was downstream of the existing
   qualification gate, not a date or filename mismatch: the run's retained
   StatsAPI schedule has one game on 2026-10-17 (`849816`, description `ALCS
-  Game 4`, source `gameType=L`), while the wrapper explicitly logged
-  `SKIP MLB slate output: NO_QUALIFIED_MLB_MODEL` at 23:38:37Z. The workspace
-  build began at 23:38:48Z and requires the archived qualified slate and wide
-  files under `backend/mlb/exports/odds_history/2026-10-17/`. The postseason
-  phase classification was left as recorded by the source. No safe workspace
-  input can be produced from this run without bypassing the qualified-model
-  gate or changing the workspace's input contract, so no wrapper or workspace
-  behavior was changed. Offline checks confirm that the missing input fails
-  closed and a retained populated slate loads 134 rows. On a later natural run,
-  workspace verification requires the existing production slate producer to
-  emit date-matched qualified slate and wide files; then confirm nonzero staging,
-  `SET ROLE proppadia_mlb_ingest`, the refresh function's four-view order, and
-  `/mlb/today` readback.
+  Game 4`, source `gameType=L`). Its retained odds snapshot has one event, 9
+  bookmakers, and 978 outcomes across 16 market types. The wrapper explicitly
+  logged `SKIP MLB slate output: NO_QUALIFIED_MLB_MODEL` at 23:38:37Z because
+  the model authority blocks production predictions. Therefore this was a real
+  postseason slate with market data but no qualified prediction slate; it was
+  not a no-game date. The workspace build began at 23:38:48Z and requires the
+  archived model slate and wide prediction files. The postseason phase remains
+  classified from the source as `gameType=L`.
+- The workspace consumer now checks model authority before looking up input
+  files or opening a database connection. Under `NO_QUALIFIED_MLB_MODEL`, it
+  emits `SKIP status=NO_QUALIFIED_PREDICTION_SLATE` and returns a distinct
+  status. The tracked daily wrapper recognizes that status and records an
+  intentional workspace and view-refresh skip. Other errors retain the existing
+  warning path; populated qualified inputs retain the existing staging and
+  restricted refresh path. No predictions, placeholder files, or market rows
+  are fabricated. Offline regression coverage checks this exact missing-file
+  case and retained populated slate/wide inputs (134 slate rows and 128 wide
+  rows after the workspace's identity deduplication). The installed wrapper
+  was not changed; install the reviewed tracked wrapper before expecting the
+  natural run log to distinguish this intentional skip from a generic build
+  failure. After a qualified model produces the date-matched files, verify
+  nonzero staging, `SET ROLE proppadia_mlb_ingest`, the refresh function's
+  four-view order, and `/mlb/today` readback.
 - Restricted writer receipts now capture separate `session_user` and
   `current_user`, the `SET ROLE proppadia_mlb_ingest` transition, and an
   explicit restricted-identity verification flag. Stat-derived date receipts

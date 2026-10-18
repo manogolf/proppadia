@@ -1532,6 +1532,8 @@ if [[ "$today_workspace_build_rc" -eq 0 ]]; then
       -c 'SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();'
     today_workspace_mv_rc=$?
   fi
+elif [[ "$today_workspace_build_rc" -eq 3 ]]; then
+  echo "[$(date -u +%FT%TZ)] SKIP mlb-today workspace build and materialized view refresh: NO_QUALIFIED_PREDICTION_SLATE (NO_QUALIFIED_MLB_MODEL)"
 else
   echo "[$(date -u +%FT%TZ)] WARN mlb-today workspace build failed rc=${today_workspace_build_rc}; continuing to daily reports/uploads" >&2
 fi
