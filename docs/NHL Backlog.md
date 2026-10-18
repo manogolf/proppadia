@@ -273,6 +273,120 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   separate. Do not fabricate a final capture or weaken direct final-pregame
   reconciliation.
 
+- Reconciliation-first integrity review (October 18): the governing contract
+  requires a completed, date-bound reconciliation package before prior-day
+  information enters subsequent learning, feature generation, prediction,
+  evaluation, or training. A valid package is not established by official
+  scores alone or by a successful daily exit: the package manifest and hashes,
+  completion marker, summary date/status, official source records, canonical
+  identities, and exact admitted-game/outcome coverage must validate. The
+  mainline `load_official_outcomes()` path performs these source and game-set
+  checks before market capture. `ensure_prior_learning()` verifies an existing
+  package, but callers must also require `official_outcomes_status == FINAL`
+  and exact expected-game coverage before using it as a downstream checkpoint.
+- Confirmed daily integrity gap: `_cmd_daily_impl()` accepts `NOT_FINAL` and
+  `NO_PACKAGE` from `ensure_prior_learning()` and proceeds into full-league
+  roster refresh, prior-date raw-log seeding/promotion, SOG evaluation, feature
+  export, and prediction scoring. The regression
+  `test_daily_morning_passes_not_final_prior_status_and_reaches_roster_stage`
+  encodes that continuation. In particular, a `NOT_FINAL` result means there
+  is no completed package certifying that date; subsequent learning and
+  prediction work must stop. `NO_PRIOR_GAMES` is a valid exception only when a
+  date-bound retained schedule has been verified and is genuinely empty.
+  `run_nhl_morning_orchestration.py` can then treat a successful morning child
+  as history readiness, so the daily false-success can also mask the missing
+  certificate upstream.
+- Confirmed independent-observer gap: the 900-second mainline wrapper invokes
+  SOG, Points, and Saves observers before `observe()`. The mainline observer's
+  own prior-outcome gate remains before its history export, phase decision,
+  and any paid odds request. The three prop observers, however, read strict-
+  prior raw game logs and can publish independently without a verified
+  reconciliation checkpoint. The Points/Saves common observer validates the
+  current slate and roster and runs its lane SQL export, but it does not bind
+  historical rows to a completed package. The SOG observer reads finalized
+  `skater_game_logs_raw` rows before the cutoff and likewise has no package
+  gate. Its prediction snapshots retain aggregate features, not contributing
+  game IDs or a reconciliation-package identity.
+- Evaluation has the same dependency boundary: daily invokes
+  `evaluate_sog_predictions.py` after `ensure_prior_learning()`, but the daily
+  `NOT_FINAL` continuation permits it to read raw-log truth without a package
+  certificate. `points_hgb_shadow.grade_prior_hgb_capture` verifies a
+  reconciliation package. The inspected NHL LaunchAgents are the mainline
+  900-second observer and morning orchestration; no NHL model-training
+  LaunchAgent was found. The offline Moneyline challenger fitter verifies
+  pinned source hashes, which establishes source identity but does not by
+  itself certify reconciliation status.
+- October 17–18 evidence: the Oct. 16 reconciliation package completed at
+  2026-10-17 18:34:41Z. An Oct. 17 SOG FINAL_PREGAME card was captured at
+  15:47:20Z, before that package completed; its snapshot has aggregate
+  historical features without row-level source IDs, so it proves an
+  uncertified prediction was produced but cannot establish whether a
+  particular uncertified game row changed a feature value. An Oct. 18 SOG
+  MIDDAY card was captured at 16:10:14Z while the Oct. 17 package was absent.
+  Oct. 18 Points and Saves observers failed with empty feature exports, and
+  mainline failed at its prior-day gate before odds or capture. Two Oct. 18
+  daily receipts failed immutable-cardinality preflight before DB requests,
+  feature writes, or predictions. No Oct. 17 reconciliation package is
+  retained. Thus the evidence establishes an unprotected SOG publication path,
+  not a specific contaminated raw row or a successful model-training event.
+- Recent-change classification: `1553e365` is a mode-scoped exception for a
+  missing active cross-market prediction source; it does not certify outcomes
+  by itself. Direct reconciliation keeps exact-one validation, and present
+  cards still undergo integrity checks. Its current prior-learning path still
+  requires the Saves card, so the exception does not permit the Oct. 17
+  handoff. This is a legitimate missing-prediction exception only if outcome
+  certification is kept distinct from lane grading. `65b09546` removes
+  unrelated prop readiness from the mainline gate and preserves the mainline's
+  own official-outcome check; it does not add a prior-certificate gate to the
+  independently dispatched props. `142b2619` moves current-slate roster
+  acquisition before prior learning; this is safe independent acquisition and
+  does not certify or consume prior-day learned state. `3c934768` adds parent
+  receipt links to child status evidence and changes visibility only.
+- The missing-Saves contract remains distinct from official-outcome integrity.
+  A missing required Saves capture must remain visible and block Saves grading;
+  it should not prevent independently validating and certifying official game
+  outcomes. Points has an explicit absent-card `NOT_GRADEABLE_NO_PREDICTION`
+  path. SOG's card currently supplies a canonical game spine; when absent,
+  outcome-only reconciliation may use a separately verified retained schedule
+  spine, but must leave SOG grading unavailable. Missing required lane
+  evidence cannot be reported as a completed grade. Duplicate, corrupt, or
+  invalid present cards remain blocking in every mode. Existing source
+  handoff and missing-Saves items above still require a contract-preserving
+  implementation; do not infer a grade from absent prediction evidence.
+- Smallest justified correction (not implemented): keep schedule validation
+  and current-slate roster capture before prior learning; in
+  `_cmd_daily_impl()`, allow downstream history ingestion, evaluation, feature
+  export, and predictions only after a verified complete prior-date package
+  with `official_outcomes_status == FINAL` and exact date/game coverage. Permit
+  `NO_PRIOR_GAMES` only after verified empty-schedule evidence. Treat
+  `NOT_FINAL`, `NO_PACKAGE`, incomplete outcomes, malformed packages, and
+  source/game-set mismatches as visible blocking failures before any dependent
+  work. Replace the test that currently expects `NOT_FINAL` continuation.
+  Apply the same read-only certificate check before independent Points, Saves,
+  and SOG historical feature exports/publications; do not trigger duplicate
+  outcome acquisition from each observer. Preserve mainline's existing gate.
+  Bind SOG evaluation truth to the certified outcome package or prove exact
+  equality of its evaluated game set and official outcome rows. Training entry
+  points must either verify the same package authority or document their
+  existing immutable, hash-pinned source contract as a separate certified
+  input.
+- Required focused coverage: package complete and exact-game-set acceptance;
+  NOT_FINAL, NO_PACKAGE, incomplete/non-final outcome, corrupt/hash-mismatched
+  package, and missing/extra outcome rows block before log promotion/evaluation/
+  features/scoring; verified no-prior-games is accepted only for an empty
+  date-bound schedule; current roster acquisition still completes before the
+  checkpoint; each prop observer blocks publication when its prior certificate
+  is absent and preserves status evidence; missing Points/Saves/SOG cards
+  separate outcome certification from that lane's grade; duplicate/corrupt
+  present cards remain failures; SOG evaluation excludes any uncertified
+  outcome rows. Natural-run acceptance requires parent and child receipts to
+  show the exact prior-date package ID/hash, FINAL status, and admitted game
+  set before any dependent stage starts, with explicit blocking status on an
+  invalid or absent certificate. Confirm independent current-slate roster
+  acquisition can still finish. Verify each lane's prediction and evaluation
+  lineage against the same certified outcome set; no missing card is
+  synthesized.
+
 ### P2.10 Repair mainline FINAL_PREGAME observer readiness
 
 - Status: **PRODUCER CORRECTED — natural verification reached a prior-day source blocker**.
