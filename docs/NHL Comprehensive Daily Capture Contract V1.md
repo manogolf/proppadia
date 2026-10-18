@@ -121,11 +121,26 @@ is rewritten.
 
 Historical sources without embedded readiness proof qualify only when an
 exact linked retained observer/daily receipt proves the certificate and roster
-evidence. Otherwise the index records no qualifying source and an explicit
-coverage gap; it does not infer proof. Natural-run acceptance still requires
-receipt-backed nonempty sources in each lane, staggered-puck coverage, and a
-comparison proving the legacy grade files remain byte-identical. See backlog
-P2.17 for lane-level status and remaining acceptance work.
+evidence. Earlier daily receipts may bind certification through an exact
+`REUSED_VALID_PACKAGE` path and `FINAL` status; the referenced package is still
+fully hash, date, completion, official-outcome, and exact-game-set validated.
+Standalone captured prop status receipts that do not link their package to the
+parent certificate and roster remain unqualified. The resolver reports that
+proof gap and does not infer linkage from neighboring receipts.
+
+Bounded read-only replay of retained final slates on 2026-10-14 and
+2026-10-17 verified the source adapters and separate grading outputs. On
+October 14, Moneyline V3 and V2 shadow and Puck Line selected both staggered
+games from REFRESH; SOG selected 1,482 atomic groups across both games from
+MIDDAY. Points and Saves immutable captures were present but lacked the
+required parent-bound certificate/roster proof. On October 17, the only
+retained market REFRESH was after first puck and roster reuse failed the
+strict-prestart check, so no source qualified. October 14 legacy grades
+remained unchanged in retained files; recomputed shared grade values matched
+exactly for Moneyline, Puck Line, Points, and Saves. SOG had only three
+floating-point round-trip differences below 3.31e-24, with the retained grade
+timestamp used. See backlog P2.17 for per-lane counts, proof exclusions,
+verification details, and remaining natural-run acceptance.
 
 Prior-date reconciliation is the first substantive daily operation after the
 database connectivity check. Daily work may continue only with a verified,

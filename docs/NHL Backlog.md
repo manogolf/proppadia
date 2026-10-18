@@ -862,7 +862,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.17 Resolve final-pregame evidence per game without rewriting captures
 
-- Status: **IMPLEMENTED — reconciliation source discovery, selection, and separate grading outputs added; natural-run acceptance remains open**.
+- Status: **IMPLEMENTED — reconciliation source discovery, selection, and separate grading outputs added; bounded retained-slate acceptance found and corrected source-discovery defects; natural-run acceptance remains open**.
 - Evidence: mainline, SOG, Points, and Saves AUTO phase selection is keyed to
   the earliest unstarted game and its 20–75 minute window. Their publication
   eligibility and final durability checks are per game. However, each lane's
@@ -911,6 +911,57 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Historical source artifacts without verifiable certificate/roster receipt
   linkage remain unqualified. No missing proof is inferred. Quote attachment
   and return evaluation remain separate from prediction-quality scoring.
+- Bounded read-only acceptance on the certified 2026-10-14 slate (two games,
+  starts 23:30Z and 00:30Z) selected Moneyline V3 production 2/2 and V2 shadow
+  2/2 from REFRESH, Puck Line 2/2 from REFRESH, and 1,482 SOG atomic
+  player/arm/line groups across both games from MIDDAY. The latest valid
+  cross-market capture was REFRESH; the selected SOG package was MIDDAY.
+  These were two linked REFRESH package captures for each market model role
+  and Puck Line, and one linked MIDDAY SOG package; repeated receipt links to
+  the same SOG package were not counted as distinct source captures. The
+  status-directory inventory found two additional unlinked immutable packages
+  in each prop lane (one MIDDAY and one FINAL_PREGAME), which remain
+  unqualified for the lineage reason below.
+  The legacy FINAL_PREGAME population graded 2 Moneyline, 2 Puck Line, 1,491
+  SOG, 285 Points, and 117 Saves rows. Resilient coverage added no game-level
+  coverage beyond those legacy rows; it produced a separate V2 shadow
+  denominator and independently selected the later qualifying REFRESH and
+  MIDDAY evidence. Points and Saves had MIDDAY and FINAL_PREGAME immutable
+  packages plus captured observer status receipts, but those receipts do not
+  bind the packages to the exact parent receipt, prior certificate, and roster
+  manifest. They therefore remain unqualified in RESILIENT_PREGAME despite
+  existing legacy FINAL grades. The final SOG package likewise lacks that
+  linked proof; resilient selection uses the linked MIDDAY package.
+- The only retained recent slate found with an earlier market REFRESH and no
+  FINAL_PREGAME cross-market package was 2026-10-17. Its REFRESH source was
+  published at 23:29:04Z, after first puck at 17:00Z. Retained roster reuse
+  validation also reports `strictly_prestart` failure. It is correctly
+  ineligible and yielded zero selected groups; it is not a valid example of
+  recoverable pregame fallback coverage.
+- Source-proof review distinguished missing source data from missing retained
+  lineage. On 2026-10-14 the two standalone mainline observer sources without
+  a feature cutoff are excluded as
+  `RESILIENT_CROSS_MARKET_FEATURE_CUTOFF_UNPROVEN`. Points/Saves/SOG packages
+  with standalone captured status files but no parent-bound certificate and
+  roster evidence are reported as
+  `RESILIENT_PROP_PARENT_CERTIFICATE_ROSTER_LINKAGE_MISSING`. These are
+  prospective receipt-linkage acceptance gaps, not grounds to infer historic
+  proof from neighboring receipts.
+- The bounded replay found and corrected integration defects: older daily
+  receipts may express certification as an exact `REUSED_VALID_PACKAGE` path
+  plus `FINAL` status; the verifier now validates that package directly. The
+  resolver accepts legacy SOG cutoff aliases and metadata-bound run identity,
+  while requiring durable publication proof from the linked daily receipt.
+  It also discovers a Puck Line sibling file when the parent links another
+  prediction file in the same manifest-bound package, handles empty Moneyline
+  populations, and preserves valid multi-row SOG player/line identities.
+- Legacy artifact comparison on 2026-10-14 retained row counts unchanged and
+  confirmed Moneyline, Puck Line, Points, and Saves recomputed shared grade
+  values exactly. SOG matched apart from three `p_sog_7_plus` values differing
+  by at most 3.31e-24 from CSV floating-point round-trip; the grading timestamp
+  matched when the retained timestamp was used. Existing legacy grade files
+  were hash-identical before and after the read-only resilient evaluation;
+  source package manifests verified, and no artifacts were rewritten.
 - Current discoverability limit: Moneyline/Puck Line outputs linked by daily
   parent receipts can qualify when their full feature cutoff is bound. A
   standalone mainline observer capture with no distinct feature-cutoff proof
@@ -922,14 +973,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   grading for Moneyline production/shadow, Puck Line, SOG, Points, and Saves,
   coherent Points/Saves groups, source lineage, empty coverage, chronology, and
   legacy certificate/observer gates.
-  Focused run: 39 passed and 10 subtests passed. The NHL suite excluding the
-  retained-receipt-count assertion and PostgreSQL integration test passed 465
-  tests and 26 subtests. The former expected 45 retained receipts but found 47;
-  the latter could not resolve its configured host in the sandbox. It was not
-  retried with elevated access because it performs database writes, which this
-  task prohibits.
-  Implementation is not yet operationally validated on a naturally reconciled
-  slate with resilient sources present.
+  Current focused run: 40 passed and 10 subtests passed. Current broad offline
+  NHL suite, excluding the unrelated historical identity fixture and the
+  PostgreSQL integration test, passed 466 tests and 26 subtests.
+- Acceptance verification: the integrated adapter was run read-only against
+  retained final outcomes for 2026-10-14 and 2026-10-17. The first produced
+  the coverage above; the second correctly selected nothing because its
+  REFRESH was post-start and retained roster proof failed chronology. The
+  broad offline NHL suite passed 466 tests and 26 subtests when excluding the
+  unrelated stale retained-receipt-count assertion and the PostgreSQL
+  integration test. The historical identity test still expects 45 receipts
+  and 28 runs per lane, but the retained range now contains 47 receipts and
+  30 SOG, 30 Points, and 30 Saves runs; recomputation found zero package or
+  prediction-hash failures. This stale fixture assertion is unrelated to
+  resilient grading, so it was not changed. The
+  PostgreSQL test requires creating and populating a schema through a
+  non-loopback DSN configured in `backend/.env`; it was not run because an
+  isolated database was not available and production database writes are
+  prohibited.
 - Remaining acceptance: tests for phase combinations, missed windows,
   staggered starts, later
   game capture after earlier start, no rewriting or duplicate final evidence,

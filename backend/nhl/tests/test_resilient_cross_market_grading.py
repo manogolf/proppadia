@@ -19,6 +19,23 @@ def sha(path: Path) -> str:
 
 
 class ResilientCrossMarketAdapterTests(unittest.TestCase):
+    def test_empty_candidate_population_returns_empty_role_grades(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "operational"
+            slate_date = "2026-10-18"
+            schedule = pd.DataFrame([{
+                "game_id": 2026020135,
+                "scheduled_start_time_utc": "2026-10-18T22:00:00Z",
+                "game_type_code": 2,
+            }])
+            grades, index = core._resilient_cross_market_grades(
+                slate_date=slate_date, operational_root=root, schedule=schedule,
+                games=pd.DataFrame(), skaters=pd.DataFrame(), goalies=pd.DataFrame(),
+            )
+            self.assertEqual(index["lanes"]["MONEYLINE"]["coverage_status"], "EMPTY")
+            self.assertEqual(len(grades["resilient_moneyline_production_champion"]), 0)
+            self.assertEqual(len(grades["resilient_moneyline_shadow"]), 0)
+
     def test_receipt_bound_production_shadow_and_puck_are_separate_grades(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "operational"
@@ -60,10 +77,11 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
                          "line": float(line), "model_version": "SAVES_V1"})}
                     for line in (18.5 + n for n in range(13))]),
                 ("SOG", "immutable_predictions.csv", [{
-                    "run_id": "sog1", "canonical_season": 2026, "slate_date": slate_date,
+                    "canonical_season": 2026, "slate_date": slate_date,
                     "game_id": 2026020135, "player_id": 77, "line": 2.5,
                     "phase": "MIDDAY", "prediction_timestamp_utc": "2026-10-18T18:40:00Z",
-                    "input_cutoff_timestamp_utc": "2026-10-18T18:30:00Z",
+                    "feature_cutoff_utc": "2026-10-18T18:30:00Z",
+                    "input_cutoff_utc": "2026-10-18T18:30:00Z",
                     "scheduled_start_time_utc": "2026-10-18T22:00:00Z", "game_type_code": 2,
                     "contract_arm": "A_BASE", "contract_sha256": core._sha(core.SOG_CONTRACT_PATH),
                     "selected_side": "OVER", "prob_over": .6,
@@ -145,7 +163,9 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
             receipt_path = root / "daily_runs/run_id=run1/parent_receipt.json"
             receipt_path.parent.mkdir(parents=True)
             output_rows = [
-                {"path": str(source / name), "sha256": sha(source / name)} for name in artifacts
+                {"path": str(source / name), "sha256": sha(source / name)}
+                for name in ("moneyline_production_predictions.csv",
+                             "moneyline_schedule_logit_v2_shadow_predictions.csv")
             ]
             roster_manifest = sha(roster / "SHA256SUMS")
             receipt = {
@@ -160,6 +180,14 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
                                           "outputs": output_rows}},
             }
             receipt_path.write_text(json.dumps(receipt))
+            # Natural daily receipts can carry an explicit null for an
+            # unavailable prerequisite section. Such unrelated receipts must
+            # not abort discovery of separately linked, valid sources.
+            null_receipt = root / "daily_runs/run_id=run-null/parent_receipt.json"
+            null_receipt.parent.mkdir(parents=True)
+            null_receipt.write_text(json.dumps({
+                "slate_date": slate_date, "prior_day_learning": None,
+            }))
             observer_parent = root / f"cross_market_shadow/orchestration_status/{slate_date}/capture.json"
             observer_parent.parent.mkdir(parents=True)
             observer_parent.write_text(json.dumps({
@@ -172,6 +200,24 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
                     "status": "VERIFIED_CURRENT_SLATE_ROSTER", "package_path": str(roster),
                     "package_manifest_sha256": roster_manifest,
                 },
+            }))
+            orphan = root / "points_prediction_only/season=2026" / f"slate_date={slate_date}" / "phase=MIDDAY" / "run_id=points-orphan"
+            orphan.mkdir(parents=True)
+            linked_points_status = json.loads(Path(observer_links["POINTS"]["receipt_path"]).read_text())
+            linked_points_run = Path(linked_points_status["run_dir"])
+            (orphan / "immutable_predictions.csv").write_bytes(
+                (linked_points_run / "immutable_predictions.csv").read_bytes())
+            (orphan / "run_metadata.json").write_text(json.dumps({
+                "run_id": "points-orphan", "lane": "POINTS",
+                "slate_date": slate_date, "phase": "MIDDAY",
+            }))
+            (orphan / "SHA256SUMS").write_text("".join(
+                f"{sha(path)}  {path.name}\n" for path in sorted(orphan.iterdir())
+            ))
+            orphan_status = root / f"points_prediction_only/status/{slate_date}/orphan.json"
+            orphan_status.write_text(json.dumps({
+                "status": "CAPTURED", "slate_date": slate_date,
+                "phase": "MIDDAY", "run_dir": str(orphan),
             }))
 
             schedule = pd.DataFrame([{
@@ -214,10 +260,18 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
                 "resilient_puck_line", "resilient_sog", "resilient_points", "resilient_saves",
             }.issubset(set(grades)))
             self.assertEqual(index["lanes"]["MONEYLINE"]["selected_atomic_prediction_count"], 2)
+            self.assertEqual(index["lanes"]["MONEYLINE"]["discovered_source_package_count"], 1)
             self.assertEqual(index["lanes"]["PUCK_LINE"]["selected_atomic_prediction_count"], 1)
+            self.assertEqual(index["lanes"]["PUCK_LINE"]["discovered_source_package_count"], 1)
             self.assertEqual(index["lanes"]["POINTS"]["selected_atomic_prediction_count"], 1)
             self.assertEqual(index["lanes"]["SAVES"]["selected_atomic_prediction_count"], 1)
             self.assertEqual(index["lanes"]["SOG"]["selected_atomic_prediction_count"], 1)
+            self.assertEqual(index["lanes"]["POINTS"]["unlinked_source_package_count"], 1)
+            self.assertTrue(any(
+                item.get("lane") == "POINTS"
+                and item.get("excluded_reason") == "RESILIENT_PROP_PARENT_CERTIFICATE_ROSTER_LINKAGE_MISSING"
+                for item in index["proof_receipts"]
+            ))
             self.assertEqual(len(grades["resilient_points"]), 3)
             self.assertEqual(len(grades["resilient_saves"]), 13)
             self.assertTrue(all(grades[name].evaluation_population.eq("RESILIENT_PREGAME").all()

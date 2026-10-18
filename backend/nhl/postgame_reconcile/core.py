@@ -230,7 +230,8 @@ def _retained_schedule_spine(*, operational_root: Path, slate_date: str) -> tupl
 
 
 def _verify_resilient_prop_package(*, run: Path, lane: str, slate_date: str,
-                                  schedule: pd.DataFrame) -> pd.DataFrame:
+                                  schedule: pd.DataFrame,
+                                  durable_publication_timestamp_utc: str | None = None) -> pd.DataFrame:
     """Validate immutable prop rows without imposing the legacy whole-slate gate."""
     files = _verify_manifest(run)
     metadata = json.loads((run / "run_metadata.json").read_text())
@@ -307,6 +308,17 @@ def _verify_resilient_prop_package(*, run: Path, lane: str, slate_date: str,
             validate_atomic_group(lane, group.to_dict(orient="records"))
         return frame
 
+    # Legacy SOG producers use shorter cutoff field names and keep run_id in
+    # run_metadata.json. Accept those equivalent hash-bound fields without
+    # requiring the newer prop-observer CSV schema.
+    if "run_id" not in frame and metadata.get("run_id"):
+        frame["run_id"] = str(metadata["run_id"])
+    if "input_cutoff_timestamp_utc" not in frame:
+        cutoff_name = next((name for name in ("feature_cutoff_timestamp_utc",
+                                               "feature_cutoff_utc", "input_cutoff_utc")
+                            if name in frame), None)
+        if cutoff_name:
+            frame["input_cutoff_timestamp_utc"] = frame[cutoff_name]
     required_sog = {"run_id", "canonical_season", "slate_date", "game_id", "player_id", "line", "phase",
                     "prediction_timestamp_utc", "prediction_identity", "contract_arm", "contract_sha256",
                     "input_cutoff_timestamp_utc"}
@@ -322,7 +334,8 @@ def _verify_resilient_prop_package(*, run: Path, lane: str, slate_date: str,
     if spine.game_id.duplicated().any() or set(spine.game_id.astype(int)) != set(schedule.game_id.astype(int)):
         raise RuntimeError("RESILIENT_SOG_CANONICAL_GAME_SET_MISMATCH")
     frame = _pregame(frame, "prediction_timestamp_utc", schedule)
-    durable = pd.to_datetime(marker.get("completed_at_utc")
+    durable = pd.to_datetime(durable_publication_timestamp_utc
+                              or marker.get("completed_at_utc")
                               or metadata.get("actual_write_timestamp_utc"),
                               utc=True, errors="coerce")
     starts = pd.to_datetime(frame.canonical_scheduled_start_time_utc, utc=True)
@@ -1113,9 +1126,16 @@ def _pregame(frame: pd.DataFrame, timestamp_col: str, schedule: pd.DataFrame) ->
         canonical_starts = pd.to_datetime(joined.canonical_scheduled_start_time_utc, utc=True, errors="coerce")
         if supplied.isna().any() or not supplied.eq(canonical_starts).all():
             raise RuntimeError("PREDICTION_SCHEDULE_IDENTITY_MISMATCH")
-    if "game_type_code" in joined and not joined.game_type_code.astype(int).eq(joined.canonical_game_type_code.astype(int)).all():
-        raise RuntimeError("PREDICTION_GAME_TYPE_IDENTITY_MISMATCH")
-    if "game_type_code" not in joined:
+    if "game_type_code" in joined:
+        supplied_type = pd.to_numeric(joined.game_type_code, errors="coerce")
+        canonical_type = pd.to_numeric(joined.canonical_game_type_code, errors="coerce")
+        present = supplied_type.notna()
+        if (canonical_type.isna().any()
+                or not supplied_type.loc[present].astype(int).eq(
+                    canonical_type.loc[present].astype(int)).all()):
+            raise RuntimeError("PREDICTION_GAME_TYPE_IDENTITY_MISMATCH")
+        joined["game_type_code"] = supplied_type.where(present, canonical_type).astype(int)
+    else:
         joined["game_type_code"] = joined.canonical_game_type_code
     stamps = pd.to_datetime(joined[timestamp_col], utc=True, errors="coerce")
     starts = pd.to_datetime(joined.canonical_scheduled_start_time_utc, utc=True, errors="coerce")
@@ -1354,13 +1374,32 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             parent = json.loads(receipt_path.read_text())
             if str(parent.get("slate_date")) != slate_date:
                 continue
-            prior = parent.get("prior_day_learning", {}).get("certificate", {})
-            cert_path = Path(str(prior.get("package_path") or ""))
+            prior = parent.get("prior_day_learning") or {}
+            certificate = prior.get("certificate") or {}
+            prior_date = (datetime.fromisoformat(slate_date).date()
+                          - __import__("datetime").timedelta(days=1)).isoformat()
+            if certificate:
+                cert_path = Path(str(certificate.get("package_path") or ""))
+                expected_cert_manifest = certificate.get("package_manifest_sha256")
+                certificate_status = certificate.get("status")
+            else:
+                # Earlier receipts bind the exact reused package path and its
+                # successful FINAL reconciliation status instead of embedding
+                # the later certificate object. Verify that retained package
+                # directly; do not synthesize or infer a package path.
+                cert_path = Path(str(prior.get("reconciliation_package") or ""))
+                expected_cert_manifest = None
+                certificate_status = (
+                    "CERTIFIED_FINAL"
+                    if prior.get("reconciliation_status") == "REUSED_VALID_PACKAGE"
+                    and prior.get("official_outcomes_status") == "FINAL"
+                    else None
+                )
             verified_cert = verify_reconciliation_certificate(
-                cert_path, (datetime.fromisoformat(slate_date).date()
-                            - __import__("datetime").timedelta(days=1)).isoformat())
-            if (prior.get("status") != "CERTIFIED_FINAL"
-                    or prior.get("package_manifest_sha256") != verified_cert["package_manifest_sha256"]):
+                cert_path, prior_date)
+            if (certificate_status != "CERTIFIED_FINAL"
+                    or (expected_cert_manifest is not None
+                        and expected_cert_manifest != verified_cert["package_manifest_sha256"])):
                 continue
             roster = parent.get("roster_observation") or {}
             roster_path = Path(str(roster.get("path") or ""))
@@ -1382,9 +1421,18 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                     continue
                 for output in lane.get("outputs") or []:
                     output_path = Path(str(output.get("path") or ""))
+                    source_files = {
+                        "moneyline_production_predictions.csv": ("MONEYLINE", "PRODUCTION_CHAMPION"),
+                        "moneyline_schedule_logit_v2_shadow_predictions.csv": ("MONEYLINE", "SHADOW"),
+                        "v2_immutable_predictions.csv": ("MONEYLINE", "SHADOW"),
+                        "puck_line_v1_immutable_predictions.csv": ("PUCK_LINE", "PUCK_LINE"),
+                        "immutable_predictions.csv": ("SOG", "CONTRACT_ARM"),
+                    }
                     # Output rows bind exact files; resolve the containing
                     # package and verify its full manifest before reading.
                     is_sog_package = lane_name == "cold_start_sog_reference" and output_path.is_dir()
+                    if (not is_sog_package and output_path.name not in source_files):
+                        continue
                     if (not is_sog_package and
                             (not output_path.is_file() or "cross_market_shadow" not in str(output_path))):
                         continue
@@ -1409,14 +1457,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         raise RuntimeError("RESILIENT_CROSS_MARKET_RECEIPT_HASH_MISMATCH")
                     parent_digest = _sha(receipt_path)
                     durable = str(lane.get("ended_at_utc") or parent.get("ended_at_utc") or "")
-                    feature_cutoff = str(parent.get("feature_cutoff_utc") or "")
-                    source_files = {
-                        "moneyline_production_predictions.csv": ("MONEYLINE", "PRODUCTION_CHAMPION"),
-                        "moneyline_schedule_logit_v2_shadow_predictions.csv": ("MONEYLINE", "SHADOW"),
-                        "v2_immutable_predictions.csv": ("MONEYLINE", "SHADOW"),
-                        "puck_line_v1_immutable_predictions.csv": ("PUCK_LINE", "PUCK_LINE"),
-                        "immutable_predictions.csv": ("SOG", "CONTRACT_ARM"),
-                    }
+                    parent_feature_cutoff = str(parent.get("feature_cutoff_utc") or "")
                     source_key = "immutable_predictions.csv" if is_sog_package else output_path.name
                     if source_key not in source_files:
                         continue
@@ -1471,12 +1512,14 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         verified_cross_packages.add(source_run)
                     if lane_key == "SOG":
                         frame = _verify_resilient_prop_package(
-                            run=source_run, lane="SOG", slate_date=slate_date, schedule=schedule)
+                            run=source_run, lane="SOG", slate_date=slate_date, schedule=schedule,
+                            durable_publication_timestamp_utc=durable or None)
                     elif lane_key == "MONEYLINE":
                         frame = pd.read_csv(output_file, float_precision="round_trip")
                     else:
                         frame = _read_immutable_puck_predictions(output_file)
-                    if "game_id" not in frame or frame.game_id.duplicated().any():
+                    if ("game_id" not in frame
+                            or (lane_key != "SOG" and frame.game_id.duplicated().any())):
                         raise RuntimeError("RESILIENT_CROSS_MARKET_GAME_IDENTITY_INVALID")
                     if (("slate_date" in frame and not frame.slate_date.astype(str).eq(slate_date).all())
                             or ("canonical_season" in frame
@@ -1490,6 +1533,18 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         game_id = int(row["game_id"])
                         if game_id not in starts:
                             raise RuntimeError("RESILIENT_CROSS_MARKET_GAME_OUTSIDE_SLATE")
+                        row_feature_cutoff = next((row.get(name) for name in (
+                            "feature_cutoff_timestamp_utc", "feature_cutoff_utc",
+                        ) if row.get(name) is not None and not pd.isna(row.get(name))
+                            and str(row.get(name)).strip()), None)
+                        feature_cutoff = str(row_feature_cutoff or parent_feature_cutoff)
+                        if not feature_cutoff:
+                            proof_notes.append({
+                                "source_path": str(output_file),
+                                "parent_receipt": str(receipt_path),
+                                "excluded_reason": "RESILIENT_CROSS_MARKET_FEATURE_CUTOFF_UNPROVEN",
+                            })
+                            continue
                         model_identity = str(
                             capture_status.get("moneyline_production_model") if role == "PRODUCTION_CHAMPION"
                             else capture_status.get("moneyline_shadow_model") if role == "SHADOW"
@@ -1506,9 +1561,11 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         if lane_key == "SOG":
                             feature_identity = str(capture_status.get("contract_sha256") or row.get("contract_sha256"))
                             model_identity = str(row.get("contract_arm"))
-                        identity_row = {"game_id": game_id, "model_role": role,
-                                        "model_identity": model_identity,
-                                        "feature_contract_identity": feature_identity}
+                        identity_row = ({**row, "game_id": game_id}
+                                        if lane_key == "SOG" else
+                                        {"game_id": game_id, "model_role": role,
+                                         "model_identity": model_identity,
+                                         "feature_contract_identity": feature_identity})
                         atomic = canonical_atomic_identity(lane_key, identity_row)
                         timestamp = str(row.get("prediction_timestamp_utc")
                                        or row.get("prediction_creation_time_utc") or durable)
@@ -1522,7 +1579,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                             "roster_source_sha256": roster_hash,
                             "model_identity": model_identity,
                             "feature_contract_identity": feature_identity,
-                            "feature_cutoff_timestamp_utc": feature_cutoff or timestamp,
+                            "feature_cutoff_timestamp_utc": feature_cutoff,
                             "prediction_timestamp_utc": timestamp,
                             "durable_publication_timestamp_utc": durable or timestamp,
                             "prediction_payload_sha256": payload,
@@ -1543,6 +1600,147 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             if linked_parent and not source_not_eligible:
                 raise
             proof_notes.append({"source_path": str(receipt_path), "excluded_reason": reason[:240]})
+
+    # Cross-market parent receipts historically listed the Moneyline output
+    # files but omitted the sibling Puck Line CSV. The linked package manifest
+    # still authenticates that sibling artifact, so discover it only when the
+    # same parent receipt links another prediction file in the exact package.
+    puck_source_keys = {
+        (str(item.get("source_path")), int(item.get("game_id", -1)))
+        for item in candidates["PUCK_LINE"]
+    }
+    for receipt_path in sorted(daily_root.glob("run_id=*/parent_receipt.json")):
+        try:
+            parent = json.loads(receipt_path.read_text())
+            if str(parent.get("slate_date")) != slate_date:
+                continue
+            outputs = (parent.get("lanes") or {}).get("moneyline", {}).get("outputs") or []
+            linked_packages: set[Path] = set()
+            for output in outputs:
+                linked_path = Path(str(output.get("path") or ""))
+                if (linked_path.is_file() and "cross_market_shadow" in str(linked_path)
+                        and linked_path.name in {
+                            "moneyline_production_predictions.csv",
+                            "moneyline_schedule_logit_v2_shadow_predictions.csv",
+                            "v2_immutable_predictions.csv",
+                        } and output.get("sha256") == _sha(linked_path)):
+                    linked_packages.add(linked_path.parent)
+            if not linked_packages:
+                continue
+            prior = parent.get("prior_day_learning") or {}
+            certificate = prior.get("certificate") or {}
+            prior_date = (datetime.fromisoformat(slate_date).date()
+                          - __import__("datetime").timedelta(days=1)).isoformat()
+            cert_path = Path(str(certificate.get("package_path")
+                                 or prior.get("reconciliation_package") or ""))
+            verified_cert = verify_reconciliation_certificate(cert_path, prior_date)
+            modern_status = certificate.get("status")
+            legacy_status = ("CERTIFIED_FINAL"
+                             if prior.get("reconciliation_status") == "REUSED_VALID_PACKAGE"
+                             and prior.get("official_outcomes_status") == "FINAL" else None)
+            if modern_status != "CERTIFIED_FINAL" and legacy_status != "CERTIFIED_FINAL":
+                continue
+            if (certificate.get("package_manifest_sha256")
+                    and certificate["package_manifest_sha256"]
+                    != verified_cert["package_manifest_sha256"]):
+                continue
+            roster = parent.get("roster_observation") or {}
+            roster_path = Path(str(roster.get("path") or ""))
+            roster_summary = json.loads((roster_path / "observation_summary.json").read_text())
+            roster_hash = _sha(roster_path / "SHA256SUMS")
+            if roster.get("manifest_sha256") != roster_hash:
+                continue
+            verified_roster = verify_roster_observation_reuse(
+                roster_path, season=int(roster_summary["season"]), slate_date=slate_date,
+                phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
+                canonical_game_set_hash=canonical_game_set_hash(game_ids))
+            if verified_roster.get("manifest_sha256") != roster_hash:
+                continue
+            for source_run in sorted(linked_packages):
+                manifest = _verify_manifest(source_run)
+                puck_path = source_run / "puck_line_v1_immutable_predictions.csv"
+                if puck_path.name not in manifest:
+                    continue
+                capture_status = json.loads((source_run / "daily_execution_status.json").read_text())
+                phase = str(capture_status.get("run_type") or "")
+                if (phase not in {"MIDDAY", "FINAL_PREGAME", "REFRESH"}
+                        or capture_status.get("slate_date") != slate_date
+                        or source_run.name != f"state={capture_status.get('substantive_state_sha256')}"):
+                    raise RuntimeError("RESILIENT_PUCK_LINE_SOURCE_IDENTITY_MISMATCH")
+                puck = _read_immutable_puck_predictions(puck_path)
+                if (puck.game_id.duplicated().any()
+                        or set(puck.game_id.astype(int)) != set(game_ids)
+                        or ("slate_date" in puck
+                            and not puck.slate_date.astype(str).eq(slate_date).all())):
+                    raise RuntimeError("RESILIENT_PUCK_LINE_GAME_IDENTITY_INVALID")
+                shadow_path = next((source_run / name for name in (
+                    "moneyline_schedule_logit_v2_shadow_predictions.csv",
+                    "v2_immutable_predictions.csv",
+                ) if name in manifest), None)
+                if shadow_path is None:
+                    raise RuntimeError("RESILIENT_PUCK_LINE_MODEL_ROLE_ARTIFACT_MISSING")
+                provenance_name = "moneyline_shot_finishing_challenger_v3_feature_provenance.csv"
+                provenance_path = source_run / provenance_name
+                provenance = (pd.read_csv(provenance_path)
+                              if provenance_name in manifest and provenance_path.is_file() else None)
+                _verify_cross_market_identities(
+                    pd.read_csv(shadow_path, float_precision="round_trip"), puck,
+                    moneyline_feature_provenance=provenance)
+                lane_receipt = (parent.get("lanes") or {}).get("moneyline") or {}
+                durable = str(lane_receipt.get("ended_at_utc")
+                              or parent.get("ended_at_utc") or "")
+                feature_cutoff = str(parent.get("feature_cutoff_utc") or "")
+                parent_hash = _sha(receipt_path)
+                for row in puck.to_dict(orient="records"):
+                    puck_model_identity = str(row.get("model_version")
+                                              or row.get("model_parameter_sha256") or "PUCK_LINE")
+                    puck_feature_identity = str(
+                        capture_status.get("puck_line_v2_shot_prior_feature_policy")
+                        or row.get("feature_contract_identity") or row.get("feature_hash")
+                        or "PUCK_LINE")
+                    identity = canonical_atomic_identity("PUCK_LINE", {
+                        "game_id": int(row["game_id"]), "model_role": "PUCK_LINE",
+                        "model_identity": puck_model_identity,
+                        "feature_contract_identity": puck_feature_identity,
+                    })
+                    key = (str(puck_path), int(row["game_id"]))
+                    if key in puck_source_keys:
+                        continue
+                    puck_source_keys.add(key)
+                    timestamp = str(row.get("prediction_timestamp_utc")
+                                    or row.get("prediction_creation_time_utc") or durable)
+                    row_cutoff = next((row.get(name) for name in (
+                        "feature_cutoff_timestamp_utc", "feature_cutoff_utc",
+                    ) if row.get(name) is not None and not pd.isna(row.get(name))
+                        and str(row.get(name)).strip()), feature_cutoff)
+                    if not row_cutoff:
+                        proof_notes.append({"source_path": str(puck_path),
+                                            "parent_receipt": str(receipt_path),
+                                            "excluded_reason": "RESILIENT_CROSS_MARKET_FEATURE_CUTOFF_UNPROVEN"})
+                        continue
+                    candidates["PUCK_LINE"].append({
+                        "game_id": int(row["game_id"]),
+                        "atomic_prediction_identity": identity,
+                        "eligible": True, "source_phase": phase,
+                        "source_path": str(puck_path),
+                        "source_manifest_sha256": _sha(source_run / "SHA256SUMS"),
+                        "observer_receipt_path": str(receipt_path),
+                        "observer_receipt_sha256": parent_hash,
+                        "certificate_sha256": str(verified_cert["package_manifest_sha256"]),
+                        "roster_source_sha256": roster_hash,
+                        "model_identity": puck_model_identity,
+                        "feature_contract_identity": puck_feature_identity,
+                        "feature_cutoff_timestamp_utc": str(row_cutoff),
+                        "prediction_timestamp_utc": timestamp,
+                        "durable_publication_timestamp_utc": durable,
+                        "prediction_payload_sha256": _hash_bytes(json.dumps(
+                            row, sort_keys=True, default=str).encode()),
+                        "source_run_id": source_run.name,
+                        "source_row_identity": str(row["game_id"]),
+                    })
+        except (OSError, ValueError, KeyError, json.JSONDecodeError, RuntimeError) as error:
+            proof_notes.append({"source_path": str(receipt_path),
+                                "excluded_reason": str(error)[:240]})
 
     orchestration_root = operational_root / "cross_market_shadow" / "orchestration_status" / slate_date
     for receipt_path in sorted(orchestration_root.glob("*.json")):
@@ -1705,6 +1903,53 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
 
     indexes: dict[str, Any] = {}
     grade_frames: dict[str, pd.DataFrame] = {}
+    unlinked_prop_source_counts: dict[str, int] = {lane: 0 for lane in ("SOG", "POINTS", "SAVES")}
+    for lane in ("SOG", "POINTS", "SAVES"):
+        status_root = operational_root / f"{lane.lower()}_prediction_only" / "status" / slate_date
+        seen_packages: set[Path] = set()
+        bound_packages = {
+            Path(candidate["source_path"]).parent.resolve()
+            for candidate in candidates[lane] if candidate.get("source_path")
+        }
+        for status_path in sorted(status_root.glob("*.json")):
+            try:
+                status = json.loads(status_path.read_text())
+                if (status.get("status") != "CAPTURED"
+                        or status.get("phase") not in {"MIDDAY", "FINAL_PREGAME"}
+                        or status.get("slate_date") != slate_date):
+                    continue
+                source_run = Path(str(status.get("run_dir") or ""))
+                if not source_run.is_dir() or source_run.resolve() in bound_packages:
+                    continue
+                if source_run in seen_packages:
+                    continue
+                seen_packages.add(source_run)
+                unlinked_prop_source_counts[lane] += 1
+                try:
+                    manifest = _verify_manifest(source_run)
+                    metadata = json.loads((source_run / "run_metadata.json").read_text())
+                    prediction_name = ("immutable_conditional_predictions.csv" if lane == "SAVES"
+                                       else "immutable_predictions.csv")
+                    rows = (len(pd.read_csv(source_run / prediction_name))
+                            if prediction_name in manifest else None)
+                    reason = ("RESILIENT_PROP_PARENT_CERTIFICATE_ROSTER_LINKAGE_MISSING"
+                              if not metadata.get("readiness_evidence")
+                              else "RESILIENT_PROP_PARENT_OBSERVER_LINKAGE_MISSING")
+                    manifest_hash = _sha(source_run / "SHA256SUMS")
+                except (OSError, ValueError, KeyError, RuntimeError) as error:
+                    rows = None
+                    manifest_hash = None
+                    reason = f"RESILIENT_{lane}_SOURCE_MANIFEST_INVALID:{str(error)[:160]}"
+                proof_notes.append({
+                    "lane": lane, "source_path": str(source_run),
+                    "source_phase": status.get("phase"),
+                    "source_manifest_sha256": manifest_hash,
+                    "observer_receipt_path": str(status_path),
+                    "observer_receipt_sha256": _sha(status_path),
+                    "prediction_rows": rows, "excluded_reason": reason,
+                })
+            except (OSError, ValueError, json.JSONDecodeError):
+                continue
     outcome_columns = ["game_id", "official_full_game_winner", "official_final_home_goals",
                        "official_final_away_goals"]
     for lane_key, output_name in (("MONEYLINE", "moneyline"), ("PUCK_LINE", "puck_line"),
@@ -1712,6 +1957,16 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
         index = select_latest_atomic_sources(
             lane=lane_key, slate_date=slate_date, canonical_game_ids=game_ids,
             scheduled_starts_utc=starts, candidates=candidates[lane_key])
+        index["discovered_candidate_count"] = len(candidates[lane_key])
+        index["proof_valid_candidate_count"] = len(candidates[lane_key])
+        unique_source_packages = {
+            (str(Path(str(candidate.get("source_path") or "")).parent),
+             str(candidate.get("source_manifest_sha256") or ""))
+            for candidate in candidates[lane_key]
+        }
+        index["discovered_source_package_count"] = len(unique_source_packages)
+        index["proof_valid_source_package_count"] = len(unique_source_packages)
+        index["unlinked_source_package_count"] = unlinked_prop_source_counts.get(lane_key, 0)
         indexes[lane_key] = index
         index["excluded"].extend(exclusions[lane_key])
         index["excluded"] = sorted(index["excluded"], key=lambda row: (
@@ -1794,10 +2049,17 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             frame = pd.DataFrame(columns=["game_id", "game_type_code", *outcome_columns[1:]])
         if lane_key == "MONEYLINE":
             # Preserve separate production and shadow populations.
-            for role, role_frame in frame.groupby("operational_role", dropna=False):
-                role_frame = role_frame.copy()
-                _grade_game_lines(role_frame, role_frame.iloc[0:0].copy())
-                grade_frames[f"resilient_moneyline_{str(role).lower()}"] = role_frame
+            if frame.empty:
+                for role in ("production_champion", "shadow"):
+                    grade_frames[f"resilient_moneyline_{role}"] = pd.DataFrame(columns=[
+                        "game_id", "operational_role", "evaluation_population",
+                        *outcome_columns[1:],
+                    ])
+            else:
+                for role, role_frame in frame.groupby("operational_role", dropna=False):
+                    role_frame = role_frame.copy()
+                    _grade_game_lines(role_frame, role_frame.iloc[0:0].copy())
+                    grade_frames[f"resilient_moneyline_{str(role).lower()}"] = role_frame
         elif lane_key == "PUCK_LINE":
             _, puck_grade = _grade_game_lines(frame.iloc[0:0].copy(), frame)
             grade_frames["resilient_puck_line"] = puck_grade
