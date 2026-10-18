@@ -673,7 +673,13 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
                     durable_json(status_path, result)
                     run = run_capture(schedule_path, history_path, odds_path, root, slate,
                                       envelope["capture_timestamp_utc"], phase,
-                                      canary_mode=PRESEASON_START <= slate < REGULAR_SEASON_START)
+                                      canary_mode=PRESEASON_START <= slate < REGULAR_SEASON_START,
+                                      readiness_evidence={
+                                          "prior_day_reconciliation_certificate": result[
+                                              "prior_day_reconciliation_certificate"],
+                                          "current_slate_roster_observation": result[
+                                              "current_slate_roster_observation"],
+                                      })
                     result.update(status="CAPTURED", run_dir=str(run))
         except PriorDayChildFailure as error:
             result.update(

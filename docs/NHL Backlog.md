@@ -862,7 +862,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.17 Resolve final-pregame evidence per game without rewriting captures
 
-- Status: **CONFIRMED COVERAGE LIMITATION — design proposed, implementation not authorized**.
+- Status: **IN PROGRESS — common selector and forward proof linkage implemented; reconciliation adapters and separate grading population remain open**.
 - Evidence: mainline, SOG, Points, and Saves AUTO phase selection is keyed to
   the earliest unstarted game and its 20–75 minute window. Their publication
   eligibility and final durability checks are per game. However, each lane's
@@ -881,23 +881,40 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   outside AUTO's window; it retained MIDDAY mainline evidence and no prop
   FINAL_PREGAME cards, so it does not itself demonstrate a missed eligible
   prediction window.
-- Proposed minimum design: one immutable lane/slate finalization index that
-  references original prediction artifacts and hashes per prediction identity
-  and game, applies a deterministic source-selection policy, and records
-  missing games/identities as ungradeable. The index must not relabel or
-  rewrite source artifacts or prediction values. It becomes the sole
-  exact-one reconciliation input; conflicting/corrupt sources block. Decide
-  explicitly whether MIDDAY/REFRESH forecasts may qualify for grading, and
-  keep quote attachment independent from forecast chronology. Cross-market
-  and SOG source requirements require lane-specific contract review.
-- Required before implementation: tests for staggered/missed windows, later
+- Authorized policy: add a separately identified RESILIENT_PREGAME population
+  while preserving historical FINAL_PREGAME grades and exact-one source
+  semantics unchanged. Moneyline/Puck Line may use MIDDAY, FINAL_PREGAME, and
+  REFRESH; SOG/Points/Saves may use MIDDAY and FINAL_PREGAME. Model roles,
+  SOG arms/contracts, Points player-game ladders, and Saves goalie-game
+  distributions remain isolated and atomic. Select latest eligible durable
+  publication; exact-time identical payloads break ties by lexical source
+  path, while conflicting ties fail. Prediction scoring is separate from
+  quote matching/returns. No retrospective grade rewrite is allowed.
+- Implemented foundation: `backend/nhl/postgame_reconcile/resilient_finalization.py`
+  defines lane phases, role-aware atomic identity helpers, atomic group checks,
+  proof-required source selection, chronology, empty/partial coverage, and
+  deterministic ties. New Points/Saves/SOG/mainline captures bind checked
+  certificate and roster evidence into manifest-covered metadata. These
+  changes do not yet invoke the selector from reconciliation.
+- Remaining integration: discover and validate lane source packages and
+  matching receipts, verify date-bound certificates and roster/source
+  manifests, materialize selected rows without copying prediction values into
+  source captures, emit separate resilient grade/index files and denominators,
+  and prove legacy output equivalence. Historical captures without proof may
+  qualify only when a matching retained observer receipt proves it; never
+  infer missing certificate evidence.
+- Required before completion: tests for phase combinations, missed windows,
+  staggered starts, later
   game capture after earlier start, no rewriting or duplicate final evidence,
   deterministic selection and conflicts, exact-one reconciliation, partial
   coverage/ungradeable identities, corrupt/wrong-date/hash evidence, certified
-  history and roster gates, strict prestart durability, and delayed/absent
-  quote attachment. The 20–75 minute AUTO window remains a scheduling
-  preference; per-game prestart chronology and source integrity remain hard
-  requirements.
+  history and roster gates, strict prestart durability, coherent ladder and
+  distribution groups, model-role isolation, separate grading denominators,
+  legacy output equivalence, and delayed/absent quote attachment. Natural-run
+  acceptance must retain distinct legacy and resilient populations with
+  source lineage and honest partial/empty classifications. The 20–75 minute
+  AUTO window remains a scheduling preference; per-game chronology and source
+  integrity remain hard requirements.
 
 ### P2.3 Close documented historical source-integrity gaps
 

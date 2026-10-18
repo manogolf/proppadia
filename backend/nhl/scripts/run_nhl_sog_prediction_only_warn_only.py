@@ -106,8 +106,10 @@ def observe(*,slate:str,requested:str,dsn:str,root:Path,now:datetime|None=None)-
         durable_json(status_path,result);return status_path
     try:
         if not dsn:raise RuntimeError("SUPABASE_DB_URL_MISSING")
-        result["prior_day_reconciliation_certificate"]=require_slate_history_certificate(slate)
-        result["current_slate_roster_observation"]=require_slate_roster_observation(slate)
+        certificate=require_slate_history_certificate(slate)
+        roster=require_slate_roster_observation(slate)
+        result["prior_day_reconciliation_certificate"]=certificate
+        result["current_slate_roster_observation"]=roster
         schedule,features=export_features(dsn,slate,now);phase,reason=phase_for(schedule,now,requested);result.update(phase=phase,phase_gate=reason)
         if phase is None:result["status"]="NOOP_OUTSIDE_WINDOW";durable_json(status_path,result);return status_path
         with lock(root,slate,phase):
@@ -122,7 +124,7 @@ def observe(*,slate:str,requested:str,dsn:str,root:Path,now:datetime|None=None)-
                 excluded=pd.concat([excluded,poststart],ignore_index=True)
             run_id=f"nhlsogprediction_s2026_d{slate.replace('-','')}_t{now.strftime('%Y%m%dT%H%M%S%fZ')}_{phase}_v1";dest=phase_root/f"run_id={run_id}";dest.mkdir(parents=True,exist_ok=False)
             schedule.to_csv(dest/"canonical_game_spine.csv",index=False);features.to_csv(dest/"feature_source_snapshot.csv",index=False);inputs.to_csv(dest/"prediction_inputs.csv",index=False);pred.to_csv(dest/"immutable_predictions.csv",index=False);excluded.to_csv(dest/"excluded_players.csv",index=False)
-            meta={"run_id":run_id,"slate_date":slate,"phase":phase,"prediction_timestamp_utc":now.isoformat(),"status":"COMPLETE_PREDICTION_ONLY_SHADOW","prediction_rows":len(pred),"admitted_players":int(inputs.player_id.nunique()) if not inputs.empty else 0,"prediction_arms":sorted(inputs.contract_arm.unique().tolist()) if not inputs.empty else [],"excluded_players":len(excluded),"market_attachment":"UNAVAILABLE_NOT_REQUIRED","market_requests":0,"paid_credits":0,"publication":False,"wagering":False};(dest/"run_metadata.json").write_text(json.dumps(meta,indent=2,sort_keys=True)+"\n");write_manifest(dest);result.update(status="CAPTURED",run_dir=str(dest),prediction_rows=len(pred),excluded_players=len(excluded))
+            meta={"run_id":run_id,"slate_date":slate,"phase":phase,"prediction_timestamp_utc":now.isoformat(),"status":"COMPLETE_PREDICTION_ONLY_SHADOW","prediction_rows":len(pred),"admitted_players":int(inputs.player_id.nunique()) if not inputs.empty else 0,"prediction_arms":sorted(inputs.contract_arm.unique().tolist()) if not inputs.empty else [],"excluded_players":len(excluded),"market_attachment":"UNAVAILABLE_NOT_REQUIRED","market_requests":0,"paid_credits":0,"publication":False,"wagering":False,"readiness_evidence":{"prior_day_reconciliation_certificate":certificate,"current_slate_roster_observation":roster}};(dest/"run_metadata.json").write_text(json.dumps(meta,indent=2,sort_keys=True)+"\n");write_manifest(dest);result.update(status="CAPTURED",run_dir=str(dest),prediction_rows=len(pred),excluded_players=len(excluded))
     except Exception as error:result.update(status="FAILED_WARN_ONLY",failure=f"{type(error).__name__}:{error}")
     durable_json(status_path,result);return status_path
 def main()->int:

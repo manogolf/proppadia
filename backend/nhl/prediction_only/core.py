@@ -194,7 +194,8 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
                    season: int, slate_date: str, phase: str,
                    observation_timestamp_utc: str, input_cutoff_timestamp_utc: str,
                    canonical_run_identifier: str,
-                   feature_contract_identity: dict[str, Any] | None = None) -> tuple[Path, str]:
+                   feature_contract_identity: dict[str, Any] | None = None,
+                   readiness_evidence: dict[str, Any] | None = None) -> tuple[Path, str]:
     observation, cutoff, eligible_game_ids, temporal_exclusions = _validate_common(
         games=games, season=season, slate_date=slate_date, phase=phase,
         observation_timestamp_utc=observation_timestamp_utc,
@@ -320,6 +321,7 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
                 "points_probability_construction": "EQUAL_WEIGHT_ISOTONIC_EXCEEDANCE_V1",
                 "points_line_meanings": {"0.5": "P(points>=1)", "1.5": "P(points>=2)", "2.5": "P(points>=3)"},
                 "first_eligible_live_date": PROSPECTIVE_NOT_BEFORE,
+                "readiness_evidence": readiness_evidence,
             }
             (staging / "run_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
             (staging / "RUN_COMPLETE.json").write_text(json.dumps({"run_id": run_id, "status": "COMPLETE"}, sort_keys=True) + "\n")
@@ -338,7 +340,8 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
 def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Path,
                   season: int, slate_date: str, phase: str,
                   observation_timestamp_utc: str, input_cutoff_timestamp_utc: str,
-                  canonical_run_identifier: str) -> tuple[Path, str]:
+                  canonical_run_identifier: str,
+                  readiness_evidence: dict[str, Any] | None = None) -> tuple[Path, str]:
     observation, cutoff, eligible_game_ids, temporal_exclusions = _validate_common(
         games=games, season=season, slate_date=slate_date, phase=phase,
         observation_timestamp_utc=observation_timestamp_utc,
@@ -449,6 +452,7 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
                 "bookmaker_credential_access": False, "market_requests": 0, "paid_credits": 0,
                 "model_fixture_status": parity["status"], "operational_amendment": amendment["status"],
                 "status": "COMPLETE_PREDICTION_ONLY", "first_eligible_live_date": PROSPECTIVE_NOT_BEFORE,
+                "readiness_evidence": readiness_evidence,
             }
             (staging / "run_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
             (staging / "RUN_COMPLETE.json").write_text(json.dumps({"run_id": run_id, "status": "COMPLETE"}, sort_keys=True) + "\n")

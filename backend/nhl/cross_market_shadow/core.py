@@ -897,7 +897,8 @@ def _run_nonblocking_challenger(callback):
 def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path | None, root: Path,
                           slate_date: str, run_timestamp_utc: str, run_type: str,
                           sog_csv: Path | None = None, points_csv: Path | None = None,
-                          saves_csv: Path | None = None, canary_mode: bool = False) -> Path:
+                          saves_csv: Path | None = None, canary_mode: bool = False,
+                          readiness_evidence: dict[str, Any] | None = None) -> Path:
     activation = load_activation()
     if not canary_mode and not activation.get("capture_enabled"):
         raise RuntimeError("SHADOW_CAPTURE_READY_NOT_ACTIVATED")
@@ -1149,6 +1150,7 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         "moneyline_parent_odds_observation_manifest_sha256": envelope.get(
             "parent_daily_odds_observation_manifest_sha256"),
         "run_timestamp_utc": parse_utc(run_timestamp_utc).isoformat(), "substantive_state_sha256": substantive_hash,
+        "readiness_evidence": readiness_evidence,
         "scheduled_games": len(schedule), "v2_predictions_created": len(predictions),
         "started_excluded_game_ids": started_excluded_game_ids,
         "puck_line_v1_predictions_created": len(puck_predictions),
@@ -1215,7 +1217,8 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
 def run_capture(schedule_csv: Path, history_csv: Path, odds_json: Path | None, root: Path,
                 slate_date: str, run_timestamp_utc: str, run_type: str,
                 sog_csv: Path | None = None, points_csv: Path | None = None,
-                saves_csv: Path | None = None, canary_mode: bool = False) -> Path:
+                saves_csv: Path | None = None, canary_mode: bool = False,
+                readiness_evidence: dict[str, Any] | None = None) -> Path:
     """Serialize a slate capture and release its lock on every return/exception path."""
     lock_path = root / ".locks" / f"{slate_date}.lock"
     lock_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1226,7 +1229,7 @@ def run_capture(schedule_csv: Path, history_csv: Path, odds_json: Path | None, r
             raise RuntimeError("CROSS_MARKET_SHADOW_CAPTURE_ALREADY_RUNNING") from error
         return _run_capture_unlocked(
             schedule_csv, history_csv, odds_json, root, slate_date, run_timestamp_utc, run_type,
-            sog_csv, points_csv, saves_csv, canary_mode,
+            sog_csv, points_csv, saves_csv, canary_mode, readiness_evidence,
         )
 
 

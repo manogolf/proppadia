@@ -202,10 +202,10 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
             raise RuntimeError(f"RETROSPECTIVE_PREDICTION_FORBIDDEN:NOT_BEFORE_{PROSPECTIVE_NOT_BEFORE}")
         if not dsn:
             raise RuntimeError("DATABASE_URL_MISSING")
-        result["prior_day_reconciliation_certificate"] = require_slate_history_certificate(
-            slate_date)
-        result["current_slate_roster_observation"] = require_slate_roster_observation(
-            slate_date)
+        certificate = require_slate_history_certificate(slate_date)
+        roster = require_slate_roster_observation(slate_date)
+        result["prior_day_reconciliation_certificate"] = certificate
+        result["current_slate_roster_observation"] = roster
         games, features = export_lane_inputs(dsn, lane, season, slate_date, observation_timestamp)
         if games.empty:
             result.update(status="VALID_EMPTY_SLATE", phase=None, prediction_rows=0)
@@ -261,12 +261,16 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
                 input_cutoff_timestamp_utc=observation_timestamp.isoformat(),
                 canonical_run_identifier=run_identifier,
                 feature_contract_identity=_points_observer_feature_identity(),
+                readiness_evidence={"prior_day_reconciliation_certificate": certificate,
+                                    "current_slate_roster_observation": roster},
             ) if lane == "POINTS" else publisher(
                 games=games, goalies=features, output_root=output_root, season=season,
                 slate_date=slate_date, phase=phase,
                 observation_timestamp_utc=observation_timestamp.isoformat(),
                 input_cutoff_timestamp_utc=observation_timestamp.isoformat(),
                 canonical_run_identifier=run_identifier,
+                readiness_evidence={"prior_day_reconciliation_certificate": certificate,
+                                    "current_slate_roster_observation": roster},
             )
             metadata = json.loads((destination / "run_metadata.json").read_text())
             result.update(status="CAPTURED" if disposition == "COMPLETE_NEW_APPEND_ONLY" else "NOOP_ALREADY_CAPTURED",

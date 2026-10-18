@@ -65,28 +65,38 @@ and strict per-game prestart observation and durable-write timestamps are the
 actual validity controls. Explicit phase requests currently bypass AUTO's
 window choice but not per-game chronology validation.
 
-**Proposed design; not implemented or authorized by this review:** resolve
-each lane/slate into one immutable finalization index that references original
-game-level prediction evidence by artifact path, manifest hash, prediction
-identity, model identity, observation/cutoff timestamps, and canonical game
-identity. Keep the original artifact, phase, values, and timestamps unchanged;
-the index is a post-observation evidence-resolution record, never a new or
-relabeled prediction. Select no more than one source per prediction identity
-under a deterministic documented rule, and record missing games/identities
-as ungradeable. The index would be the single exact-one reconciliation input;
-raw candidate observations remain provenance and are not independently
-counted as final cards. Conflicting or corrupt candidates must block rather
-than be silently selected. This requires explicit policy for whether MIDDAY
-or REFRESH forecasts qualify for grading, separate from whether associated
-market quotes can be attached. Late or absent quotes may limit attachment,
-but cannot change forecast values or timestamps. Cross-market and SOG source
-requirements need deliberate lane-specific treatment before implementation.
+## Resilient pregame evaluation population
 
-Implementation requires regression coverage for staggered starts, missed
-windows, later-game qualification after earlier puck drop, existing-card
-immutability, source selection/conflict behavior, exact-one reconciliation,
-missing/ungradeable games, corruption/date/hash failures, certification and
-roster prerequisites, and delayed quote attachment. See backlog P2.17.
+The separately identified `RESILIENT_PREGAME` population supplements the
+historical FINAL_PREGAME-only population. Lane phase eligibility is explicit:
+Moneyline and Puck Line may use `MIDDAY`, `FINAL_PREGAME`, or `REFRESH`; SOG,
+Points, and Saves may use `MIDDAY` or `FINAL_PREGAME`. Each source must pass
+its lane's model, feature, identity, receipt, certificate, roster/source,
+manifest, and chronology checks. Mainline production V3 and shadow V2 remain
+separate populations; Puck Line retains its own model role; SOG arms and
+contracts remain separate. Points selects a complete player-game ladder and
+Saves a complete goalie-game conditional distribution from one observation.
+
+The common outcome-independent selector is implemented in
+`backend/nhl/postgame_reconcile/resilient_finalization.py`. It selects the
+latest eligible durable publication per atomic identity; equal-time identical
+payloads use lexicographic source path, while differing payloads fail closed.
+It records the full canonical game set, missing coverage, proof references,
+source phase, hashes, model/feature identities, and chronology. It has no
+outcome input. Forward Points, Saves, SOG, and mainline producers now retain
+the checked prior-day certificate and current-slate roster evidence in their
+manifest-covered source metadata. Historical sources without embedded proof
+must use a verifiable matching retained observer receipt; missing proof is
+not inferred.
+
+**Integration limitation:** lane-specific source discovery, validation,
+materialization of selected prediction rows, separate `RESILIENT_PREGAME`
+grade files and denominators, and legacy-output equivalence are not yet
+implemented. The selector is not yet invoked by reconciliation. Existing
+FINAL_PREGAME source resolution and grades remain unchanged. No historical
+grade is rewritten. Market quote matching and returns remain separate from
+prediction scoring. See backlog P2.17 for required integration and acceptance
+work.
 
 Prior-date reconciliation is the first substantive daily operation after the
 database connectivity check. Daily work may continue only with a verified,
