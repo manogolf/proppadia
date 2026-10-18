@@ -202,6 +202,29 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   manifest hash. Do not change existing manual-upload behavior or imply that a
   candidate was executed.
 
+### P2.7 Evaluate 2026 Moneyline favorites, pricing, and V3/V2 disagreement
+
+- Status: **ANALYSIS COMPLETE — descriptive, 120 settled paired games**. The
+  full September 29–October 17 population contains 124 games, 120 settled and
+  four unresolved. BetOnline has strict chronology-qualified two-sided prices
+  on all 120 settled games. V3 probability performance is slightly better by
+  accuracy and Brier than the no-vig BetOnline market; V3/V2 and favorite/dog
+  ROI results remain exploratory. The original 89-game study overlaps exactly
+  with 89 of the full settled set; 31 additional settled games are included.
+- Evidence: `docs/nhl/2026_moneyline_favorites_pricing_analysis_2026-10-17.md`;
+  `artifacts/analysis/nhl/moneyline_favorites_pricing_2026-10-17/`;
+  frozen parent receipt
+  `artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261017T232609902832Z_68bc386f/parent_receipt.json`.
+- Bounded follow-up: fix or explicitly document the full-window Moneyline
+  export fields before external Moneyline filtering. Its V3 probability
+  columns are blank on 105/124 rows, and its `selected_side` agrees with the
+  probability-derived side from the retained V3 ledger on only 60/124 rows.
+  The analysis derives picks from captured ledger probabilities and records
+  per-slate ledger hashes. Preserve prediction identity, chronology, and
+  historical role labels when correcting the exporter. Continue prospective
+  paired pricing evaluation; do not promote models or select thresholds from
+  these retrospective ROI results.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** 46,379 2023–24 shot-attempt corrections;

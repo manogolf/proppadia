@@ -1,0 +1,21 @@
+{
+  "frozen_export_manifest_sha256": "10a0e68ac04903f13b6769650690e364129b50fac9c01cc17a2bd5c840d8f194",
+  "outputs": [
+    {
+      "path": "moneyline_candidates_unfiltered.csv",
+      "rows": 248,
+      "sha256": "27f0e007b75ed69df8b21c7212ac621fcf5f112a272cde052fc2ccdaded56914"
+    },
+    {
+      "path": "moneyline_model_side_quotes_unfiltered.csv",
+      "rows": 5358,
+      "sha256": "6bc1704336e474daa9cba5a673605757c01e2910bd5b33b8ae991f465b62a13c"
+    },
+    {
+      "path": "analysis_summary.json",
+      "rows": null,
+      "sha256": "9568f553272cdcb57e5f93b06cf517f5359862b966eae6987b4e8bbfd2213682"
+    }
+  ],
+  "schema_version": "NHL_MONEYLINE_FAVORITES_PRICING_ANALYSIS_V1"
+}

@@ -1,0 +1,1499 @@
+{
+  "book_coverage_games": {
+    "ballybet": 120,
+    "betanysports": 120,
+    "betmgm": 120,
+    "betonlineag": 120,
+    "betopenly": 58,
+    "betparx": 120,
+    "betrivers": 120,
+    "betus": 120,
+    "bovada": 120,
+    "courtside": 112,
+    "draftkings": 120,
+    "espnbet": 120,
+    "fanatics": 120,
+    "fanduel": 120,
+    "fliff": 62,
+    "hardrockbet": 120,
+    "kalshi": 68,
+    "lowvig": 120,
+    "mybookieag": 120,
+    "novig": 68,
+    "polymarket": 68,
+    "polymarket_us": 64,
+    "prophetx": 68,
+    "rebet": 99,
+    "williamhill_us": 120
+  },
+  "checks": {
+    "duplicate_candidate_natural_keys": 0,
+    "model_arm_pairing_issues": 0,
+    "old_89_probability_replay_max_abs_difference": 1.1102230246251565e-16,
+    "v2_candidate_probability_max_abs_difference": 1.1102230246251565e-16
+  },
+  "cutover_period_metrics": {
+    "post_cutover": {
+      "BetOnline_market": {
+        "accuracy": 0.7333333333333333,
+        "brier": 0.20191646701045957,
+        "calibration_bins": [
+          {
+            "mean_probability": 0.4857176884922158,
+            "n": 3,
+            "observed_rate": 0.3333333333333333,
+            "range": "0.4-0.5"
+          },
+          {
+            "mean_probability": 0.5579465374511383,
+            "n": 8,
+            "observed_rate": 0.625,
+            "range": "0.5-0.6"
+          },
+          {
+            "mean_probability": 0.6498364747893818,
+            "n": 1,
+            "observed_rate": 1.0,
+            "range": "0.6-0.7"
+          },
+          {
+            "mean_probability": 0.7106029420601335,
+            "n": 3,
+            "observed_rate": 1.0,
+            "range": "0.7-0.8"
+          }
+        ],
+        "log_loss": 0.5925868884602076,
+        "mean_probability": 0.5801580444037024,
+        "n": 15,
+        "observed_rate": 0.6666666666666666
+      },
+      "V2": {
+        "accuracy": 0.6666666666666666,
+        "brier": 0.20170862308940243,
+        "calibration_bins": [
+          {
+            "mean_probability": 0.46254296074793894,
+            "n": 6,
+            "observed_rate": 0.5,
+            "range": "0.4-0.5"
+          },
+          {
+            "mean_probability": 0.550645268131497,
+            "n": 3,
+            "observed_rate": 0.6666666666666666,
+            "range": "0.5-0.6"
+          },
+          {
+            "mean_probability": 0.6450075776842997,
+            "n": 5,
+            "observed_rate": 0.8,
+            "range": "0.6-0.7"
+          },
+          {
+            "mean_probability": 0.7705814249857087,
+            "n": 1,
+            "observed_rate": 1.0,
+            "range": "0.7-0.8"
+          }
+        ],
+        "log_loss": 0.5918104109837855,
+        "mean_probability": 0.5615208588192888,
+        "n": 15,
+        "observed_rate": 0.6666666666666666
+      },
+      "V2_BetOnline_ROI": {
+        "losses": 5,
+        "n": 15,
+        "net_units": 1.8496512967369538,
+        "roi": 0.12331008644913026,
+        "wins": 10
+      },
+      "V3": {
+        "accuracy": 0.7333333333333333,
+        "brier": 0.19853407920446048,
+        "calibration_bins": [
+          {
+            "mean_probability": 0.4613177226681595,
+            "n": 3,
+            "observed_rate": 0.3333333333333333,
+            "range": "0.4-0.5"
+          },
+          {
+            "mean_probability": 0.5519795665768222,
+            "n": 7,
+            "observed_rate": 0.7142857142857143,
+            "range": "0.5-0.6"
+          },
+          {
+            "mean_probability": 0.6648936771091454,
+            "n": 3,
+            "observed_rate": 0.6666666666666666,
+            "range": "0.6-0.7"
+          },
+          {
+            "mean_probability": 0.7464569220715684,
+            "n": 2,
+            "observed_rate": 1.0,
+            "range": "0.7-0.8"
+          }
+        ],
+        "log_loss": 0.5844181123490577,
+        "mean_probability": 0.5823603339675203,
+        "n": 15,
+        "observed_rate": 0.6666666666666666
+      },
+      "V3_BetOnline_ROI": {
+        "losses": 4,
+        "n": 15,
+        "net_units": 3.2057750968031566,
+        "roi": 0.2137183397868771,
+        "wins": 11
+      },
+      "n": 15
+    },
+    "pre_cutover": {
+      "BetOnline_market": {
+        "accuracy": 0.638095238095238,
+        "brier": 0.22966036620838318,
+        "calibration_bins": [
+          {
+            "mean_probability": 0.2819686538743226,
+            "n": 1,
+            "observed_rate": 0.0,
+            "range": "0.2-0.3"
+          },
+          {
+            "mean_probability": 0.35546059922441425,
+            "n": 8,
+            "observed_rate": 0.25,
+            "range": "0.3-0.4"
+          },
+          {
+            "mean_probability": 0.45709269557045984,
+            "n": 28,
+            "observed_rate": 0.39285714285714285,
+            "range": "0.4-0.5"
+          },
+          {
+            "mean_probability": 0.5461221441241139,
+            "n": 42,
+            "observed_rate": 0.5714285714285714,
+            "range": "0.5-0.6"
+          },
+          {
+            "mean_probability": 0.6421461554553457,
+            "n": 21,
+            "observed_rate": 0.7142857142857143,
+            "range": "0.6-0.7"
+          },
+          {
+            "mean_probability": 0.7240257221329836,
+            "n": 5,
+            "observed_rate": 0.8,
+            "range": "0.7-0.8"
+          }
+        ],
+        "log_loss": 0.6509786002336421,
+        "mean_probability": 0.5330150176388808,
+        "n": 105,
+        "observed_rate": 0.5333333333333333
+      },
+      "V2": {
+        "accuracy": 0.5904761904761905,
+        "brier": 0.2285928463450979,
+        "calibration_bins": [
+          {
+            "mean_probability": 0.19530923203681827,
+            "n": 1,
+            "observed_rate": 0.0,
+            "range": "0.1-0.2"
+          },
+          {
+            "mean_probability": 0.2539207581148123,
+            "n": 5,
+            "observed_rate": 0.0,
+            "range": "0.2-0.3"
+          },
+          {
+            "mean_probability": 0.3680361437095039,
+            "n": 12,
+            "observed_rate": 0.6666666666666666,
+            "range": "0.3-0.4"
+          },
+          {
+            "mean_probability": 0.45287003399510806,
+            "n": 20,
+            "observed_rate": 0.4,
+            "range": "0.4-0.5"
+          },
+          {
+            "mean_probability": 0.5434930125126016,
+            "n": 39,
+            "observed_rate": 0.46153846153846156,
+            "range": "0.5-0.6"
+          },
+          {
+            "mean_probability": 0.6496927327649082,
+            "n": 20,
+            "observed_rate": 0.75,
+            "range": "0.6-0.7"
+          },
+          {
+            "mean_probability": 0.7589748043482468,
+            "n": 6,
+            "observed_rate": 0.8333333333333334,
+            "range": "0.7-0.8"
+          },
+          {
+            "mean_probability": 0.8277245340736634,
+            "n": 2,
+            "observed_rate": 1.0,
+            "range": "0.8-0.9"
+          }
+        ],
+        "log_loss": 0.64667900237169,
+        "mean_probability": 0.5270297853767001,
+        "n": 105,
+        "observed_rate": 0.5333333333333333
+      },
+      "V2_BetOnline_ROI": {
+        "losses": 43,
+        "n": 105,
+        "net_units": -0.1943484463053986,
+        "roi": -0.0018509375838609392,
+        "wins": 62
+      },
+      "V3": {
+        "accuracy": 0.6571428571428571,
+        "brier": 0.2277727473976565,
+        "calibration_bins": [
+          {
+            "mean_probability": 0.2636957464595635,
+            "n": 4,
+            "observed_rate": 0.25,
+            "range": "0.2-0.3"
+          },
+          {
+            "mean_probability": 0.3560408209361716,
+            "n": 6,
+            "observed_rate": 0.16666666666666666,
+            "range": "0.3-0.4"
+          },
+          {
+            "mean_probability": 0.45780644781450425,
+            "n": 31,
+            "observed_rate": 0.3870967741935484,
+            "range": "0.4-0.5"
+          },
+          {
+            "mean_probability": 0.5487797203463703,
+            "n": 24,
+            "observed_rate": 0.625,
+            "range": "0.5-0.6"
+          },
+          {
+            "mean_probability": 0.6509675463133323,
+            "n": 23,
+            "observed_rate": 0.6086956521739131,
+            "range": "0.6-0.7"
+          },
+          {
+            "mean_probability": 0.7288233238476941,
+            "n": 16,
+            "observed_rate": 0.8125,
+            "range": "0.7-0.8"
+          },
+          {
+            "mean_probability": 0.8020514990541421,
+            "n": 1,
+            "observed_rate": 0.0,
+            "range": "0.8-0.9"
+          }
+        ],
+        "log_loss": 0.6483472718875816,
+        "mean_probability": 0.5522782793127781,
+        "n": 105,
+        "observed_rate": 0.5333333333333333
+      },
+      "V3_BetOnline_ROI": {
+        "losses": 36,
+        "n": 105,
+        "net_units": 13.605250625540304,
+        "roi": 0.12957381548133623,
+        "wins": 69
+      },
+      "n": 105
+    }
+  },
+  "disagreements": {
+    "n": 22,
+    "v2_correct": 7,
+    "v3_correct": 15,
+    "v3_favors_market_underdog": 22,
+    "v3_market_gap_bands": [
+      {
+        "absolute_gap_pp": [
+          0,
+          2.5
+        ],
+        "n": 30,
+        "v3_accuracy": 0.7333333333333333,
+        "v3_favors_market_underdog": 1
+      },
+      {
+        "absolute_gap_pp": [
+          2.5,
+          5.0
+        ],
+        "n": 25,
+        "v3_accuracy": 0.64,
+        "v3_favors_market_underdog": 2
+      },
+      {
+        "absolute_gap_pp": [
+          5.0,
+          10.0
+        ],
+        "n": 40,
+        "v3_accuracy": 0.675,
+        "v3_favors_market_underdog": 13
+      },
+      {
+        "absolute_gap_pp": [
+          10.0,
+          101.0
+        ],
+        "n": 25,
+        "v3_accuracy": 0.6,
+        "v3_favors_market_underdog": 6
+      }
+    ],
+    "v3_market_underdog_picks": {
+      "mean_absolute_model_market_gap": 0.08680426852462163,
+      "n": 22,
+      "win_rate": 0.5454545454545454,
+      "wins": 12
+    }
+  },
+  "favorite_price_bands": [
+    {
+      "favorite_novig_probability": [
+        0.5,
+        0.55
+      ],
+      "favorite_win_rate": 0.6086956521739131,
+      "favorite_wins": 28,
+      "n": 46,
+      "v2_accuracy": 0.5652173913043478,
+      "v2_correct": 26,
+      "v3_accuracy": 0.6739130434782609,
+      "v3_correct": 31
+    },
+    {
+      "favorite_novig_probability": [
+        0.55,
+        0.6
+      ],
+      "favorite_win_rate": 0.5757575757575758,
+      "favorite_wins": 19,
+      "n": 33,
+      "v2_accuracy": 0.48484848484848486,
+      "v2_correct": 16,
+      "v3_accuracy": 0.5454545454545454,
+      "v3_correct": 18
+    },
+    {
+      "favorite_novig_probability": [
+        0.6,
+        0.65
+      ],
+      "favorite_win_rate": 0.6842105263157895,
+      "favorite_wins": 13,
+      "n": 19,
+      "v2_accuracy": 0.631578947368421,
+      "v2_correct": 12,
+      "v3_accuracy": 0.6842105263157895,
+      "v3_correct": 13
+    },
+    {
+      "favorite_novig_probability": [
+        0.65,
+        0.7
+      ],
+      "favorite_win_rate": 0.8181818181818182,
+      "favorite_wins": 9,
+      "n": 11,
+      "v2_accuracy": 0.8181818181818182,
+      "v2_correct": 9,
+      "v3_accuracy": 0.8181818181818182,
+      "v3_correct": 9
+    },
+    {
+      "favorite_novig_probability": [
+        0.7,
+        0.8
+      ],
+      "favorite_win_rate": 0.8888888888888888,
+      "favorite_wins": 8,
+      "n": 9,
+      "v2_accuracy": 0.8888888888888888,
+      "v2_correct": 8,
+      "v3_accuracy": 0.8888888888888888,
+      "v3_correct": 8
+    },
+    {
+      "favorite_novig_probability": [
+        0.8,
+        1.001
+      ],
+      "favorite_win_rate": null,
+      "favorite_wins": 0,
+      "n": 0,
+      "v2_accuracy": null,
+      "v2_correct": 0,
+      "v3_accuracy": null,
+      "v3_correct": 0
+    }
+  ],
+  "favorite_side_split": {
+    "V2": {
+      "AWAY": {
+        "accuracy": 0.6,
+        "model_picked_market_favorite": 30,
+        "model_picked_market_underdog": 10,
+        "n": 40
+      },
+      "HOME": {
+        "accuracy": 0.6025641025641025,
+        "model_picked_market_favorite": 64,
+        "model_picked_market_underdog": 14,
+        "n": 78
+      }
+    },
+    "V3": {
+      "AWAY": {
+        "accuracy": 0.675,
+        "model_picked_market_favorite": 31,
+        "model_picked_market_underdog": 9,
+        "n": 40
+      },
+      "HOME": {
+        "accuracy": 0.6666666666666666,
+        "model_picked_market_favorite": 65,
+        "model_picked_market_underdog": 13,
+        "n": 78
+      }
+    }
+  },
+  "favorites": {
+    "AWAY": {
+      "favorite_win_rate": 0.65,
+      "n": 40,
+      "v2_accuracy": 0.6,
+      "v3_accuracy": 0.675
+    },
+    "HOME": {
+      "favorite_win_rate": 0.6538461538461539,
+      "n": 78,
+      "v2_accuracy": 0.6025641025641025,
+      "v3_accuracy": 0.6666666666666666
+    }
+  },
+  "frozen_export_quote_rows": 5196,
+  "ledger_pairing_issues": [],
+  "ledger_sources": [
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-09-29/run_type=REFRESH/state=99fe80c14c395cb31100cd9d402fbed0906ee516916d09e46392c8f39f4fbfa2/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "58346a848f441f6e62fe1850c373e895fd53174f7f443dd919c63a9ca9396977"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-09-30/run_type=FINAL_PREGAME/state=b1c8a454beed479226c157842e2b48f7b5e9b8173f31b07be11b13273a19db07/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "37d3a1c80fc52a900601278a1fce288a633bfaff828c69273fd2799a26593584"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-01/run_type=FINAL_PREGAME/state=9e7ecbdca9afecfb76ac47bedbd6192dec6f6b10f40efe6a2c6888f46714c1d2/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "3efe3e2bd126200334bc7a921610932116e2ccf7a61e8edb9ce014fb6b4187cb"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-02/run_type=FINAL_PREGAME/state=a52c1664b01f755ffe3b64f4ad228c8094cd0cf6ac8dead8920d4a20176d71c2/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "dc5e5ac916460733175260960839c07320dae9187e6ec7f9792ccc6b746deb65"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-03/run_type=FINAL_PREGAME/state=1f532eac5f37ddd9b912e0664adefb402a904210998e4ac56383924de71a79b8/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "1dd8585c1afbf879cd22c427cd423a6cc8f8d9795cca8cced1ca1f6765e6d9f4"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-04/run_type=FINAL_PREGAME/state=305372208280e5785ccc8743b2591c472a19ce267e47e5cf577a6cc9d16ad53b/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "f2769691160895864847d43e5afe769024ad5e47e1578cdec2baf31607f02fa9"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-05/run_type=FINAL_PREGAME/state=4b1d9fad756ecdcdcd367b158740607dd004a9b9cb565a86bf13cba9422244f6/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "4778a1d229e22280720d743b1b7cf854bc743249d4b38ddf4d99c136f9f0b7f3"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-06/run_type=FINAL_PREGAME/state=d71bbb99702b12b18364b6b3631b8e77cf4105b97443118518cd69001e415e6d/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "0e7fb8a618bc4079eeaf31a13d117219e36a1da2d53182024add9eb8ee4f9672"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-07/run_type=FINAL_PREGAME/state=7336cc625bda11cb2afbcb6b216ffc7bbdd4d4098d8c37b3ffc6ce54e4f8ec93/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "1da5852101f490c233b635e5326af755eadebd7a93b5e9380597b8190c674fe1"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-08/run_type=FINAL_PREGAME/state=899cd7b6c6cbf9eaeb1d6a35193f44dfa581654de674eb2d5bb2bec3c4a52889/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "42eea96d279b234bbf783e4bbeefbc674eddb2a244a553e8fb73e140919b9c6a"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-09/run_type=FINAL_PREGAME/state=23a87afbc85a487da7689c22f2412a16715e5b17f2487193b7892c4c469f20ea/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "7169e7dd8a80aed28be8580dca9453fa09526123221d21d857d38fbb00a5b875"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-10/run_type=FINAL_PREGAME/state=1f92f8ceb5a3b1a3bf6b2f599b11fea54c07609d76b1bf0175743a76006c477d/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "ca97d40267580915741faaa006cf483c24417e75d44ce0aef54b12e3a87b7381"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-11/run_type=FINAL_PREGAME/state=f1c15422c4524be95d81bec008676a2bce681e0c55adb955bf8d11f6d5b0cb6c/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "9ab5e0b61343def9c8c2c91bd38594897662cc101a4c058a8191e494c00703b5"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-12/run_type=FINAL_PREGAME/state=1f54896c639106e4a9305f26611ecd7151b86d697b486a93bd8855ef2d099bfa/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "ebd2ea0836c4c7b5c8232e06f7cb1f1f63ac19376fec22a553a52d476b54fb20"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-13/run_type=FINAL_PREGAME/state=114cc2ea24b2407f6073bcaa37dedbf0149933ce2881797f88721a738fae944a/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "6bf0ad1c794d24ce7fdfb6f1f7f7b81afa14e280c875a6975857634be26d8648"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-14/run_type=FINAL_PREGAME/state=d343edd5a9bc2dcf211d357a2d2bcc7016b6f35b1727ef176508081df1b84988/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "5fad27b3b6404be234b98ab039c1cc0e330dee36d4499be362949b30a0b6a1b8"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-15/run_type=FINAL_PREGAME/state=c4fc5d3574ec877d991c434611740310622606b1ecd3e2efb0ad7680f93ac52f/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "415de169732311df9a43fd38d47ded0bb34de5020e0042636ea3c504c9711612"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-16/run_type=FINAL_PREGAME/state=c50095eeead048fe5d284730012916501a46b81c029abd876c2a9cd1421419c4/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "0f981cf811bb397518e9af36f8d5d8d102afba0159eef0aa6a52e9404394cfaa"
+    },
+    {
+      "path": "artifacts/operational/nhl/cross_market_shadow/season=2026/slate_date=2026-10-17/run_type=REFRESH/state=e1fd0aa4b2dce9399678972c507208e97399547c80d71f7c44959015cdb114a4/moneyline_shot_finishing_challenger_v3_ledger.csv",
+      "sha256": "6227eb32bb92b7724bdb47ba5b6e82ed7d8b9ddd22a3169f19b62f090da33388"
+    }
+  ],
+  "market_metrics": {
+    "BetOnline no-vig market": {
+      "accuracy": 0.65,
+      "brier": 0.22619237880864276,
+      "calibration_bins": [
+        {
+          "mean_probability": 0.2819686538743226,
+          "n": 1,
+          "observed_rate": 0.0,
+          "range": "0.2-0.3"
+        },
+        {
+          "mean_probability": 0.35546059922441425,
+          "n": 8,
+          "observed_rate": 0.25,
+          "range": "0.3-0.4"
+        },
+        {
+          "mean_probability": 0.4598628561757911,
+          "n": 31,
+          "observed_rate": 0.3870967741935484,
+          "range": "0.4-0.5"
+        },
+        {
+          "mean_probability": 0.5480140470564376,
+          "n": 50,
+          "observed_rate": 0.58,
+          "range": "0.5-0.6"
+        },
+        {
+          "mean_probability": 0.6424957154250746,
+          "n": 22,
+          "observed_rate": 0.7272727272727273,
+          "range": "0.6-0.7"
+        },
+        {
+          "mean_probability": 0.7189921796056649,
+          "n": 8,
+          "observed_rate": 0.875,
+          "range": "0.7-0.8"
+        }
+      ],
+      "log_loss": 0.6436796362619628,
+      "mean_probability": 0.5389078959844835,
+      "n": 120,
+      "observed_rate": 0.55
+    }
+  },
+  "model_side_price_split": {
+    "V2": {
+      "MARKET_FAVORITE": {
+        "losses": 32,
+        "n": 94,
+        "net_units": 7.007819996469255,
+        "roi": 0.07455127655818357,
+        "wins": 62
+      },
+      "MARKET_UNDERDOG": {
+        "losses": 15,
+        "n": 24,
+        "net_units": -5.287096585290035,
+        "roi": -0.22029569105375146,
+        "wins": 9
+      }
+    },
+    "V3": {
+      "MARKET_FAVORITE": {
+        "losses": 29,
+        "n": 96,
+        "net_units": 13.852878193250463,
+        "roi": 0.14430081451302565,
+        "wins": 67
+      },
+      "MARKET_UNDERDOG": {
+        "losses": 10,
+        "n": 22,
+        "net_units": 3.0235680898406585,
+        "roi": 0.13743491317457537,
+        "wins": 12
+      }
+    }
+  },
+  "old_89_study_comparison": {
+    "new_settled_games_outside_old_89": 31,
+    "old_file_rows": 89,
+    "overlap_betonline_roi": {
+      "V2": {
+        "losses": 38,
+        "n": 89,
+        "net_units": -3.822363580944029,
+        "roi": -0.0429479054038655,
+        "wins": 51
+      },
+      "V3": {
+        "losses": 30,
+        "n": 89,
+        "net_units": 11.862191243114061,
+        "roi": 0.1332830476754389,
+        "wins": 59
+      }
+    },
+    "overlap_dates": "2026-09-29 through 2026-10-12",
+    "overlap_games_in_full_settled": 89,
+    "overlap_probability_metrics": {
+      "V2": {
+        "accuracy": 0.5730337078651685,
+        "brier": 0.22877300135649947,
+        "calibration_bins": [
+          {
+            "mean_probability": 0.19530923203681827,
+            "n": 1,
+            "observed_rate": 0.0,
+            "range": "0.1-0.2"
+          },
+          {
+            "mean_probability": 0.2539207581148123,
+            "n": 5,
+            "observed_rate": 0.0,
+            "range": "0.2-0.3"
+          },
+          {
+            "mean_probability": 0.3674358092724375,
+            "n": 10,
+            "observed_rate": 0.7,
+            "range": "0.3-0.4"
+          },
+          {
+            "mean_probability": 0.4549705027975813,
+            "n": 14,
+            "observed_rate": 0.5,
+            "range": "0.4-0.5"
+          },
+          {
+            "mean_probability": 0.541709853936829,
+            "n": 35,
+            "observed_rate": 0.45714285714285713,
+            "range": "0.5-0.6"
+          },
+          {
+            "mean_probability": 0.6461808214043807,
+            "n": 16,
+            "observed_rate": 0.75,
+            "range": "0.6-0.7"
+          },
+          {
+            "mean_probability": 0.7589748043482468,
+            "n": 6,
+            "observed_rate": 0.8333333333333334,
+            "range": "0.7-0.8"
+          },
+          {
+            "mean_probability": 0.8277245340736634,
+            "n": 2,
+            "observed_rate": 1.0,
+            "range": "0.8-0.9"
+          }
+        ],
+        "log_loss": 0.6467499099907779,
+        "mean_probability": 0.5282797087527787,
+        "n": 89,
+        "observed_rate": 0.550561797752809
+      },
+      "V3": {
+        "accuracy": 0.6629213483146067,
+        "brier": 0.22252821119316243,
+        "calibration_bins": [
+          {
+            "mean_probability": 0.2636957464595635,
+            "n": 4,
+            "observed_rate": 0.25,
+            "range": "0.2-0.3"
+          },
+          {
+            "mean_probability": 0.3650857626611718,
+            "n": 4,
+            "observed_rate": 0.0,
+            "range": "0.3-0.4"
+          },
+          {
+            "mean_probability": 0.4579364051614043,
+            "n": 26,
+            "observed_rate": 0.4230769230769231,
+            "range": "0.4-0.5"
+          },
+          {
+            "mean_probability": 0.5468845789643887,
+            "n": 22,
+            "observed_rate": 0.6363636363636364,
+            "range": "0.5-0.6"
+          },
+          {
+            "mean_probability": 0.6509054335576563,
+            "n": 20,
+            "observed_rate": 0.65,
+            "range": "0.6-0.7"
+          },
+          {
+            "mean_probability": 0.7318596168972723,
+            "n": 12,
+            "observed_rate": 0.8333333333333334,
+            "range": "0.7-0.8"
+          },
+          {
+            "mean_probability": 0.8020514990541421,
+            "n": 1,
+            "observed_rate": 0.0,
+            "range": "0.8-0.9"
+          }
+        ],
+        "log_loss": 0.6371700534833399,
+        "mean_probability": 0.5511843694479835,
+        "n": 89,
+        "observed_rate": 0.550561797752809
+      }
+    },
+    "reported_paired_games": 89,
+    "role_cutover_note": "After 2026-10-14, V3/V2 labels are production/shadow; paired probabilities remain separate model identities and are evaluated as contemporaneous outputs, not as same-role production comparisons."
+  },
+  "paired_game_count": 124,
+  "population_contract": "One prediction row per model/game; separate quote rows are keyed to that model's probability-derived side. Only settled official outcomes enter predictive metrics and ROI. No profitable filter applied. BetOnline is the declared primary book; alternatives are reported book-by-book, not pooled as independent wagers. Market price eligibility requires PREGAME_QUALIFIED and source update <= observation <= prediction < scheduled start. Historical roles use the authority effective timestamp 2026-10-14T15:27:11Z; export role labels are retained alongside them.",
+  "probability_metrics": {
+    "V2": {
+      "accuracy": 0.6,
+      "brier": 0.225232318438136,
+      "calibration_bins": [
+        {
+          "mean_probability": 0.19530923203681827,
+          "n": 1,
+          "observed_rate": 0.0,
+          "range": "0.1-0.2"
+        },
+        {
+          "mean_probability": 0.2539207581148123,
+          "n": 5,
+          "observed_rate": 0.0,
+          "range": "0.2-0.3"
+        },
+        {
+          "mean_probability": 0.3680361437095039,
+          "n": 12,
+          "observed_rate": 0.6666666666666666,
+          "range": "0.3-0.4"
+        },
+        {
+          "mean_probability": 0.45510224786114595,
+          "n": 26,
+          "observed_rate": 0.4230769230769231,
+          "range": "0.4-0.5"
+        },
+        {
+          "mean_probability": 0.5440038879139513,
+          "n": 42,
+          "observed_rate": 0.47619047619047616,
+          "range": "0.5-0.6"
+        },
+        {
+          "mean_probability": 0.6487557017487866,
+          "n": 25,
+          "observed_rate": 0.76,
+          "range": "0.6-0.7"
+        },
+        {
+          "mean_probability": 0.7606328930107413,
+          "n": 7,
+          "observed_rate": 0.8571428571428571,
+          "range": "0.7-0.8"
+        },
+        {
+          "mean_probability": 0.8277245340736634,
+          "n": 2,
+          "observed_rate": 1.0,
+          "range": "0.8-0.9"
+        }
+      ],
+      "log_loss": 0.639820428448202,
+      "mean_probability": 0.5313411695570236,
+      "n": 120,
+      "observed_rate": 0.55
+    },
+    "V3": {
+      "accuracy": 0.6666666666666666,
+      "brier": 0.22411791387350702,
+      "calibration_bins": [
+        {
+          "mean_probability": 0.2636957464595635,
+          "n": 4,
+          "observed_rate": 0.25,
+          "range": "0.2-0.3"
+        },
+        {
+          "mean_probability": 0.3560408209361716,
+          "n": 6,
+          "observed_rate": 0.16666666666666666,
+          "range": "0.3-0.4"
+        },
+        {
+          "mean_probability": 0.4581162661839444,
+          "n": 34,
+          "observed_rate": 0.38235294117647056,
+          "range": "0.4-0.5"
+        },
+        {
+          "mean_probability": 0.5495022662693756,
+          "n": 31,
+          "observed_rate": 0.6451612903225806,
+          "range": "0.5-0.6"
+        },
+        {
+          "mean_probability": 0.6525744075590031,
+          "n": 26,
+          "observed_rate": 0.6153846153846154,
+          "range": "0.6-0.7"
+        },
+        {
+          "mean_probability": 0.7307826125392357,
+          "n": 18,
+          "observed_rate": 0.8333333333333334,
+          "range": "0.7-0.8"
+        },
+        {
+          "mean_probability": 0.8020514990541421,
+          "n": 1,
+          "observed_rate": 0.0,
+          "range": "0.8-0.9"
+        }
+      ],
+      "log_loss": 0.640356126945266,
+      "mean_probability": 0.556038536144621,
+      "n": 120,
+      "observed_rate": 0.55
+    }
+  },
+  "qualified_model_side_quote_rows": 5358,
+  "roi": {
+    "BetOnline market favorite": {
+      "losses": 41,
+      "n": 118,
+      "net_units": 9.921580492460535,
+      "roi": 0.08408119061407233,
+      "wins": 77
+    },
+    "BetOnline market underdog": {
+      "losses": 77,
+      "n": 118,
+      "net_units": -24.143177171370628,
+      "roi": -0.2046031963675477,
+      "wins": 41
+    },
+    "V2 BetOnline selected side": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 1.6553028504315552,
+      "roi": 0.01379419042026296,
+      "wins": 72
+    },
+    "V2 ballybet": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.9511478676114042,
+      "roi": 0.007926232230095035,
+      "wins": 72
+    },
+    "V2 betanysports": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.9661313896456274,
+      "roi": 0.008051094913713561,
+      "wins": 72
+    },
+    "V2 betmgm": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.5740998898745091,
+      "roi": 0.004784165748954242,
+      "wins": 72
+    },
+    "V2 betonlineag": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 1.6553028504315552,
+      "roi": 0.01379419042026296,
+      "wins": 72
+    },
+    "V2 betopenly": {
+      "losses": 24,
+      "n": 58,
+      "net_units": 0.11262214058651088,
+      "roi": 0.0019417610445950151,
+      "wins": 34
+    },
+    "V2 betparx": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.9511478676114042,
+      "roi": 0.007926232230095035,
+      "wins": 72
+    },
+    "V2 betrivers": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.9105042388590092,
+      "roi": 0.007587535323825076,
+      "wins": 72
+    },
+    "V2 betus": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 1.0823859628772845,
+      "roi": 0.009019883023977372,
+      "wins": 72
+    },
+    "V2 bovada": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.5676185661687114,
+      "roi": 0.004730154718072596,
+      "wins": 72
+    },
+    "V2 courtside": {
+      "losses": 43,
+      "n": 112,
+      "net_units": 4.942165716121014,
+      "roi": 0.04412647960822334,
+      "wins": 69
+    },
+    "V2 draftkings": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.756597590189549,
+      "roi": 0.006304979918246242,
+      "wins": 72
+    },
+    "V2 espnbet": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 1.2535422957319007,
+      "roi": 0.01044618579776584,
+      "wins": 72
+    },
+    "V2 fanatics": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.590185316236751,
+      "roi": 0.004918210968639591,
+      "wins": 72
+    },
+    "V2 fanduel": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.5682295756779263,
+      "roi": 0.00473524646398272,
+      "wins": 72
+    },
+    "V2 fliff": {
+      "losses": 27,
+      "n": 62,
+      "net_units": -4.190842037094605,
+      "roi": -0.06759422640475168,
+      "wins": 35
+    },
+    "V2 hardrockbet": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 1.4690481937456745,
+      "roi": 0.012242068281213955,
+      "wins": 72
+    },
+    "V2 kalshi": {
+      "losses": 28,
+      "n": 68,
+      "net_units": 0.1258163017761087,
+      "roi": 0.0018502397320015985,
+      "wins": 40
+    },
+    "V2 lowvig": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 1.6553028504315552,
+      "roi": 0.01379419042026296,
+      "wins": 72
+    },
+    "V2 mybookieag": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.7553870201020394,
+      "roi": 0.006294891834183662,
+      "wins": 72
+    },
+    "V2 novig": {
+      "losses": 28,
+      "n": 68,
+      "net_units": 0.3961096514188249,
+      "roi": 0.005825141932629778,
+      "wins": 40
+    },
+    "V2 polymarket": {
+      "losses": 28,
+      "n": 68,
+      "net_units": 0.09243880727119946,
+      "roi": 0.0013593942245764628,
+      "wins": 40
+    },
+    "V2 polymarket_us": {
+      "losses": 27,
+      "n": 64,
+      "net_units": -0.6927291335432064,
+      "roi": -0.0108238927116126,
+      "wins": 37
+    },
+    "V2 prophetx": {
+      "losses": 28,
+      "n": 68,
+      "net_units": 0.22656947659133464,
+      "roi": 0.003331904067519627,
+      "wins": 40
+    },
+    "V2 rebet": {
+      "losses": 40,
+      "n": 99,
+      "net_units": 0.37506877637419755,
+      "roi": 0.0037885734987292683,
+      "wins": 59
+    },
+    "V2 williamhill_us": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 0.9785804293705151,
+      "roi": 0.00815483691142096,
+      "wins": 72
+    },
+    "V3 BetOnline selected side": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 16.811025722343462,
+      "roi": 0.14009188101952885,
+      "wins": 80
+    },
+    "V3 ballybet": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.644263603202432,
+      "roi": 0.13036886336002027,
+      "wins": 80
+    },
+    "V3 betanysports": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.893947336554852,
+      "roi": 0.1324495611379571,
+      "wins": 80
+    },
+    "V3 betmgm": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.525606628800887,
+      "roi": 0.1293800552400074,
+      "wins": 80
+    },
+    "V3 betonlineag": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 16.811025722343462,
+      "roi": 0.14009188101952885,
+      "wins": 80
+    },
+    "V3 betopenly": {
+      "losses": 19,
+      "n": 58,
+      "net_units": 9.394306560762946,
+      "roi": 0.16197080277177492,
+      "wins": 39
+    },
+    "V3 betparx": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.644263603202432,
+      "roi": 0.13036886336002027,
+      "wins": 80
+    },
+    "V3 betrivers": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.58738620821627,
+      "roi": 0.1298948850684689,
+      "wins": 80
+    },
+    "V3 betus": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.978564235741082,
+      "roi": 0.13315470196450901,
+      "wins": 80
+    },
+    "V3 bovada": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.56887743810541,
+      "roi": 0.1297406453175451,
+      "wins": 80
+    },
+    "V3 courtside": {
+      "losses": 36,
+      "n": 112,
+      "net_units": 18.171278727375757,
+      "roi": 0.16224356006585497,
+      "wins": 76
+    },
+    "V3 draftkings": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.77739204966878,
+      "roi": 0.13147826708057317,
+      "wins": 80
+    },
+    "V3 espnbet": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 16.21898665529391,
+      "roi": 0.13515822212744927,
+      "wins": 80
+    },
+    "V3 fanatics": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.447449761098536,
+      "roi": 0.12872874800915446,
+      "wins": 80
+    },
+    "V3 fanduel": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.400673362615606,
+      "roi": 0.12833894468846338,
+      "wins": 80
+    },
+    "V3 fliff": {
+      "losses": 21,
+      "n": 62,
+      "net_units": 7.420922668787746,
+      "roi": 0.11969230110947977,
+      "wins": 41
+    },
+    "V3 hardrockbet": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 16.402591538273004,
+      "roi": 0.1366882628189417,
+      "wins": 80
+    },
+    "V3 kalshi": {
+      "losses": 21,
+      "n": 68,
+      "net_units": 12.796580945390188,
+      "roi": 0.18818501390279688,
+      "wins": 47
+    },
+    "V3 lowvig": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 16.811025722343462,
+      "roi": 0.14009188101952885,
+      "wins": 80
+    },
+    "V3 mybookieag": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.653426905733482,
+      "roi": 0.13044522421444568,
+      "wins": 80
+    },
+    "V3 novig": {
+      "losses": 21,
+      "n": 68,
+      "net_units": 13.137488454152656,
+      "roi": 0.193198359619892,
+      "wins": 47
+    },
+    "V3 polymarket": {
+      "losses": 21,
+      "n": 68,
+      "net_units": 12.701032959808904,
+      "roi": 0.186779896467778,
+      "wins": 47
+    },
+    "V3 polymarket_us": {
+      "losses": 20,
+      "n": 64,
+      "net_units": 11.915865018994499,
+      "roi": 0.18618539092178904,
+      "wins": 44
+    },
+    "V3 prophetx": {
+      "losses": 21,
+      "n": 68,
+      "net_units": 12.981205337036359,
+      "roi": 0.1909000784858288,
+      "wins": 47
+    },
+    "V3 rebet": {
+      "losses": 36,
+      "n": 99,
+      "net_units": 7.169384413536065,
+      "roi": 0.07241802437915217,
+      "wins": 63
+    },
+    "V3 williamhill_us": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 15.947257507494573,
+      "roi": 0.13289381256245478,
+      "wins": 80
+    }
+  },
+  "sensitivity": {
+    "V2_american_price_floor": [
+      {
+        "american_price_floor": -300,
+        "losses": 48,
+        "n": 119,
+        "net_units": 1.3654477779677876,
+        "roi": 0.01147435107535956,
+        "wins": 71
+      },
+      {
+        "american_price_floor": -200,
+        "losses": 45,
+        "n": 99,
+        "net_units": -2.6646117060130075,
+        "roi": -0.026915269757707146,
+        "wins": 54
+      },
+      {
+        "american_price_floor": -150,
+        "losses": 34,
+        "n": 68,
+        "net_units": -3.4503809196832744,
+        "roi": -0.05074089587769521,
+        "wins": 34
+      }
+    ],
+    "V2_minimum_edge": [
+      {
+        "losses": 33,
+        "minimum": 0,
+        "n": 81,
+        "net_units": 3.370861940826668,
+        "roi": 0.04161557951637861,
+        "wins": 48
+      },
+      {
+        "losses": 28,
+        "minimum": 0.025,
+        "n": 69,
+        "net_units": 3.9129038409438013,
+        "roi": 0.05670875131802611,
+        "wins": 41
+      },
+      {
+        "losses": 22,
+        "minimum": 0.05,
+        "n": 51,
+        "net_units": 0.22105225568296816,
+        "roi": 0.004334357954568003,
+        "wins": 29
+      },
+      {
+        "losses": 10,
+        "minimum": 0.1,
+        "n": 27,
+        "net_units": 3.328208490823792,
+        "roi": 0.12326698114162192,
+        "wins": 17
+      }
+    ],
+    "V2_minimum_ev": [
+      {
+        "losses": 30,
+        "minimum": 0,
+        "n": 72,
+        "net_units": 2.5580651312663827,
+        "roi": 0.03552868237869976,
+        "wins": 42
+      },
+      {
+        "losses": 27,
+        "minimum": 0.025,
+        "n": 65,
+        "net_units": 2.139643109663095,
+        "roi": 0.032917586302509155,
+        "wins": 38
+      },
+      {
+        "losses": 23,
+        "minimum": 0.05,
+        "n": 53,
+        "net_units": 0.21115126558395825,
+        "roi": 0.003983986143093552,
+        "wins": 30
+      }
+    ],
+    "V3_american_price_floor": [
+      {
+        "american_price_floor": -300,
+        "losses": 40,
+        "n": 119,
+        "net_units": 16.521170649879693,
+        "roi": 0.1388333668057117,
+        "wins": 79
+      },
+      {
+        "american_price_floor": -200,
+        "losses": 37,
+        "n": 99,
+        "net_units": 12.4911111658989,
+        "roi": 0.12617284005958485,
+        "wins": 62
+      },
+      {
+        "american_price_floor": -150,
+        "losses": 26,
+        "n": 67,
+        "net_units": 11.185221243428675,
+        "roi": 0.16694360064818917,
+        "wins": 41
+      }
+    ],
+    "V3_minimum_edge": [
+      {
+        "losses": 28,
+        "minimum": 0,
+        "n": 83,
+        "net_units": 13.621373726160424,
+        "roi": 0.16411293645976416,
+        "wins": 55
+      },
+      {
+        "losses": 25,
+        "minimum": 0.025,
+        "n": 70,
+        "net_units": 9.948735050330988,
+        "roi": 0.14212478643329984,
+        "wins": 45
+      },
+      {
+        "losses": 20,
+        "minimum": 0.05,
+        "n": 55,
+        "net_units": 7.60906345817512,
+        "roi": 0.13834660833045673,
+        "wins": 35
+      },
+      {
+        "losses": 10,
+        "minimum": 0.1,
+        "n": 24,
+        "net_units": 1.5998615534946625,
+        "roi": 0.06666089806227761,
+        "wins": 14
+      }
+    ],
+    "V3_minimum_ev": [
+      {
+        "losses": 27,
+        "minimum": 0,
+        "n": 75,
+        "net_units": 10.139839197956876,
+        "roi": 0.13519785597275835,
+        "wins": 48
+      },
+      {
+        "losses": 22,
+        "minimum": 0.025,
+        "n": 65,
+        "net_units": 12.055236845305064,
+        "roi": 0.18546518223546252,
+        "wins": 43
+      },
+      {
+        "losses": 20,
+        "minimum": 0.05,
+        "n": 56,
+        "net_units": 8.456521085293765,
+        "roi": 0.15100930509453153,
+        "wins": 36
+      }
+    ]
+  },
+  "settled_paired_game_count": 120,
+  "source_artifacts": [
+    {
+      "path": "artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/candidate_predictions.csv",
+      "sha256": "a3d8c6581e2be06cc8ccb1b05221b613e8e7bf7e43baafb0fdb6b07cc3035ee2"
+    },
+    {
+      "path": "artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/candidate_quotes.csv",
+      "sha256": "9877332288fb4700951843a3e29f06c16e115747af0360d45f56461de73f2000"
+    },
+    {
+      "path": "artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/manifest.json",
+      "sha256": "10a0e68ac04903f13b6769650690e364129b50fac9c01cc17a2bd5c840d8f194"
+    },
+    {
+      "path": "artifacts/analysis/nhl/moneyline_prospective_performance/2026-10-13/moneyline_game_level_results.csv",
+      "sha256": "f7a3648fed4c756c006342201cfe43eac2b5af3e61f32587b26fd0e4957ffb37"
+    },
+    {
+      "path": "artifacts/analysis/nhl/moneyline_prospective_performance/2026-10-13/moneyline_prospective_performance.json",
+      "sha256": "2efa90c0527c191dbe3b53117e32d6a020c38d007903cff96606bc2805ce9339"
+    },
+    {
+      "path": "artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261017T232609902832Z_68bc386f/parent_receipt.json",
+      "sha256": "8ee2638c63c77d81cc71912806ac19d025a79f27375f7135b1dd870ea85d2e10"
+    }
+  ],
+  "source_ledger_count": 19,
+  "unresolved_paired_game_count": 4
+}
