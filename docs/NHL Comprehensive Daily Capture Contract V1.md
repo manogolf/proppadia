@@ -141,6 +141,96 @@ same field after writing its completion marker and final manifest. Historical
 sources still qualify when their exact contemporaneous parent receipt binds
 the certificate, roster, child status, and a valid completion timestamp.
 
+## Prediction evidence classes: policy review (not yet authorized)
+
+Prediction-value validity and compliance with reconciliation-first operations
+are separate questions. The existing governed `RESILIENT_PREGAME` definition
+continues to require its exact parent/observer receipt, prior-day
+`CERTIFIED_FINAL` evidence, applicable date-bound roster proof, manifest-bound
+source identity, and durable prestart publication time. A missing receipt does
+not by itself establish that a prediction was mathematically invalid, but
+neither may adjacent or later receipts be used to assert operational
+compliance retroactively.
+
+The following evidence labels are proposed for a separate research-only
+evaluation population. They do not qualify a source for governed
+reconciliation, model promotion, prospective claims, or replacement of a
+legacy grade:
+
+- `VERIFIED_PROSPECTIVE`: an immutable source artifact and its complete input
+  snapshot pass hash, model/feature, canonical identity, and atomic-group
+  checks; a contemporaneous durable witness binds those exact hashes and
+  publication time; each feature cutoff and publication precedes the
+  authoritative scheduled start; and no contradictory source evidence exists.
+  To additionally claim reconciliation-first operational compliance, the
+  source-time parent must bind a valid prior-day certificate and applicable
+  roster observation. The label alone does not waive those separate controls.
+- `CORROBORATED_PREGAME`: the immutable artifact and input snapshot are
+  internally coherent, and explicit per-game prestart times are corroborated
+  by contemporaneous retained execution records and the canonical schedule,
+  but the durable witness does not bind every source hash or required
+  operational prerequisite. This can support only a separately named,
+  non-governed retrospective sensitivity analysis, with its own denominator
+  and visible evidence limitations.
+- `CHRONOLOGY_UNVERIFIED`: chronology rests on source self-assertions or
+  filesystem modification times alone; relevant inputs or model identity are
+  absent; evidence conflicts; or any prediction may have been made or
+  published after its game's start. Exclude it from scored evaluation; it may
+  be inventoried as unverified coverage only.
+
+Minimum evidence even for the separate research path is: stable canonical
+game/player/market identity; immutable prediction values and verifiable
+artifact hashes; model and feature-contract identity; actual retained input
+values with an as-of cutoff; authoritative per-game scheduled starts; and a
+contemporaneous execution-time witness independent of the prediction file's
+self-declared timestamp. Require both cutoff and publication before puck drop.
+For Points ladders, Saves conditional distributions, or any multi-arm atomic
+group, all values must come from one observation. Ambiguous identities,
+conflicting values, corrupt manifests, or after-start timestamps are excluded
+or blocking according to scope. No missing value, timestamp, certificate, or
+roster proof may be reconstructed.
+
+Bounded artifact inventory (counts are candidate rows, not accepted or graded
+research coverage): October 14 SOG has 1,482 MIDDAY and 1,491
+FINAL_PREGAME rows across two games; Points has 282 MIDDAY and 285
+FINAL_PREGAME rows; Saves has 117 in each phase. October 17 SOG has 11,262
+FINAL_PREGAME rows across 14 games. October 18 SOG MIDDAY has 1,593 rows,
+96 players, and two games (2026020135 and 2026020136), with the package
+metadata and row cutoffs at 16:10:14.719263Z and scheduled starts at 22:00Z
+and 00:00Z. Counts across phases overlap and must not be summed as unique
+coverage. October 17 Points/Saves and October 18 Points/Saves produced no
+immutable phase package in the retained inventory reviewed here.
+
+On October 18, the SOG child status says `CAPTURED` at 16:10:14.719263Z and
+the mainline observer receipt at 16:10:17.147155Z links that child status.
+The package has a valid current manifest and prediction/input snapshots, but
+neither retained receipt binds that manifest hash or a post-publication
+timestamp. The SOG producer explicitly declared no morning-readiness
+dependency; the contemporaneous mainline receipt records prior-day
+reconciliation failure. The package's feature and prediction timestamps
+precede both scheduled starts, and its rows have distinct identities, but this
+is only `CORROBORATED_PREGAME` candidate evidence under the proposed research
+standard. It is not reconciliation-first evidence. The 2026-10-17 SOG file
+also declares a 15:47:20.064127Z cutoff before the first 17:00Z start, but
+current-slate roster and source-time certified-history proof are not linked;
+its 11,262 rows remain candidate-only. October 14 prop packages have valid
+manifests, complete markers (Points/Saves), input snapshots, and declared
+prestart times; their observer status and parent records do not bind all
+source-time certificate/roster and durable-publication proof required by the
+governed population. Existing legacy FINAL_PREGAME grading is unaffected.
+
+The reviewed evidence establishes no specific altered prediction values or
+post-start generation in these candidate packages: source values are
+manifest-checked, identities are unique within the inspected SOG files, and
+declared cutoffs precede their game starts. It does not establish that
+historical files were never replaced after their receipts, nor that every
+feature input was available at the asserted cutoff. Host file times are
+corroborative at most, not a trusted publication clock. Therefore no
+additional scored/gradeable coverage is confirmed under this review. The
+separate research population requires an explicit policy decision and
+implementation; existing governed selectors and historical grades remain
+unchanged until then.
+
 Bounded read-only replay of retained final slates on 2026-10-14 and
 2026-10-17 verified the source adapters and separate grading outputs. On
 October 14, Moneyline V3 and V2 shadow and Puck Line selected both staggered

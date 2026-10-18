@@ -1017,6 +1017,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   captured source exists after that acceptance baseline in the inspected
   artifacts, so the receipt changes have not yet received live natural-run
   acceptance.
+- Evidence-policy review (read-only; no policy implementation authorized):
+  distinguish `VERIFIED_PROSPECTIVE`, `CORROBORATED_PREGAME`, and
+  `CHRONOLOGY_UNVERIFIED` for a future, separately labeled research-only
+  evaluation population. The contract defines minimum identity/value/input
+  evidence and contemporaneous chronology witnesses. These labels do not
+  relax existing governed `RESILIENT_PREGAME` certificate, roster, receipt,
+  or durable-publication requirements and cannot feed promotion or replace
+  legacy grades. Candidate inventory, not accepted coverage: 10/14 MIDDAY SOG
+  1,482, Points 282, Saves 117; 10/14 FINAL_PREGAME SOG 1,491, Points 285,
+  Saves 117; 10/17 SOG FINAL_PREGAME 11,262 across 14 games; and 10/18 SOG
+  MIDDAY 1,593 across two games and 96 players. Phases overlap, so counts are
+  not additive unique coverage. On 10/18 the SOG child status and mainline
+  observer receipt corroborate prestart execution, but neither binds the
+  current manifest hash or post-write timestamp; the contemporaneous mainline
+  receipt also records failed prior reconciliation. This is not governed
+  evidence. No new scored/gradeable coverage is confirmed, and no altered
+  values or after-start generation were found in inspected candidate files.
+  Historical replacement after receipt and actual availability of every input
+  at its asserted cutoff remain unresolved. Require explicit policy approval
+  before implementing any separate research path; do not infer missing proof.
 - Remaining acceptance: tests for phase combinations, missed windows,
   staggered starts, later
   game capture after earlier start, no rewriting or duplicate final evidence,
