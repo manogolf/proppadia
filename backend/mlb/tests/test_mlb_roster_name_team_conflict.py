@@ -37,7 +37,7 @@ class _Cursor:
                 raise error
 
 
-def test_same_name_same_team_conflict_retries_without_changing_official_identity():
+def test_jared_jones_pit_collision_retry_preserves_existing_display_labels():
     cur = _Cursor(_UniquePlayerTeamViolation("duplicate display label"))
 
     label_conflict = _upsert_player(
@@ -62,13 +62,12 @@ def test_same_name_same_team_conflict_retries_without_changing_official_identity
     assert cur.calls[2][0] == "ROLLBACK TO SAVEPOINT mlb_roster_player_upsert"
     assert retry_payload == {
         "player_id": 683003,
-        "player_name": "Jared Jones",
         "team_id": 134,
     }
     assert cur.calls[4][0] == "RELEASE SAVEPOINT mlb_roster_player_upsert"
 
 
-def test_ordinary_roster_upsert_keeps_the_team_display_label():
+def test_new_player_id_insert_keeps_verified_display_labels():
     cur = _Cursor()
 
     label_conflict = _upsert_player(

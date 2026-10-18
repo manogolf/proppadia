@@ -1771,24 +1771,30 @@ if [[ -f "${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}" && "${reconcile_rows_size}" -gt
     fi
   fi
   if [[ "${actual_reconcile_reused_existing}" != "true" ]]; then
-    actual_reconcile_build_attempted=true
-    echo "[$(date -u +%FT%TZ)] START completed-slate actual wager reconcile (completed_slate_date=${MLB_COMPLETED_SLATE_DATE} expected=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV})"
-    set +e
-    .venv/bin/python -m backend.mlb.scripts.compare_mlb_model_v2_upload_vs_actual --date "$MLB_COMPLETED_SLATE_DATE"
-    actual_reconcile_rc=$?
-    set -e
-    if [[ -f "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" ]]; then
-      actual_reconcile_size="$(wc -c < "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" | tr -d '[:space:]')"
+    actual_upload_skip_reason="$(./bin/python -c 'from backend.mlb.shared.model_authority import predictive_output_skip_reason; print(predictive_output_skip_reason() or "")')"
+    if [[ "${actual_upload_skip_reason}" == "NO_QUALIFIED_MLB_MODEL" ]]; then
+      actual_reconcile_build_status=skipped_no_qualified_model
+      echo "[$(date -u +%FT%TZ)] SKIP completed-slate actual wager reconcile status=SKIPPED reason=NO_QUALIFIED_MLB_MODEL completed_slate_date=${MLB_COMPLETED_SLATE_DATE}"
     else
-      actual_reconcile_size=0
-    fi
-    if [[ "$actual_reconcile_rc" -eq 0 && -f "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" && "${actual_reconcile_size}" -gt 0 ]]; then
-      actual_reconcile_exists_before_brief=true
-      actual_reconcile_build_status=rebuilt
-      echo "[$(date -u +%FT%TZ)] DONE completed-slate actual wager reconcile actual_wagers_by_source_csv=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV} actual_reconcile_size=${actual_reconcile_size}"
-    else
-      actual_reconcile_build_status=failed_or_empty
-      echo "[$(date -u +%FT%TZ)] WARN completed-slate actual wager reconcile unavailable rc=${actual_reconcile_rc} expected=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV} actual_reconcile_size=${actual_reconcile_size}; actual-wager watches may remain stale" >&2
+      actual_reconcile_build_attempted=true
+      echo "[$(date -u +%FT%TZ)] START completed-slate actual wager reconcile (completed_slate_date=${MLB_COMPLETED_SLATE_DATE} expected=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV})"
+      set +e
+      .venv/bin/python -m backend.mlb.scripts.compare_mlb_model_v2_upload_vs_actual --date "$MLB_COMPLETED_SLATE_DATE"
+      actual_reconcile_rc=$?
+      set -e
+      if [[ -f "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" ]]; then
+        actual_reconcile_size="$(wc -c < "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" | tr -d '[:space:]')"
+      else
+        actual_reconcile_size=0
+      fi
+      if [[ "$actual_reconcile_rc" -eq 0 && -f "${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV}" && "${actual_reconcile_size}" -gt 0 ]]; then
+        actual_reconcile_exists_before_brief=true
+        actual_reconcile_build_status=rebuilt
+        echo "[$(date -u +%FT%TZ)] DONE completed-slate actual wager reconcile actual_wagers_by_source_csv=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV} actual_reconcile_size=${actual_reconcile_size}"
+      else
+        actual_reconcile_build_status=failed_or_empty
+        echo "[$(date -u +%FT%TZ)] WARN completed-slate actual wager reconcile unavailable rc=${actual_reconcile_rc} expected=${MLB_ACTUAL_WAGERS_BY_SOURCE_CSV} actual_reconcile_size=${actual_reconcile_size}; actual-wager watches may remain stale" >&2
+      fi
     fi
   fi
 

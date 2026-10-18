@@ -24,6 +24,14 @@ def predictive_model_is_qualified() -> bool:
     return authority().get("authority_status") != "NO_QUALIFIED_MLB_MODEL"
 
 
+def predictive_output_skip_reason(authority_path: Path = AUTHORITY_PATH) -> str | None:
+    """Return the explicit fail-closed skip reason for gated output generation."""
+    payload = json.loads(authority_path.read_text(encoding="utf-8"))
+    if payload.get("authority_status") == "NO_QUALIFIED_MLB_MODEL":
+        return "NO_QUALIFIED_MLB_MODEL"
+    return None
+
+
 def assert_predictive_model_qualified(operation: str) -> None:
     payload = authority()
     if payload.get("authority_status") == "NO_QUALIFIED_MLB_MODEL":

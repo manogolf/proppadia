@@ -625,6 +625,16 @@ writer validation does not authorize a hosted cutover or a different writer.
   These results do not close the remaining natural effective-identity,
   first-insert/NULL-fill, reconciliation, or view-refresh checks.
 
+- Offline follow-up, 2026-10-18: the roster caller's `unique_player_team`
+  fallback now retries by official `player_id`/`team_id` only, preserving the
+  existing display name and team; unrelated unique violations still fail. The
+  daily actual-wager reconcile now records `skipped_no_qualified_model` when
+  the configured authority is exactly `NO_QUALIFIED_MLB_MODEL`; otherwise its
+  existing required-upload checks and failure status remain active. Focused
+  offline regressions cover both decisions. No migration, role, grant, or data
+  change was made. The natural roster path and reconciler remain operationally
+  unverified after these local corrections.
+
 - Production source-read permission subtask: **COMPLETE — deployed and verified
   2026-10-17**. After confirming the production project ref
   `cnwwhhmpashijqbspvhf`, database `postgres`, PostgreSQL 15.8, owner session,

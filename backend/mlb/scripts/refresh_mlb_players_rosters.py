@@ -168,8 +168,8 @@ def _upsert_player(
 
     # player_ids has a legacy UNIQUE(player_name, team) index in addition to
     # its canonical player_id key. Distinct official MLB identities can share
-    # a name and organization, so retry only that collision without the team
-    # display label. Keep the official player_id and team_id in the payload.
+    # a name and organization. On that collision, update only by official IDs
+    # and preserve the existing display name and team labels.
     cur.execute("SAVEPOINT mlb_roster_player_upsert")
     try:
         cur.execute(statement, (json.dumps(payload, separators=(",", ":")),))
@@ -177,6 +177,7 @@ def _upsert_player(
         if getattr(getattr(exc, "diag", None), "constraint_name", None) != "unique_player_team":
             raise
         cur.execute("ROLLBACK TO SAVEPOINT mlb_roster_player_upsert")
+        payload.pop("player_name", None)
         payload.pop("team", None)
         cur.execute(statement, (json.dumps(payload, separators=(",", ":")),))
         cur.execute("RELEASE SAVEPOINT mlb_roster_player_upsert")
