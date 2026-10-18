@@ -995,3 +995,28 @@ writer validation does not authorize a hosted cutover or a different writer.
 - Publish only the roster retirement and this follow-up retirement in an
   isolated worktree based on `origin/main`; do not push the ahead local
   `main` branch.
+
+## Daily Signal Cleanup Follow-ups (2026-10-18)
+
+Commits `bdad28b6`, `1f5a71a3`, and `34960e87` removed retired-lane warnings,
+made the totals lifecycle report an idle phase instead of failing, added a
+bounded network wait after wake, and dropped the retired `rbis` model from the
+readiness probe. Remaining items found while doing that work:
+
+- **Private Totals idle status not yet observed naturally.** The next daily
+  run should write `TOTALS_SHADOW_DAILY_NO_GAMES_IN_PHASE`; confirm the Ops
+  Brief then reports `PASS` or only actionable issues.
+- **Readiness probe still checks retired prop models.** All Prod12 prop models
+  lack production authority (`NO_QUALIFIED_MLB_PROP_MODEL`); decide whether
+  the daily prediction probe should run at all until a prop model qualifies.
+- **Invariant WARN: weekly research snapshot due but missing.** Determine
+  whether the snapshot producer is still scheduled, then fix or retire it.
+- **Invariant WARN: backfill/status doc scope.** A producer rewrites
+  `artifacts/analysis/mlb/research_gap_analysis/pa_backfill_validation.md`
+  daily without a scope statement; add the statement at the producer.
+- **Pre-existing failing tests (unchanged by this work):**
+  `test_mlb_2026_ops_brief_and_daily_index_phase_gating_v1` (2 tests pinned to
+  a 2934-game phase population; live is 2936) and
+  `test_totals_daily_integration_v1::test_existing_identity_is_bypassed_before_context_reconstruction`
+  (patches a removed `load_retained_schedule`).
+

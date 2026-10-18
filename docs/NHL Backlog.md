@@ -65,6 +65,27 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-fill and new-row INSERT counts, verifies official source values and
   preserved populated values, and retains the function summary and run receipt.
 
+### P1.4 Retire plaintext database passwords left in local files and git history
+
+- Status: **OPEN — code path closed; cleanup and rotation confirmation are
+  the operator's decision**. Commit `c4164d4b` moves any password in a `psql`
+  DSN into the child's `PGPASSWORD` in every mode and adds a final receipt
+  redaction pass, so new logs and receipts cannot carry a password.
+- Findings (2026-10-18, fingerprints only, no values printed): two distinct
+  real passwords. Fingerprint `fccfbe` is in `backend/nhl/range_runner.log`,
+  the Dec 2025–Jan 2026 files in `nhl daily run logs/`, and `nohup.out` in
+  public-repo history (commit `095f20fb`, removed in `876a8d54`). Fingerprint
+  `a86adf` is in the Jan–Feb 2026 daily logs, the Sep 25 receipt
+  `run_id=nhldaily_20260925T181852Z_postfixrefresh_28f2f1de`, and the Sep 9
+  `.env.before` backups under `/private/tmp/proppadia_nhl_isolation_*`. The
+  tracked legacy `test_db_connection.py` holds only a placeholder.
+- Completion: confirm the current `backend/.env` password fingerprint matches
+  neither value; then delete or redact the 160 affected daily logs,
+  `range_runner.log`, and the Sep 25 receipt. Rewriting git history is
+  optional once `fccfbe` is confirmed retired.
+- Not changed: `backend/nhl/scripts/run_nhl_september19_independent_lane_predictions.py`
+  (one-off, dated) still passes its DSN on argv.
+
 ## Priority 2: Operational Verification and Historical Integrity
 
 ### P2.1 Diagnose the October 17 SOG integrity exit status 2
@@ -1295,6 +1316,17 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Next: retain the paired captures through more slates and resolve the three
   outcome-coverage discrepancies from existing official evidence before any
   retrospective re-grade. Do not promote from this short, correlated sample.
+
+### P2.18 Restore the failing NHL test baseline
+
+- Status: **OPEN — found 2026-10-18; failures predate commit `c4164d4b`**.
+  Running `backend/nhl/tests` plus `backend/tests/test_nhl_*.py` gives 25
+  failures on the unmodified tree, in daily lane containment, scheduler guard
+  repair, Points HGB shadow, game-date lineage, SOG market coverage, and
+  mainline intraday refresh. `test_historical_fitted_model_identity_reconstruction`
+  counts live receipts (47 vs 45), and the PP-TOI integration failure is P2.14.
+- Completion: classify each as stale expectation, environment-dependent, or
+  real regression; fix or delete so a failing suite means something.
 
 ## Verified Complete — Do Not Reopen
 
