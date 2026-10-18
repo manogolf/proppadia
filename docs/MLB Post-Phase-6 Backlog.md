@@ -910,21 +910,31 @@ writer validation does not authorize a hosted cutover or a different writer.
   and all three Oct 18 selection receipts listed above.
 - The proposed active-selection JSON SHA-256 is
   `1690f8be895918ca0dab962ed252f6df8b7e93cfccb84c870f8209be16d6e04a`.
-  The actual active-selection file remains byte-identical at
+  At proposal preparation, the active-selection file was byte-identical at
   `1a3a1ea4e5935c247ef0ac96e06595727233c7086d704543b73cd548693a1d57` and
-  selects V4. No regular-season close, source schedule, runtime allowlist,
-  database, or run state was modified.
-- Offline checks passed: the V5 package validator returned
-  `GOVERNED_CHILD_VALID_INACTIVE`; focused authority/status/runtime tests passed
-  (16 tests). The delayed-start implementation is isolated in
-  `runtime_schedule_status_policy_proposal_v1.py` and is not imported by the
-  active overlay. Separate authorization remains required to compare-and-swap
-  `active_selection.json` to the proposed V5 selection and to wire the exact
-  `Preview / P / PI / Delayed Start` tuple into
-  `RuntimeScheduleAuthority._validate_new_postseason_game` while keeping
-  conflicting identity, unknown status, and `Final / D / DR` rejected.
-- Status: **PREPARED — governed V5 child and inactive runtime-policy proposal
-  ready for ChatGPT review; not activated**.
+  selecting V4. The pre-activation package validator returned
+  `GOVERNED_CHILD_VALID_INACTIVE`; 16 focused tests passed.
+- Status: **ACTIVE — reviewed V5 source-bound ALCS authority selected and the
+  exact delayed-start tuple wired into the runtime overlay (2026-10-18)**.
+  Compare-and-swap replaced only the V4 selector bytes pinned above with
+  proposed selection SHA-256
+  `1690f8be895918ca0dab962ed252f6df8b7e93cfccb84c870f8209be16d6e04a`.
+  The extension adds only exact gamePks `849816` and `849817`; descriptor SHA-256
+  `fa639c543ba77bab4ca4a5a853ec78cb10eaf2163b7cebddad6156eeed4d941d`,
+  proposal SHA-256
+  `2eac7837294784c925d14d054cb5278f400baa1a5431fba310a14021cdce1ec5`,
+  source-manifest SHA-256
+  `7aa66ac4e6a5fe71a1869ec88cbae1136063150750ff7d5332935a73c9af6e09`, and
+  source-set SHA-256
+  `99761a634131cd885da524ab83b9eca9404058bbdee3dc17307955aa4caae812`.
+  The 849817 `rescheduledFrom=2026-10-17T00:00:00Z` link is preserved. Runtime
+  policy admits exactly `Preview / P / P / PI / Delayed Start` after existing
+  exact-identity and source-hash checks; unknown/conflicting states and
+  terminal `Final / D / DR` remain fail-closed. The retained positive schedule
+  hash is `50e2a6d70ec32797a9cfacbda05fd549a290d49c6d753e905751cdfb7800554c`.
+  Package validation and focused runtime/authority tests passed after
+  activation. Regular-season close remained unchanged at SHA-256
+  `fa96e14158d6c5e77856be9d03a8d4eae1b2c4eb922442fb20f13a1ec1e112e3`.
 
 ### P2.3 Review broad API-role permissions against consumer dependencies
 

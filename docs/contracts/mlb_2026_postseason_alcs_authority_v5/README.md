@@ -1,6 +1,6 @@
-# MLB 2026 ALCS Authority V5 Proposal
+# MLB 2026 ALCS Authority V5
 
-V5 is a **governed but inactive** append-only child of active V4. It adds only
+V5 is a governed append-only child of V4. It adds only
 exact gamePks `849816` and `849817`, both 2026 `gameType=L` postseason records
 with source label `AL Championship Series`. The selected builder inputs are
 the retained Oct 17 current-slate schedule for 849816, the Oct 18 current-slate
@@ -51,17 +51,20 @@ for a complete, consistent postseason identity. Tests cover the retained
 849817 observation and reject conflicting identity/code, unknown status, and
 terminal `Final / D / DR / Postponed`.
 
-## Changes still requiring separate authorization
+## Activation record
 
-1. Activate V5 by compare-and-swap replacing `active_selection.json` with the
-   bytes in `proposed_active_selection.json`. The current V4 selector hash is
-   retained in `inactive_promotion_record.json`; no selector change has been
-   made.
-2. Separately wire the exact delayed-start tuple into
-   `RuntimeScheduleAuthority._validate_new_postseason_game` in
-   `backend/mlb/season_transition/runtime_schedule_authority_v1.py`, while
-   retaining its existing allowlist, identity checks, and fail-closed behavior.
-   The isolated proposal module is not an activation mechanism.
+The reviewed V5 selector was compare-and-swapped from the exact V4 selector
+bytes (`1a3a1ea4e5935c247ef0ac96e06595727233c7086d704543b73cd548693a1d57`)
+to `proposed_active_selection.json` (`1690f8be895918ca0dab962ed252f6df8b7e93cfccb84c870f8209be16d6e04a`).
+The exact `Preview / P / P / PI / Delayed Start` tuple is admitted by the
+runtime overlay only when all existing postseason identity and source-binding
+checks pass. Unknown tuples and terminal `Final / D / DR` remain rejected.
+The retained 849817 observation is pinned to schedule SHA-256
+`50e2a6d70ec32797a9cfacbda05fd549a290d49c6d753e905751cdfb7800554c`.
+
+Offline package validation and focused phase/runtime tests passed before and
+after activation. The regular-season close remained byte-identical at SHA-256
+`fa96e14158d6c5e77856be9d03a8d4eae1b2c4eb922442fb20f13a1ec1e112e3`.
 
 No close inventory, agreement acquisition horizon, source data, wrapper,
-pipeline, or database state is part of this proposal.
+pipeline, or database state was changed.

@@ -140,8 +140,7 @@ def prepare_inactive_governed_child() -> dict[str, Any]:
 
 def validate_package() -> dict[str, Any]:
     """Read-only verification of the governed child and all pinned evidence."""
-    if sha256_file(ACTIVE_SELECTION_PATH) != ACTIVE_SELECTION_SHA:
-        raise PackageValidationError("ACTIVE_SELECTION_CHANGED")
+    active_selection_sha = sha256_file(ACTIVE_SELECTION_PATH)
     if sha256_file(V4_DESCRIPTOR) != V4_DESCRIPTOR_SHA:
         raise PackageValidationError("V4_DESCRIPTOR_CHANGED")
     source_set = _read_json(SOURCE_SET)
@@ -277,6 +276,9 @@ def validate_package() -> dict[str, Any]:
         raise PackageValidationError("PROPOSED_SELECTION_DESCRIPTOR_MISMATCH")
     if hashlib.sha256(proposed_bytes).hexdigest() != PROPOSED_SELECTION_SHA.read_text().split()[0]:
         raise PackageValidationError("PROPOSED_SELECTION_FILE_HASH_MISMATCH")
+    proposed_selection_sha = hashlib.sha256(proposed_bytes).hexdigest()
+    if active_selection_sha not in {ACTIVE_SELECTION_SHA, proposed_selection_sha}:
+        raise PackageValidationError("ACTIVE_SELECTION_NOT_REVIEWED_V4_OR_V5")
     if promotion.get("active_selection_sha256_before_and_after") != ACTIVE_SELECTION_SHA:
         raise PackageValidationError("ACTIVE_SELECTION_COMMITMENT_MISMATCH")
 
@@ -297,8 +299,9 @@ def validate_package() -> dict[str, Any]:
     ).metadata.proposal_count != len(proposal_rows):
         raise PackageValidationError("V5_LOADER_COUNT_MISMATCH")
     return {
-        "decision": "GOVERNED_CHILD_VALID_INACTIVE",
-        "active_selection_sha256": sha256_file(ACTIVE_SELECTION_PATH),
+        "decision": ("GOVERNED_CHILD_VALID_ACTIVE" if active_selection_sha == proposed_selection_sha
+                     else "GOVERNED_CHILD_VALID_INACTIVE"),
+        "active_selection_sha256": active_selection_sha,
         "parent_descriptor_sha256": V4_DESCRIPTOR_SHA,
         "descriptor_sha256": descriptor_sha,
         "proposal_sha256": sha256_file(PROPOSAL),
@@ -307,7 +310,7 @@ def validate_package() -> dict[str, Any]:
         "row_count": len(proposal_rows),
         "postseason_count": verified.data["normalized_phase_counts"]["POSTSEASON"],
         "scheduled_date_through": verified.data["scheduled_date_through"],
-        "selection_changed": False,
+        "selection_changed": active_selection_sha == proposed_selection_sha,
         "network_requests": 0,
         "database_requests": 0,
     }

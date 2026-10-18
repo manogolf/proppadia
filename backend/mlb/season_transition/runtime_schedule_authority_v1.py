@@ -191,7 +191,14 @@ class RuntimeScheduleAuthority(CanonicalGamePhaseAuthority):
             ("Live", "I", "I"), ("Live", "P", "PW"),
             ("Final", "F", "F"), ("Final", "O", "O"),
         }
-        if not detailed or (abstract, coded, status_code) not in accepted:
+        delayed_start = (
+            abstract == "Preview"
+            and str(status.get("abstractGameCode") or "") == "P"
+            and coded == "P"
+            and status_code == "PI"
+            and detailed == "Delayed Start"
+        )
+        if not detailed or ((abstract, coded, status_code) not in accepted and not delayed_start):
             raise GamePhaseAuthorityError("RUNTIME_SCHEDULE_STATUS_CONFLICT", game_pk=pk)
         if game.get("gameData"):
             nested = (game.get("gameData") or {}).get("game") or {}

@@ -31,6 +31,12 @@ from backend.mlb.season_transition.runtime_schedule_authority_v1 import (
     phase_authority_binding,
 )
 
+DELAYED_SOURCE = REPO_ROOT / (
+    "artifacts/ops/mlb_current_slate_sources/2026-10-16/"
+    "local_daily_20261016T233004Z/moneyline_schedule.json"
+)
+DELAYED_SOURCE_SHA256 = "50e2a6d70ec32797a9cfacbda05fd549a290d49c6d753e905751cdfb7800554c"
+
 
 OCT4_SCHEDULE = REPO_ROOT / (
     "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-04/"
@@ -135,6 +141,35 @@ class RuntimeScheduleAuthorityTests(unittest.TestCase):
         ):
             with self.subTest(pk=bad_game["gamePk"]), self.assertRaises(GamePhaseAuthorityError):
                 self.authority([bad_game])
+
+    def test_runtime_policy_accepts_only_source_verified_delayed_start_tuple(self) -> None:
+        raw = DELAYED_SOURCE.read_bytes()
+        self.assertEqual(hashlib.sha256(raw).hexdigest(), DELAYED_SOURCE_SHA256)
+        payload = json.loads(raw)
+        matches = [game for day in payload["dates"] for game in day["games"]
+                   if int(game.get("gamePk") or 0) == 849817]
+        self.assertEqual(len(matches), 1)
+        RuntimeScheduleAuthority._validate_new_postseason_game(matches[0], 849817)
+
+        for status in (
+            {"abstractGameState": "Preview", "abstractGameCode": "L", "codedGameState": "P",
+             "statusCode": "PI", "detailedState": "Delayed Start"},
+            {"abstractGameState": "Preview", "abstractGameCode": "P", "codedGameState": "X",
+             "statusCode": "XX", "detailedState": "Unknown"},
+            {"abstractGameState": "Final", "abstractGameCode": "F", "codedGameState": "D",
+             "statusCode": "DR", "detailedState": "Postponed"},
+        ):
+            with self.subTest(status=status), self.assertRaisesRegex(
+                GamePhaseAuthorityError, "RUNTIME_SCHEDULE_STATUS_CONFLICT"
+            ):
+                RuntimeScheduleAuthority._validate_new_postseason_game(
+                    {**matches[0], "status": status}, 849817
+                )
+
+        with self.assertRaisesRegex(GamePhaseAuthorityError, "GAME_TYPE_UNSUPPORTED"):
+            RuntimeScheduleAuthority._validate_new_postseason_game(
+                {**matches[0], "gameType": "R"}, 849817
+            )
 
     def test_persistence_and_grading_gates_precede_database_access(self) -> None:
         with patch("backend.mlb.public_game_predictions.durable_store_v1.pg_connect") as connect:
