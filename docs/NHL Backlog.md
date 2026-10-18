@@ -157,32 +157,39 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.6 Define and implement an all-candidate raw CSV research export
 
-- Status: **PARTIAL — bounded reconciliation export produced; complete source
-  arm and quote lineage remain open**. The offline exporter and focused tests
-  are in `backend/nhl/scripts/export_nhl_all_candidate_evaluation.py` and
-  `backend/nhl/tests/test_all_candidate_evaluation_export.py`. The sample at
-  `artifacts/analysis/nhl/all_candidate_evaluation_export/2026-10-17/` includes
-  a bounded October 16 slate sample of 1,637 rows across Moneyline, Puck Line,
-  SOG, Points, and Saves. It keeps unresolved outcomes, records source
-  hashes, includes every row before candidate filters, and has an explicit
-  per-candidate quote coverage file. The quote CSV is intentionally empty:
-  reconciliation attachments do not preserve both sportsbook quote time and
-  observation time, so a pregame quote cannot be proven from those rows.
-- Remaining blockers: join retained raw odds observations to exact prediction
-  natural identities while preserving source and observation timestamps;
-  include the retained SOG production and qualified fixed-blend/shadow arms;
-  include the Puck Line challenger capture. Do not infer these from daily
-  aggregate grades. Keep all attached-but-unverifiable prices out of the
-  qualified quote file. A future complete export must still separate
-  production/challenger/shadow identities, retain all no-quote candidates,
-  and bind postgame outcomes without using them as pregame inputs.
+- Status: **COMPLETE — retained model arms and chronology-qualified quote
+  lineage are exported**. The offline exporter and focused tests are in
+  `backend/nhl/scripts/export_nhl_all_candidate_evaluation.py` and
+  `backend/nhl/tests/test_all_candidate_evaluation_export.py`. The bounded
+  October 16 sample at
+  `artifacts/analysis/nhl/all_candidate_evaluation_export/2026-10-17/` contains
+  2,035 unique prediction rows across Moneyline, Puck Line, SOG, Points, and
+  Saves. It includes SOG production, both retained fixed blends, and the
+  final-pregame Puck Line challenger, preserving each role and artifact hash.
+- The quote export joins Odds API normalized observations by canonical event,
+  player identity, market, line, and side. It binds source market-update time
+  and observation time to prediction time and scheduled start, keeps the latest
+  eligible quote per sportsbook, and keeps no-quote candidates in the raw
+  predictions plus coverage diagnostic. The two-game Moneyline ledger supplies
+  100 qualified book/side quotes with audited no-vig probability. Overall the
+  bounded package has 5,429 deduplicated quote rows: 73 Saves, 100 Moneyline,
+  882 Points, and 4,374 SOG. There are no retained Puck Line prices in the
+  captured market evidence. EV and edge are calculated only on qualified rows;
+  normalized player-market edges use raw implied probabilities including the
+  sportsbook margin. The coverage file records 1,218 candidate rows without a
+  qualified quote.
+- Remaining limits are evidence coverage rather than exporter gaps: 1,218
+  candidate rows have no qualified quote; Puck Line has no retained quote;
+  normalized Odds API player-market updates are market-level timestamps, not
+  outcome-specific timestamps. Do not infer prices for those rows. Outcomes
+  remain append-bound evaluation fields and are not pregame inputs.
 - Reference: `docs/nhl/2026_prospective_performance_evaluation_2026-10-17.md`
   (Practical raw CSV export contract); `docs/NHL SOG Command Deck.md`; sample
   export manifest and README in the artifact directory.
-- Completion: verify exact prediction-to-quote temporal lineage for all five
-  markets and all authorized arms, then add separate filter-output lineage.
-  Do not change existing manual-upload behavior or imply that a candidate was
-  executed.
+- Completion: preserve the raw package and write any filtering as a separate
+  derived CSV with filter expression/version/hash and the parent raw-package
+  manifest hash. Do not change existing manual-upload behavior or imply that a
+  candidate was executed.
 
 ## Verified Complete — Do Not Reopen
 

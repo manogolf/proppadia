@@ -3,7 +3,9 @@ import unittest
 from backend.nhl.scripts.export_nhl_all_candidate_evaluation import (
     candidate_key,
     deduplicate_candidates,
+    deduplicate_quotes,
     evaluate_quote,
+    missing_required_arms,
     quote_is_eligible,
 )
 
@@ -31,6 +33,20 @@ class AllCandidateExportTests(unittest.TestCase):
         rows = deduplicate_candidates([production, shadow])
         self.assertEqual(len(rows), 2)
         self.assertEqual({row["outcome_status"] for row in rows}, {"UNRESOLVED"})
+
+    def test_required_production_shadow_and_challenger_arms_are_checked(self):
+        rows = [
+            {"market_key": "shots_on_goal", "model_version": "baseline_v1"},
+            {"market_key": "shots_on_goal", "model_version": "NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1"},
+            {"market_key": "shots_on_goal", "model_version": "NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1"},
+        ]
+        required = {
+            ("shots_on_goal", "baseline_v1"),
+            ("shots_on_goal", "NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1"),
+            ("shots_on_goal", "NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1"),
+            ("puck_line_full_game", "NHL_PUCK_LINE_SHOT_PRIOR_CHALLENGER_V2"),
+        }
+        self.assertEqual(missing_required_arms(rows, required), {("puck_line_full_game", "NHL_PUCK_LINE_SHOT_PRIOR_CHALLENGER_V2")})
 
     def test_identical_duplicate_is_collapsed_but_conflict_is_rejected(self):
         row = self._candidate()
@@ -70,6 +86,33 @@ class AllCandidateExportTests(unittest.TestCase):
         base = self._candidate()
         self.assertNotEqual(candidate_key(base), candidate_key({**base, "market_line": "3.5"}))
         self.assertNotEqual(candidate_key(base), candidate_key({**base, "model_version": "other"}))
+
+    def test_quote_rows_keep_book_identity_without_expanding_candidates(self):
+        base = {
+            "candidate_key": "candidate-1", "sportsbook_key": "draftkings",
+            "provider_market_key": "player_shots_on_goal_alternate",
+            "source_quote_timestamp_utc": "2026-10-16T17:59:00Z",
+            "observation_timestamp_utc": "2026-10-16T18:00:00Z",
+            "quote_qualification_status": "QUALIFIED_SOURCE_AND_OBSERVATION_PRECEDE_PREDICTION",
+        }
+        latest_primary = {**base, "provider_market_key": "player_shots_on_goal", "observation_timestamp_utc": "2026-10-16T17:00:00Z"}
+        later_book = {**base, "sportsbook_key": "betonlineag", "provider_market_key": "player_shots_on_goal", "observation_timestamp_utc": "2026-10-16T19:00:00Z"}
+        ineligible = {**base, "sportsbook_key": "badbook", "quote_qualification_status": "UNQUALIFIED"}
+        result = deduplicate_quotes([base, latest_primary, later_book, ineligible])
+        self.assertEqual(len(result), 2)
+        self.assertEqual({r["sportsbook_key"] for r in result}, {"draftkings", "betonlineag"})
+        dk = next(r for r in result if r["sportsbook_key"] == "draftkings")
+        self.assertEqual(dk["provider_market_key"], "player_shots_on_goal")
+
+    def test_quote_source_requires_timestamp_and_sportsbook_key(self):
+        valid = {
+            "candidate_key": "c", "sportsbook_key": "book", "provider_market_key": "h2h",
+            "observation_timestamp_utc": "2026-10-16T19:00:00Z",
+            "source_quote_timestamp_utc": "2026-10-16T18:59:00Z",
+            "quote_qualification_status": "QUALIFIED_SOURCE_AND_OBSERVATION_PRECEDE_PREDICTION",
+        }
+        result = deduplicate_quotes([valid, {**valid, "sportsbook_key": ""}, {**valid, "observation_timestamp_utc": ""}])
+        self.assertEqual(result, [valid])
 
 
 if __name__ == "__main__":
