@@ -237,6 +237,19 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   Fifteen focused exporter tests pass. Continue prospective paired pricing
   evaluation; do not promote models or choose thresholds from retrospective
   ROI results.
+- Prospective favorite-band policy: **FROZEN 2026-10-17; prospective slate
+  dates begin 2026-10-18**. Uses four fixed BetOnline no-vig favorite
+  probability bands (50–55%, 55–60%, 60–70%, 70%+), with pick'em and missing
+  pairs retained as explicit states. The fixed same-capture quote rule,
+  chronology, denominators, grading, model-role transition, and ordinary daily
+  artifact flow are documented in
+  `docs/nhl/2026_moneyline_favorite_band_prospective_contract.md`.
+  Historical baseline is exploratory only and is not used to choose bands:
+  `docs/nhl/2026_moneyline_favorite_band_baseline.json`. Focused policy tests
+  cover bands, pick orientation, odds conversion, quote pairing/chronology,
+  disagreement direction/magnitude, and the V3/V2 role cutover. Continue
+  prospective paired grading using existing daily/reconciliation evidence;
+  do not add an acquisition lane or use these tiers as betting filters.
 
 ### P2.8 Evaluate SOG production versus D10/D20 fixed blends
 

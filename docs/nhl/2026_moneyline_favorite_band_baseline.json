@@ -1,0 +1,89 @@
+{
+  "caveat": "Small early-season retrospective baseline. The frozen bands are evaluated prospectively; baseline results are descriptive and do not support threshold selection, durable-edge claims, or model promotion.",
+  "historical_bands_collapsed_to_frozen_prospective_policy": [
+    {
+      "band": "50_to_55",
+      "favorite_wins": 28,
+      "n": 46,
+      "v2_correct": 26,
+      "v3_correct": 31
+    },
+    {
+      "band": "55_to_60",
+      "favorite_wins": 19,
+      "n": 33,
+      "v2_correct": 16,
+      "v3_correct": 18
+    },
+    {
+      "band": "60_to_70",
+      "favorite_wins": 22,
+      "n": 30,
+      "v2_correct": 21,
+      "v3_correct": 22
+    },
+    {
+      "band": "70_or_more",
+      "favorite_wins": 8,
+      "n": 9,
+      "v2_correct": 8,
+      "v3_correct": 8
+    }
+  ],
+  "lineage": {
+    "analysis_output_manifest_sha256": "aab3755f93581e561970976ea315ef69c21f61768ece54323b432b1ef979fb66",
+    "candidate_export_manifest_sha256": "21331a6bfa94705affd08686b5b706c25606a77d02a7d62d4d571aee667768cc",
+    "source_summary_sha256": "6f0956b6695d03a49fae1fba4689db7d5c711653c7ca3b09f4ec8195cd7e3b0b"
+  },
+  "overall": {
+    "market_favorite": {
+      "losses": 41,
+      "n": 118,
+      "net_units": 9.921580492460535,
+      "roi": 0.08408119061407233,
+      "wins": 77
+    },
+    "v2": {
+      "losses": 48,
+      "n": 120,
+      "net_units": 1.6553028504315552,
+      "roi": 0.01379419042026296,
+      "wins": 72
+    },
+    "v2_correct_on_disagreements": 7,
+    "v3": {
+      "losses": 40,
+      "n": 120,
+      "net_units": 16.811025722343462,
+      "roi": 0.14009188101952885,
+      "wins": 80
+    },
+    "v3_correct_on_disagreements": 15,
+    "v3_market_underdog_picks": {
+      "mean_absolute_model_market_gap": 0.08680426852462163,
+      "n": 22,
+      "win_rate": 0.5454545454545454,
+      "wins": 12
+    },
+    "v3_v2_disagreements": 22
+  },
+  "period": "2026-09-29 through 2026-10-17; settled outcomes through 2026-10-16",
+  "population": {
+    "paired_games": 124,
+    "pickem_games": 2,
+    "missing_betonline_price_games": 0,
+    "settled_games": 120,
+    "settled_with_two_sided_betonline_quotes": 120,
+    "priced_non_pickem_favorite_games": 118,
+    "unresolved_games": 4
+  },
+  "prospective_start_slate_date": "2026-10-18",
+  "role_transition": {
+    "cutover_utc": "2026-10-14T15:27:11Z",
+    "interpretation": "Keep pre-cutover V3 challenger/V2 reference and post-cutover V3 production/V2 shadow separately identifiable.",
+    "post_cutover_settled_games": 15,
+    "pre_cutover_settled_games": 105
+  },
+  "schema_version": "NHL_MONEYLINE_FAVORITE_BAND_BASELINE_V1",
+  "status": "EXPLORATORY_HISTORICAL_BASELINE_NOT_USED_TO_SELECT_BANDS"
+}
