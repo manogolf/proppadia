@@ -30,6 +30,7 @@ from backend.nhl.sog_cold_start.core import (
     grade_predictions,
 )
 from backend.nhl.prediction_only.core import digest as prediction_only_digest
+from backend.nhl.daily_capture import canonical_game_set_hash
 from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluation_eligible
 
 
@@ -203,6 +204,11 @@ def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
         "RUN_COMPLETE.json", "run_metadata.json", "canonical_game_spine.csv",
         expected_file, "input_exclusions.csv",
     }
+    coverage_contract = metadata.get("coverage_contract")
+    if coverage_contract not in {None, "NHL_GAME_LEVEL_PREGAME_COVERAGE_V1"}:
+        raise RuntimeError(f"IMMUTABLE_{lane}_COVERAGE_CONTRACT_UNSUPPORTED")
+    if coverage_contract == "NHL_GAME_LEVEL_PREGAME_COVERAGE_V1":
+        required_manifest_files.add("game_exclusions.csv")
     if lane == "POINTS":
         required_manifest_files.add("prediction_exclusions.csv")
     if not required_manifest_files.issubset(files):
@@ -248,15 +254,82 @@ def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
     observed = pd.to_datetime(frame.prediction_timestamp_utc, utc=True, errors="coerce")
     if cutoff.isna().any() or observed.isna().any() or (cutoff > observed).any():
         raise RuntimeError(f"IMMUTABLE_{lane}_TIMESTAMP_INVALID")
-    first_puck = pd.to_datetime(
-        schedule.scheduled_start_time_utc, utc=True, errors="raise").min()
     metadata_observed = pd.to_datetime(
         metadata.get("observation_timestamp_utc"), utc=True, errors="coerce")
     durable_write = pd.to_datetime(
         metadata.get("actual_write_timestamp_utc"), utc=True, errors="coerce")
-    if (pd.isna(metadata_observed) or pd.isna(durable_write)
-            or metadata_observed >= first_puck or durable_write >= first_puck):
+    if pd.isna(metadata_observed) or pd.isna(durable_write):
         raise RuntimeError(f"IMMUTABLE_{lane}_DURABLE_WRITE_NOT_PREGAME")
+    prediction_games = set(frame.game_id.astype(int))
+    if coverage_contract == "NHL_GAME_LEVEL_PREGAME_COVERAGE_V1":
+        if durable_write < metadata_observed or not observed.eq(metadata_observed).all():
+            raise RuntimeError(f"IMMUTABLE_{lane}_OBSERVATION_IDENTITY_MISMATCH")
+        declared_canonical = sorted(map(int, metadata.get("canonical_game_ids") or []))
+        eligible_ids = sorted(map(int, metadata.get("eligible_game_ids") or []))
+        prediction_ids = sorted(map(int, metadata.get("prediction_game_ids") or []))
+        started_ids = sorted(map(int, metadata.get("started_excluded_game_ids") or []))
+        schedule_starts = schedule.assign(_game_id=schedule.game_id.astype(int)).set_index(
+            "_game_id").scheduled_start_time_utc
+        expected_eligible = {
+            game_id for game_id in canonical_ids
+            if pd.to_datetime(schedule_starts.loc[game_id], utc=True, errors="coerce")
+            > metadata_observed
+        }
+        expected_started = canonical_ids - expected_eligible
+        if (declared_canonical != sorted(canonical_ids)
+                or metadata.get("canonical_game_set_hash") != canonical_game_set_hash(canonical_ids)
+                or metadata.get("eligible_game_set_hash") != canonical_game_set_hash(eligible_ids)
+                or len(eligible_ids) != len(set(eligible_ids))
+                or len(prediction_ids) != len(set(prediction_ids))
+                or len(started_ids) != len(set(started_ids))
+                or set(eligible_ids) != expected_eligible
+                or set(started_ids) != expected_started
+                or set(prediction_ids) != prediction_games
+                or not prediction_games.issubset(set(eligible_ids))):
+            raise RuntimeError(f"IMMUTABLE_{lane}_GAME_LEVEL_COVERAGE_IDENTITY_MISMATCH")
+        exclusions = pd.read_csv(run / "game_exclusions.csv")
+        _require_columns(exclusions, {"game_id", "reason"}, f"{lane}_GAME_EXCLUSIONS")
+        exclusion_ids = exclusions.game_id.astype(int).tolist()
+        reasons = exclusions.reason.astype(str).str.strip()
+        if (len(exclusion_ids) != len(set(exclusion_ids))
+                or reasons.eq("").any()
+                or set(exclusion_ids) - canonical_ids
+                or set(exclusion_ids) & prediction_games
+                or not set(started_ids).issubset(set(exclusion_ids))
+                or set(eligible_ids) - prediction_games - set(exclusion_ids)):
+            raise RuntimeError(f"IMMUTABLE_{lane}_GAME_LEVEL_EXCLUSION_MISMATCH")
+        reason_by_game = dict(zip(exclusion_ids, reasons))
+        eligible_without_predictions = set(eligible_ids) - prediction_games
+        allowed_reasons = {
+            "GAME_ALREADY_STARTED", "GAME_STARTED_BEFORE_DURABLE_CAPTURE",
+            "NO_ACTIVE_CUTOFF_BOUNDED_ROSTER_IDENTITIES",
+            ("NO_POINTS_ROWS_PASS_LADDER_COHERENCE_OR_FEATURE_INPUTS"
+             if lane == "POINTS" else "NO_QUALIFIED_SAVES_FEATURE_INPUTS"),
+        }
+        if (any(reason_by_game.get(game_id) != "GAME_ALREADY_STARTED"
+                for game_id in started_ids)
+                or any(reason_by_game.get(game_id) not in allowed_reasons
+                       for game_id in eligible_without_predictions)):
+            raise RuntimeError(f"IMMUTABLE_{lane}_GAME_LEVEL_EXCLUSION_REASON_INVALID")
+        expected_coverage = (
+            "FULL_SLATE"
+            if len(eligible_ids) == len(canonical_ids) and exclusions.empty
+            and int(metadata.get("input_excluded_player_games" if lane == "POINTS"
+                                 else "input_excluded_goalie_games", 0)) == 0
+            and int(metadata.get("ladder_excluded_player_games", 0)) == 0
+            else "PARTIAL_GAME_OR_PLAYER_COVERAGE"
+        )
+        if metadata.get("coverage_status") != expected_coverage:
+            raise RuntimeError(f"IMMUTABLE_{lane}_COVERAGE_STATUS_MISMATCH")
+        for game_id in prediction_games:
+            start = pd.to_datetime(schedule_starts.loc[game_id], utc=True, errors="coerce")
+            if metadata_observed >= start or durable_write >= start:
+                raise RuntimeError(f"IMMUTABLE_{lane}_DURABLE_WRITE_NOT_PREGAME:{game_id}")
+    else:
+        first_puck = pd.to_datetime(
+            schedule.scheduled_start_time_utc, utc=True, errors="raise").min()
+        if metadata_observed >= first_puck or durable_write >= first_puck:
+            raise RuntimeError(f"IMMUTABLE_{lane}_DURABLE_WRITE_NOT_PREGAME")
     probabilities = pd.to_numeric(frame.prob_over, errors="coerce")
     if probabilities.isna().any() or (~probabilities.between(0.0, 1.0)).any():
         raise RuntimeError(f"IMMUTABLE_{lane}_PROBABILITY_INVALID")
@@ -295,24 +368,36 @@ def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
         "manifest_sha256": _sha(run / "SHA256SUMS"), "files": files,
         "prediction_rows": len(frame), expected_population_key: len(population),
         "observation_timestamp_utc": str(metadata.get("observation_timestamp_utc")),
+        "coverage_status": metadata.get("coverage_status", "LEGACY_FULL_SLATE_CONTRACT"),
+        "canonical_game_ids": sorted(canonical_ids),
+        "eligible_game_ids": sorted(map(int, metadata.get("eligible_game_ids") or canonical_ids)),
+        "prediction_game_ids": sorted(prediction_games),
+        "game_exclusions": (pd.read_csv(run / "game_exclusions.csv").to_dict("records")
+                            if (run / "game_exclusions.csv").is_file() else []),
     }
 
 
 def _resolve_prop_prediction_source(*, runs: list[Path], lane: str,
                                     slate_date: str,
-                                    schedule: pd.DataFrame) -> dict[str, Any]:
+                                    schedule: pd.DataFrame,
+                                    allow_missing_prediction: bool = False) -> dict[str, Any]:
     """Resolve a prospective Points/Saves card without hiding corrupt sources.
 
     An entirely absent prospective Points publication means that there is no
     immutable prediction to grade. It is an explicit zero-grade outcome, not
     a retrospective prediction opportunity. Saves retains its exact-one
-    requirement. Any present card is fully validated, and competing cards
+    requirement outside prior-learning mode. Any present card is fully validated, and competing cards
     remain fatal for both lanes.
     """
     if len(runs) > 1:
         raise RuntimeError(f"IMMUTABLE_{lane}_FINAL_PREGAME_RUN_CARDINALITY:{len(runs)}")
     if not runs:
         if lane == "POINTS":
+            return {
+                "status": "NOT_GRADEABLE_NO_PREDICTION",
+                "reason": "NO_VALID_IMMUTABLE_FINAL_PREGAME_PREDICTION",
+            }
+        if allow_missing_prediction:
             return {
                 "status": "NOT_GRADEABLE_NO_PREDICTION",
                 "reason": "NO_VALID_IMMUTABLE_FINAL_PREGAME_PREDICTION",
@@ -622,7 +707,8 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path,
             schedule=schedule)
         saves = _resolve_prop_prediction_source(
             runs=saves_runs, lane="SAVES", slate_date=slate_date,
-            schedule=schedule)
+            schedule=schedule,
+            allow_missing_prediction=allow_missing_active_final_for_prior_learning)
 
     observed = pd.to_datetime(sog_meta["prediction_timestamp_utc"], utc=True)
     first_puck = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True).min()
@@ -990,12 +1076,16 @@ def _grade_points(run: Path, schedule: pd.DataFrame,
     missing["grading_status"] = "MISSING_PROSPECTIVE_PREDICTION_EXCLUDED"
     exclusions = pd.read_csv(run / "prediction_exclusions.csv")
     input_exclusions = pd.read_csv(run / "input_exclusions.csv")
+    game_exclusions = (pd.read_csv(run / "game_exclusions.csv")
+                       if (run / "game_exclusions.csv").is_file()
+                       else pd.DataFrame(columns=["game_id", "reason"]))
     return {"points": pd.concat([settled, unresolved], ignore_index=True, sort=False),
             "points_settled": settled, "points_participating": participating,
             "points_nonparticipants": unresolved, "points_unresolved": unresolved,
             "points_missing_predictions": missing,
             "points_source_exclusions": exclusions,
-            "points_input_exclusions": input_exclusions}
+            "points_input_exclusions": input_exclusions,
+            "points_game_exclusions": game_exclusions}
 
 
 def _grade_saves(run: Path, schedule: pd.DataFrame,
@@ -1029,6 +1119,9 @@ def _grade_saves(run: Path, schedule: pd.DataFrame,
     predicted_relief = nonstarters.loc[
         nonstarters.goalie_participation_state.eq("RELIEF_APPEARANCE")].copy()
     input_exclusions = pd.read_csv(run / "input_exclusions.csv")
+    game_exclusions = (pd.read_csv(run / "game_exclusions.csv")
+                       if (run / "game_exclusions.csv").is_file()
+                       else pd.DataFrame(columns=["game_id", "reason"]))
     return {"saves": pd.concat([settled, nonstarters, unresolved], ignore_index=True, sort=False),
             "saves_settled_starters": settled,
             "saves_predicted_nonstarters": nonstarters,
@@ -1038,7 +1131,8 @@ def _grade_saves(run: Path, schedule: pd.DataFrame,
             "saves_unpredicted_starters": unpredicted_starters,
             "saves_unpredicted_relief_appearances": unpredicted_relief,
             "saves_unpredicted_outcomes": unpredicted,
-            "saves_input_exclusions": input_exclusions}
+            "saves_input_exclusions": input_exclusions,
+            "saves_game_exclusions": game_exclusions}
 
 
 def _grade_points_source(points_status: dict[str, Any], schedule: pd.DataFrame,
@@ -1115,7 +1209,8 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
     extra: dict[str, pd.DataFrame] = {}
     points, point_grades = _grade_points_source(points_status, schedule, skaters)
     extra.update(point_grades)
-    if saves_status["status"] == "NO_PROSPECTIVE_SAVES_PREDICTIONS":
+    if saves_status["status"] in {
+            "NO_PROSPECTIVE_SAVES_PREDICTIONS", "NOT_GRADEABLE_NO_PREDICTION"}:
         saves = _zero_evidence_surface(saves_status["status"], saves_status["reason"])
     else:
         save_grades = _grade_saves(Path(saves_status["run"]), schedule, goalies)

@@ -38,6 +38,7 @@ from backend.nhl.saves_shadow.core import (
     verify_operational_amendment,
     verify_frozen_identity as verify_saves_identity,
 )
+from backend.nhl.daily_capture import canonical_game_set_hash
 
 
 CONTRACT = "NHL_GENERAL_PREDICTION_ONLY_V1"
@@ -86,9 +87,23 @@ def verify_manifest(directory: Path) -> None:
             raise RuntimeError(f"PREDICTION_ONLY_MANIFEST_MISMATCH:{name}")
 
 
+def game_level_eligibility(games: pd.DataFrame, observation_timestamp_utc: str
+                           ) -> tuple[list[int], list[dict[str, Any]]]:
+    """Partition the intact canonical slate at the actual per-game start times."""
+    starts = pd.to_datetime(games.scheduled_start_time_utc, utc=True, errors="coerce")
+    if starts.isna().any():
+        raise RuntimeError("CANONICAL_GAME_START_INVALID")
+    observation = pd.Timestamp(parse_utc(observation_timestamp_utc))
+    eligible = games.loc[starts > observation, "game_id"].astype(int).tolist()
+    started = games.loc[starts <= observation, ["game_id"]].copy()
+    exclusions = [{"game_id": int(game_id), "reason": "GAME_ALREADY_STARTED"}
+                  for game_id in started.game_id]
+    return sorted(eligible), exclusions
+
+
 def _validate_common(*, games: pd.DataFrame, season: int, slate_date: str, phase: str,
                      observation_timestamp_utc: str, input_cutoff_timestamp_utc: str,
-                     canonical_run_identifier: str) -> tuple[str, str]:
+                     canonical_run_identifier: str) -> tuple[str, str, list[int], list[dict[str, Any]]]:
     if season != 2026:
         raise RuntimeError("FROZEN_MODEL_SEASON_MISMATCH")
     if slate_date < PROSPECTIVE_NOT_BEFORE:
@@ -109,10 +124,27 @@ def _validate_common(*, games: pd.DataFrame, season: int, slate_date: str, phase
         raise RuntimeError("DUPLICATE_CANONICAL_GAME_IDENTITY")
     if not games.canonical_season.astype(int).eq(season).all() or not games.slate_date.astype(str).eq(slate_date).all():
         raise RuntimeError("CANONICAL_SLATE_IDENTITY_MISMATCH")
-    starts = pd.to_datetime(games.scheduled_start_time_utc, utc=True, errors="coerce")
-    if starts.isna().any() or (pd.Timestamp(parse_utc(observation)) >= starts).any():
-        raise RuntimeError("WHOLE_SLATE_PRESTART_GATE_FAILED_PARTIAL_SLATE_FORBIDDEN")
-    return observation, cutoff
+    eligible, exclusions = game_level_eligibility(games, observation)
+    if not eligible:
+        raise RuntimeError("NO_ELIGIBLE_PREGAME_GAMES")
+    return observation, cutoff, eligible, exclusions
+
+
+def _game_exclusion_rows(games: pd.DataFrame, eligible_game_ids: list[int],
+                         temporal_exclusions: list[dict[str, Any]],
+                         represented_game_ids: set[int], *, empty_reason: str
+                         ) -> pd.DataFrame:
+    rows = list(temporal_exclusions)
+    already_excluded = {int(row["game_id"]) for row in rows}
+    roster_game_ids = set(map(int, games.attrs.get("roster_identity_game_ids", [])))
+    roster_scope_known = games.attrs.get("roster_identity_scope_known") is True
+    for game_id in eligible_game_ids:
+        if game_id not in represented_game_ids and game_id not in already_excluded:
+            reason = ("NO_ACTIVE_CUTOFF_BOUNDED_ROSTER_IDENTITIES"
+                      if roster_scope_known and game_id not in roster_game_ids
+                      else empty_reason)
+            rows.append({"game_id": game_id, "reason": reason})
+    return pd.DataFrame(rows, columns=["game_id", "reason"]).drop_duplicates()
 
 
 def _run_id(lane: str, season: int, slate_date: str, phase: str,
@@ -163,7 +195,7 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
                    observation_timestamp_utc: str, input_cutoff_timestamp_utc: str,
                    canonical_run_identifier: str,
                    feature_contract_identity: dict[str, Any] | None = None) -> tuple[Path, str]:
-    observation, cutoff = _validate_common(
+    observation, cutoff, eligible_game_ids, temporal_exclusions = _validate_common(
         games=games, season=season, slate_date=slate_date, phase=phase,
         observation_timestamp_utc=observation_timestamp_utc,
         input_cutoff_timestamp_utc=input_cutoff_timestamp_utc,
@@ -177,7 +209,11 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
         )
         if old is not None:
             return old, disposition or "IDEMPOTENT_EXISTING_ZERO_INSERTS"
-        validate_points_inputs(games, players, slate_date, observation)
+        eligible_games = games[games.game_id.astype(int).isin(eligible_game_ids)].copy()
+        players = players[players.game_id.astype(int).isin(eligible_game_ids)].copy()
+        if players.empty:
+            raise RuntimeError("NO_QUALIFIED_POINTS_FEATURE_INPUTS")
+        validate_points_inputs(eligible_games, players, slate_date, observation)
         parity = verify_points_parity(feature_contract_identity)
         identity = verify_points_identity(feature_contract_identity)
         raw = construct_coherent_ladders(score_points(players, identity))
@@ -204,12 +240,29 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
                                 "model_version": identity["model_version"],
                                 "probability_construction": row.probability_construction}), axis=1)
         exclusions = ladder.loc[~ladder.ladder_coherence_decision.isin(ELIGIBLE_LADDER_STATES)].copy()
+        predictions = predictions.loc[predictions.prediction_eligible].copy()
+        if predictions.empty:
+            raise RuntimeError("NO_POINTS_ROWS_PASS_LADDER_COHERENCE")
         input_exclusions = pd.DataFrame(
             players.attrs.get("input_exclusions", []),
             columns=["game_id", "player_id", "reason"],
         )
         if predictions.prediction_identity.duplicated().any():
             raise RuntimeError("DUPLICATE_POINTS_PREDICTION_IDENTITY")
+        game_starts = games.assign(_game_id=games.game_id.astype(int)).set_index(
+            "_game_id").scheduled_start_time_utc
+        durable_candidate = pd.Timestamp(datetime.now(timezone.utc))
+        expired_game_ids = sorted(
+            game_id for game_id in set(predictions.game_id.astype(int))
+            if durable_candidate >= pd.to_datetime(game_starts.loc[game_id], utc=True))
+        if expired_game_ids:
+            predictions = predictions.loc[~predictions.game_id.astype(int).isin(expired_game_ids)].copy()
+            temporal_exclusions.extend({
+                "game_id": game_id,
+                "reason": "GAME_STARTED_BEFORE_DURABLE_CAPTURE",
+            } for game_id in expired_game_ids)
+        if predictions.empty:
+            raise RuntimeError("NO_POINTS_GAMES_REMAIN_PREGAME_AT_DURABLE_CAPTURE")
         phase_root = output_root / f"season={season}" / f"slate_date={slate_date}" / f"phase={phase}"
         destination = phase_root / f"run_id={run_id}"
         phase_root.mkdir(parents=True, exist_ok=True)
@@ -221,6 +274,12 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
             ladder.sort_values(["game_id", "player_id"]).to_csv(staging / "ladder_coherence.csv", index=False)
             exclusions.sort_values(["game_id", "player_id"]).to_csv(staging / "prediction_exclusions.csv", index=False)
             input_exclusions.to_csv(staging / "input_exclusions.csv", index=False)
+            represented_game_ids = set(predictions.game_id.astype(int))
+            game_exclusions = _game_exclusion_rows(
+                games, eligible_game_ids, temporal_exclusions, represented_game_ids,
+                empty_reason="NO_POINTS_ROWS_PASS_LADDER_COHERENCE_OR_FEATURE_INPUTS",
+            )
+            game_exclusions.to_csv(staging / "game_exclusions.csv", index=False)
             for name in ("market_qualified_population.csv", "candidate_population.csv", "upload_population.csv", "execution_population.csv"):
                 _empty_surface(run_id).to_csv(staging / name, index=False)
             written = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
@@ -230,6 +289,20 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
                 "canonical_run_identifier": canonical_run_identifier,
                 "observation_timestamp_utc": observation, "input_cutoff_timestamp_utc": cutoff,
                 "actual_write_timestamp_utc": written, "games": len(games),
+                "coverage_contract": "NHL_GAME_LEVEL_PREGAME_COVERAGE_V1",
+                "canonical_game_ids": sorted(games.game_id.astype(int).tolist()),
+                "canonical_game_set_hash": canonical_game_set_hash(games.game_id.astype(int)),
+                "eligible_game_ids": eligible_game_ids,
+                "eligible_game_set_hash": canonical_game_set_hash(eligible_game_ids),
+                "prediction_game_ids": sorted(predictions.game_id.astype(int).unique().tolist()),
+                "started_excluded_game_ids": sorted(
+                    int(row["game_id"]) for row in temporal_exclusions
+                    if row["reason"] == "GAME_ALREADY_STARTED"),
+                "coverage_status": (
+                    "FULL_SLATE" if len(eligible_game_ids) == len(games)
+                    and not temporal_exclusions and not len(input_exclusions)
+                    and not len(exclusions) and game_exclusions.empty
+                    else "PARTIAL_GAME_OR_PLAYER_COVERAGE"),
                 "player_games": int(players[["game_id", "player_id"]].drop_duplicates().shape[0]),
                 "prediction_rows": len(predictions), "eligible_prediction_rows": int(predictions.prediction_eligible.sum()),
                 "ladder_excluded_player_games": len(exclusions),
@@ -251,6 +324,10 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
             (staging / "run_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
             (staging / "RUN_COMPLETE.json").write_text(json.dumps({"run_id": run_id, "status": "COMPLETE"}, sort_keys=True) + "\n")
             _manifest(staging)
+            final_check = pd.Timestamp(datetime.now(timezone.utc))
+            if any(final_check >= pd.to_datetime(game_starts.loc[int(game_id)], utc=True)
+                   for game_id in predictions.game_id.astype(int).unique()):
+                raise RuntimeError("POINTS_GAME_STARTED_BEFORE_IMMUTABLE_PUBLICATION")
             os.replace(staging, destination)
         except BaseException:
             shutil.rmtree(staging, ignore_errors=True)
@@ -262,7 +339,7 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
                   season: int, slate_date: str, phase: str,
                   observation_timestamp_utc: str, input_cutoff_timestamp_utc: str,
                   canonical_run_identifier: str) -> tuple[Path, str]:
-    observation, cutoff = _validate_common(
+    observation, cutoff, eligible_game_ids, temporal_exclusions = _validate_common(
         games=games, season=season, slate_date=slate_date, phase=phase,
         observation_timestamp_utc=observation_timestamp_utc,
         input_cutoff_timestamp_utc=input_cutoff_timestamp_utc,
@@ -272,7 +349,12 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
         old, disposition = _existing(output_root, season, slate_date, phase, canonical_run_identifier)
         if old is not None:
             return old, disposition or "IDEMPOTENT_EXISTING_ZERO_INSERTS"
-        validate_saves_inputs(games, goalies, slate_date, observation)
+        eligible_games = games[games.game_id.astype(int).isin(eligible_game_ids)].copy()
+        goalies = goalies[goalies.game_id.astype(int).isin(eligible_game_ids)].copy()
+        if goalies.empty:
+            raise RuntimeError("NO_QUALIFIED_SAVES_FEATURE_INPUTS")
+        goalies["expected_complete_population_rows"] = len(goalies)
+        validate_saves_inputs(eligible_games, goalies, slate_date, observation)
         identity, parity, amendment = verify_saves_identity(), verify_saves_parity(), verify_operational_amendment()
         scoring = goalies.copy()
         scoring["player_id"] = scoring.goalie_id
@@ -301,6 +383,20 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
                                 "model_version": identity["model_version"]}), axis=1)
         if predictions.prediction_identity.duplicated().any():
             raise RuntimeError("DUPLICATE_SAVES_PREDICTION_IDENTITY")
+        game_starts = games.assign(_game_id=games.game_id.astype(int)).set_index(
+            "_game_id").scheduled_start_time_utc
+        durable_candidate = pd.Timestamp(datetime.now(timezone.utc))
+        expired_game_ids = sorted(
+            game_id for game_id in set(predictions.game_id.astype(int))
+            if durable_candidate >= pd.to_datetime(game_starts.loc[game_id], utc=True))
+        if expired_game_ids:
+            predictions = predictions.loc[~predictions.game_id.astype(int).isin(expired_game_ids)].copy()
+            temporal_exclusions.extend({
+                "game_id": game_id,
+                "reason": "GAME_STARTED_BEFORE_DURABLE_CAPTURE",
+            } for game_id in expired_game_ids)
+        if predictions.empty:
+            raise RuntimeError("NO_SAVES_GAMES_REMAIN_PREGAME_AT_DURABLE_CAPTURE")
         input_exclusions = pd.DataFrame(
             goalies.attrs.get("input_exclusions", []),
             columns=["game_id", "player_id", "reason"],
@@ -314,6 +410,12 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
             goalies.sort_values(["game_id", "goalie_id"]).to_csv(staging / "feature_input_snapshot.csv", index=False)
             predictions.sort_values(["game_id", "goalie_id", "line"]).to_csv(staging / "immutable_conditional_predictions.csv", index=False)
             input_exclusions.to_csv(staging / "input_exclusions.csv", index=False)
+            represented_game_ids = set(predictions.game_id.astype(int))
+            game_exclusions = _game_exclusion_rows(
+                games, eligible_game_ids, temporal_exclusions, represented_game_ids,
+                empty_reason="NO_QUALIFIED_SAVES_FEATURE_INPUTS",
+            )
+            game_exclusions.to_csv(staging / "game_exclusions.csv", index=False)
             pd.DataFrame(columns=["game_id", "team", "selected_goalie_id", "reason"]).to_csv(staging / "starter_selections.csv", index=False)
             for name in ("market_qualified_population.csv", "candidate_population.csv", "upload_population.csv", "execution_population.csv"):
                 _empty_surface(run_id).to_csv(staging / name, index=False)
@@ -324,6 +426,20 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
                 "canonical_run_identifier": canonical_run_identifier,
                 "observation_timestamp_utc": observation, "input_cutoff_timestamp_utc": cutoff,
                 "actual_write_timestamp_utc": written, "games": len(games),
+                "coverage_contract": "NHL_GAME_LEVEL_PREGAME_COVERAGE_V1",
+                "canonical_game_ids": sorted(games.game_id.astype(int).tolist()),
+                "canonical_game_set_hash": canonical_game_set_hash(games.game_id.astype(int)),
+                "eligible_game_ids": eligible_game_ids,
+                "eligible_game_set_hash": canonical_game_set_hash(eligible_game_ids),
+                "prediction_game_ids": sorted(predictions.game_id.astype(int).unique().tolist()),
+                "started_excluded_game_ids": sorted(
+                    int(row["game_id"]) for row in temporal_exclusions
+                    if row["reason"] == "GAME_ALREADY_STARTED"),
+                "coverage_status": (
+                    "FULL_SLATE" if len(eligible_game_ids) == len(games)
+                    and not temporal_exclusions and not len(input_exclusions)
+                    and game_exclusions.empty
+                    else "PARTIAL_GAME_OR_PLAYER_COVERAGE"),
                 "goalie_games": int(goalies[["game_id", "goalie_id"]].drop_duplicates().shape[0]),
                 "prediction_rows": len(predictions), "starter_selections": 0,
                 "input_excluded_goalie_games": len(input_exclusions),
@@ -337,6 +453,10 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
             (staging / "run_metadata.json").write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
             (staging / "RUN_COMPLETE.json").write_text(json.dumps({"run_id": run_id, "status": "COMPLETE"}, sort_keys=True) + "\n")
             _manifest(staging)
+            final_check = pd.Timestamp(datetime.now(timezone.utc))
+            if any(final_check >= pd.to_datetime(game_starts.loc[int(game_id)], utc=True)
+                   for game_id in predictions.game_id.astype(int).unique()):
+                raise RuntimeError("SAVES_GAME_STARTED_BEFORE_IMMUTABLE_PUBLICATION")
             os.replace(staging, destination)
         except BaseException:
             shutil.rmtree(staging, ignore_errors=True)

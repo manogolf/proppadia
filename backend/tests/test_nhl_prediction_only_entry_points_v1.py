@@ -79,6 +79,12 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="nhl_prediction_only_")
         self.root = Path(self.tmp.name)
+        class FixtureDateTime(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                value = datetime.fromisoformat("2026-09-21T18:01:00+00:00")
+                return value.astimezone(tz) if tz else value.replace(tzinfo=None)
+        self.enterContext(patch.object(core, "datetime", FixtureDateTime))
         self.enterContext(patch.object(observer, "require_slate_history_certificate", return_value={
             "status": "CERTIFIED_FINAL", "slate_date": "2026-09-20",
         }))
@@ -175,8 +181,22 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
                                       output_root=self.root / "empty")
         self.assertEqual(json.loads(status.read_text())["status"], "VALID_EMPTY_SLATE")
 
-    def test_poststart_and_retrospective_partial_slate_are_rejected(self):
-        with self.assertRaisesRegex(RuntimeError, "WHOLE_SLATE_PRESTART_GATE_FAILED"):
+    def test_started_game_is_excluded_while_future_game_remains_eligible(self):
+        slate = pd.concat([
+            games("2026-09-21T17:00:00Z"),
+            games("2026-09-21T21:00:00Z").assign(game_id=2026010011),
+        ], ignore_index=True)
+        observation, cutoff, eligible, excluded = core._validate_common(
+            games=slate, season=2026, slate_date=SLATE, phase="MIDDAY",
+            observation_timestamp_utc=OBSERVED,
+            input_cutoff_timestamp_utc=OBSERVED, canonical_run_identifier="partial")
+        self.assertEqual(eligible, [2026010011])
+        self.assertEqual(excluded, [{"game_id": 2026010010, "reason": "GAME_ALREADY_STARTED"}])
+        self.assertEqual(observation, OBSERVED)
+        self.assertEqual(cutoff, OBSERVED)
+
+    def test_no_eligible_games_and_retrospective_dates_are_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "NO_ELIGIBLE_PREGAME_GAMES"):
             core._validate_common(games=games("2026-09-21T17:00:00Z"), season=2026,
                                   slate_date=SLATE, phase="MIDDAY",
                                   observation_timestamp_utc=OBSERVED,
@@ -198,10 +218,12 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
                                       canonical_run_identifier="poststart-observer", dsn="fixture",
                                       output_root=self.root / "poststart")
         payload = json.loads(status.read_text())
-        self.assertEqual(payload["status"], "FAILED_WARN_ONLY")
-        self.assertIn("WHOLE_SLATE_PRESTART_GATE_FAILED", payload["failure"])
+        self.assertEqual(payload["status"], "NOOP_NO_ELIGIBLE_PREGAME_GAMES")
+        self.assertEqual(payload["started_excluded_games"], [
+            {"game_id": 2026010010, "reason": "GAME_ALREADY_STARTED"},
+        ])
 
-    def test_current_cutoff_excludes_started_game_without_publishing_partial_slate(self):
+    def test_staggered_slate_preserves_future_game_eligibility(self):
         now = datetime.fromisoformat("2026-10-17T18:19:54+00:00")
         slate = pd.DataFrame([{
             "canonical_season": 2026, "slate_date": "2026-10-17", "game_id": 2026020100 + index,
@@ -211,12 +233,13 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         } for index in range(14)])
         eligible = slate[pd.to_datetime(slate.scheduled_start_time_utc, utc=True) > pd.Timestamp(now)]
         self.assertEqual(len(eligible), 13)
-        with self.assertRaisesRegex(RuntimeError, "WHOLE_SLATE_PRESTART_GATE_FAILED_PARTIAL_SLATE_FORBIDDEN"):
-            core._validate_common(
-                games=slate, season=2026, slate_date="2026-10-17", phase="FINAL_PREGAME",
-                observation_timestamp_utc=now.isoformat(), input_cutoff_timestamp_utc=now.isoformat(),
-                canonical_run_identifier="oct17-partial-forbidden",
-            )
+        _, _, actual_eligible, actual_excluded = core._validate_common(
+            games=slate, season=2026, slate_date="2026-10-17", phase="FINAL_PREGAME",
+            observation_timestamp_utc=now.isoformat(), input_cutoff_timestamp_utc=now.isoformat(),
+            canonical_run_identifier="oct17-game-level",
+        )
+        self.assertEqual(actual_eligible, eligible.game_id.astype(int).tolist())
+        self.assertEqual(len(actual_excluded), 1)
 
     def test_observer_binds_points_card_to_explicit_corrected_shadow_contract(self):
         now = datetime.fromisoformat(OBSERVED.replace("Z", "+00:00"))
@@ -260,11 +283,75 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
                            feature_contract_sha256="c" * 64)
 
     def test_points_ladder_exclusion_is_retained_and_not_qualified(self):
-        destination, _ = self.publish_points(decision="BLOCKED_MATERIAL_LADDER_INCOHERENCE")
+        with self.assertRaisesRegex(RuntimeError, "NO_POINTS_ROWS_PASS_LADDER_COHERENCE"):
+            self.publish_points(decision="BLOCKED_MATERIAL_LADDER_INCOHERENCE")
+
+    def test_points_ladder_incoherence_excludes_player_without_blocking_other_players(self):
+        players = pd.concat([points_features(), points_features().assign(
+            player_id=102, player_name="Second Fixture Skater")], ignore_index=True)
+        scores = pd.concat([point_scores(), point_scores().assign(player_id=102)], ignore_index=True)
+        decisions = pd.concat([
+            ladder("PASS_LADDER_COHERENCE"),
+            ladder("BLOCKED_MATERIAL_LADDER_INCOHERENCE").assign(player_id=102),
+        ], ignore_index=True)
+        with self.points_patches():
+            with patch.object(core, "score_points", return_value=scores), \
+                 patch.object(core, "evaluate_ladder_coherence", return_value=decisions):
+                destination, _ = core.publish_points(
+                    games=games(), players=players, output_root=self.root / "mixed-ladder",
+                    season=2026, slate_date=SLATE, phase="MIDDAY",
+                    observation_timestamp_utc=OBSERVED, input_cutoff_timestamp_utc=OBSERVED,
+                    canonical_run_identifier="mixed-ladder",
+                )
         predictions = pd.read_csv(destination / "immutable_predictions.csv")
-        self.assertFalse(predictions.prediction_eligible.any())
-        self.assertEqual(len(pd.read_csv(destination / "prediction_exclusions.csv")), 1)
-        self.assertFalse(predictions.market_qualified.any())
+        exclusions = pd.read_csv(destination / "prediction_exclusions.csv")
+        self.assertEqual(set(predictions.player_id.astype(int)), {101})
+        self.assertEqual(set(exclusions.player_id.astype(int)), {102})
+        self.assertEqual(json.loads((destination / "run_metadata.json").read_text())[
+            "coverage_status"], "PARTIAL_GAME_OR_PLAYER_COVERAGE")
+
+    def test_points_partial_capture_keeps_only_future_game_and_records_started_exclusion(self):
+        slate = pd.concat([
+            games("2026-09-21T21:00:00Z"),
+            games("2026-09-21T17:00:00Z").assign(game_id=2026010011),
+        ], ignore_index=True)
+        future_player = points_features()
+        future_player["scheduled_start_time_utc"] = "2026-09-21T21:00:00Z"
+        output = self.root / "partial-points"
+        with self.points_patches():
+            with patch.object(core, "score_points", return_value=point_scores()):
+                destination, _ = core.publish_points(
+                    games=slate, players=future_player, output_root=output, season=2026,
+                    slate_date=SLATE, phase="MIDDAY", observation_timestamp_utc=OBSERVED,
+                    input_cutoff_timestamp_utc=OBSERVED, canonical_run_identifier="partial-points",
+                )
+        metadata = json.loads((destination / "run_metadata.json").read_text())
+        self.assertEqual(metadata["eligible_game_ids"], [2026010010])
+        self.assertEqual(metadata["prediction_game_ids"], [2026010010])
+        self.assertEqual(metadata["started_excluded_game_ids"], [2026010011])
+        self.assertEqual(pd.read_csv(destination / "game_exclusions.csv").reason.tolist(),
+                         ["GAME_ALREADY_STARTED"])
+
+    def test_missing_roster_identity_game_is_explicitly_excluded(self):
+        slate = pd.concat([
+            games("2026-09-21T20:00:00Z"),
+            games("2026-09-21T21:00:00Z").assign(game_id=2026010011),
+        ], ignore_index=True)
+        slate.attrs["roster_identity_scope_known"] = True
+        slate.attrs["roster_identity_game_ids"] = [2026010010]
+        output = self.root / "missing-roster-game"
+        with self.points_patches():
+            with patch.object(core, "score_points", return_value=point_scores()):
+                destination, _ = core.publish_points(
+                    games=slate, players=points_features(), output_root=output, season=2026,
+                    slate_date=SLATE, phase="MIDDAY", observation_timestamp_utc=OBSERVED,
+                    input_cutoff_timestamp_utc=OBSERVED, canonical_run_identifier="missing-roster",
+                )
+        exclusions = pd.read_csv(destination / "game_exclusions.csv")
+        self.assertEqual(exclusions.to_dict("records"), [{
+            "game_id": 2026010011,
+            "reason": "NO_ACTIVE_CUTOFF_BOUNDED_ROSTER_IDENTITIES",
+        }])
 
     def test_saves_snapshot_preserves_unknown_starter_and_conditional_semantics(self):
         with self.saves_patches(), patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
@@ -281,6 +368,54 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         self.assertFalse(predictions.selected_starter.any())
         self.assertFalse(predictions.market_qualified.any())
         self.assertEqual(len(pd.read_csv(destination / "starter_selections.csv")), 0)
+
+    def test_saves_partial_capture_keeps_future_game_and_excludes_started_game(self):
+        slate = pd.concat([
+            games("2026-09-21T21:00:00Z"),
+            games("2026-09-21T17:00:00Z").assign(game_id=2026010011),
+        ], ignore_index=True)
+        goalies = goalie_features()
+        goalies["scheduled_start_time_utc"] = "2026-09-21T21:00:00Z"
+        with self.saves_patches():
+            destination, _ = core.publish_saves(
+                games=slate, goalies=goalies, output_root=self.root / "partial-saves",
+                season=2026, slate_date=SLATE, phase="FINAL_PREGAME",
+                observation_timestamp_utc=OBSERVED, input_cutoff_timestamp_utc=OBSERVED,
+                canonical_run_identifier="partial-saves",
+            )
+        metadata = json.loads((destination / "run_metadata.json").read_text())
+        self.assertEqual(metadata["prediction_game_ids"], [2026010010])
+        self.assertEqual(metadata["started_excluded_game_ids"], [2026010011])
+        predictions = pd.read_csv(destination / "immutable_conditional_predictions.csv")
+        self.assertTrue(predictions.starter_state.eq(
+            "UNKNOWN_NO_AUTHORIZED_PREGAME_STARTER_SOURCE").all())
+        self.assertFalse(predictions.selected_starter.any())
+
+    def test_missing_goalie_history_is_explicitly_excluded_per_game(self):
+        slate = pd.concat([
+            games("2026-09-21T20:00:00Z"),
+            games("2026-09-21T21:00:00Z").assign(game_id=2026010011),
+        ], ignore_index=True)
+        slate.attrs["roster_identity_scope_known"] = True
+        slate.attrs["roster_identity_game_ids"] = [2026010010, 2026010011]
+        goalies = goalie_features()
+        goalies.attrs["input_exclusions"] = [{
+            "game_id": 2026010011, "player_id": 202,
+            "reason": "NO_QUALIFIED_LANE_FEATURE_HISTORY",
+        }]
+        with self.saves_patches():
+            destination, _ = core.publish_saves(
+                games=slate, goalies=goalies, output_root=self.root / "missing-goalie-history",
+                season=2026, slate_date=SLATE, phase="FINAL_PREGAME",
+                observation_timestamp_utc=OBSERVED, input_cutoff_timestamp_utc=OBSERVED,
+                canonical_run_identifier="missing-goalie-history",
+            )
+        exclusions = pd.read_csv(destination / "game_exclusions.csv")
+        self.assertEqual(exclusions.to_dict("records"), [{
+            "game_id": 2026010011, "reason": "NO_QUALIFIED_SAVES_FEATURE_INPUTS",
+        }])
+        self.assertEqual(pd.read_csv(destination / "input_exclusions.csv").iloc[0].reason,
+                         "NO_QUALIFIED_LANE_FEATURE_HISTORY")
 
     def test_missing_market_directory_and_credentials_do_not_block_either_lane(self):
         with patch.dict(os.environ, {}, clear=True):

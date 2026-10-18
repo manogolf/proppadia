@@ -17,6 +17,7 @@ from backend.nhl.database_access import database_url, restricted_mode
 
 from backend.nhl.prediction_only.core import (
     PROSPECTIVE_NOT_BEFORE,
+    game_level_eligibility,
     publish_points,
     publish_saves,
 )
@@ -127,6 +128,9 @@ def _canonical_and_identity(dsn: str, season: int, slate_date: str,
             ORDER BY g.start_time_utc,g.game_id,l.player_id
         """, (games.game_id.astype(int).tolist(), cutoff, cutoff))
         connection.rollback()
+    games.attrs["roster_identity_scope_known"] = True
+    games.attrs["roster_identity_game_ids"] = sorted(
+        identity.game_id.astype(int).unique().tolist()) if not identity.empty else []
     return games, identity
 
 
@@ -137,22 +141,21 @@ def export_lane_inputs(dsn: str, lane: str, season: int, slate_date: str,
         return games, identity
     sql_path = SQL / ("export_points.sql" if lane == "POINTS" else "export_saves_from_denali.sql")
     features = _psql_export(dsn, sql_path, slate_date)
-    if features.empty:
-        raise RuntimeError(f"{lane}_FEATURE_EXPORT_EMPTY")
     key = ["game_id", "player_id"]
-    if features.duplicated(key).any():
+    if not features.empty and features.duplicated(key).any():
         raise RuntimeError(f"{lane}_FEATURE_EXPORT_DUPLICATE_IDENTITY")
     # Canonical identity and orientation always come from the cutoff-bounded
     # roster/game query, never from convenience columns in the model export.
     overlap = sorted((set(features) & set(identity)) - set(key))
     if overlap:
         features = features.drop(columns=overlap)
+    identity_keys = set(map(tuple, identity[key].astype(int).to_numpy()))
+    feature_keys = set(map(tuple, features[key].astype(int).to_numpy()))
+    unexpected = sorted(feature_keys - identity_keys)
+    if unexpected:
+        raise RuntimeError(f"{lane}_FEATURE_IDENTITY_SOURCE_CONFLICT:{unexpected[:20]}")
     merged = features.merge(identity, on=key, how="inner", validate="one_to_one")
-    if merged.empty:
-        raise RuntimeError(f"{lane}_FEATURE_IDENTITY_JOIN_EMPTY")
-    expected_keys = set(map(tuple, features[key].astype(int).to_numpy()))
-    admitted_keys = set(map(tuple, merged[key].astype(int).to_numpy()))
-    excluded_keys = sorted(expected_keys - admitted_keys)
+    missing_feature_keys = sorted(identity_keys - feature_keys)
     epoch = "1970-01-01T00:00:00Z"
     merged["feature_history_max_timestamp_utc"] = merged.feature_history_max_timestamp_utc.fillna(epoch)
     merged["feature_cutoff_timestamp_utc"] = cutoff.isoformat()
@@ -173,8 +176,8 @@ def export_lane_inputs(dsn: str, lane: str, season: int, slate_date: str,
         merged["expected_complete_population_rows"] = len(merged)
     merged.attrs["input_exclusions"] = [
         {"game_id": int(game_id), "player_id": int(player_id),
-         "reason": "NO_ACTIVE_CUTOFF_BOUNDED_CANONICAL_ROSTER_IDENTITY"}
-        for game_id, player_id in excluded_keys
+         "reason": "NO_QUALIFIED_LANE_FEATURE_HISTORY"}
+        for game_id, player_id in missing_feature_keys
     ]
     return games, merged
 
@@ -207,6 +210,37 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
             result.update(status="VALID_EMPTY_SLATE", phase=None, prediction_rows=0)
             durable_json(status_path, result)
             return status_path
+        eligible_game_ids, started_exclusions = game_level_eligibility(
+            games, observation_timestamp.isoformat())
+        started_ids = {int(row["game_id"]) for row in started_exclusions}
+        feature_game_ids = (set(features.game_id.astype(int)) if not features.empty else set())
+        roster_ids = set(map(int, games.attrs.get("roster_identity_game_ids", [])))
+        game_exclusions = list(started_exclusions)
+        for game_id in eligible_game_ids:
+            if game_id not in feature_game_ids:
+                reason = ("NO_ACTIVE_CUTOFF_BOUNDED_ROSTER_IDENTITIES"
+                          if games.attrs.get("roster_identity_scope_known") is True
+                          and game_id not in roster_ids
+                          else f"NO_QUALIFIED_{lane}_FEATURE_INPUTS")
+                game_exclusions.append({"game_id": game_id, "reason": reason})
+        result.update(
+            canonical_game_ids=sorted(games.game_id.astype(int).tolist()),
+            eligible_game_ids=eligible_game_ids,
+            started_excluded_games=started_exclusions,
+            game_exclusions=game_exclusions,
+            feature_input_exclusions=features.attrs.get("input_exclusions", []),
+        )
+        if not eligible_game_ids:
+            result.update(status="NOOP_NO_ELIGIBLE_PREGAME_GAMES",
+                          phase=None, prediction_rows=0)
+            durable_json(status_path, result)
+            return status_path
+        if features.empty:
+            result.update(status="NOOP_NO_QUALIFIED_FEATURE_INPUTS",
+                          phase=None, prediction_rows=0,
+                          feature_input_exclusions=features.attrs.get("input_exclusions", []))
+            durable_json(status_path, result)
+            return status_path
         if requested_phase == "AUTO":
             phase, gate = phase_for(games, observation_timestamp, requested_phase)
         else:
@@ -236,7 +270,10 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
             metadata = json.loads((destination / "run_metadata.json").read_text())
             result.update(status="CAPTURED" if disposition == "COMPLETE_NEW_APPEND_ONLY" else "NOOP_ALREADY_CAPTURED",
                           disposition=disposition, run_dir=str(destination),
-                          prediction_rows=metadata["prediction_rows"])
+                          prediction_rows=metadata["prediction_rows"],
+                          coverage_status=metadata.get("coverage_status"),
+                          prediction_game_ids=metadata.get("prediction_game_ids", []),
+                          game_exclusions_path=str(destination / "game_exclusions.csv"))
     except Exception as error:
         result.update(status="FAILED_WARN_ONLY", failure=f"{type(error).__name__}:{error}")
     durable_json(status_path, result)

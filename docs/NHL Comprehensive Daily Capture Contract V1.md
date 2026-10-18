@@ -56,6 +56,21 @@ runs once; explicit roster reuse disables provider fetching. Schedule and
 roster failures remain blocking for downstream work. A valid empty current
 slate skips the roster child after the prior-date checkpoint.
 
+Points and Saves prediction-only observers retain the complete canonical
+schedule spine but determine pregame eligibility separately for each game.
+Games already started, or that start before immutable publication completes,
+are excluded with manifest-bound reasons. Other future games may still be
+captured when their lane inputs qualify. Game and player exclusions remain
+visible in the prediction package and observer receipt; partial coverage is
+never labeled full-slate coverage. The complete, strictly prestart roster
+observation and certified prior-day history remain prerequisites. A lane with
+no eligible prediction rows creates no card. Reconciliation grades only
+retained prediction keys; missing Points predictions remain explicitly
+ungradeable and missing Saves predictions remain unpredicted starters or
+outcomes. In prior-learning mode an absent Saves card is ungradeable, while a
+present invalid or duplicate card still blocks; direct reconciliation keeps
+its exact-one-card contract.
+
 Before V1, the optional odds step wrote mutable odds files directly, could retry individual
 provider calls, and represented failures as empty results. V1 retains the same
 comprehensive graph while placing immutable roster evidence before roster DML,

@@ -522,6 +522,36 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   October 18 receipts under `artifacts/operational/nhl/{points_prediction_only,saves_prediction_only,sog_prediction_only}/status/2026-10-18/`
   and `artifacts/operational/nhl/cross_market_shadow/orchestration_status/2026-10-18/`.
 
+### P2.12 Preserve eligible Points and Saves games on staggered slates
+
+- Status: **IMPLEMENTED — natural observer and grading verification pending**.
+  Points and Saves no longer reject a whole slate merely because one game has
+  started. Each retains the full canonical schedule spine and publishes rows
+  only for games still pregame at both observation and durable publication.
+  `game_exclusions.csv`, player/input exclusion surfaces, and observer status
+  evidence identify omitted games and reasons. Points ladder coherence and
+  Saves conditional-on-start semantics remain unchanged. The complete,
+  verified prestart roster observation and certified prior-day history remain
+  mandatory; this correction does not make an incomplete roster package
+  acceptable. If no prediction rows qualify, the observer records an explicit
+  no-op/failure and creates no prediction card.
+- Reconciliation recomputes the eligible game set from the retained canonical
+  schedule and observation timestamp, verifies coverage hashes and exclusions,
+  and grades only immutable `(game_id, player_id/goalie_id)` keys. Missing rows
+  remain ungradeable/unpredicted. In prior-learning mode only, an absent Saves
+  card is now explicitly ungradeable, matching Points; direct reconciliation
+  still requires exactly one Saves card. Duplicate and corrupt present cards
+  remain blocking.
+- Evidence: `backend/nhl/prediction_only/core.py`,
+  `backend/nhl/scripts/nhl_prediction_only_common.py`,
+  `backend/nhl/postgame_reconcile/core.py`,
+  `backend/tests/test_nhl_prediction_only_entry_points_v1.py`, and
+  `backend/tests/test_nhl_postgame_reconciliation_v1.py`. Focused offline
+  verification: 83 passed and 6 subtests passed across those tests plus the
+  observer reconciliation-gate and certificate suites. Still pending: inspect
+  a naturally scheduled partial-slate observer package and a later prior-day
+  reconciliation receipt; no live execution was performed for this correction.
+
 ### P2.3 Close documented historical source-integrity gaps
 
 - Status: **OPEN** — the research-only

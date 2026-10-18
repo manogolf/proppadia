@@ -28,12 +28,14 @@ from backend.nhl.postgame_reconcile.core import (
     _grade_points_source,
     _resolve_prop_prediction_source,
     _settle_ladder,
+    _verify_prop_source,
     publish_reconciliation,
     reconciliation_lock,
     resolve_operational_sources,
     validate_staging_identity_sets,
     validate_final_slate,
 )
+from backend.nhl.daily_capture import canonical_game_set_hash as capture_game_set_hash
 from backend.nhl.cross_market_shadow.core import digest_value, moneyline_substantive_identity
 from backend.nhl.postgame_learning import current_et_slate, prior_et_slate
 from backend.nhl.scripts.run_nhl_postgame_reconciliation import (
@@ -550,6 +552,151 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(len(save_grades["saves_unpredicted_starters"]), 0)
         self.assertEqual(len(save_grades["saves_unpredicted_relief_appearances"]), 0)
 
+    def test_game_level_partial_points_card_binds_for_only_future_games(self):
+        operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
+        binding = resolve_operational_sources(
+            slate_date="2026-09-21", operational_root=operational)
+        source_run = Path(binding["points"]["run"])
+        schedule = pd.read_csv(Path(binding["cross_market"]["run"]) /
+                               "schedule_event_identity.csv")
+        with tempfile.TemporaryDirectory(prefix="nhl_partial_points_binding_") as tmp:
+            partial = Path(tmp) / source_run.name
+            shutil.copytree(source_run, partial)
+            metadata_path = partial / "run_metadata.json"
+            metadata = json.loads(metadata_path.read_text())
+            observed = pd.Timestamp("2026-09-21T23:15:00Z")
+            starts = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True)
+            canonical_ids = set(schedule.game_id.astype(int))
+            eligible_ids = set(schedule.loc[starts > observed, "game_id"].astype(int))
+            started_ids = canonical_ids - eligible_ids
+            predictions_path = partial / "immutable_predictions.csv"
+            predictions = pd.read_csv(predictions_path)
+            all_predictions = predictions.copy()
+            prediction_starts = pd.to_datetime(predictions.scheduled_start_time_utc, utc=True)
+            predictions = predictions.loc[prediction_starts > observed].copy()
+            self.assertTrue(len(predictions))
+            predictions["prediction_timestamp_utc"] = observed.isoformat().replace("+00:00", "Z")
+            predictions.to_csv(predictions_path, index=False)
+            predicted_ids = set(predictions.game_id.astype(int))
+            metadata.update(
+                observation_timestamp_utc=observed.isoformat().replace("+00:00", "Z"),
+                actual_write_timestamp_utc=(observed + pd.Timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+                coverage_contract="NHL_GAME_LEVEL_PREGAME_COVERAGE_V1",
+                canonical_game_ids=sorted(canonical_ids),
+                canonical_game_set_hash=capture_game_set_hash(canonical_ids),
+                eligible_game_ids=sorted(eligible_ids),
+                eligible_game_set_hash=capture_game_set_hash(eligible_ids),
+                prediction_game_ids=sorted(predicted_ids),
+                started_excluded_game_ids=sorted(started_ids),
+                coverage_status="PARTIAL_GAME_OR_PLAYER_COVERAGE",
+                prediction_rows=len(predictions),
+                player_games=len(predictions[["game_id", "player_id"]].drop_duplicates()),
+            )
+            metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+            pd.DataFrame([{"game_id": game_id, "reason": "GAME_ALREADY_STARTED"}
+                          for game_id in sorted(started_ids)]).to_csv(
+                              partial / "game_exclusions.csv", index=False)
+            entries = []
+            for path in sorted(p for p in partial.iterdir()
+                               if p.is_file() and p.name != "SHA256SUMS"):
+                entries.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n")
+            (partial / "SHA256SUMS").write_text("".join(entries))
+            bound = _verify_prop_source(
+                run=partial, lane="POINTS", slate_date="2026-09-21", schedule=schedule)
+            outcomes = all_predictions[["game_id", "player_id"]].drop_duplicates()
+            outcomes["official_goals"] = 0
+            outcomes["official_assists"] = 0
+            outcomes["participation_state"] = "PARTICIPATED"
+            grades = _grade_points(partial, schedule, outcomes)
+            self.assertEqual(len(grades["points_game_exclusions"]), len(started_ids))
+            self.assertTrue(set(grades["points_missing_predictions"].game_id.astype(int))
+                            .issuperset(started_ids))
+            metadata["eligible_game_ids"] = sorted(canonical_ids)
+            metadata["eligible_game_set_hash"] = capture_game_set_hash(canonical_ids)
+            metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+            entries = []
+            for path in sorted(p for p in partial.iterdir()
+                               if p.is_file() and p.name != "SHA256SUMS"):
+                entries.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n")
+            (partial / "SHA256SUMS").write_text("".join(entries))
+            with self.assertRaisesRegex(
+                    RuntimeError, "IMMUTABLE_POINTS_GAME_LEVEL_COVERAGE_IDENTITY_MISMATCH"):
+                _verify_prop_source(
+                    run=partial, lane="POINTS", slate_date="2026-09-21", schedule=schedule)
+        self.assertEqual(bound["status"], "PROSPECTIVE_SOURCE_BOUND")
+        self.assertEqual(bound["eligible_game_ids"], sorted(eligible_ids))
+        self.assertEqual(bound["prediction_game_ids"], sorted(predicted_ids))
+        self.assertEqual({int(row["game_id"]) for row in bound["game_exclusions"]},
+                         started_ids)
+
+    def test_game_level_partial_saves_card_binds_and_unpredicteds_remain_explicit(self):
+        operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
+        binding = resolve_operational_sources(
+            slate_date="2026-09-21", operational_root=operational)
+        source_run = Path(binding["saves"]["run"])
+        schedule = pd.read_csv(Path(binding["cross_market"]["run"]) /
+                               "schedule_event_identity.csv")
+        with tempfile.TemporaryDirectory(prefix="nhl_partial_saves_binding_") as tmp:
+            partial = Path(tmp) / source_run.name
+            shutil.copytree(source_run, partial)
+            metadata_path = partial / "run_metadata.json"
+            metadata = json.loads(metadata_path.read_text())
+            observed = pd.Timestamp("2026-09-21T23:15:00Z")
+            starts = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True)
+            canonical_ids = set(schedule.game_id.astype(int))
+            eligible_ids = set(schedule.loc[starts > observed, "game_id"].astype(int))
+            started_ids = canonical_ids - eligible_ids
+            predictions_path = partial / "immutable_conditional_predictions.csv"
+            predictions = pd.read_csv(predictions_path)
+            all_predictions = predictions.copy()
+            prediction_starts = pd.to_datetime(predictions.scheduled_start_time_utc, utc=True)
+            predictions = predictions.loc[prediction_starts > observed].copy()
+            self.assertTrue(len(predictions))
+            predictions["prediction_timestamp_utc"] = observed.isoformat().replace("+00:00", "Z")
+            predictions.to_csv(predictions_path, index=False)
+            predicted_ids = set(predictions.game_id.astype(int))
+            metadata.update(
+                observation_timestamp_utc=observed.isoformat().replace("+00:00", "Z"),
+                actual_write_timestamp_utc=(observed + pd.Timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
+                coverage_contract="NHL_GAME_LEVEL_PREGAME_COVERAGE_V1",
+                canonical_game_ids=sorted(canonical_ids),
+                canonical_game_set_hash=capture_game_set_hash(canonical_ids),
+                eligible_game_ids=sorted(eligible_ids),
+                eligible_game_set_hash=capture_game_set_hash(eligible_ids),
+                prediction_game_ids=sorted(predicted_ids),
+                started_excluded_game_ids=sorted(started_ids),
+                coverage_status="PARTIAL_GAME_OR_PLAYER_COVERAGE",
+                prediction_rows=len(predictions),
+                goalie_games=len(predictions[["game_id", "goalie_id"]].drop_duplicates()),
+            )
+            metadata_path.write_text(json.dumps(metadata, indent=2, sort_keys=True) + "\n")
+            pd.DataFrame([{"game_id": game_id, "reason": "GAME_ALREADY_STARTED"}
+                          for game_id in sorted(started_ids)]).to_csv(
+                              partial / "game_exclusions.csv", index=False)
+            entries = []
+            for path in sorted(p for p in partial.iterdir()
+                               if p.is_file() and p.name != "SHA256SUMS"):
+                entries.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n")
+            (partial / "SHA256SUMS").write_text("".join(entries))
+            bound = _verify_prop_source(
+                run=partial, lane="SAVES", slate_date="2026-09-21", schedule=schedule)
+            outcomes = all_predictions[["game_id", "goalie_id", "team"]].drop_duplicates()
+            team_ids = {team: index + 1 for index, team in enumerate(sorted(outcomes.team.unique()))}
+            outcomes["team_id"] = outcomes.team.map(team_ids)
+            outcomes["official_saves"] = 0
+            outcomes = outcomes.sort_values(["game_id", "team", "goalie_id"])
+            outcomes["actual_start_flag"] = ~outcomes.duplicated(["game_id", "team"])
+            outcomes["goalie_participation_state"] = outcomes.actual_start_flag.map(
+                {True: "STARTED", False: "RELIEF_APPEARANCE"})
+            outcomes["starter_identity_method"] = "UNIQUE_MAX_OFFICIAL_TOI_POSTGAME"
+            grades = _grade_saves(partial, schedule, outcomes)
+            self.assertEqual(len(grades["saves_game_exclusions"]), len(started_ids))
+            self.assertTrue(set(grades["saves_unpredicted_outcomes"].game_id.astype(int))
+                            .issuperset(started_ids))
+        self.assertEqual(bound["status"], "PROSPECTIVE_SOURCE_BOUND")
+        self.assertEqual(bound["eligible_game_ids"], sorted(eligible_ids))
+        self.assertEqual(bound["prediction_game_ids"], sorted(predicted_ids))
+
     def test_october_16_missing_points_card_is_ungradeable_and_nonblocking(self):
         # Retained Oct. 17 daily evidence records this exact prior-day failure.
         receipt = (Path(__file__).resolve().parents[2] / "artifacts/operational/nhl/daily_runs"
@@ -588,6 +735,14 @@ class PostgameReconciliationTest(unittest.TestCase):
                                         f"IMMUTABLE_{lane}_FINAL_PREGAME_RUN_CARDINALITY:0"):
                 _resolve_prop_prediction_source(
                     runs=[], lane=lane, slate_date="2026-10-16", schedule=pd.DataFrame())
+        prior_learning_saves = _resolve_prop_prediction_source(
+            runs=[], lane="SAVES", slate_date="2026-10-16", schedule=pd.DataFrame(),
+            allow_missing_prediction=True)
+        self.assertEqual(prior_learning_saves["status"], "NOT_GRADEABLE_NO_PREDICTION")
+        with self.assertRaisesRegex(RuntimeError, "IMMUTABLE_SAVES_FINAL_PREGAME_RUN_CARDINALITY:0"):
+            _resolve_prop_prediction_source(
+                runs=[], lane="SAVES", slate_date="2026-10-16", schedule=pd.DataFrame(),
+                allow_missing_prediction=False)
         for lane in ("POINTS", "SAVES"):
             with self.assertRaisesRegex(RuntimeError,
                                         f"IMMUTABLE_{lane}_FINAL_PREGAME_RUN_CARDINALITY:2"):
