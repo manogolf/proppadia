@@ -79,17 +79,17 @@ def test_grader_classifies_nonparticipants_and_unresolved_rows():
 
 def test_operational_feature_builder_enforces_120_day_and_strict_prior_membership():
     outcomes = pd.DataFrame([
-        {"canonical_season":2026,"game_date":"2026-05-01","game_id":2025020001,"player_id":11,"team_id":1,"goals":1,"assists":0},
-        {"canonical_season":2026,"game_date":"2026-09-30","game_id":2026020001,"player_id":11,"team_id":1,"goals":1,"assists":1},
-        {"canonical_season":2026,"game_date":"2026-09-30","game_id":2026020001,"player_id":22,"team_id":1,"goals":0,"assists":0},
+        {"canonical_season":2026,"game_date":"2026-05-01","game_id":2025020001,"player_id":11,"team_id":1,"goals":1,"assists":0,"official_sog":9,"outcome_source_timestamp_utc":"2026-05-02T03:00:00Z"},
+        {"canonical_season":2026,"game_date":"2026-09-30","game_id":2026020001,"player_id":11,"team_id":1,"goals":1,"assists":1,"official_sog":3,"outcome_source_timestamp_utc":"2026-10-01T03:00:00Z"},
+        {"canonical_season":2026,"game_date":"2026-09-30","game_id":2026020001,"player_id":22,"team_id":1,"goals":0,"assists":0,"official_sog":2,"outcome_source_timestamp_utc":"2026-10-01T03:00:00Z"},
         # A same-day realized row in the source must not leak into the target.
-        {"canonical_season":2026,"game_date":"2026-10-09","game_id":2026020066,"player_id":11,"team_id":1,"goals":3,"assists":2},
+        {"canonical_season":2026,"game_date":"2026-10-09","game_id":2026020066,"player_id":11,"team_id":1,"goals":3,"assists":2,"official_sog":99,"outcome_source_timestamp_utc":"2026-10-10T03:00:00Z"},
     ])
     logs = pd.DataFrame([
-        {"game_id":2025020001,"player_id":11,"team_id":1,"is_home":True,"toi_minutes":20,"pp_toi_minutes":2,"shots_on_goal":9,"shot_attempts":12},
-        {"game_id":2026020001,"player_id":11,"team_id":1,"is_home":True,"toi_minutes":30,"pp_toi_minutes":4,"shots_on_goal":3,"shot_attempts":6},
-        {"game_id":2026020001,"player_id":22,"team_id":1,"is_home":False,"toi_minutes":25,"pp_toi_minutes":1,"shots_on_goal":2,"shot_attempts":4},
-        {"game_id":2026020066,"player_id":11,"team_id":1,"is_home":True,"toi_minutes":99,"pp_toi_minutes":99,"shots_on_goal":99,"shot_attempts":99},
+        {"game_id":2025020001,"player_id":11,"team_id":1,"is_home":True,"home_team_id":1,"away_team_id":2,"toi_minutes":20,"pp_toi_minutes":2,"shots_on_goal":9,"shot_attempts":12},
+        {"game_id":2026020001,"player_id":11,"team_id":1,"is_home":True,"home_team_id":1,"away_team_id":2,"toi_minutes":30,"pp_toi_minutes":4,"shots_on_goal":3,"shot_attempts":6},
+        {"game_id":2026020001,"player_id":22,"team_id":1,"is_home":False,"home_team_id":1,"away_team_id":2,"toi_minutes":25,"pp_toi_minutes":1,"shots_on_goal":2,"shot_attempts":4},
+        {"game_id":2026020066,"player_id":11,"team_id":1,"is_home":True,"home_team_id":1,"away_team_id":2,"toi_minutes":99,"pp_toi_minutes":99,"shots_on_goal":99,"shot_attempts":99},
     ])
     slate = pd.DataFrame([{"game_id":2026020066,"player_id":11,"game_date":"2026-10-09",
         "game_start_utc":"2026-10-09T23:00:00Z","is_home":1,"home_team_id":1,"away_team_id":2}])
@@ -106,9 +106,11 @@ def test_operational_feature_builder_enforces_120_day_and_strict_prior_membershi
 
 def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_path):
     logs = pd.DataFrame([{"game_id":2026020001,"player_id":11,"team_id":1,"is_home":True,
+        "home_team_id":1,"away_team_id":2,
         "toi_minutes":20,"pp_toi_minutes":2,"shots_on_goal":4,"shot_attempts":8}])
     outcomes = pd.DataFrame([{"canonical_season":2026,"game_date":"2026-10-08","game_id":2026020001,
-        "player_id":11,"team_id":1,"official_goals":1,"official_assists":0,"official_final":True}])
+        "player_id":11,"team_id":1,"official_goals":1,"official_assists":0,"official_final":True,
+        "official_sog":4,"outcome_source_timestamp_utc":"2026-10-09T03:00:00Z"}])
     slate = pd.DataFrame([{"game_id":2026020066,"player_id":11,"game_date":"2026-10-09",
         "game_start_utc":"2026-10-10T01:00:00Z","is_home":True,"home_team_id":1,"away_team_id":2}])
     phoenix = pd.DataFrame([{"game_id":2026020066,"player_id":11,"line":line,"prob_over":prob}
@@ -165,7 +167,12 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
         "official_final":True,"participation_state":"PARTICIPATED",
         "slate_date":"2026-10-09"}]).to_csv(
             reconciliation/"canonical_skater_outcomes.csv",index=False)
-    pd.DataFrame([{"game_id":2026020066,"game_type_code":2,"official_final":True}]).to_csv(
+    pd.DataFrame([{"game_id":2026020066,"slate_date":"2026-10-09"}]).to_csv(
+        reconciliation/"canonical_admitted_slate.csv",index=False)
+    pd.DataFrame([{"game_id":2026020066,"slate_date":"2026-10-09","game_type_code":2,
+        "official_final":True,"official_final_home_goals":3,"official_final_away_goals":2,
+        "outcome_source":"NHL_OFFICIAL_GAMECENTER",
+        "outcome_source_timestamp_utc":"2026-10-10T03:00:00Z"}]).to_csv(
         reconciliation/"canonical_game_outcomes.csv",index=False)
     for name in ("graded_moneyline.csv","graded_puck_line.csv"):
         pd.DataFrame([{"game_id":2026020066,"grading_status":"REGULAR_SEASON_GRADED"}]).to_csv(
@@ -238,9 +245,11 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
 def test_capture_grading_validation_rejects_missing_or_rebound_immutable_evidence(tmp_path):
     # Build a small real capture through the frozen exporter/scorer path.
     logs = pd.DataFrame([{"game_id":2026020001,"player_id":11,"team_id":1,"is_home":True,
+        "home_team_id":1,"away_team_id":2,
         "toi_minutes":20,"pp_toi_minutes":2,"shots_on_goal":4,"shot_attempts":8}])
     outcomes = pd.DataFrame([{"canonical_season":2026,"game_date":"2026-10-08","game_id":2026020001,
-        "player_id":11,"team_id":1,"official_goals":1,"official_assists":0,"official_final":True}])
+        "player_id":11,"team_id":1,"official_goals":1,"official_assists":0,"official_final":True,
+        "official_sog":4,"outcome_source_timestamp_utc":"2026-10-09T03:00:00Z"}])
     slate = pd.DataFrame([{"game_id":2026020066,"player_id":11,"game_date":"2026-10-09",
         "game_start_utc":"2026-10-10T01:00:00Z","is_home":True,"home_team_id":1,"away_team_id":2}])
     source_paths = [tmp_path / name for name in ("logs.csv", "outcomes.csv", "slate.csv")]
