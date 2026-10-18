@@ -31,6 +31,7 @@ If the question is “what is the active runtime path right now?”:
 
 ## Architecture
 
+- `docs/PROJECT_BRIEF.md`: self-contained big-picture brief (architecture, data, status, risks) for discussions outside the codebase.
 - `docs/PROJECT_DOCTRINE.md`: permanent engineering doctrine for durable features, backfills, daily sustainability, visibility, and regression monitoring.
 - `docs/CANONICAL_IDENTITY_DOCTRINE.md`: official numeric identity, namespace mapping, and auditable resolution rules.
 - `docs/contracts/missingness_and_zero_semantics.md`: authoritative cross-sport contract for source missingness, verified zeros, aggregation denominators, and model-layer imputation.
