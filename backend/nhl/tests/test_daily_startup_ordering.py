@@ -68,6 +68,181 @@ class DailyStartupOrderingTests(unittest.TestCase):
                                             recorder=recorder)
         self.assertLess(events.index("schedule"), events.index("prior-learning"))
 
+    def test_roster_capture_completes_before_prior_learning_failure(self):
+        events = []
+        recorder = DailyRunRecorder(run_id="test", command=[], phase="EARLY")
+        game = SimpleNamespace(game_id=2026020084)
+        with tempfile.TemporaryDirectory() as temp, patch.object(
+            cli, "ROOT", Path(temp)
+        ), patch.object(cli, "require_db_url", return_value="db"), patch.object(
+            cli, "run", side_effect=lambda *a, **k: events.append("db")
+        ), patch.object(cli, "et_today", return_value="2026-10-18"), patch.object(
+            cli, "et_yesterday", return_value="2026-10-17"
+        ), patch.object(cli, "prior_et_slate", return_value="2026-10-17"), patch.object(
+            cli, "_bootstrap_daily_canonical_slate",
+            side_effect=lambda **kw: (
+                events.append("schedule") or
+                ({"completion_status": "READY"}, [game], "canonical-hash")
+            ),
+        ), patch.object(cli, "_capture_daily_slate_roster") as capture, patch.object(
+            cli, "ensure_prior_learning",
+            side_effect=lambda _: events.append("prior-learning") or
+            (_ for _ in ()).throw(RuntimeError("missing-prior-card")),
+        ):
+            def complete_roster(**kwargs):
+                events.append("roster")
+                kwargs["recorder"].finish_lane("roster", status="COMPLETE")
+            capture.side_effect = complete_roster
+            with patch.dict("os.environ", {}, clear=False), self.assertRaisesRegex(
+                RuntimeError, "missing-prior-card"
+            ):
+                cli._cmd_daily_impl(
+                    with_odds=True, morning_only=False, odds_phase="EARLY",
+                    daily_run_id="test", recorder=recorder,
+                )
+
+        self.assertLess(events.index("schedule"), events.index("roster"))
+        self.assertLess(events.index("roster"), events.index("prior-learning"))
+        self.assertEqual(recorder.lane("roster").status, "COMPLETE")
+        self.assertIsNone(recorder.prior_learning)
+        capture.assert_called_once()
+        self.assertEqual(capture.call_args.kwargs["slate"], "2026-10-18")
+        self.assertEqual(capture.call_args.kwargs["canonical_games"], [game])
+        self.assertEqual(capture.call_args.kwargs["game_hash"], "canonical-hash")
+
+    def test_roster_capture_uses_one_official_roster_child_and_receipt_identity(self):
+        recorder = DailyRunRecorder(run_id="daily-1", command=[], phase="EARLY")
+        recorder.set_canonical(
+            slate_date="2026-10-18", season=2026, game_ids=[2026020084],
+            game_set_hash="canonical-hash",
+        )
+        recorder.start_lane("roster")
+        with patch.object(cli, "run", return_value=SimpleNamespace(returncode=0)) as run, patch.object(
+            cli, "ROSTER_OBSERVATION_ROOT", Path("/roster-observations")
+        ):
+            run.side_effect = lambda cmd, **kwargs: (
+                recorder.record_child({
+                    "lane": "roster", "command_identity": str(cmd[-1]),
+                    "exit_status": 0, "status": "COMPLETE",
+                    "schema_version": "NHL_ROSTER_CHILD_SUMMARY_V2",
+                    "database_write_capable": True,
+                    "database_write_status": "COMMITTED",
+                    "transaction_disposition": "COMMITTED",
+                    "database_row_counts": {"roster_status_upsert_rows": 48},
+                    "database_row_counts_complete": False,
+                    "roster_observation": "/immutable/2026-10-18/obs-1",
+                    "roster_manifest_sha256": "abc123",
+                    "database_stage_summary": {"roster_status_rows_present": 48},
+                }) or SimpleNamespace(returncode=0)
+            )
+            cli._capture_daily_slate_roster(
+                slate="2026-10-18", odds_phase="EARLY", daily_run_id="daily-1",
+                recorder=recorder, reuse_roster_observation=None,
+                canonical_games=[SimpleNamespace(game_id=2026020084)],
+                game_hash="canonical-hash",
+            )
+
+        self.assertEqual(run.call_count, 1)
+        command = run.call_args.args[0]
+        self.assertEqual(Path(command[-1]).name, "refresh_players_and_roster_today.py")
+        self.assertNotEqual(Path(command[-1]).name, "import_roster_today.py")
+        self.assertEqual(run.call_args.kwargs["env"]["SLATE_DATE"], "2026-10-18")
+        self.assertEqual(run.call_args.kwargs["env"]["NHL_DAILY_PHASE"], "EARLY")
+        self.assertEqual(recorder.lane("roster").status, "COMPLETE")
+        self.assertEqual(recorder.roster_observation["path"], "/immutable/2026-10-18/obs-1")
+        self.assertEqual(recorder.roster_observation["manifest_sha256"], "abc123")
+        self.assertEqual(
+            recorder.lane("roster").database_stage_summary["roster_status_rows_present"], 48
+        )
+
+    def test_schedule_failure_prevents_roster_acquisition(self):
+        recorder = DailyRunRecorder(run_id="test", command=[], phase="EARLY")
+        with tempfile.TemporaryDirectory() as temp, patch.object(
+            cli, "ROOT", Path(temp)
+        ), patch.object(cli, "require_db_url", return_value="db"), patch.object(
+            cli, "run"
+        ), patch.object(cli, "et_today", return_value="2026-10-18"), patch.object(
+            cli, "et_yesterday", return_value="2026-10-17"), patch.object(
+            cli, "_bootstrap_daily_canonical_slate",
+            side_effect=RuntimeError("schedule-not-ready"),
+        ), patch.object(cli, "_capture_daily_slate_roster") as capture:
+            with patch.dict("os.environ", {}, clear=False), self.assertRaisesRegex(
+                RuntimeError, "schedule-not-ready"
+            ):
+                cli._cmd_daily_impl(
+                    with_odds=False, morning_only=False, odds_phase="EARLY",
+                    daily_run_id="test", recorder=recorder,
+                )
+        capture.assert_not_called()
+
+    def test_roster_failure_prevents_prior_learning(self):
+        recorder = DailyRunRecorder(run_id="test", command=[], phase="EARLY")
+        game = SimpleNamespace(game_id=2026020084)
+        with tempfile.TemporaryDirectory() as temp, patch.object(
+            cli, "ROOT", Path(temp)
+        ), patch.object(cli, "require_db_url", return_value="db"), patch.object(
+            cli, "run"
+        ), patch.object(cli, "et_today", return_value="2026-10-18"), patch.object(
+            cli, "et_yesterday", return_value="2026-10-17"), patch.object(
+            cli, "_bootstrap_daily_canonical_slate",
+            return_value=({"completion_status": "READY"}, [game], "hash"),
+        ), patch.object(cli, "_capture_daily_slate_roster",
+                        side_effect=RuntimeError("official-roster-failed")), patch.object(
+            cli, "ensure_prior_learning"
+        ) as learning:
+            with patch.dict("os.environ", {}, clear=False), self.assertRaisesRegex(
+                RuntimeError, "official-roster-failed"
+            ):
+                cli._cmd_daily_impl(
+                    with_odds=False, morning_only=False, odds_phase="EARLY",
+                    daily_run_id="test", recorder=recorder,
+                )
+        learning.assert_not_called()
+
+    def test_roster_capture_does_not_touch_prior_learning_feature_tables(self):
+        source = (cli.SCRIPTS_DIR / "refresh_players_and_roster_today.py").read_text()
+        self.assertIn("write_roster_observation(", source)
+        self.assertIn("with conn.transaction():", source)
+        self.assertIn("merge_roster_status_from_temp(", source)
+        self.assertIn("ROSTER_OBSERVATION_REQUIRES_OFFICIAL_RESPONSES", source)
+        self.assertNotIn("ensure_prior_learning", source)
+        daily_source = Path(cli.__file__).read_text()
+        self.assertLess(
+            daily_source.index("recorder.prior_learning = ensure_prior_learning(prior_date_et)"),
+            daily_source.index("# 2) Seed features for today (SOG + Saves)."),
+        )
+
+    def test_explicit_roster_reuse_disables_provider_fetch(self):
+        recorder = DailyRunRecorder(run_id="daily-1", command=[], phase="EARLY")
+        reused = Path("/immutable/2026-10-18/obs-1")
+        with patch.object(cli, "verify_roster_observation_reuse", return_value={
+            "path": str(reused), "manifest_sha256": "abc123",
+        }) as verify, patch.object(cli, "run", side_effect=lambda *a, **k: (
+            recorder.record_child({
+                "lane": "roster", "command_identity": "refresh_players_and_roster_today.py",
+                "exit_status": 0, "status": "COMPLETE",
+                "schema_version": "NHL_ROSTER_CHILD_SUMMARY_V2",
+                "database_stage_summary": {"roster_status_rows_present": 48},
+                "database_write_capable": True,
+                "database_write_status": "COMMITTED",
+                "transaction_disposition": "COMMITTED",
+                "database_row_counts": {}, "database_row_counts_complete": False,
+            }) or SimpleNamespace(returncode=0)
+        )) as run:
+            cli._capture_daily_slate_roster(
+                slate="2026-10-18", odds_phase="EARLY", daily_run_id="daily-1",
+                recorder=recorder, reuse_roster_observation=reused,
+                canonical_games=[SimpleNamespace(game_id=2026020084)],
+                game_hash="canonical-hash",
+            )
+
+        verify.assert_called_once()
+        self.assertEqual(run.call_count, 1)
+        env = run.call_args.kwargs["env"]
+        self.assertEqual(env["NHL_REUSE_ROSTER_OBSERVATION"], str(reused.resolve()))
+        self.assertEqual(env["NHL_FETCH_DISABLE"], "1")
+        self.assertEqual(recorder.lane("roster").status, "REUSED")
+
     def test_valid_initialized_empty_schedule_is_explicit(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

@@ -175,9 +175,9 @@ _ACTIVE_DAILY_LANE = "shared_prerequisites"
 DAILY_EXECUTION_GRAPH = (
     "DATABASE_SANITY",
     "CANONICAL_SCHEDULE_AND_SLATE_VALIDATION",
+    "SLATE_ROSTER_CAPTURE_AND_NORMALIZATION",
     "PRIOR_DATE_OUTCOME_FINALIZATION",
     "FULL_LEAGUE_ROSTER_REFRESH",
-    "SLATE_ROSTER_CAPTURE_AND_NORMALIZATION",
     "FEATURE_AND_PREDICTION_DURABILITY",
     "OPTIONAL_GOVERNED_ODDS_OBSERVATION",
     "OPTIONAL_MARKET_ATTACHMENT",
@@ -2516,6 +2516,61 @@ def _bootstrap_daily_canonical_slate(*, slate: str, recorder: DailyRunRecorder):
     return slate_health, canonical_games, game_hash
 
 
+def _capture_daily_slate_roster(
+    *, slate: str, odds_phase: str, daily_run_id: str,
+    recorder: DailyRunRecorder, reuse_roster_observation: Path | None,
+    canonical_games: Sequence[Any], game_hash: str,
+) -> None:
+    """Capture official current-slate roster evidence after schedule validation."""
+    recorder.start_lane("roster", inputs=[{
+        "canonical_game_set_hash": game_hash,
+        "reuse_requested": reuse_roster_observation is not None,
+    }])
+    global _ACTIVE_DAILY_LANE
+    _ACTIVE_DAILY_LANE = "roster"
+    roster_env = {
+        "SLATE_DATE": slate,
+        "NHL_DAILY_PHASE": odds_phase,
+        "NHL_PARENT_DAILY_RUN_ID": daily_run_id,
+        "NHL_ROSTER_OBSERVATION_ROOT": str(ROSTER_OBSERVATION_ROOT),
+    }
+    if reuse_roster_observation is not None:
+        reuse_reference = verify_roster_observation_reuse(
+            reuse_roster_observation,
+            season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+            slate_date=slate,
+            phase=odds_phase,
+            canonical_game_ids=[game.game_id for game in canonical_games],
+            canonical_game_set_hash=game_hash,
+        )
+        recorder.roster_observation = reuse_reference
+        roster_env["NHL_REUSE_ROSTER_OBSERVATION"] = str(reuse_roster_observation.resolve())
+        roster_env["NHL_FETCH_DISABLE"] = "1"
+
+    run([PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"], env=roster_env)
+    structured = next((
+        child for child in reversed(recorder.children)
+        if child.get("schema_version") in {
+            "NHL_ROSTER_CHILD_SUMMARY_V1", "NHL_ROSTER_CHILD_SUMMARY_V2",
+        }
+    ), None)
+    if structured:
+        if recorder.roster_observation is None and structured.get("roster_observation"):
+            recorder.roster_observation = {
+                "path": structured["roster_observation"],
+                "manifest_sha256": structured.get("roster_manifest_sha256"),
+                "reuse_mode": "NEW_IMMUTABLE_OBSERVATION",
+            }
+        recorder.finish_lane(
+            "roster", status="REUSED" if reuse_roster_observation else "COMPLETE",
+            outputs=[recorder.roster_observation] if recorder.roster_observation else [],
+            database_stage_summary=structured.get("database_stage_summary") or {},
+        )
+    else:
+        raise RuntimeError("ROSTER_CHILD_SUMMARY_MISSING")
+    _ACTIVE_DAILY_LANE = "shared_prerequisites"
+
+
 # ---------- daily pipeline ----------
 
 # --- REPLACE the very top of cmd_daily(with_odds: bool) down through the two print() lines ---
@@ -2578,6 +2633,16 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     # any production-lane lineage checks against retained daily receipts.
     slate_health, canonical_games, game_hash = _bootstrap_daily_canonical_slate(
         slate=slate, recorder=recorder)
+
+    # Current-slate roster evidence is independent of prior-day grading. Capture
+    # it as soon as the canonical game and team identities are verified so a
+    # missing prior prediction card cannot consume the pregame observation window.
+    if slate_health.get("completion_status") == "READY":
+        _capture_daily_slate_roster(
+            slate=slate, odds_phase=odds_phase, daily_run_id=daily_run_id,
+            recorder=recorder, reuse_roster_observation=reuse_roster_observation,
+            canonical_games=canonical_games, game_hash=game_hash,
+        )
 
     # Complete yesterday's official learning handoff before history updates.
     # Official NHL requests are governed; this path never invokes Odds API.
@@ -2784,57 +2849,6 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     # --- end early exit ---
 
     recorder.finish_lane("shared_prerequisites", database_rows_written=True)
-    recorder.start_lane("roster", inputs=[{
-        "canonical_game_set_hash": game_hash,
-        "reuse_requested": reuse_roster_observation is not None,
-    }])
-    _ACTIVE_DAILY_LANE = "roster"
-    roster_env = {
-        "SLATE_DATE": slate,
-        "NHL_DAILY_PHASE": odds_phase,
-        "NHL_PARENT_DAILY_RUN_ID": daily_run_id,
-        "NHL_ROSTER_OBSERVATION_ROOT": str(ROSTER_OBSERVATION_ROOT),
-    }
-    if reuse_roster_observation is not None:
-        reuse_reference = verify_roster_observation_reuse(
-            reuse_roster_observation,
-            season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
-            slate_date=slate,
-            phase=odds_phase,
-            canonical_game_ids=[game.game_id for game in canonical_games],
-            canonical_game_set_hash=game_hash,
-        )
-        recorder.roster_observation = reuse_reference
-        roster_env["NHL_REUSE_ROSTER_OBSERVATION"] = str(reuse_roster_observation.resolve())
-        roster_env["NHL_FETCH_DISABLE"] = "1"
-    else:
-        run(
-            [PY, SCRIPTS_DIR / "import_roster_today.py"],
-            env={"SLATE_DATE": slate, "SKIP_ROSTER_STATUS": "1", "SKIP_PLAYERS": "1"},
-        )
-    roster_result = run(
-        [PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"], env=roster_env)
-    structured = next((
-        child for child in reversed(recorder.children)
-        if child.get("schema_version") in {
-            "NHL_ROSTER_CHILD_SUMMARY_V1", "NHL_ROSTER_CHILD_SUMMARY_V2",
-        }
-    ), None)
-    if structured:
-        if recorder.roster_observation is None and structured.get("roster_observation"):
-            recorder.roster_observation = {
-                "path": structured["roster_observation"],
-                "manifest_sha256": structured.get("roster_manifest_sha256"),
-                "reuse_mode": "NEW_IMMUTABLE_OBSERVATION",
-            }
-        recorder.finish_lane(
-            "roster", status="REUSED" if reuse_roster_observation else "COMPLETE",
-            outputs=[recorder.roster_observation] if recorder.roster_observation else [],
-            database_stage_summary=structured.get("database_stage_summary") or {},
-        )
-    else:
-        raise RuntimeError("ROSTER_CHILD_SUMMARY_MISSING")
-    _ACTIVE_DAILY_LANE = "shared_prerequisites"
 
     # 2) Seed features for today (SOG + Saves).
     run_psql_file(SQL_DIR / "seed_sog_features_for_slate.sql",    vars={"slate_date": slate})

@@ -240,9 +240,36 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   future implementation. Separately, the mode-scoped missing-Saves handling
   documented above remains necessary for official prior-day outcomes, but it
   cannot restore October 17 prediction evidence.
-- Next step: authorize and implement the roster-before-prior-learning source
-  ordering correction and mode-scoped missing-Saves outcome handling, then
-  verify a natural pre-puck receipt. Keep the SOG schedule-spine question
+- Roster sequencing correction implemented locally: after the date-bound
+  schedule health and canonical game set are validated, daily now runs the
+  existing `refresh_players_and_roster_today.py` capture before
+  `ensure_prior_learning()`. The roster lane and its immutable observation
+  summary are recorded before prior-day learning starts; a subsequent prior-day
+  failure therefore leaves roster status complete in the parent receipt while
+  the shared prerequisite stage still fails and prevents downstream scoring.
+  Valid empty slates skip the roster child. Schedule validation remains a hard
+  prerequisite. Reused observations retain their existing canonical-set
+  verification and `NHL_FETCH_DISABLE=1` behavior.
+- Removed the adjacent current-slate `import_roster_today.py` invocation that
+  set both `SKIP_ROSTER_STATUS=1` and `SKIP_PLAYERS=1`. That path still fetched
+  every slate team but performed neither identity nor roster-status writes;
+  the governed refresh child already performs official source acquisition,
+  canonical player normalization, immutable observation persistence, and its
+  player/roster-status writes in one transaction. This removes a redundant
+  provider acquisition from the current-slate stage without changing the
+  separate full-league roster refresh.
+- Focused offline regression coverage in
+  `backend/nhl/tests/test_daily_startup_ordering.py` proves schedule → roster →
+  prior-learning order, roster receipt completion despite a missing-card
+  failure, single child invocation and date binding, explicit reuse with
+  provider fetching disabled, and schedule/roster failure stopping behavior.
+  It also asserts feature seeding remains after prior-day learning. Verification:
+  `./bin/python -m pytest backend/nhl/tests/test_daily_startup_ordering.py
+  backend/nhl/tests/test_postgame_learning_missing_prior_final.py -q` (18 passed).
+- Remaining: prior-day outcome reconciliation can still block feature scoring
+  and downstream daily lanes after the roster stage; the separate missing-Saves
+  prediction-card contract remains unresolved. Verify the new roster receipt on
+  the next natural pre-puck daily run. Keep the SOG schedule-spine question
   separate. Do not fabricate a final capture or weaken direct final-pregame
   reconciliation.
 

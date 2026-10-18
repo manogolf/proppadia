@@ -18,23 +18,34 @@ Operational NHL dates use `America/Los_Angeles`; durable timestamps use UTC
 and, where useful for review, their Pacific representation. The season is
 identified by its single starting year, such as season `2026`.
 
-The preserved comprehensive graph is:
+The comprehensive graph is:
 
 1. database sanity;
-2. full-league roster refresh;
-3. prior-date outcome, log, shift, manpower, and feature finalization;
-4. current-date schedule acquisition and canonical-slate validation;
-5. slate roster capture and player normalization;
-6. feature construction, prediction scoring, and prediction durability;
-7. optional governed odds observation, only with `--with-odds`;
-8. optional market attachment from that run-bound observation;
-9. research refresh, archival, integrity checks, and final sanity counts.
+2. current-date schedule acquisition and canonical-slate validation;
+3. current-slate roster capture and player normalization;
+4. prior-date outcome finalization;
+5. full-league roster refresh;
+6. prior-date log, shift, manpower, and feature finalization;
+7. feature construction, prediction scoring, and prediction durability;
+8. optional governed odds observation, only with `--with-odds`;
+9. optional market attachment from that run-bound observation;
+10. research refresh, archival, integrity checks, and final sanity counts.
 
-Before V1, step 7 wrote mutable odds files directly, could retry individual
+The current-slate roster capture follows verified schedule and canonical team
+identity readiness and runs before prior-date learning. Its official source
+observation and transaction-backed player/roster updates are independently
+recorded in the `roster` lane. A prior-date learning failure can still stop
+later daily features and predictions, but it does not prevent the current
+roster evidence from being captured and reported. A valid empty slate skips
+the roster child. Schedule validation and the roster child remain blocking
+prerequisites for downstream work.
+
+Before V1, the optional odds step wrote mutable odds files directly, could retry individual
 provider calls, and represented failures as empty results. V1 retains the same
 comprehensive graph while placing immutable roster evidence before roster DML,
 placing prediction durability before optional odds, and binding market builders
-only to the current immutable observation. Roster and prediction work does not
+only to the current immutable observation. Current-slate roster capture does
+not depend on prior-day outcome or grading readiness. Prediction work does not
 depend on odds availability or canonical market matching.
 
 ## Odds observations
