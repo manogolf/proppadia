@@ -126,6 +126,29 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   status and that all normal current-slate lanes continue. Do not fabricate a
   final capture or weaken direct final-pregame reconciliation.
 
+### P2.10 Repair mainline FINAL_PREGAME observer readiness
+
+- Status: **ROOT CAUSE CONFIRMED — targeted producer correction proposed**.
+  October 17 had 95 active LaunchAgent polls, all blocked as
+  `NOOP_MORNING_NOT_READY` with zero paid calls. The first two daily attempts
+  failed before current-slate lanes because the prior slate lacked an
+  immutable Points `FINAL_PREGAME` capture. A later daily run produced a
+  verified current-slate REFRESH while three later games remained; the next
+  final-pregame window was missed because the observer requires exact daily
+  `READY` and rejects both `READY_WITH_BOUNDED_LANE_WARNING` and the verified
+  prior-learning status `REUSED_VALID_PACKAGE`.
+- Evidence: `docs/nhl/final_pregame_capture_root_cause_2026-10-18.md`;
+  `backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py`;
+  October 17 observer status receipts and daily parent receipts under
+  `artifacts/operational/nhl/`.
+- Next: make the existing observer readiness lane-scoped to verified
+  mainline inputs, accept bounded-warning/reused-package statuses only after
+  the corresponding artifact checks pass, and remove unrelated prior-day
+  player-prop capture dependencies. Add focused offline tests for valid
+  warning/reuse states, true mainline failures, and staggered starts. Keep
+  direct reconciliation's exact-one FINAL_PREGAME requirement unchanged.
+  Do not manufacture or relabel October 17 evidence.
+
 ### P2.3 Close documented historical source-integrity gaps
 
 - Status: **OPEN** — the research-only
