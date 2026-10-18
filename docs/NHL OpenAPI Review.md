@@ -9,7 +9,7 @@
 Regenerate snapshot:
 
 ```bash
-.venv/bin/python - <<'PY'
+./bin/python - <<'PY'
 from backend.app.api_server import app
 import json
 spec = app.openapi()

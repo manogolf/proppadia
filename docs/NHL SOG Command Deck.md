@@ -44,7 +44,7 @@ grading/book-upload workflow below. The upload remains manual.
 1. Run today's normal pipeline and acquire fresh odds:
 
    ```bash
-   .venv/bin/python -m backend.nhl.cli daily --with-odds
+   ./bin/python -m backend.nhl.cli daily --with-odds
    ```
 
 2. Run the current-slate mainline cross-market capture. Use `AUTO` for the
@@ -52,7 +52,7 @@ grading/book-upload workflow below. The upload remains manual.
 
    ```bash
    SLATE=$(TZ=America/New_York date +%F)
-   .venv/bin/python backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py \
+   ./bin/python backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py \
      --slate-date "$SLATE" --phase AUTO
    ```
 
@@ -171,7 +171,7 @@ set -a && source backend/.env && set +a
 Step 2. Run NHL daily pipeline.
 
 ```bash
-.venv/bin/python -m backend.nhl.cli daily --with-odds
+./bin/python -m backend.nhl.cli daily --with-odds
 ```
 
 This is the canonical comprehensive runner. `bin/nhl_ops.sh daily` is its
@@ -204,7 +204,7 @@ Daily archive note:
 Step 3. Legacy SOG full-slate book-upload file (all rows; not the 8rain adapter).
 
 ```bash
-.venv/bin/python backend/nhl/scripts/export_sog_denali_book_upload.py
+./bin/python backend/nhl/scripts/export_sog_denali_book_upload.py
 ```
 
 Step 3b (optional). Trigger bakeoff on larger slates only (`>=8` games).
@@ -236,7 +236,7 @@ Matchup confirmation note (auto-enabled):
 
 ```bash
 SLATE=$(date +%F)
-.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+./bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --game-date "$SLATE" \
   --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" \
   --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json" \
@@ -256,7 +256,7 @@ SLATE=$(date +%F)
 
 ```bash
 SLATE=$(date +%F)
-.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+./bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --policy-json backend/nhl/config/nhl_sog_active_candidate_policy_v1.json \
   --game-date "$SLATE" \
   --min-train-wilson-lb 0.50 \
@@ -276,7 +276,7 @@ SLATE=$(date +%F)
 
 ```bash
 SLATE=$(date +%F)
-.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+./bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --policy-json tmp/analysis/walkforward_exec/nhl_sog_walkforward_exec_summary.json \
   --game-date "$SLATE" \
   --segment-disable over:3.5 \
@@ -297,7 +297,7 @@ to `tmp/analysis/cards_shadow/`.
 ```bash
 SLATE=$(date +%F)
 
-.venv/bin/python backend/nhl/scripts/build_sog_recency_policy_json.py \
+./bin/python backend/nhl/scripts/build_sog_recency_policy_json.py \
   --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv \
   --as-of-date "$SLATE" \
   --window-days 30 \
@@ -305,7 +305,7 @@ SLATE=$(date +%F)
   --fallback-policy-json backend/nhl/config/nhl_sog_active_candidate_policy_v1.json \
   --out-json "tmp/analysis/cards_shadow/nhl_sog_policy_${SLATE}_4d_recency30.json"
 
-.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+./bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --market-csv nhl/site/data/sog_with_market.csv \
   --policy-json "tmp/analysis/cards_shadow/nhl_sog_policy_${SLATE}_4d_recency30.json" \
   --game-date "$SLATE" \
@@ -328,7 +328,7 @@ Wager-history reconciliation note:
 
 ```bash
 SLATE=2026-03-14
-.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+./bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --policy-json backend/nhl/config/nhl_sog_active_candidate_policy_v1.json \
   --game-date "$SLATE" \
   --segment-disable over:1.5 \
@@ -356,7 +356,7 @@ SLATE=2026-03-14
 1. Rebuild walk-forward thresholds using executable two-sided prices and realized PnL objective.
 
 ```bash
-.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward_executable.py \
+./bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward_executable.py \
   --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv \
   --odds-root backend/nhl/exports/odds_history \
   --bookmaker betonlineag \
@@ -377,7 +377,7 @@ SLATE=2026-03-14
 
 ```bash
 SLATE=$(date +%F)
-.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+./bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --policy-json tmp/analysis/walkforward_exec/nhl_sog_walkforward_exec_summary.json \
   --game-date "$SLATE" \
   --segment-disable over:3.5 \
@@ -397,7 +397,7 @@ Use this to produce one scoreboard that shows:
 - placed-stream alignment metrics from anchored reconcile
 
 ```bash
-.venv/bin/python backend/nhl/scripts/build_sog_truth_scoreboard.py \
+./bin/python backend/nhl/scripts/build_sog_truth_scoreboard.py \
   --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv \
   --odds-root backend/nhl/exports/odds_history \
   --bookmaker betonlineag \
@@ -419,12 +419,12 @@ Use this when evaluating challenger model foundations on the same holdout popula
 1. Build comparable rows from month-end holdout probabilities.
 
 ```bash
-.venv/bin/python backend/nhl/scripts/build_sog_rows_from_holdout_probs.py \
+./bin/python backend/nhl/scripts/build_sog_rows_from_holdout_probs.py \
   --in-csv tmp/nhl_sog_market_residual_monthend14_holdout_rows.csv \
   --model-prob-col p_base \
   --out-csv tmp/analysis/challenger/rows_base_prob_monthend14.csv
 
-.venv/bin/python backend/nhl/scripts/build_sog_rows_from_holdout_probs.py \
+./bin/python backend/nhl/scripts/build_sog_rows_from_holdout_probs.py \
   --in-csv tmp/nhl_sog_market_residual_monthend14_holdout_rows.csv \
   --model-prob-col p_model \
   --out-csv tmp/analysis/challenger/rows_residual_prob_monthend14.csv
@@ -433,7 +433,7 @@ Use this when evaluating challenger model foundations on the same holdout popula
 2. Optimize executable thresholds for each foundation.
 
 ```bash
-.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward_executable.py \
+./bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward_executable.py \
   --rows-csv tmp/analysis/challenger/rows_base_prob_monthend14.csv \
   --odds-root backend/nhl/exports/odds_history \
   --bookmaker betonlineag \
@@ -449,7 +449,7 @@ Use this when evaluating challenger model foundations on the same holdout popula
   --out-threshold-history-csv tmp/analysis/challenger/base_prob_exec_threshold_history.csv \
   --out-summary-json tmp/analysis/challenger/base_prob_exec_summary.json
 
-.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward_executable.py \
+./bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward_executable.py \
   --rows-csv tmp/analysis/challenger/rows_residual_prob_monthend14.csv \
   --odds-root backend/nhl/exports/odds_history \
   --bookmaker betonlineag \
@@ -469,7 +469,7 @@ Use this when evaluating challenger model foundations on the same holdout popula
 3. Build challenger scoreboard (supports strategy-specific rows via `@ROWS_CSV`).
 
 ```bash
-.venv/bin/python backend/nhl/scripts/build_sog_truth_scoreboard.py \
+./bin/python backend/nhl/scripts/build_sog_truth_scoreboard.py \
   --rows-csv tmp/analysis/challenger/rows_base_prob_monthend14.csv \
   --odds-root backend/nhl/exports/odds_history \
   --bookmaker betonlineag \
@@ -497,13 +497,13 @@ This writes a shadow card only (no candidate-upload overwrite).
 SLATE=$(date +%F)
 
 # baseline (already used in production path)
-.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+./bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --game-date "$SLATE" \
   --out-csv "tmp/cards/nhl_sog_card_${SLATE}.csv" \
   --out-json "tmp/cards/nhl_sog_card_${SLATE}_summary.json"
 
 # toggled shadow card for reconcile
-.venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+./bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --game-date "$SLATE" \
   --out-csv "tmp/analysis/cards_shadow/nhl_sog_card_${SLATE}_toggles.csv" \
   --out-json "tmp/analysis/cards_shadow/nhl_sog_card_${SLATE}_toggles_summary.json" \
@@ -529,7 +529,7 @@ Quick reconcile (baseline vs toggles):
 
 ```bash
 SLATE=$(date +%F)
-.venv/bin/python - <<'PY'
+./bin/python - <<'PY'
 import pandas as pd
 from pathlib import Path
 
@@ -550,21 +550,21 @@ Use this to generate shadow candidate-card arms for the same slate plus one over
 
 ```bash
 SLATE=$(date +%F)
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE"
+PYTHONPATH=. ./bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE"
 ```
 
 Strict mode (require calibration success, fail if any arm fails):
 
 ```bash
 SLATE=$(date +%F)
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE" --strict-calibration --strict-arms
+PYTHONPATH=. ./bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE" --strict-calibration --strict-arms
 ```
 
 Optional residual arm controls:
 
 ```bash
 SLATE=$(date +%F)
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py \
+PYTHONPATH=. ./bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py \
   --slate-date "$SLATE" \
   --residual-history-rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv \
   --residual-min-train-rows-per-line 400 \
@@ -575,7 +575,7 @@ Optional `base_v2_calibrated` arm (strengthen base with team-env + opponent-supp
 
 ```bash
 SLATE=$(date +%F)
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py \
+PYTHONPATH=. ./bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py \
   --slate-date "$SLATE" \
   --enable-base-v2-arm \
   --base-v2-features-csv "backend/nhl/exports/daily/sog_features/sog_features_${SLATE}_denali.csv" \
@@ -592,7 +592,7 @@ Optional full-refit arm controls (shadow only):
 
 ```bash
 SLATE=$(date +%F)
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py \
+PYTHONPATH=. ./bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py \
   --slate-date "$SLATE" \
   --full-refit-dataset-csv backend/nhl/data/analysis/sog_poisson_residual_dataset_season_2025.csv \
   --full-refit-odds-root backend/nhl/exports/odds_history \
@@ -606,14 +606,14 @@ Disable residual arm:
 
 ```bash
 SLATE=$(date +%F)
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE" --disable-residual-arm
+PYTHONPATH=. ./bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE" --disable-residual-arm
 ```
 
 Disable full-refit arm:
 
 ```bash
 SLATE=$(date +%F)
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE" --disable-full-refit-arm
+PYTHONPATH=. ./bin/python backend/nhl/scripts/run_sog_candidate_arm_bakeoff.py --slate-date "$SLATE" --disable-full-refit-arm
 ```
 
 Standalone `base_v2` scorer (writes shadow wide CSV + optional holdout diagnostics):
@@ -621,7 +621,7 @@ Standalone `base_v2` scorer (writes shadow wide CSV + optional holdout diagnosti
 ```bash
 SLATE=$(date +%F)
 set -a; source backend/.env; set +a
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/score_sog_poisson_base_v2_shadow.py \
+PYTHONPATH=. ./bin/python backend/nhl/scripts/score_sog_poisson_base_v2_shadow.py \
   --in "backend/nhl/exports/daily/sog_features/sog_features_${SLATE}_denali.csv" \
   --out "tmp/analysis/challenger/sog_predictions_wide_base_v2_shadow_${SLATE}.csv" \
   --slate-date "$SLATE" \
@@ -651,7 +651,7 @@ Use this to explain one pick step-by-step (`offense -> defense -> calibration ->
 
 ```bash
 SLATE=$(date +%F)
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/explain_sog_pick_waterfall.py \
+PYTHONPATH=. ./bin/python backend/nhl/scripts/explain_sog_pick_waterfall.py \
   --slate-date "$SLATE" \
   --arm defense_blend_calibrated \
   --player-id 8482702 \
@@ -673,7 +673,7 @@ Use defense model outputs only (no segmented calibration), then build/upload can
 SLATE=$(date +%F)
 
 # assumes bakeoff was already run for this slate (creates sog_predictions_shadow_wide.csv)
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/build_sog_with_market.py \
+PYTHONPATH=. ./bin/python backend/nhl/scripts/build_sog_with_market.py \
   --pred "tmp/analysis/arm_bakeoff/${SLATE}/sog_predictions_shadow_wide.csv" \
   --names "backend/nhl/exports/daily/names/names_${SLATE}.csv" \
   --odds-json nhl/site/data/odds_latest.json \
@@ -681,7 +681,7 @@ PYTHONPATH=. .venv/bin/python backend/nhl/scripts/build_sog_with_market.py \
   --unmatched "tmp/analysis/arm_bakeoff/${SLATE}/defense_raw/unmatched_sog_defense_raw.csv" \
   --slate-date "$SLATE"
 
-PYTHONPATH=. .venv/bin/python backend/nhl/scripts/select_sog_candidates_live.py \
+PYTHONPATH=. ./bin/python backend/nhl/scripts/select_sog_candidates_live.py \
   --market-csv "tmp/analysis/arm_bakeoff/${SLATE}/defense_raw/sog_with_market_defense_raw.csv" \
   --policy-json backend/nhl/config/nhl_sog_active_candidate_policy_v1.json \
   --game-date "$SLATE" \
@@ -715,7 +715,7 @@ Preferred (auto-pick newest grader CSV in Downloads):
 ```bash
 GRADER_CSV="$(ls -t ~/Downloads/8rainstation_daily_*.csv | head -n 1)"
 [ -n "$GRADER_CSV" ] || { echo "No grader CSV found in ~/Downloads"; exit 1; }
-.venv/bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
+./bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
 ```
 
 Outputs:
@@ -730,19 +730,19 @@ Preferred (auto-pick newest grader CSV in Downloads):
 ```bash
 GRADER_CSV="$(ls -t ~/Downloads/8rainstation_daily_*.csv | head -n 1)"
 [ -n "$GRADER_CSV" ] || { echo "No grader CSV found in ~/Downloads"; exit 1; }
-.venv/bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
+./bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
 DATE_TAG="$(basename "$GRADER_CSV" .csv | sed 's/^8rainstation_daily_//' | tr '_' '-')"
 NHL_SPLIT_CSV="tmp/graded/8rainstation_daily_${DATE_TAG}_nhl.csv"
-.venv/bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$NHL_SPLIT_CSV"
+./bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$NHL_SPLIT_CSV"
 ```
 
 Manual (specific file path):
 
 ```bash
 GRADER_CSV=/Users/jerrystrain/Downloads/8rainstation_daily_YYYY_MM_DD.csv
-.venv/bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
+./bin/python backend/scripts/split_grader_csv_by_sport.py --in-csv "$GRADER_CSV"
 NHL_SPLIT_CSV=tmp/graded/8rainstation_daily_YYYY-MM-DD_nhl.csv
-.venv/bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$NHL_SPLIT_CSV"
+./bin/python backend/nhl/scripts/summarize_nhl_grader_csv.py --in-csv "$NHL_SPLIT_CSV"
 ```
 
 Outputs:
@@ -755,7 +755,7 @@ Step 8. Run anchored reevaluation from `2026-03-04` through latest graded day (p
 
 ```bash
 ANCHOR_FROM=2026-03-04
-.venv/bin/python backend/nhl/scripts/anchored_reconcile_sog_graded_policy.py \
+./bin/python backend/nhl/scripts/anchored_reconcile_sog_graded_policy.py \
   --anchor-from "$ANCHOR_FROM"
 ```
 
@@ -764,7 +764,7 @@ Optional explicit end date:
 ```bash
 ANCHOR_FROM=2026-03-04
 ANCHOR_TO=$(date +%F)
-.venv/bin/python backend/nhl/scripts/anchored_reconcile_sog_graded_policy.py \
+./bin/python backend/nhl/scripts/anchored_reconcile_sog_graded_policy.py \
   --anchor-from "$ANCHOR_FROM" \
   --anchor-to "$ANCHOR_TO"
 ```
@@ -776,7 +776,7 @@ Outputs:
 Step 9. Run live truth gate (uses placed+graded wagers only) before upload decisions.
 
 ```bash
-.venv/bin/python backend/nhl/scripts/live_truth_gate_sog.py \
+./bin/python backend/nhl/scripts/live_truth_gate_sog.py \
   --anchor-from 2026-03-04 \
   --window-days 7 \
   --min-segment-bets 20 \
@@ -840,13 +840,13 @@ Examples:
 1. Reconcile model rows vs BetOnline to produce row-level report.
 
 ```bash
-.venv/bin/python -m backend.nhl.scripts.reconcile_sog_base_vs_betonline_by_month --from-date 2025-10-07 --to-date $(date +%F) --out-csv tmp/nhl_sog_base_vs_betonline_monthly.csv --out-json tmp/nhl_sog_base_vs_betonline_monthly.json --out-rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv
+./bin/python -m backend.nhl.scripts.reconcile_sog_base_vs_betonline_by_month --from-date 2025-10-07 --to-date $(date +%F) --out-csv tmp/nhl_sog_base_vs_betonline_monthly.csv --out-json tmp/nhl_sog_base_vs_betonline_monthly.json --out-rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv
 ```
 
 2. Re-optimize walk-forward thresholds from row report.
 
 ```bash
-.venv/bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward.py --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv --objective expected_roi --objective-slippage-cents 5 --out-picks-csv tmp/nhl_sog_walkforward_selected.csv --out-threshold-history-csv tmp/nhl_sog_walkforward_threshold_history.csv --out-summary-json tmp/nhl_sog_walkforward_research_summary.json
+./bin/python backend/nhl/scripts/optimize_sog_entry_thresholds_walkforward.py --rows-csv tmp/nhl_sog_base_vs_betonline_rows.csv --objective expected_roi --objective-slippage-cents 5 --out-picks-csv tmp/nhl_sog_walkforward_selected.csv --out-threshold-history-csv tmp/nhl_sog_walkforward_threshold_history.csv --out-summary-json tmp/nhl_sog_walkforward_research_summary.json
 ```
 
 ## Output Paths
@@ -985,7 +985,7 @@ git update-index --no-skip-worktree \
 ## Odds History Backfill (SOG-only)
 
 ```bash
-.venv/bin/python backend/nhl/scripts/backfill_nhl_oddsapi_history.py --season 2025 --to-date 2026-03-01 --markets player_shots_on_goal_alternate --regions us --max-days 10 --sleep-ms 250
+./bin/python backend/nhl/scripts/backfill_nhl_oddsapi_history.py --season 2025 --to-date 2026-03-01 --markets player_shots_on_goal_alternate --regions us --max-days 10 --sleep-ms 250
 ```
 
 Writes to:

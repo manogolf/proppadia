@@ -7,7 +7,7 @@ This is a separate research data path. It does not feed the daily prop pipeline,
 Run from the repository root with the qualified environment:
 
 ```sh
-.venv/bin/python -m backend.nhl.scripts.build_nhl_clean_moneyline_team_history
+./bin/python -m backend.nhl.scripts.build_nhl_clean_moneyline_team_history
 ```
 
 The builder reads the certified regular-season game ID inventory at `artifacts/analysis/model_development/nhl_moneyline_strict_prior_control_v2_and_sog_conditional_test/2026-09-15/corrected_spine_{2023,2024,2025}.csv`. It acquires official NHL club-season schedules and gamecenter boxscores, preserving each original JSON response under `artifacts/operational/nhl/moneyline_team_history/raw/season=.../`. Existing raw responses are immutable: a different response for an occupied path stops the build.
@@ -33,7 +33,7 @@ Chronology is `scheduled_start_time_utc < target.scheduled_start_time_utc`; equa
 Focused unit tests:
 
 ```sh
-.venv/bin/python -m unittest backend.nhl.tests.test_clean_moneyline_team_history
+./bin/python -m unittest backend.nhl.tests.test_clean_moneyline_team_history
 ```
 
 After acquiring sources, run the builder twice to separate output directories and compare `reproducibility_hashes.json`. Official calls use bounded concurrency and retries; a failed historical boxscore stops the build rather than substituting skater-derived statistics.

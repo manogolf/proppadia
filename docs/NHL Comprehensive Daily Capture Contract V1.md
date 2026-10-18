@@ -219,6 +219,24 @@ The October 18 follow-up found no date directory under retained
 outcomes. The retained SOG source hash and prior legacy-grade hashes still
 match. No additional grading run was performed.
 
+### Late outcomes and delayed research grading
+
+Missing a preferred pregame poll never authorizes creating, relabeling, or
+backdating a prediction after its game's start. Preserve any retained partial
+or otherwise useful source with its original phase and evidence class; missing
+procedural proof remains missing. The ordinary prior-day outcome handoff may
+later acquire and reconcile official finals, but prediction absence does not
+block certification of complete official outcomes in prior-learning mode.
+Research grading may proceed only after the exact date-bound official outcome
+package is independently verified as complete and `CERTIFIED_FINAL`. Then the
+local research evaluator may grade eligible retained observations without
+acquisition, database writes, or changes to governed or legacy populations.
+If that package is absent, incomplete, corrupt, or not final, the research
+result is `NOT_READY`; do not substitute cross-market outcome summaries or
+reconstruct outcomes. A later certificate does not upgrade
+`CORROBORATED_PREGAME` to `VERIFIED_PROSPECTIVE` without the stronger
+source-time evidence required by that class.
+
 Prior-date reconciliation is the first substantive daily operation after the
 database connectivity check. Daily work may continue only with a verified,
 date-bound complete reconciliation package whose official outcome rows are
@@ -241,10 +259,9 @@ The host wake event is preparation for early network responsiveness and
 availability. No separate NHL stir process or LaunchAgent is identified in
 the retained configuration; wake itself does not run NHL code or write NHL
 analytical state. A wake or observer poll is not a reconciliation bypass.
-When an explicitly authorized read-only test fails on sandbox DNS or transport,
-Codex must request elevated network permission and retry that same test before
-classifying the condition as a genuine provider or database connectivity
-failure. Load configured environment values without printing credentials.
+Repository command, environment, and sandbox network-escalation rules are
+owned by root `AGENTS.md`; this contract does not duplicate them. NHL tests
+that require database writes must use an authorized isolated test database.
 
 After that checkpoint, the current-slate schedule and canonical identities are
 validated, then the existing governed roster child captures official roster

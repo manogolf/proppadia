@@ -7,14 +7,14 @@
 - `NATURAL_LIVE_CAPTURE_OBSERVED`: the installed 900-second observer has produced a valid immutable snapshot on an eligible live slate.
 - `MARKET_ATTACHMENT_READY`: a separately governed downstream market run can attach qualified prices. This is not required for prediction creation.
 
-Before this correction, Points and Saves were only `MODEL/FIXTURE_READY`. Their normal shadow commands required quote-run directories, and their only market-free operational helper was fixed to the September 19 catch-up. They now have general prediction-only entry points. `NATURAL_LIVE_CAPTURE_OBSERVED` remains pending until the next nonempty pregame slate on or after September 21, 2026.
+Before this correction, Points and Saves were only `MODEL/FIXTURE_READY`. Their normal shadow commands required quote-run directories, and their only market-free operational helper was fixed to the September 19 catch-up. They now have general prediction-only entry points. The October 18 comprehensive daily run generated Points, Saves, and SOG predictions, but that does not satisfy `NATURAL_LIVE_CAPTURE_OBSERVED`, which specifically requires a valid immutable observer snapshot. The October 18 SOG MIDDAY observer status explicitly declared `NONE_PREDICTION_ONLY`; it and the associated parent did not bind certified prior history or roster proof. That source remains `CORROBORATED_PREGAME` research evidence only. The 18:42 poll was outside the prediction window and produced no FINAL_PREGAME observer cards. Governed in-window observer acceptance therefore remains pending; see the comprehensive contract and backlog P2.15–P2.17.
 
 ## Commands
 
 Points:
 
 ```sh
-.venv/bin/python backend/nhl/scripts/run_nhl_points_prediction_only.py \
+./bin/python backend/nhl/scripts/run_nhl_points_prediction_only.py \
   --season 2026 --slate-date YYYY-MM-DD --phase MIDDAY \
   --observation-timestamp-utc ACTUAL_UTC_TIMESTAMP \
   --canonical-run-identifier GOVERNED_RUN_ID
@@ -23,7 +23,7 @@ Points:
 Saves:
 
 ```sh
-.venv/bin/python backend/nhl/scripts/run_nhl_saves_prediction_only.py \
+./bin/python backend/nhl/scripts/run_nhl_saves_prediction_only.py \
   --season 2026 --slate-date YYYY-MM-DD --phase MIDDAY \
   --observation-timestamp-utc ACTUAL_UTC_TIMESTAMP \
   --canonical-run-identifier GOVERNED_RUN_ID
@@ -62,7 +62,7 @@ history export, phase selection, and paid odds access.
 The operator-facing comprehensive path remains:
 
 ```sh
-.venv/bin/python -m backend.nhl.cli daily --with-odds
+./bin/python -m backend.nhl.cli daily --with-odds
 ```
 
 Its schedule, roster, feature, and prediction stages are independent of odds.

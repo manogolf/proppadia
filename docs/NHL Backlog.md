@@ -617,10 +617,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   either the test or writer.
 - The wake event is intended for early host/network responsiveness. No
   separate NHL stir process or LaunchAgent is identified; the retained OS wake
-  configuration itself invokes no NHL code or analytical writes. For an
-  explicitly authorized read-only test blocked on sandbox DNS/transport,
-  request elevated permission and retry the exact test before classifying a
-  connectivity failure. No credentials or connection strings belong in logs.
+  configuration itself invokes no NHL code or analytical writes. Repository
+  sandbox escalation and secret-handling instructions are owned by root
+  `AGENTS.md`; the test-specific result above distinguishes that transport
+  restriction from the functional precision assertion.
 
 ### P2.15 Separate NHL roster acquisition failures from readiness timing
 
@@ -863,6 +863,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 ### P2.17 Resolve final-pregame evidence per game without rewriting captures
 
 - Status: **IMPLEMENTED — reconciliation source discovery, selection, and separate grading outputs added; bounded retained-slate acceptance found and corrected source-discovery defects; natural-run acceptance remains open**.
+- Implementation lineage reviewed here: `e4cdee47` establishes the prior-learning
+  handoff and observer readiness gates; `e6a9f976` integrates the distinct
+  `RESILIENT_PREGAME` reconciliation population; `41b66d64` tightens durable
+  receipt binding; `0dabaad3` adds research-only evidence classes and grading;
+  `087da78d` records the October 18 `NOT_READY` outcome follow-up. These
+  commits do not change Moneyline model authority or legacy FINAL_PREGAME
+  populations.
 - Evidence: mainline, SOG, Points, and Saves AUTO phase selection is keyed to
   the earliest unstarted game and its 20–75 minute window. Their publication
   eligibility and final durability checks are per game. However, each lane's
