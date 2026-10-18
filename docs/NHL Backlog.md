@@ -134,6 +134,43 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   boxscores and source coverage, retain a hashed before/after proposal, and
   obtain separate authorization before any production correction.
 
+### P2.5 Complete the October 17 prospective performance synthesis
+
+- Status: **ANALYSIS COMPLETE — descriptive only**. The retained 2026 daily
+  grade summaries through October 16 were deduplicated by latest slate-date
+  revision and synthesized with the existing paired Moneyline, Puck Line,
+  SOG, and Points analyses. The result preserves separate model roles and
+  evaluation windows, reports settled denominators, and does not alter
+  production authority. Moneyline and Puck Line have bounded single-book
+  descriptive ROI studies; SOG has partial market coverage; Points and Saves
+  do not have complete bound market coverage. No ROI is inferred for the
+  latter lanes.
+- References: `docs/nhl/2026_prospective_performance_evaluation_2026-10-17.md`;
+  `artifacts/analysis/nhl/moneyline_prospective_performance/2026-10-13/`;
+  `artifacts/analysis/nhl/puck_line_framework_viability/2026-10-14/`;
+  `artifacts/analysis/nhl/sog_fixed_blend_prospective_evaluation/2026-10-14/`;
+  latest per-date learning summaries under
+  `artifacts/operational/nhl/postgame_reconciliation/learning_restatements/`.
+- Completion: no further action for this synthesis. Continue the three
+  bounded follow-ups listed in its report without changing current production
+  models.
+
+### P2.6 Define and implement an all-candidate raw CSV research export
+
+- Status: **OPEN — contract documented; exporter not implemented**. The
+  current SOG command-deck path retains raw decision ledgers but emits a
+  reference-only combined current-slate CSV; it excludes challenger rows.
+  External filtering needs a create-only raw prediction population that keeps
+  every eligible model arm and no-quote prediction before filters, with
+  timestamped quote rows, natural identities, hashes, and separate derived
+  filter outputs.
+- Reference: `docs/nhl/2026_prospective_performance_evaluation_2026-10-17.md`
+  (Practical raw CSV export contract); `docs/NHL SOG Command Deck.md`.
+- Completion: implement and validate the two-file prediction/quote package,
+  explicit quote coverage diagnostics, manifest hashes, and a separate
+  filter-output lineage. Do not change existing manual-upload behavior or
+  imply that a candidate was executed.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** 46,379 2023–24 shot-attempt corrections;
