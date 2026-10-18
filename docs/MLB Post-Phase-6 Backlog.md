@@ -654,6 +654,31 @@ writer validation does not authorize a hosted cutover or a different writer.
   returned 323 training rows. See
   `artifacts/operational/mlb/research_reader_activation/2026-10-17/activation_receipt.json`
   for per-reader outcomes and remaining natural-run checks.
+- Follow-up for the two separately invoked hits reports: the SQL projections
+  already supplied `d7_hits`/`d30_hits`; the report merge collided with those
+  names in the reconciliation CSV and pandas renamed both copies with `_x`/
+  `_y`, while downstream calculations expected the database feature names.
+  Both reports now use the database-backed snapshot as the canonical unsuffixed
+  columns and suffix only colliding reconciliation columns. The focused
+  regression test passed for both entrypoints (`2 passed`). Bounded one-day
+  production reads for 2026-04-09 completed through the existing research
+  connection: recency returned 114 side rows; interaction returned 114 side
+  rows and 153 surface rows. The shared research helper enforced a read-only
+  transaction and checked `session_user=current_user=proppadia_mlb_research_login`
+  with `proppadia_mlb_research_ro` inherited. Outputs were written under
+  `/private/tmp`. This closes the report dataframe failure; it does not change
+  either report's feature definitions or calculations.
+- The `local_daily_20261017T233005Z` workspace build did not reach the view
+  refresh. The stdout log starts the build at 23:38:48Z and points to
+  `backend/mlb/exports/odds_history/2026-10-17/mlb_slate_output.csv`; stderr at
+  23:38:49Z records `FileNotFoundError: slate csv not found` and
+  `workspace build failed rc=1`. There is no run-specific
+  `START mlb-today workspace materialized view refresh` or
+  `refresh_today_workspace_views()` evidence after that failure. Thus the four
+  materialized views and `/mlb/today` remain unverified for this run; the
+  existing qualified-model gate and source-readiness warning must be addressed
+  before the next natural-run confirmation. No refresh was retried as part of
+  this read-only verification.
 
 ### P2.3 Review broad API-role permissions against consumer dependencies
 

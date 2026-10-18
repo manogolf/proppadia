@@ -160,7 +160,14 @@ def _side_rows(reconcile: pd.DataFrame, features: pd.DataFrame) -> pd.DataFrame:
     work["date_key"] = work["game_date"].map(_date_key)
     work["game_id_key"] = pd.to_numeric(work["game_id"], errors="coerce").astype("Int64")
     work["player_id_key"] = pd.to_numeric(work["player_id"], errors="coerce").astype("Int64")
-    work = work.merge(features, how="left", on=["date_key", "game_id_key", "player_id_key"])
+    # The reconcile snapshot may already carry these feature names. Keep the
+    # database-backed snapshot canonical, as intended by this report's query.
+    work = work.merge(
+        features,
+        how="left",
+        on=["date_key", "game_id_key", "player_id_key"],
+        suffixes=("_reconcile", ""),
+    )
     pieces = []
     for side in ("over", "under"):
         side_df = pd.DataFrame(
