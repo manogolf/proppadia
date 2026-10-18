@@ -1075,6 +1075,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   availability of every historical feature input at its asserted cutoff
   remain unresolved; no timestamp, outcome, certificate, or roster proof was
   reconstructed.
+- October 18 outcome follow-up: **NOT_READY**. No retained
+  `artifacts/operational/nhl/postgame_reconciliation/2026-10-18/` package or
+  certified-final artifact exists for its two canonical games. Retained
+  `cross_market_shadow` `canonical_outcomes.csv` files are not an official
+  final-outcome reconciliation certificate and were not substituted. The
+  existing research evaluator was not run for another grading pass. The
+  531-group, 1,593-row SOG MIDDAY source still classifies
+  `CORROBORATED_PREGAME`; its prediction-file SHA-256 still matches the
+  retained evidence index. The six previously checked Oct 14/17 legacy grade
+  hashes also still match. Grading must wait for the ordinary process to
+  produce a complete, date-bound certified-final package; do not reconstruct
+  or infer outcomes. Follow-up verification was read-only; no test was needed.
 - Remaining acceptance: tests for phase combinations, missed windows,
   staggered starts, later
   game capture after earlier start, no rewriting or duplicate final evidence,

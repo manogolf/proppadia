@@ -213,6 +213,11 @@ October 18's 531 SOG groups (1,593 rows) were not graded because no complete
 certified-final outcome package was retained. No Points/Saves package was
 found for October 17 or 18. October 14 and 17 legacy grade-file hashes were
 unchanged. See P2.17 for scored denominators, metrics, and limitations.
+The October 18 follow-up found no date directory under retained
+`postgame_reconciliation`, so its status remains `NOT_READY`; cross-market
+`canonical_outcomes.csv` files do not substitute for certified official
+outcomes. The retained SOG source hash and prior legacy-grade hashes still
+match. No additional grading run was performed.
 
 Prior-date reconciliation is the first substantive daily operation after the
 database connectivity check. Daily work may continue only with a verified,
