@@ -311,12 +311,11 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
              patch.object(mainline, "database_url",
                           side_effect=lambda access: database_accesses.append(access) or "fixture-dsn"), \
              patch.object(mainline, "observe_prediction_only_lanes", side_effect=lambda *a: call_order.append("predictions")), \
-             patch.object(mainline, "morning_capture_allowed", side_effect=lambda *a: (call_order.append("market_gate") or (False, "fixture"))), \
-             patch.object(mainline, "record_morning_not_ready", return_value=self.root / "status.json"), \
+             patch.object(mainline, "observe", side_effect=lambda *a: (call_order.append("mainline_observer") or self.root / "status.json")), \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(mainline.main(), 0)
-        self.assertEqual(call_order, ["predictions", "market_gate"])
-        self.assertEqual(database_accesses, ["research"])
+        self.assertEqual(call_order, ["predictions", "mainline_observer"])
+        self.assertEqual(database_accesses, ["research", "research"])
 
 
 if __name__ == "__main__":

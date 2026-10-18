@@ -128,26 +128,29 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.10 Repair mainline FINAL_PREGAME observer readiness
 
-- Status: **ROOT CAUSE CONFIRMED — targeted producer correction proposed**.
+- Status: **PRODUCER CORRECTED LOCALLY — focused verification passed**.
   October 17 had 95 active LaunchAgent polls, all blocked as
-  `NOOP_MORNING_NOT_READY` with zero paid calls. The first two daily attempts
-  failed before current-slate lanes because the prior slate lacked an
-  immutable Points `FINAL_PREGAME` capture. A later daily run produced a
-  verified current-slate REFRESH while three later games remained; the next
-  final-pregame window was missed because the observer requires exact daily
-  `READY` and rejects both `READY_WITH_BOUNDED_LANE_WARNING` and the verified
-  prior-learning status `REUSED_VALID_PACKAGE`.
+  `NOOP_MORNING_NOT_READY` with zero paid calls. The live observer's daily
+  receipt gate required unrelated SOG, Points, and Saves outputs even though
+  mainline capture reads its own schedule and official score/history evidence.
 - Evidence: `docs/nhl/final_pregame_capture_root_cause_2026-10-18.md`;
   `backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py`;
   October 17 observer status receipts and daily parent receipts under
   `artifacts/operational/nhl/`.
-- Next: make the existing observer readiness lane-scoped to verified
-  mainline inputs, accept bounded-warning/reused-package statuses only after
-  the corresponding artifact checks pass, and remove unrelated prior-day
-  player-prop capture dependencies. Add focused offline tests for valid
-  warning/reuse states, true mainline failures, and staggered starts. Keep
-  direct reconciliation's exact-one FINAL_PREGAME requirement unchanged.
-  Do not manufacture or relabel October 17 evidence.
+- The runtime now delegates readiness to the existing source-bound observer
+  checks instead of requiring the daily receipt. The Oct. 17 bounded warning
+  was the nonblocking SOG-integrity diagnostic; `REUSED_VALID_PACKAGE` is
+  validated through the official source package reader. Neither status is a
+  runtime mainline authority. Direct reconciliation's exact-one
+  FINAL_PREGAME requirement is unchanged. No Oct. 17 capture was created or
+  relabeled.
+- Next natural verification: inspect the next ordinary scheduled observer
+  result and manifest. It should report either capture success or a specific
+  mainline source/authority failure. Do not manually trigger or reconstruct
+  Oct. 17 evidence.
+- Verification: 96 focused observer, source-integrity, timing, immutable
+  capture, prediction-only, and reconciliation-learning tests passed; the
+  separate exact-one-final-card prior-learning test set passed (5 tests).
 
 ### P2.3 Close documented historical source-integrity gaps
 

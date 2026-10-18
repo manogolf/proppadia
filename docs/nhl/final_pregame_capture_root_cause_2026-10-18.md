@@ -65,33 +65,29 @@ not explain the missing late capture by themselves: after the 19:29 ET
 `REFRESH`, three later games remained and the first was still inside AUTO's
 final-pregame window.
 
-## Exact readiness defects
+## Exact readiness defect
 
-Two independent status checks reject the completed 19:26 ET daily receipt:
+The live `main()` path calls `morning_capture_allowed()` before `observe()`.
+Its `_daily_receipt_is_capture_ready()` required exact top-level
+`final_classification == "READY"` and completed SOG, Points, and Saves lanes,
+their prediction artifacts, and the daily odds-observation manifest. It
+therefore rejected the Oct. 17 `READY_WITH_BOUNDED_LANE_WARNING` receipt
+before its actual mainline source checks could run, even though the warning
+was limited to the nonblocking SOG-integrity diagnostic.
 
-1. `_daily_receipt_is_capture_ready()` accepts only top-level
-   `final_classification == "READY"`. It rejects
-   `READY_WITH_BOUNDED_LANE_WARNING` before its existing checks of required
-   lane statuses, prediction hashes/lineage, and the odds-observation
-   manifest can establish current-slate readiness.
-2. `auto_capture_readiness_decision()` accepts prior-learning
-   `reconciliation_status` values `CREATED` and
-   `EXISTING_GOVERNED_PACKAGE_VALID`, but not `REUSED_VALID_PACKAGE`. The
-   latter was the October 17 value. The same function already verifies the
-   retained reconciliation package manifest and completion marker, so a
-   verified reuse is rejected only by the status allowlist. This second check
-   was not reached on October 17 because the first gate returned early; it is
-   an independent blocker that would remain if only the first allowlist were
-   fixed.
+The `auto_capture_readiness_decision()` helper separately rejected
+`REUSED_VALID_PACKAGE` in its prior-learning status set. Call-graph inspection
+shows this helper was only used by offline readiness tests, not by the
+LaunchAgent's live `main()` or `observe()` path. It was not a second live
+blocker on Oct. 17. The live observer instead validates prior-day official
+outcomes through `load_official_outcomes()` and its immutable source manifest.
 
 The 19:29 ET daily receipt had completed prior-day outcomes, Moneyline and
-Puck Line grades, a verified reused reconciliation package, completed
-current-slate required lanes, hash-verified predictions, and a valid odds
-observation. At the next 15-minute poll, the first remaining game was about
-25 minutes away. If both status mismatches had been accepted after their
-corresponding artifact checks, `phase_for()` would have selected
-`FINAL_PREGAME`. This is a code-based counterfactual; the first gate stopped
-execution before phase selection, and no capture was attempted.
+Puck Line grades, a reused reconciliation package, completed current-slate
+lanes, predictions, and a valid odds observation. At the next 15-minute poll,
+the first remaining game was about 25 minutes away. The exact daily gate
+blocked before `observe()` could validate the mainline schedule/history or
+select the phase; no capture was attempted.
 
 The scheduler is expected to create one final phase package for a qualifying
 regular-season slate when its readiness and timing gates pass. It is not
@@ -133,28 +129,12 @@ recurring capture gaps.
 
 ## Recommended next implementation
 
-Make a narrow change in the existing cross-market observer's readiness gate;
-do not add a pipeline or weaken reconciliation:
-
-1. Evaluate readiness against the current cross-market inputs the observer
-   consumes. Accept `READY_WITH_BOUNDED_LANE_WARNING` only after the existing
-   required-lane, prediction-integrity, and odds-manifest checks pass. A
-   warning or failure in an unrelated lane must not silently satisfy a
-   missing mainline input.
-2. Accept `REUSED_VALID_PACKAGE` only after the existing independent
-   reconciliation-manifest and completion-marker verification passes.
-3. Remove dependence on unrelated prior-day player-prop final captures from
-   mainline market-capture readiness. Retain the source-backed history and
-   schedule checks required by `export_inputs()` and keep actual mainline
-   source/authority failures blocking.
-4. Preserve the 20–75 minute AUTO rule, 15-minute polling, paid-attempt
-   claim, create-only phase identity, and strict direct-reconciliation
-   requirement of exactly one valid `FINAL_PREGAME` card.
-5. Add focused offline regressions for: a warning-only unrelated lane with
-   valid mainline inputs; a verified reused prior-day package; missing or
-   corrupt mainline inputs still blocking; missing unrelated Points
-   `FINAL_PREGAME` not blocking a current mainline capture; and staggered
-   starts where a later eligible game remains after the first game starts.
-
-No producer, scheduler, authority, or reconciliation policy was changed in
-this investigation. Activation or production validation remains separate.
+Correction completed locally: the live mainline observer no longer consumes a
+daily receipt as its readiness authority. It proceeds to its existing
+source-bound official-outcome, schedule/history, model, odds chronology,
+create-only identity, and paid-attempt checks. The schedule-only rehearsal
+reports window eligibility but marks mainline input validation as deferred.
+The LaunchAgent cadence, 20–75 minute AUTO window, capture identity, provider
+controls, and direct reconciliation's exact-one FINAL_PREGAME requirement
+remain intact. Focused offline validation and local commit are recorded with
+the correction; no Oct. 17 artifact was created or relabeled.
