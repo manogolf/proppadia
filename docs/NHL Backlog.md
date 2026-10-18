@@ -622,7 +622,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.15 Separate NHL roster acquisition failures from readiness timing
 
-- Status: **IMPLEMENTED LOCALLY — natural-run verification pending**. The
+- Status: **IMPLEMENTED LOCALLY — partial natural-run verification; daily
+  sequencing and full capture verification remain pending**. The
   roster producer and daily sequence are unchanged; the prior-day source
   handoff and observer readiness classifications are corrected below.
 - Confirmed incident A, slate 2026-09-30, games
@@ -745,6 +746,79 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   observer timestamp; and no full stage-by-stage source/transaction evidence
   for every historical empty-export date. Classify those cases from natural
   run receipts rather than inferring from final feature counts.
+
+- First post-correction natural observer evidence, 2026-10-18:
+  - Installed `com.proppadia.nhl.mainline-cross-market-shadow` and
+    `com.proppadia.nhl.morning-orchestration` both point to this checkout's
+    `.venv/bin/python`, scripts, and working directory. The mainline LaunchAgent
+    runs every 900 seconds. The morning agent runs at 07:30 local time. No
+    post-`e4cdee47` morning/daily receipt existed at 18:27Z; the retained daily
+    attempts at 14:07Z and 14:30Z predate the commit and stopped on missing
+    immutable capture cardinality. Current-slate schedule-after-certificate
+    and current roster acquisition ordering therefore remain unverified.
+  - At 18:10:42Z, Points, Saves, and SOG child observers ran before the parent
+    completed its handoff and each retained
+    `PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED:PRIOR_DATE_EMPTY_SCHEDULE_CERTIFICATE_INVALID`.
+    The parent then used prior-learning acquisition for October 17, retained
+    14 official game outcomes for IDs `2026020121`–`2026020134`, imported the
+    schedule with a recorded transaction commit (14 rows considered, 11
+    updated, 3 unchanged), and wrote reconciliation package
+    `reconciliation=2d607370c4cf8766886f`. The implemented certificate
+    validator passed exact date/game coverage, completion marker, and hashes
+    as `CERTIFIED_FINAL`. The parent stopped before current-slate feature
+    export because the October 18 roster package was missing. It recorded
+    `ROSTER_NOT_READY`, `retry_eligible_on_later_poll=true`,
+    `feature_export_started=false`, and zero odds calls/credits.
+  - At 18:27:11Z, the parent revalidated that certificate and linked all three
+    child status files. Points and Saves reported
+    `ROSTER_NOT_READY`, `feature_export_started=false`,
+    `prediction_attempt_created=false`, and
+    `retry_eligible_on_later_poll=true`. SOG also stopped before publication,
+    but recorded `FAILED_WARN_ONLY` with
+    `RosterObservationNotReady:CURRENT_SLATE_ROSTER_OBSERVATION_MISSING` and
+    omitted the retry flag. Its 900-second parent polling still invokes it
+    again, but the lane receipt misclassifies a retryable readiness condition.
+    This is a confirmed SOG status-classification gap; see P2.16.
+  - The retained October 18 canonical schedule contains games `2026020135`
+    (22:00Z) and `2026020136` (00:00Z next day). Both were still prestart at
+    the second poll. No October 18 roster observation or post-correction
+    Points/Saves/SOG prediction card existed at that time. An earlier SOG
+    MIDDAY card at 16:10Z predates both `79ef060c` and `e4cdee47`; its receipt
+    has no prior-day certificate evidence and does not verify a governed
+    reconciliation-first capture. The mainline LaunchAgent does not acquire
+    the current-slate roster;
+    without the existing daily roster stage, the two remaining eligible games
+    are at risk of being missed. No missing prediction is represented as a
+    successful capture.
+- Natural-run classification at 18:27Z: prior-day official outcomes and
+  certification **PASS**; October 18 canonical schedule artifact **PASS** as
+  retained evidence, but its post-certificate daily validation **NOT YET
+  VERIFIED**; current-slate roster **BLOCKED / NOT ACQUIRED**; Points and Saves
+  **EXPECTED READINESS SKIP** with retry; SOG **BLOCKED** with an incorrect
+  status label; post-correction immutable prediction capture **NOT YET
+  VERIFIED**; mainline **EXPECTED READINESS SKIP** before feature export and
+  odds. No post-correction paid odds calls occurred.
+
+### P2.16 Classify SOG roster-not-ready observer results
+
+- Status: **CONFIRMED OPERATIONAL VISIBILITY GAP — correction deferred**.
+- Evidence: the 2026-10-18 18:27:11Z SOG child receipt contains a valid
+  October 17 `CERTIFIED_FINAL` certificate, then fails on
+  `RosterObservationNotReady:CURRENT_SLATE_ROSTER_OBSERVATION_MISSING`. It
+  reports `FAILED_WARN_ONLY` and lacks `retry_eligible_on_later_poll`; no
+  prediction attempt, market request, or paid credit is recorded. The parent
+  receipt links the SOG status file. Points and Saves classify this same
+  missing-package condition as `ROSTER_NOT_READY` and retry eligible.
+- Recommended correction: make the SOG observer serialize the existing
+  `RosterObservationNotReady` exception as `ROSTER_NOT_READY`, with the same
+  retry and no-attempt fields used by Points/Saves. Preserve all certificate,
+  roster-integrity, chronology, and qualification gates. No code or scheduler
+  change is authorized by this verification entry.
+- Acceptance: on a natural poll with a valid prior-day certificate and absent
+  current-slate roster package, SOG reports `ROSTER_NOT_READY`, creates no
+  prediction attempt, and is invoked again by the ordinary mainline interval;
+  after a valid date-bound package arrives, it proceeds only for individually
+  qualified prestart games.
 
 ### P2.3 Close documented historical source-integrity gaps
 
