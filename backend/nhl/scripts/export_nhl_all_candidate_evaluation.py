@@ -44,7 +44,10 @@ QUOTE_FIELDS = [
 
 QUOTE_DIAGNOSTIC_FIELDS = [
     "candidate_key", "market_key", "model_role", "model_family", "model_version",
-    "odds_status", "reason", "source_path", "source_sha256",
+    "odds_status", "reason", "source_path", "source_sha256", "sportsbook_key",
+    "provider_event_id", "provider_market_key", "provider_outcome", "market_line",
+    "american_price", "decimal_price", "source_quote_timestamp_utc", "observation_timestamp_utc",
+    "source_capture_identity", "odds_manifest_sha256", "source_parent_run_id",
 ]
 
 
@@ -135,6 +138,34 @@ def deduplicate_candidates(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any
 def missing_required_arms(rows: Iterable[dict[str, Any]], required: set[tuple[str, str]]) -> set[tuple[str, str]]:
     present = {(str(r.get("market_key", "")), str(r.get("model_version", ""))) for r in rows}
     return required - present
+
+
+def scope_regular_season_pregame(rows: Iterable[dict[str, Any]]) -> tuple[list[dict[str, Any]], Counter]:
+    """Require canonical 2026 regular-season identity and strict pregame timing."""
+    scoped: list[dict[str, Any]] = []
+    exclusions: Counter = Counter()
+    for original in rows:
+        row = dict(original)
+        game_id = str(row.get("game_id", ""))
+        game_type = str(row.get("game_type", ""))
+        if game_type and game_type != "2":
+            exclusions[(str(row.get("slate_date", "")), "NOT_REGULAR_SEASON")] += 1
+            continue
+        if not game_type and not game_id.startswith("202602"):
+            exclusions[(str(row.get("slate_date", "")), "REGULAR_SEASON_NOT_PROVEN")] += 1
+            continue
+        pred_time = parse_utc(row.get("prediction_timestamp_utc"))
+        start_time = parse_utc(row.get("scheduled_start_utc"))
+        if pred_time is None or start_time is None:
+            exclusions[(str(row.get("slate_date", "")), "PREGAME_CHRONOLOGY_UNPROVEN")] += 1
+            continue
+        if not pred_time < start_time:
+            exclusions[(str(row.get("slate_date", "")), "PREDICTION_AT_OR_AFTER_SCHEDULED_START")] += 1
+            continue
+        row["canonical_phase"] = "REGULAR_SEASON"
+        row["game_type"] = "2"
+        scoped.append(row)
+    return scoped, exclusions
 
 
 _SHA_CACHE: dict[Path, str] = {}
@@ -397,6 +428,13 @@ def add_captured_sog_arms(rows: list[dict[str, Any]], operational_root: Path,
     run_root = manifest_path.parents[1]
     cutoff = json.loads(manifest_path.read_text(encoding="utf-8")).get("feature_cutoff_utc", "")
     production_path = repo / "backend/nhl/data/processed/daily_runs" / run_id / "sog_predictions_wide_calibrated.csv"
+    schedule_starts: dict[str, str] = {}
+    for schedule_file in (repo / "backend/nhl/data/processed/daily_runs" / run_id).glob("*_scoring_input.csv"):
+        for schedule_row in _csv_rows(schedule_file):
+            gid = str(schedule_row.get("game_id", ""))
+            start = schedule_row.get("game_start_utc", "")
+            if gid and start:
+                schedule_starts[gid] = start
     for model, path, role, blend_version in (
         ("PRODUCTION", production_path, "PRODUCTION", ""),
         ("NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1", run_root / "model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/predictions.csv", "SHADOW", ""),
@@ -419,7 +457,7 @@ def add_captured_sog_arms(rows: list[dict[str, Any]], operational_root: Path,
                     continue
                 b = {
                     "canonical_season": 2026, "slate_date": slate_date, "game_type": "", "canonical_phase": "REGULAR_SEASON",
-                    "run_id": run_id, "run_type": "FINAL_PREGAME_CAPTURE", "scheduled_start_utc": outcome.get("scheduled_start_time_utc", ""),
+                    "run_id": run_id, "run_type": "FINAL_PREGAME_CAPTURE", "scheduled_start_utc": outcome.get("scheduled_start_time_utc", "") or schedule_starts.get(game_id, ""),
                     "prediction_timestamp_utc": cutoff, "feature_cutoff_utc": cutoff, "prediction_identity": f"{game_id}:{player_id}:{line}:{sha}",
                     "model_role": role, "model_family": family, "model_version": version,
                     "feature_contract_sha256": "", "model_identity_sha256": "", "prediction_artifact_sha256": sha, "odds_manifest_sha256": "",
@@ -439,8 +477,10 @@ def add_captured_sog_arms(rows: list[dict[str, Any]], operational_root: Path,
 
 def add_puck_line_challenger(rows: list[dict[str, Any]], operational_root: Path,
                              slate_date: str) -> list[dict[str, Any]]:
-    captures = operational_root / "cross_market_shadow" / "season=2026" / f"slate_date={slate_date}" / "run_type=FINAL_PREGAME"
-    capture_dirs = sorted(captures.glob("state=*"))
+    capture_base = operational_root / "cross_market_shadow" / "season=2026" / f"slate_date={slate_date}"
+    capture_dirs = sorted([*capture_base.glob("run_type=FINAL_PREGAME/state=*"),
+                           *capture_base.glob("run_type=REFRESH/state=*")],
+                          key=lambda p: p.stat().st_mtime_ns)
     if not capture_dirs:
         return rows
     capture = capture_dirs[-1]
@@ -481,6 +521,141 @@ def add_puck_line_challenger(rows: list[dict[str, Any]], operational_root: Path,
     return deduplicate_candidates(rows)
 
 
+def add_ungraded_slate_candidates(rows: list[dict[str, Any]], operational_root: Path,
+                                  through_date: str) -> list[dict[str, Any]]:
+    """Add the latest retained daily prediction capture not yet in reconciliation."""
+    receipt_path, receipt = latest_daily_receipt(operational_root, through_date)
+    if receipt_path is None:
+        return rows
+    run_id = receipt.get("parent_daily_run_id") or receipt_path.parent.name.split("=", 1)[-1]
+    run_dir = Path("backend/nhl/data/processed/daily_runs") / run_id
+    eligible = {str(x) for x in receipt.get("eligible_pregame_game_ids", [])}
+    if not eligible:
+        return rows
+    out = list(rows)
+
+    # The operational moneyline and puck line outputs are immutable capture files.
+    cross_base = operational_root / "cross_market_shadow" / "season=2026" / f"slate_date={through_date}"
+    captures = sorted([*cross_base.glob("run_type=FINAL_PREGAME/state=*"),
+                       *cross_base.glob("run_type=REFRESH/state=*")],
+                      key=lambda p: p.stat().st_mtime_ns)
+    if captures:
+        capture = captures[-1]
+        specs = [
+            ("moneyline_production_predictions.csv", "moneyline_home", "PRODUCTION", "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3", "challenger_home_win_probability", "challenger_away_win_probability"),
+            ("moneyline_schedule_logit_v2_shadow_predictions.csv", "moneyline_home", "SHADOW", "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2", "v2_home_win_probability", "v2_away_win_probability"),
+        ]
+        for filename, market, role, version, home_key, away_key in specs:
+            path = capture / filename
+            if not path.exists():
+                continue
+            sha = _sha(path)
+            for r in _csv_rows(path):
+                game_id = str(r.get("game_id", ""))
+                if game_id not in eligible:
+                    continue
+                ph, pa = _num(r.get(home_key)), _num(r.get(away_key))
+                b = {
+                    "canonical_season": 2026, "slate_date": through_date, "game_type": "2", "canonical_phase": "REGULAR_SEASON",
+                    "run_id": run_id, "run_type": "DAILY_RETAINED_CAPTURE", "scheduled_start_utc": r.get("scheduled_start_time_utc", ""),
+                    "prediction_timestamp_utc": r.get("prediction_creation_time_utc", ""), "feature_cutoff_utc": "",
+                    "prediction_identity": r.get("substantive_prediction_sha256") or retained_row_identity(r), "model_role": role,
+                    "model_family": "moneyline", "model_version": version, "feature_contract_sha256": r.get("feature_policy_sha256", ""),
+                    "model_identity_sha256": r.get("model_parameter_sha256") or r.get("substantive_prediction_sha256", ""),
+                    "prediction_artifact_sha256": sha, "odds_manifest_sha256": "", "market_key": market, "market_line": "",
+                    "selected_side": "HOME" if ph is not None and ph >= .5 else "AWAY", "probability_over": ph,
+                    "probability_under": pa, "expected_count": "", "candidate_policy_status": "NOT_APPLIED", "game_id": game_id,
+                    "player_id": "", "goalie_id": "", "team_id": r.get("home_team_id", ""), "opponent_id": r.get("away_team_id", ""),
+                    "display_name": r.get("home_team", ""), "outcome_status": "UNRESOLVED", "outcome_value": "", "outcome_side": "",
+                    "outcome_source": "", "outcome_source_timestamp_utc": "", "source_path": str(path), "source_sha256": sha,
+                    "parent_run_id": run_id,
+                }
+                b["candidate_key"] = candidate_key(b)
+                out.append({field: b.get(field, "") for field in PREDICTION_FIELDS})
+
+        # Daily puck line has a retained incumbent control. Its challenger is
+        # added by add_puck_line_challenger above from this same immutable state.
+        for filename, version, role in (("puck_line_v1_immutable_predictions.csv", "NHL_STANDARD_PUCK_LINE_SIMPLE_BASELINE_V1", "PRODUCTION"),):
+            path = capture / filename
+            if not path.exists():
+                continue
+            sha = _sha(path)
+            for r in _csv_rows(path):
+                game_id = str(r.get("game_id", ""))
+                probs = [_num(r.get(k)) for k in ("away_by_2_plus_probability", "one_goal_game_probability", "home_by_2_plus_probability")]
+                if game_id not in eligible or any(x is None for x in probs):
+                    continue
+                b = {
+                    "canonical_season": 2026, "slate_date": through_date, "game_type": "2", "canonical_phase": "REGULAR_SEASON",
+                    "run_id": run_id, "run_type": "DAILY_RETAINED_CAPTURE", "scheduled_start_utc": r.get("scheduled_start_time_utc", ""),
+                    "prediction_timestamp_utc": r.get("prediction_creation_time_utc", ""), "feature_cutoff_utc": "",
+                    "prediction_identity": r.get("substantive_prediction_sha256") or retained_row_identity(r), "model_role": role,
+                    "model_family": "puck_line", "model_version": version, "feature_contract_sha256": r.get("feature_policy_version", ""),
+                    "model_identity_sha256": r.get("control_model_sha256", ""), "prediction_artifact_sha256": sha, "odds_manifest_sha256": "",
+                    "market_key": "puck_line_full_game", "market_line": "-1.5/+1.5", "selected_side": r.get("wager_recommendation") or "MULTICLASS",
+                    "probability_over": probs[2], "probability_under": probs[0], "expected_count": "", "candidate_policy_status": "NOT_APPLIED",
+                    "game_id": game_id, "player_id": "", "goalie_id": "", "team_id": r.get("home_team_id", ""), "opponent_id": r.get("away_team_id", ""),
+                    "display_name": r.get("home_team", ""), "outcome_status": "UNRESOLVED", "outcome_value": "", "outcome_side": "",
+                    "outcome_source": "", "outcome_source_timestamp_utc": "", "source_path": str(path), "source_sha256": sha, "parent_run_id": run_id,
+                }
+                b["candidate_key"] = candidate_key(b)
+                out.append({field: b.get(field, "") for field in PREDICTION_FIELDS})
+
+    # Unsettled player-prop predictions carry their immutable feature cutoff and start.
+    for filename, market, version, role, family in (
+        ("points_predictions.csv", "player_points", "NHL_POINTS_COUNT_HGB_V1", "PRODUCTION", "hist_gradient_boosting"),
+        ("points_phoenix_shadow_predictions.csv", "player_points", "phoenix_v2", "SHADOW", "phoenix"),
+        ("saves_predictions.csv", "goalie_saves", "phoenix_v2", "PRODUCTION", "phoenix"),
+    ):
+        path = run_dir / filename
+        if not path.exists():
+            continue
+        sha = _sha(path)
+        for r in _csv_rows(path):
+            game_id = str(r.get("game_id", ""))
+            if game_id not in eligible:
+                continue
+            if market == "goalie_saves":
+                lines = [(key.removeprefix("p_over_").replace("_", "."), _num(value)) for key, value in r.items() if key.startswith("p_over_")]
+            else:
+                lines = [(r.get("line", ""), _num(r.get("prob_over")))] if r.get("line") else [(line, _num(r.get(f"prob_over_{line.replace('.', '_')}"))) for line in ("0.5", "1.5", "2.5")]
+            for line, p in lines:
+                if p is None or not line:
+                    continue
+                start = r.get("game_start_utc", "")
+                cutoff = r.get("feature_input_cutoff_utc", "")
+                b = {
+                    "canonical_season": 2026, "slate_date": through_date, "game_type": "2", "canonical_phase": "REGULAR_SEASON",
+                    "run_id": run_id, "run_type": "DAILY_RETAINED_CAPTURE", "scheduled_start_utc": start,
+                    "prediction_timestamp_utc": cutoff, "feature_cutoff_utc": cutoff, "prediction_identity": retained_row_identity(r),
+                    "model_role": role, "model_family": family, "model_version": version, "feature_contract_sha256": "", "model_identity_sha256": "",
+                    "prediction_artifact_sha256": sha, "odds_manifest_sha256": "", "market_key": market, "market_line": line,
+                    "selected_side": "OVER" if p >= .5 else "UNDER", "probability_over": p, "probability_under": 1-p,
+                    "expected_count": r.get("expected_points", ""), "candidate_policy_status": "NOT_APPLIED", "game_id": game_id,
+                    "player_id": r.get("player_id", ""), "goalie_id": r.get("player_id", "") if market == "goalie_saves" else "",
+                    "team_id": r.get("team_id", ""), "opponent_id": r.get("opponent_id", ""), "display_name": r.get("full_name", ""),
+                    "outcome_status": "UNRESOLVED", "outcome_value": "", "outcome_side": "", "outcome_source": "", "outcome_source_timestamp_utc": "",
+                    "source_path": str(path), "source_sha256": sha, "parent_run_id": run_id,
+                }
+                b["candidate_key"] = candidate_key(b)
+                out.append({field: b.get(field, "") for field in PREDICTION_FIELDS})
+    return deduplicate_candidates(out)
+
+
+def latest_daily_receipt(operational_root: Path, slate_date: str) -> tuple[Path | None, dict[str, Any]]:
+    matches = []
+    for path in (operational_root / "daily_runs").glob("run_id=*/parent_receipt.json"):
+        try:
+            receipt = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if receipt.get("slate_date") == slate_date or receipt.get("operational_slate_date") == slate_date or slate_date in path.parent.name:
+            matches.append((path, receipt))
+    if not matches:
+        return None, {}
+    return max(matches, key=lambda item: item[0].stat().st_mtime_ns)
+
+
 def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Bind normalized retained quotes; retain only each book's latest eligible quote."""
     by_game_player: dict[tuple[str, str], list[dict[str, Any]]] = {}
@@ -495,6 +670,7 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
     output: dict[tuple[str, str], dict[str, Any]] = {}
     diagnostics: list[dict[str, Any]] = []
     odds_root = operational_root / "odds_observations" / "season=2026"
+    candidate_dates = {str(c.get("slate_date", "")) for c in candidates}
     for obs_dir in sorted(odds_root.glob("slate_date=*/observation=*")):
         summary_path = obs_dir / "observation_summary.json"
         normalized_path = obs_dir / "normalized_odds.jsonl"
@@ -503,6 +679,9 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
             continue
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
         observed = summary.get("observation_timestamp_utc", "")
+        slate = obs_dir.parent.name.split("=", 1)[1]
+        if slate not in candidate_dates:
+            continue
         if summary.get("phase") not in ("EARLY", "FINAL_PREGAME"):
             continue
         bound_events = {}
@@ -511,7 +690,6 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
                 binding = json.loads(line)
                 if binding.get("binding_status") == "MATCHED":
                     bound_events[binding.get("provider_event_id")] = str(binding.get("canonical_game_id"))
-        slate = obs_dir.parent.name.split("=", 1)[1]
         names = {}
         names_path = names_path_root / f"names_{slate}.csv"
         if names_path.exists():
@@ -527,8 +705,6 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
             if not line.strip(): continue
             q = json.loads(line)
             game_id = bound_events.get(q.get("provider_event_id"))
-            if not game_id: continue
-            player_id = names.get((game_id, str(q.get("description") or "").strip().casefold()), "")
             market = {"player_shots_on_goal": "shots_on_goal", "player_shots_on_goal_alternate": "shots_on_goal", "player_points": "player_points", "player_points_alternate": "player_points", "player_total_saves": "goalie_saves", "player_total_saves_alternate": "goalie_saves", "h2h": "moneyline_home"}.get(q.get("market"))
             if not market: continue
             line_val = q.get("point")
@@ -537,29 +713,55 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
             except (TypeError, ValueError): continue
             decimal = american_to_decimal(price)
             source_time = q.get("market_last_update", "")
+            source_path = str(normalized_path)
+            def unmatched(status: str, reason: str) -> None:
+                diagnostics.append({
+                    "candidate_key": "", "market_key": market, "model_role": "", "model_family": "", "model_version": "",
+                    "odds_status": status, "reason": reason, "source_path": source_path, "source_sha256": obs_sha,
+                    "sportsbook_key": q.get("bookmaker", ""), "provider_event_id": q.get("provider_event_id", ""),
+                    "provider_market_key": q.get("market", ""), "provider_outcome": q.get("outcome", ""),
+                    "market_line": line_val if line_val is not None else "", "american_price": price, "decimal_price": decimal or "",
+                    "source_quote_timestamp_utc": source_time, "observation_timestamp_utc": observed,
+                    "source_capture_identity": source_capture_identity, "odds_manifest_sha256": odds_manifest_sha,
+                    "source_parent_run_id": source_parent_run_id,
+                })
+            if not game_id:
+                unmatched("UNMATCHED_RETAINED_QUOTE", "provider event has no canonical game binding")
+                continue
+            player_id = names.get((game_id, str(q.get("description") or "").strip().casefold()), "")
             if market == "moneyline_home":
                 book_candidates = [c for c in by_game.get(game_id, []) if c.get("market_key") == market]
+                side_matched = False
                 for c in book_candidates:
                     outcome_name = str(q.get("outcome") or "").strip().casefold()
                     expected_name = str(q.get("home_team") if c.get("selected_side") == "HOME" else q.get("away_team") or "").strip().casefold()
                     if outcome_name != expected_name: continue
+                    side_matched = True
                     quote_player = ""
                     implied = _american_implied(price)
                     candidate = c
                     _consider_quote(output, diagnostics, candidate, q, obs_dir, obs_sha, odds_manifest_sha, observed, source_time, price, decimal, implied, quote_player)
+                if not side_matched:
+                    unmatched("UNMATCHED_RETAINED_QUOTE", "no candidate has the quoted canonical game side")
                 continue
-            if not player_id: continue
+            if not player_id:
+                unmatched("UNMATCHED_RETAINED_QUOTE", "provider player description did not resolve through the retained names file")
+                continue
             matching_candidates = (by_game_goalie.get((game_id, player_id), []) if market == "goalie_saves"
                                    else by_game_player.get((game_id, player_id), []))
+            side_matched = False
             for c in matching_candidates:
                 if c.get("market_key") != market or str(c.get("market_line")) != str(line_val): continue
                 side = str(q.get("outcome", "")).upper()
                 if side != c.get("selected_side"): continue
+                side_matched = True
                 _consider_quote(output, diagnostics, c, q, obs_dir, obs_sha, odds_manifest_sha, observed, source_time, price, decimal, _american_implied(price), player_id)
                 key = (c["candidate_key"], str(q.get("bookmaker", "")))
                 if key in output:
                     output[key]["source_parent_run_id"] = source_parent_run_id
                     output[key]["source_capture_identity"] = source_capture_identity
+            if not side_matched:
+                unmatched("UNMATCHED_RETAINED_QUOTE", "no candidate matched canonical player, market line, and selected side")
     # Moneyline's audited ledger binds its no-vig price, exact model capture,
     # bookmaker, source update and observation time. Use that stronger lineage
     # when it exists; it supersedes the older normalized snapshots per book.
@@ -689,10 +891,16 @@ def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, An
         predictions = [r for r in predictions if r["slate_date"] == slate_date]
         dates = [slate_date]
     else:
-        dates = sorted({r["slate_date"] for r in predictions})
+        dates = sorted({r["slate_date"] for r in predictions} | {"2026-10-17"})
     for date in dates:
         predictions = add_captured_sog_arms(predictions, root, date)
         predictions = add_puck_line_challenger(predictions, root, date)
+    # The final retained operational capture is not in postgame reconciliation
+    # yet. Bind its eligible pregame identities directly from its parent receipt.
+    if not slate_date:
+        predictions = add_ungraded_slate_candidates(predictions, root, "2026-10-17")
+    scoped, exclusions = scope_regular_season_pregame(predictions)
+    predictions = deduplicate_candidates(scoped)
     if "2026-10-16" in dates:
         required = {
             ("shots_on_goal", "baseline_v1"),
@@ -715,7 +923,8 @@ def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, An
     _write_csv(prediction_path, PREDICTION_FIELDS, predictions)
     quotes = deduplicate_quotes(quotes)
     _write_csv(quote_path, QUOTE_FIELDS, quotes)
-    known_diagnostics = {row["candidate_key"]: row for row in diagnostics}
+    unmatched_quote_diagnostics = [row for row in diagnostics if row.get("odds_status") == "UNMATCHED_RETAINED_QUOTE"]
+    known_diagnostics = {row["candidate_key"]: row for row in diagnostics if row.get("candidate_key")}
     for candidate in predictions:
         key = candidate["candidate_key"]
         if key not in known_diagnostics:
@@ -732,6 +941,7 @@ def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, An
             }
     quoted_candidates = {r["candidate_key"] for r in quotes}
     diagnostics = [known_diagnostics[key] for key in sorted(known_diagnostics) if key not in quoted_candidates]
+    diagnostics.extend(unmatched_quote_diagnostics)
     _write_csv(coverage_path, QUOTE_DIAGNOSTIC_FIELDS, diagnostics)
     market_counts = Counter(row["market_key"] for row in predictions)
     model_counts = Counter((row["market_key"], row["model_family"], row["model_version"], row["model_role"]) for row in predictions)
@@ -747,6 +957,9 @@ def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, An
             "candidate_rows_without_qualified_quote": sum(not quoted_counts[c["candidate_key"]] for c in subset),
         }
     quote_counts_by_market = Counter(q["market_key"] for q in quotes)
+    final_receipt_path, final_receipt = latest_daily_receipt(root, "2026-10-17") if not slate_date else (None, {})
+    started_ids = [str(x) for x in (final_receipt.get("started_excluded_game_ids") or [])]
+    eligible_ids = [str(x) for x in (final_receipt.get("eligible_pregame_game_ids") or [])]
     manifest = {
         "schema_version": "NHL_ALL_CANDIDATE_EVALUATION_EXPORT_V1",
         "created_from_existing_retained_evidence_only": True,
@@ -765,12 +978,40 @@ def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, An
         "candidate_key_unique_count": len({r["candidate_key"] for r in predictions}),
         "quote_candidate_book_unique_count": len({(r["candidate_key"], r["sportsbook_key"]) for r in quotes}),
         "quote_diagnostic_count": len(diagnostics),
+        "unmatched_retained_quote_count": len(unmatched_quote_diagnostics),
         "market_counts": dict(sorted(market_counts.items())),
         "model_counts": [{"market_key": k[0], "model_family": k[1], "model_version": k[2], "model_role": k[3], "rows": n} for k, n in sorted(model_counts.items())],
         "source_evidence_scope": f"latest retained 2026 reconciliation package per slate{'; bounded to ' + slate_date if slate_date else ''}",
+        "regular_season_scope": {"game_type_code": "2", "start_date_inclusive": "2026-09-29", "end_date_inclusive": "2026-10-17"},
+        "exclusions_by_date_and_reason": {f"{date}|{reason}": count for (date, reason), count in sorted(exclusions.items())},
+        "started_game_exclusion_counts_by_date": ({date: count for (date, reason), count in sorted(exclusions.items()) if reason == "PREDICTION_AT_OR_AFTER_SCHEDULED_START"} | ({"2026-10-17": len(started_ids)} if started_ids else {})),
+        "started_game_exclusion_ids_by_date": {"2026-10-17": started_ids} if started_ids else {},
+        "eligible_pregame_game_ids_by_date": {"2026-10-17": eligible_ids} if eligible_ids else {},
+        "date_counts": {date: dict(Counter(r["market_key"] for r in predictions if r["slate_date"] == date)) for date in sorted({r["slate_date"] for r in predictions})},
+        "game_counts_by_date": {date: len({r["game_id"] for r in predictions if r["slate_date"] == date}) for date in sorted({r["slate_date"] for r in predictions})},
+        "outcome_status_counts": dict(Counter(r["outcome_status"] for r in predictions)),
+        "outcome_status_counts_by_date": {date: dict(Counter(r["outcome_status"] for r in predictions if r["slate_date"] == date)) for date in sorted({r["slate_date"] for r in predictions})},
+        "conditional_prediction_counts_by_date": {date: (sum(r["run_type"] in ("DAILY_RETAINED_CAPTURE", "FINAL_PREGAME_CAPTURE") for r in predictions if r["slate_date"] == date) if date == "2026-10-17" else 0) for date in sorted({r["slate_date"] for r in predictions})},
+        "model_counts_by_date": {
+            "|".join(key): count for key, count in sorted(Counter(
+                (r["slate_date"], r["market_key"], r["model_family"], r["model_version"], r["model_role"])
+                for r in predictions
+            ).items())
+        },
+        "quote_counts_by_date_market": {
+            "|".join(key): count for key, count in sorted(Counter((q["slate_date"], q["market_key"]) for q in quotes).items())
+        },
+        "operationally_impaired_dates": {
+            "2026-10-16": "Two-game slate; small outcome sample. Retained as observed.",
+            "2026-10-17": "Late daily capture excludes ten games that had already started; four pregame games remain. Outcomes are unresolved at the export cutoff.",
+        },
+        "game_candidate_counts": {
+            "|".join(key): count for key, count in sorted(Counter((r["slate_date"], r["game_id"], r["market_key"]) for r in predictions).items())
+        },
+        "quote_qualification_by_date": {date: sum(q["slate_date"] == date for q in quotes) for date in sorted({r["slate_date"] for r in predictions})},
         "market_model_coverage": coverage_summary,
         "limitations": [
-            "Only the October 16 bounded sample currently joins SOG production/fixed blends and the Puck Line challenger to immutable captures; other dates retain their reconciliation arms only.",
+            "Only model arms present in retained captures are emitted; dates without a retained arm are not reconstructed. October 17 predictions are conditional and unresolved because reconciliation has not yet graded that slate.",
             "The normalized Odds API artifact provides market_last_update plus the immutable observation timestamp. EV uses the quoted price and model side probability; model-market edge uses raw implied probability including bookmaker margin.",
             "Prediction and outcome rows are combined for evaluation convenience. Outcome fields are postgame append-bound fields and must not be used as pregame inputs.",
         ],

@@ -157,32 +157,43 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.6 Define and implement an all-candidate raw CSV research export
 
-- Status: **COMPLETE — retained model arms and chronology-qualified quote
-  lineage are exported**. The offline exporter and focused tests are in
+- Status: **COMPLETE — full available regular-season window exported through
+  October 17, 2026**. The offline exporter and focused tests are in
   `backend/nhl/scripts/export_nhl_all_candidate_evaluation.py` and
-  `backend/nhl/tests/test_all_candidate_evaluation_export.py`. The bounded
-  October 16 sample at
-  `artifacts/analysis/nhl/all_candidate_evaluation_export/2026-10-17/` contains
-  2,035 unique prediction rows across Moneyline, Puck Line, SOG, Points, and
-  Saves. It includes SOG production, both retained fixed blends, and the
-  final-pregame Puck Line challenger, preserving each role and artifact hash.
+  `backend/nhl/tests/test_all_candidate_evaluation_export.py`. The full-window
+  package is at
+  `artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/`.
+  It covers **September 29 through October 17**. Game-type-1 preseason rows
+  from September 19–26 and rows without proven regular-season identity are
+  excluded and counted in the manifest. The October 16 bounded sample remains
+  unchanged as an engineering fixture.
+- Full-window package contains 111,676 unique candidate predictions and
+  207,582 chronology-qualified candidate/book quotes. Outcomes are settled on
+  88,429 candidates and unresolved on 23,247. EV and edge are available on
+  205,446 quote rows. Per-date, per-game, market/model-arm, quote, outcome,
+  exclusion, and conditional prediction counts are retained in the manifest.
+  October 17 includes 3,054 conditional predictions across four games, sourced
+  from the latest retained parent run's eligible game IDs; all remain
+  unresolved. September 29 is the first date with canonical game type 2.
 - The quote export joins Odds API normalized observations by canonical event,
-  player identity, market, line, and side. It binds source market-update time
-  and observation time to prediction time and scheduled start, keeps the latest
-  eligible quote per sportsbook, and keeps no-quote candidates in the raw
-  predictions plus coverage diagnostic. The two-game Moneyline ledger supplies
-  100 qualified book/side quotes with audited no-vig probability. Overall the
-  bounded package has 5,429 deduplicated quote rows: 73 Saves, 100 Moneyline,
-  882 Points, and 4,374 SOG. There are no retained Puck Line prices in the
-  captured market evidence. EV and edge are calculated only on qualified rows;
-  normalized player-market edges use raw implied probabilities including the
-  sportsbook margin. The coverage file records 1,218 candidate rows without a
-  qualified quote.
-- Remaining limits are evidence coverage rather than exporter gaps: 1,218
-  candidate rows have no qualified quote; Puck Line has no retained quote;
-  normalized Odds API player-market updates are market-level timestamps, not
-  outcome-specific timestamps. Do not infer prices for those rows. Outcomes
-  remain append-bound evaluation fields and are not pregame inputs.
+  player identity, market, line, and side. It binds source market-update and
+  observation times before prediction time and scheduled start, keeps the
+  latest eligible quote per candidate and sportsbook, and retains candidates
+  without eligible quotes in `candidate_quote_coverage.csv`. Moneyline includes
+  the audited ledger when available. Puck Line has no retained qualified
+  quotes. EV/edge remain unavailable where price or valid market probability is
+  absent. Normalized player-market edge uses raw implied probability including
+  bookmaker margin. Unmatched candidate/quote coverage and unresolved outcomes
+  must not be interpreted as zero prices or settled results.
+- Evidence limitation: the full-window candidate population is the latest
+  retained reconciliation package per slate, augmented with retained SOG and
+  Puck Line arms and the October 17 parent-run predictions. It is not a
+  complete inventory of every superseded daily capture. Started-game rows and
+  rows without strict chronology are excluded; the manifest records these
+  exclusions. The October 17 late run has only four eligible pregame games,
+  while October 16 is a two-game slate. Neither is a representative performance
+  sample. The SOG cold-start shadow arms have much larger candidate populations
+  than the production arm and must be analyzed separately.
 - Reference: `docs/nhl/2026_prospective_performance_evaluation_2026-10-17.md`
   (Practical raw CSV export contract); `docs/NHL SOG Command Deck.md`; sample
   export manifest and README in the artifact directory.

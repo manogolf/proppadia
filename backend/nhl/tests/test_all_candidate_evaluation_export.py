@@ -7,6 +7,7 @@ from backend.nhl.scripts.export_nhl_all_candidate_evaluation import (
     evaluate_quote,
     missing_required_arms,
     quote_is_eligible,
+    scope_regular_season_pregame,
 )
 
 
@@ -113,6 +114,31 @@ class AllCandidateExportTests(unittest.TestCase):
         }
         result = deduplicate_quotes([valid, {**valid, "sportsbook_key": ""}, {**valid, "observation_timestamp_utc": ""}])
         self.assertEqual(result, [valid])
+
+    def test_full_window_scope_excludes_preseason_started_and_unproven_rows(self):
+        valid = self._candidate(
+            game_id="2026020021", game_type="2", canonical_phase="REGULAR_SEASON",
+            prediction_timestamp_utc="2026-10-16T19:00:00Z",
+            scheduled_start_utc="2026-10-16T23:00:00Z",
+        )
+        preseason = self._candidate(
+            game_id="2026010001", game_type="1",
+            prediction_timestamp_utc="2026-09-19T19:00:00Z",
+            scheduled_start_utc="2026-09-19T23:00:00Z",
+        )
+        started = self._candidate(
+            game_id="2026020022", game_type="2",
+            prediction_timestamp_utc="2026-10-16T23:00:00Z",
+            scheduled_start_utc="2026-10-16T23:00:00Z",
+        )
+        unproven = self._candidate(game_id="2026020023", game_type="2")
+        scoped, exclusions = scope_regular_season_pregame([valid, preseason, started, unproven])
+        self.assertEqual(len(scoped), 1)
+        self.assertEqual(scoped[0]["canonical_phase"], "REGULAR_SEASON")
+        self.assertEqual(sum(exclusions.values()), 3)
+        self.assertEqual(exclusions[("2026-10-16", "NOT_REGULAR_SEASON")], 1)
+        self.assertEqual(exclusions[("2026-10-16", "PREDICTION_AT_OR_AFTER_SCHEDULED_START")], 1)
+        self.assertEqual(exclusions[("2026-10-16", "PREGAME_CHRONOLOGY_UNPROVEN")], 1)
 
 
 if __name__ == "__main__":
