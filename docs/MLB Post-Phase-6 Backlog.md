@@ -378,6 +378,13 @@ writer validation does not authorize a hosted cutover or a different writer.
   production duration. Keep this separate from first integrated restricted
   writer validation and the 16:30 PT run. No production refresh, database
   write, object, or schedule change was performed during installation.
+- Natural-run verification for `local_daily_20261017T233005Z` (2026-10-17
+  16:30 PT): the staging build failed because
+  `backend/mlb/exports/odds_history/2026-10-17/mlb_slate_output.csv` was absent.
+  The wrapper therefore did not call the refresh function; no `SET ROLE`,
+  successful function call, four-view refresh, or downstream `/mlb/today`
+  read is evidenced for this run. Keep natural refresh, order, identity,
+  endpoint-read, source-fingerprint, and duration checks open.
 
 ### P2.1 Hosted GitHub roster migration
 
@@ -589,6 +596,34 @@ writer validation does not authorize a hosted cutover or a different writer.
   natural run after activation.
   No alias, role, grant, credential, or scheduler change is authorized by this
   inventory.
+
+- Integrated natural-run evidence, `local_daily_20261017T233005Z`
+  (2026-10-17 16:30 PT; wrapper receipt `SUCCEEDED`, rc 0): roster refresh
+  completed for 30/30 teams with 1,121 rows/upserts, but this run's retained
+  output has no session identity assertion; restricted roster identity remains
+  unverified. The BvP hook returned `BVP_INLINE_SUCCESS_ALREADY_EXISTS` for the
+  previously certified same-date run (`local_daily_20261017T200003Z`), so it
+  legitimately performed no second write/readback. That earlier receipt records
+  286 durable rows verified by readback; it does not establish this run's
+  restricted writer identity. Stat-derived ran with the restricted-ingest
+  opt-in and completed its count reconciliation: two `game_info` rows were
+  written; `player_stats`, legacy `player_derived_stats`, rolling sync, and
+  synthetic training/outcome rows had zero writes because admitted candidates
+  were unchanged or quarantined. No natural protected NULL fill or new source
+  row was observed. The stat-derived receipts omit `session_user` and
+  `current_user`, so this run does not directly evidence the effective writer
+  identity. The run-specific receipts are under
+  `artifacts/ops/mlb_stat_derived_natural_run_evidence_v1/stat-derived-20261017T233546Z-6e45c2f654/`.
+  Rolling integrity passed 2026-10-08 through 2026-10-17 at 100% d7/d15/d30
+  coverage. Completed-slate reconciliation remains source-not-ready: the
+  finalized-data check found zero `model_training_props` and `player_stats`
+  rows for 2026-10-16, and the bounded recovery refused game `849817` because
+  its official player-stat payload was missing. The wrapper receipt and logs
+  are in `artifacts/ops/mlb_wrapper_run_receipts/2026-10-17/` and
+  `artifacts/ops/mlb_refresh_daily.{out,err}.log`; see also
+  `artifacts/ops/mlb_rolling_integrity_receipts/2026-10-17/local_daily_20261017T233005Z.json`.
+  These results do not close the remaining natural effective-identity,
+  first-insert/NULL-fill, reconciliation, or view-refresh checks.
 
 - Production source-read permission subtask: **COMPLETE — deployed and verified
   2026-10-17**. After confirming the production project ref
