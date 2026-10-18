@@ -23,6 +23,7 @@ from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON
 from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canonical_slate
 from backend.nhl.cross_market_shadow.official_outcomes import load_official_outcomes
 from backend.nhl.daily_capture import load_canonical_slate
+from backend.nhl.daily_orchestration import redact_sensitive_text
 from backend.nhl.scripts.nhl_prediction_only_common import observe as observe_independent_prediction_only
 from backend.nhl.scripts.run_nhl_sog_prediction_only_warn_only import observe as observe_sog_prediction_only
 from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
@@ -33,10 +34,37 @@ DEFAULT_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow"
 DEFAULT_OUTCOME_ROOT = ROOT / "artifacts/operational/nhl/postgame_reconciliation"
 
 
+def _player_prop_observer_link(path: Path) -> dict[str, object]:
+    """Read only the child status needed to link its authoritative receipt."""
+    link: dict[str, object] = {"receipt_path": str(path)}
+    try:
+        payload = json.loads(path.read_text())
+        if not isinstance(payload, dict) or not isinstance(payload.get("status"), str):
+            raise ValueError("CHILD_STATUS_RECEIPT_INVALID_SHAPE")
+        link["status"] = payload["status"]
+    except Exception as error:
+        link.update(status="CHILD_RECEIPT_UNREADABLE", failure={
+            "exception_type": type(error).__name__,
+            "message": redact_sensitive_text(error)[:500],
+        })
+    return link
+
+
+def _player_prop_observer_failure(error: Exception) -> dict[str, object]:
+    return {
+        "status": "FAILED_BEFORE_RECEIPT",
+        "receipt_path": None,
+        "failure": {
+            "exception_type": type(error).__name__,
+            "message": redact_sensitive_text(error)[:500],
+        },
+    }
+
+
 def observe_prediction_only_lanes(slate: str, requested: str, dsn: str,
-                                  now: datetime) -> dict[str, str]:
-    """Run independent lane snapshots; their outcomes do not gate mainline capture."""
-    results: dict[str, str] = {}
+                                  now: datetime) -> dict[str, dict[str, object]]:
+    """Run and link independent lane statuses; none gate mainline capture."""
+    results: dict[str, dict[str, object]] = {}
     for lane in ("POINTS", "SAVES"):
         try:
             path = observe_independent_prediction_only(
@@ -44,20 +72,20 @@ def observe_prediction_only_lanes(slate: str, requested: str, dsn: str,
                 observation_timestamp=now, canonical_run_identifier=None, dsn=dsn,
                 output_root=ROOT / "artifacts/operational/nhl" / f"{lane.lower()}_prediction_only",
             )
-            results[lane] = str(path)
+            results[lane] = _player_prop_observer_link(Path(path))
         except Exception as error:
             # Each publisher normally emits its own FAILED_WARN_ONLY status. This
             # boundary additionally prevents an unexpected lane defect from
             # suppressing another prediction lane or changing paid-market flow.
-            results[lane] = f"FAILED_WARN_ONLY:{type(error).__name__}:{error}"
+            results[lane] = _player_prop_observer_failure(error)
     try:
         path = observe_sog_prediction_only(
             slate=slate, requested=requested, dsn=dsn,
             root=ROOT / "artifacts/operational/nhl/sog_prediction_only", now=now,
         )
-        results["SOG"] = str(path)
+        results["SOG"] = _player_prop_observer_link(Path(path))
     except Exception as error:
-        results["SOG"] = f"FAILED_WARN_ONLY:{type(error).__name__}:{error}"
+        results["SOG"] = _player_prop_observer_failure(error)
     return results
 
 
@@ -468,7 +496,8 @@ def resolve_slate_date(requested: str, now: datetime) -> str:
 
 def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
             canonical_raw_path: Path | None = None,
-            canonical_health_path: Path | None = None) -> Path:
+            canonical_health_path: Path | None = None,
+            player_prop_observers: dict[str, dict[str, object]] | None = None) -> Path:
     """One WARN-only entry; --force is the existing explicit operator override.
 
     Claims are immutable request intents, not assertions that a charge occurred.
@@ -480,6 +509,10 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
     result = {"slate_date": slate, "warning_only": True,
               "requested_phase": requested,
               "capture_window": "NONBLOCKING" if requested == "AUTO" else "EXPLICIT_PHASE",
+              "player_prop_observers": {
+                  "schema_version": "NHL_PLAYER_PROP_OBSERVER_LINKS_V1",
+                  **(player_prop_observers or {}),
+              },
               "player_prop_execution_allowed": True, "historical_odds_calls": 0,
               "live_calls": 0, "live_credits_consumed": 0,
               **observer_provenance(Path(__file__))}
@@ -585,12 +618,13 @@ def main() -> int:
         # Prediction-only observers retain their scheduler phases; REFRESH is
         # a market-snapshot mode, not a new scoring/prediction phase.
         observer_phase = "AUTO" if args.phase == "REFRESH" else args.phase
-        observe_prediction_only_lanes(
+        player_prop_observers = observe_prediction_only_lanes(
             slate, observer_phase, database_url("research"), now,
         )
         status_path = observe(args.output_root, slate, args.phase, args.force,
                               database_url("research"),
-                              args.canonical_slate_raw, args.canonical_slate_health)
+                              args.canonical_slate_raw, args.canonical_slate_health,
+                              player_prop_observers=player_prop_observers)
         print(status_path)
     except Exception as error:
         # Lock/claim/status failures never permit acquisition; remain WARN-only.

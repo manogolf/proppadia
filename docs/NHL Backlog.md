@@ -201,28 +201,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.11 Link independent player-prop observer outcomes from the mainline receipt
 
-- Status: **OPEN — lane failures are retained, but the parent observer receipt
-  does not link them**. The 900-second LaunchAgent invokes Points, Saves, and
-  SOG observers before mainline capture. Each ordinary lane result is written
-  to its own status JSON, but `main()` discards the result map returned by
-  `observe_prediction_only_lanes()`. Unexpected lane exceptions are converted
-  to strings and discarded the same way. A reviewer starting from only the
-  mainline `orchestration_status` receipt therefore cannot tell that the
-  player-prop lanes failed or find their receipts without searching separate
-  lane roots. Current October 18 receipts demonstrate the distinction: Points
-  and Saves each retained `FAILED_WARN_ONLY` (`*_FEATURE_EXPORT_EMPTY`), while
-  SOG retained `NOOP_OUTSIDE_WINDOW`; the corresponding mainline receipt has
-  no lane status references.
-- This does not bypass or weaken the separate readiness owners, and ordinary
-  lane failures are not lost from disk while their status roots are writable.
-  It is an operational discoverability gap, not a production prediction or
-  mainline blocking defect. Keep each lane WARN-only and independent; ensure
-  the parent receipt records each child status and receipt path, including
-  exceptions before a child can write its own status. Do not make mainline
-  capture readiness depend on player-prop success.
+- Status: **IMPLEMENTED — natural LaunchAgent receipt verification pending**.
+  The 900-second LaunchAgent still invokes Points, Saves, and SOG observers
+  before mainline capture. The parent receipt now records each child status
+  and receipt path under `player_prop_observers`, using schema
+  `NHL_PLAYER_PROP_OBSERVER_LINKS_V1`. Child status JSON remains authoritative;
+  the parent records only the status and path. Exceptions before child receipt
+  creation become `FAILED_BEFORE_RECEIPT` with bounded, redacted error text;
+  unreadable child receipts are marked `CHILD_RECEIPT_UNREADABLE`. These
+  records do not gate or alter mainline readiness, paid-market flow, or lane
+  scheduling. October 18 evidence remains Points/Saves
+  `FAILED_WARN_ONLY` (`*_FEATURE_EXPORT_EMPTY`) and SOG `NOOP_OUTSIDE_WINDOW`.
+- This does not bypass or weaken the separate readiness owners. It closes the
+  receipt discoverability gap without making mainline capture readiness depend
+  on player-prop success. Remaining operational verification is to inspect a
+  later ordinary mainline receipt and confirm all three statuses and paths are
+  present for that run.
 - Evidence: `backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py`;
   `backend/nhl/scripts/nhl_prediction_only_common.py`;
   `backend/nhl/scripts/run_nhl_sog_prediction_only_warn_only.py`;
+  `backend/tests/test_nhl_cross_market_daily_readiness.py` (12 passed);
   October 18 receipts under `artifacts/operational/nhl/{points_prediction_only,saves_prediction_only,sog_prediction_only}/status/2026-10-18/`
   and `artifacts/operational/nhl/cross_market_shadow/orchestration_status/2026-10-18/`.
 

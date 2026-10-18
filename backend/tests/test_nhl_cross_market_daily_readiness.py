@@ -31,21 +31,104 @@ class CrossMarketObserverReadinessTest(unittest.TestCase):
         self.assertEqual(reconciliation_status, "REUSED_VALID_PACKAGE")
 
         order = []
+        child_links = {
+            "POINTS": {"status": "FAILED_WARN_ONLY", "receipt_path": "/points.json"},
+            "SAVES": {"status": "FAILED_WARN_ONLY", "receipt_path": "/saves.json"},
+            "SOG": {"status": "BOUNDED_WARNING", "receipt_path": "/sog.json"},
+        }
+        observed = {}
         with patch("sys.argv", ["runner", "--slate-date", SLATE,
                                 "--env-file", "/absent", "--output-root", "/unused"]), \
              patch.object(capture, "load_env"), \
              patch.object(capture, "database_url", return_value="fixture-dsn"), \
              patch.object(capture, "observe_prediction_only_lanes",
                           side_effect=lambda *args: (order.append("independent_lanes")
-                                                     or {"POINTS": "FAILED_WARN_ONLY",
-                                                         "SAVES": "FAILED_WARN_ONLY",
-                                                         "SOG": "BOUNDED_WARNING"})), \
+                                                     or child_links)), \
              patch.object(capture, "observe",
-                          side_effect=lambda *args: (order.append("mainline_observer")
-                                                    or Path("status.json"))), \
+                          side_effect=lambda *args, **kwargs: (order.append("mainline_observer")
+                                                               or observed.update(kwargs)
+                                                               or Path("status.json"))), \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(capture.main(), 0)
         self.assertEqual(order, ["independent_lanes", "mainline_observer"])
+        self.assertEqual(observed.get("player_prop_observers"), child_links)
+
+    def test_lane_dispatch_links_success_skip_and_failed_readiness_receipts(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            paths = {lane: root / f"{lane.lower()}.json"
+                     for lane in ("POINTS", "SAVES", "SOG")}
+            for lane, status in (("POINTS", "CAPTURED"),
+                                 ("SAVES", "FAILED_WARN_ONLY"),
+                                 ("SOG", "NOOP_OUTSIDE_WINDOW")):
+                paths[lane].write_text(json.dumps({"status": status, "large_payload": [1, 2]}))
+
+            def independent(*, lane, **kwargs):
+                return paths[lane]
+
+            with patch.object(capture, "observe_independent_prediction_only",
+                              side_effect=independent), \
+                 patch.object(capture, "observe_sog_prediction_only", return_value=paths["SOG"]):
+                links = capture.observe_prediction_only_lanes("2026-10-18", "AUTO",
+                                                               "fixture-dsn", NOW)
+        self.assertEqual(links["POINTS"], {"status": "CAPTURED",
+                                           "receipt_path": str(paths["POINTS"])})
+        self.assertEqual(links["SAVES"]["status"], "FAILED_WARN_ONLY")
+        self.assertEqual(links["SOG"]["status"], "NOOP_OUTSIDE_WINDOW")
+        self.assertNotIn("large_payload", links["POINTS"])
+
+    def test_pre_receipt_exception_is_bounded_and_does_not_skip_other_lanes(self):
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            saves = root / "saves.json"
+            sog = root / "sog.json"
+            saves.write_text(json.dumps({"status": "NOOP_OUTSIDE_WINDOW"}))
+            sog.write_text(json.dumps({"status": "CAPTURED"}))
+            calls = []
+
+            def independent(*, lane, **kwargs):
+                calls.append(lane)
+                if lane == "POINTS":
+                    raise RuntimeError("password=secret postgres://user:pass@host/db " + "x" * 800)
+                return saves
+
+            with patch.object(capture, "observe_independent_prediction_only",
+                              side_effect=independent), \
+                 patch.object(capture, "observe_sog_prediction_only", return_value=sog):
+                links = capture.observe_prediction_only_lanes("2026-10-18", "AUTO",
+                                                               "fixture-dsn", NOW)
+        failed = links["POINTS"]
+        self.assertEqual(failed["status"], "FAILED_BEFORE_RECEIPT")
+        self.assertIsNone(failed["receipt_path"])
+        self.assertLessEqual(len(failed["failure"]["message"]), 500)
+        self.assertNotIn("secret", failed["failure"]["message"])
+        self.assertNotIn("user:pass", failed["failure"]["message"])
+        self.assertEqual(calls, ["POINTS", "SAVES"])
+        self.assertEqual(links["SOG"]["status"], "CAPTURED")
+
+    def test_parent_receipt_retains_child_links_when_mainline_readiness_fails(self):
+        child_links = {
+            "POINTS": {"status": "FAILED_WARN_ONLY", "receipt_path": "/points/status.json"},
+            "SAVES": {"status": "FAILED_WARN_ONLY", "receipt_path": "/saves/status.json"},
+            "SOG": {"status": "NOOP_OUTSIDE_WINDOW", "receipt_path": "/sog/status.json"},
+        }
+        with tempfile.TemporaryDirectory() as raw:
+            with patch.object(capture, "utc_now", return_value=NOW), \
+                 patch.object(capture, "ensure_prior_day_official_outcomes",
+                              side_effect=ValueError("fixture source gate")), \
+                 patch.object(capture, "export_inputs") as export, \
+                 patch.object(capture, "fetch_markets") as fetch:
+                status_path = capture.observe(Path(raw), SLATE, "AUTO", False,
+                                              "fixture-dsn", player_prop_observers=child_links)
+            parent = json.loads(status_path.read_text())
+        self.assertEqual(parent["status"], "FAILED_WARN_ONLY")
+        self.assertEqual(parent["player_prop_observers"]["schema_version"],
+                         "NHL_PLAYER_PROP_OBSERVER_LINKS_V1")
+        self.assertEqual({key: value for key, value in parent["player_prop_observers"].items()
+                          if key != "schema_version"}, child_links)
+        self.assertEqual(parent["live_calls"], 0)
+        export.assert_not_called()
+        fetch.assert_not_called()
 
     def test_october_17_later_game_keeps_auto_window_after_first_start(self):
         schedule = pd.DataFrame({"scheduled_start_time_utc": [
