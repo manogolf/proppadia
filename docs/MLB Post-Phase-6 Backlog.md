@@ -651,7 +651,10 @@ writer validation does not authorize a hosted cutover or a different writer.
   still invokes the reconciler, preserving missing-input failure behavior. A
   focused offline regression covers absent CSV plus skipped book, ranking, and
   Quick Card uploads and asserts no reconciler call. The observed natural run
-  is retained unchanged; no wrapper or pipeline was run during this follow-up.
+  is retained unchanged. The LaunchAgent target was replaced with the validated
+  committed wrapper (SHA-256
+  `48d1760049d1a4dc7d717b2bcec4a37cba0b929a4fa50cc838814b31e927a79a`); it was
+  not invoked during this follow-up.
 
 - Production source-read permission subtask: **COMPLETE — deployed and verified
   2026-10-17**. After confirming the production project ref
