@@ -396,7 +396,7 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P2.2 Inventory owner-level database aliases and plan gradual replacement
 
-- Status: **READ PERMISSIONS AND PROCESS ROUTING PREPARED — production deployment and verification remain open**.
+- Status: **SOURCE READ PERMISSIONS DEPLOYED AND VERIFIED — reader activation and broader alias-replacement criteria remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as
   `session_user=current_user=postgres`. The restricted alias connected as
   `proppadia_mlb_ingest_login`; after the application's required `SET ROLE`,
@@ -528,25 +528,21 @@ writer validation does not authorize a hosted cutover or a different writer.
   for the shared fetch helper, and routing non-leakage into generic reads. It
   also checks all eight named consumer sources reference their intended reader
   helper and contain no direct DML. The run passed (`6 passed, 8 subtests
-  passed`). This task did not connect to production or run a PostgreSQL preview;
-  the earlier isolated permission/rollback preview remains the database-level
-  evidence. Real application row shapes and write denial under the deployed
-  login remain cutover checks.
-- Production cutover sequence, still requiring separate authorization: (1)
-  keep the current scheduled environment and routes while reviewing this
-  commit; (2) apply
-  `backend/mlb/sql/migrations/20261017_mlb_research_source_read.sql` in an
-  approved maintenance window and verify the six grants, four policies, and
-  both research roles' `NOBYPASSRLS` attributes; (3) supply the existing
-  research URL only to the eight reader process environments, preserving the
-  current writer environment, Moneyline audit URL, and BvP verification URL;
-  (4) smoke the readers individually outside the scheduled run, checking
-  identity, expected row counts/shapes, unrelated-column denial, and denied
-  writes; (5) opt the daily report and selector readers in before the next
-  scheduled MLB run, then verify their natural-run outputs and confirm writer
-  receipts and Moneyline/BvP checks are unchanged; (6) if a reader fails, unset
-  its process-level research URL and return it to its legacy route, then use
-  the paired rollback only under separate database-change authorization.
+  passed`). These offline checks predate the production deployment. The bounded
+  production consumer projections, representative rows, expected result types,
+  and denied writes are recorded in the receipt below. Natural scheduled
+  application outputs remain pending until process routing is activated.
+- Reader activation sequence remains pending: (1) keep the scheduled wrapper
+  and current process routes unchanged; (2) provide the research URL only to
+  each explicitly opted-in reader process, preserving the writer environment,
+  Moneyline audit URL, and BvP verification URL; (3) exercise direct research
+  readers individually outside the scheduled run; (4) after separate approval,
+  opt the daily report and selector readers in for a natural run and confirm
+  their outputs, writer receipts, and Moneyline/BvP checks; (5) if a reader
+  fails, remove its process-level research URL so the helper returns to its
+  legacy route. Use the paired database rollback only under separate database-
+  change authorization. This prepared code requires no tracked or installed
+  daily-wrapper change.
   Relevant recurring entrypoints are `mlb-hits-environment-report` (also a
   nonblocking child of `mlb-daily-refresh`), its selector/reconciliation path,
   and `build_mlb_overlap_role_profile_watch.py`; the other research/evidence
@@ -564,17 +560,39 @@ writer validation does not authorize a hosted cutover or a different writer.
   `backend/shared/db/pg.py`, the active daily wrapper, and the two MLB DH
   launch-agent definitions.
 - Completion criteria: (1) verify the three process-scoped daily writer routes
-  and each effective identity on the next natural run; (2) confirm the research
-  login/group remain `NOBYPASSRLS`, obtain separate authorization to deploy the
-  prepared read-only grants/policies, and route only listed reader processes
-  through the existing research login; (3) verify query row scope, expected
-  results, and write denial under that identity; (4) decide and validate a separately
+  and each effective identity on the next natural run; (2) route only listed
+  reader processes through the existing research login after separately
+  approved activation; (3) production source-read grants, policies, query
+  projections, row return, unrelated-column denial, and direct-write denial are
+  now verified in the receipt below; (4) decide and validate a separately
   approved route for the daily materialized-view refresh; (5) retain the first
   natural restricted source/training INSERT or protected NULL-fill evidence;
-  (6) after separately authorized grant deployment, complete the reader
-  cutover smoke and first-natural-run checks above.
+  (6) verify opted-in reader outputs and unchanged writer receipts on the first
+  natural run after activation.
   No alias, role, grant, credential, or scheduler change is authorized by this
   inventory.
+
+- Production source-read permission subtask: **COMPLETE — deployed and verified
+  2026-10-17**. After confirming the production project ref
+  `cnwwhhmpashijqbspvhf`, database `postgres`, PostgreSQL 15.8, owner session,
+  and an idle MLB wrapper, the exact reviewed migration at
+  `backend/mlb/sql/migrations/20261017_mlb_research_source_read.sql` was
+  applied and committed. Its SHA-256 is
+  `c19de80ffa71ddb324299dbb750ccd8064833625bb246fcf902b84d8ee8af024`.
+  Catalog verification found all 92 inventoried column grants on the six
+  relations, all four expected research SELECT policies, and both research
+  roles still `NOBYPASSRLS`. Through
+  `proppadia_mlb_research_login`, all eight routed consumer groups returned
+  representative rows across 17 bounded SELECT probes, including the exact
+  61-column selector projection. The unrelated `player_stats.total_bases`
+  SELECT and inert direct INSERT/UPDATE/DELETE probes were denied with SQLSTATE
+  `42501`. Existing Moneyline prediction/outcome (16/9 columns) and BvP feature
+  (8 columns) reads returned rows through their existing dedicated route.
+  Receipt: `artifacts/operational/mlb/research_source_read_deployment/2026-10-17/verification_receipt.json`.
+  The research URL was passed only to the one-off verifier process; scheduled
+  reader routing remains inactive. No source, training, prediction, or outcome
+  rows were changed. Focused offline routing/migration tests passed: 9 tests
+  and 8 subtests.
 
 ### P2.3 Review broad API-role permissions against consumer dependencies
 

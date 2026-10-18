@@ -1,0 +1,839 @@
+{
+  "bounded_select_probe_count": 17,
+  "captured_at_utc": "2026-10-18T00:04:09.219640+00:00",
+  "catalog_verification": {
+    "preserved_existing_select_columns": {
+      "bvp_prop_features": 8,
+      "moneyline_outcomes": 9,
+      "moneyline_predictions": 16
+    },
+    "research_roles_nobypassrls": {
+      "proppadia_mlb_research_login": true,
+      "proppadia_mlb_research_ro": true
+    },
+    "research_select_policies": {
+      "command": "SELECT",
+      "count": 4,
+      "names": [
+        "proppadia_mlb_research_select"
+      ],
+      "relations": [
+        "mlb.player_stats",
+        "mlb.player_derived_stats",
+        "mlb.player_ids",
+        "public.mlb_team_map"
+      ],
+      "using": "true"
+    },
+    "table_writes_denied_by_catalog": true,
+    "target_relations": {
+      "mlb.model_training_props": {
+        "effective_login_grants": 5,
+        "expected_select_columns": 5
+      },
+      "mlb.player_derived_stats": {
+        "effective_login_grants": 64,
+        "expected_select_columns": 64
+      },
+      "mlb.player_ids": {
+        "effective_login_grants": 4,
+        "expected_select_columns": 4
+      },
+      "mlb.player_stats": {
+        "effective_login_grants": 14,
+        "expected_select_columns": 14
+      },
+      "mlb.player_team_by_game": {
+        "effective_login_grants": 3,
+        "expected_select_columns": 3
+      },
+      "public.mlb_team_map": {
+        "effective_login_grants": 2,
+        "expected_select_columns": 2
+      }
+    },
+    "total_effective_login_grants": 92,
+    "total_expected_select_columns": 92,
+    "unrelated_total_bases_column_select_denied": true
+  },
+  "consumer_count": 8,
+  "consumer_probes": [
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "team",
+          "type": "text"
+        },
+        {
+          "name": "opponent",
+          "type": "text"
+        },
+        {
+          "name": "hits",
+          "type": "integer"
+        },
+        {
+          "name": "hits_allowed",
+          "type": "integer"
+        },
+        {
+          "name": "outs_recorded",
+          "type": "integer"
+        },
+        {
+          "name": "is_starter",
+          "type": "smallint"
+        },
+        {
+          "name": "position",
+          "type": "text"
+        },
+        {
+          "name": "earned_runs",
+          "type": "integer"
+        },
+        {
+          "name": "strikeouts_pitching",
+          "type": "integer"
+        }
+      ],
+      "consumer": "report_mlb_hits_environment",
+      "probe": "player_stats",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "d7_hits_allowed",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_hits_allowed",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_hits_allowed",
+          "type": "numeric"
+        }
+      ],
+      "consumer": "report_mlb_hits_environment",
+      "probe": "player_derived_stats",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "player_name",
+          "type": "text"
+        },
+        {
+          "name": "team",
+          "type": "text"
+        },
+        {
+          "name": "team_id",
+          "type": "bigint"
+        }
+      ],
+      "consumer": "report_mlb_hits_environment",
+      "probe": "player_ids",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "team",
+          "type": "character varying"
+        },
+        {
+          "name": "d7_hits",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_runs_scored",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_rbis",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_home_runs",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_singles",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_doubles",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_triples",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_walks",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_strikeouts_batting",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_stolen_bases",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_total_bases",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_hits_runs_rbis",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_runs_rbis",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_outs_recorded",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_strikeouts_pitching",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_walks_allowed",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_earned_runs",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_hits_allowed",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_hits",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_runs_scored",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_rbis",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_home_runs",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_singles",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_doubles",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_triples",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_walks",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_strikeouts_batting",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_stolen_bases",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_total_bases",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_hits_runs_rbis",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_runs_rbis",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_outs_recorded",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_strikeouts_pitching",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_walks_allowed",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_earned_runs",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_hits_allowed",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_hits",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_runs_scored",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_rbis",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_home_runs",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_singles",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_doubles",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_triples",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_walks",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_strikeouts_batting",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_stolen_bases",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_total_bases",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_hits_runs_rbis",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_runs_rbis",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_outs_recorded",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_strikeouts_pitching",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_walks_allowed",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_earned_runs",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_hits_allowed",
+          "type": "numeric"
+        },
+        {
+          "name": "d7_at_bats",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_at_bats",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_at_bats",
+          "type": "numeric"
+        }
+      ],
+      "consumer": "run_mlb_hits_lane_selector_daily",
+      "probe": "player_derived_stats_selector_projection",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "player_team",
+          "type": "text"
+        }
+      ],
+      "consumer": "run_mlb_hits_lane_selector_daily",
+      "probe": "player_team_by_game_team_map_join",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "d15_at_bats",
+          "type": "numeric"
+        }
+      ],
+      "consumer": "run_mlb_hits_lane_selector_report",
+      "probe": "player_derived_stats",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "position",
+          "type": "text"
+        },
+        {
+          "name": "at_bats",
+          "type": "integer"
+        }
+      ],
+      "consumer": "run_mlb_hits_lane_selector_report",
+      "probe": "player_stats",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "d7_plate_appearances",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_plate_appearances",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_plate_appearances",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_at_bats",
+          "type": "numeric"
+        }
+      ],
+      "consumer": "build_mlb_overlap_role_profile_watch",
+      "probe": "player_derived_stats",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "position",
+          "type": "text"
+        },
+        {
+          "name": "at_bats",
+          "type": "integer"
+        }
+      ],
+      "consumer": "build_mlb_overlap_role_profile_watch",
+      "probe": "player_stats",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "d7_hits",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_hits",
+          "type": "numeric"
+        },
+        {
+          "name": "rolling_result_avg_7",
+          "type": "double precision"
+        },
+        {
+          "name": "pfp_features",
+          "type": "jsonb"
+        },
+        {
+          "name": "feature_set_tag",
+          "type": "text"
+        },
+        {
+          "name": "model_tag",
+          "type": "text"
+        }
+      ],
+      "consumer": "report_mlb_hits_recency_vs_baseline",
+      "probe": "training_pds_pfp_join",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "d7_hits",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_hits",
+          "type": "numeric"
+        },
+        {
+          "name": "pfp_features",
+          "type": "jsonb"
+        },
+        {
+          "name": "feature_set_tag",
+          "type": "text"
+        },
+        {
+          "name": "model_tag",
+          "type": "text"
+        }
+      ],
+      "consumer": "report_mlb_hits_interaction_failure",
+      "probe": "training_pds_pfp_join",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "rolling_result_avg_7",
+          "type": "double precision"
+        },
+        {
+          "name": "d7_hits",
+          "type": "double precision"
+        },
+        {
+          "name": "d15_hits",
+          "type": "double precision"
+        },
+        {
+          "name": "d30_hits",
+          "type": "double precision"
+        }
+      ],
+      "consumer": "audit_mlb_hits_feature_parity",
+      "probe": "training_pds_join",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "game_date",
+          "type": "date"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "features",
+          "type": "jsonb"
+        },
+        {
+          "name": "feature_set_tag",
+          "type": "text"
+        },
+        {
+          "name": "model_tag",
+          "type": "text"
+        },
+        {
+          "name": "d7_hits",
+          "type": "numeric"
+        },
+        {
+          "name": "d15_hits",
+          "type": "numeric"
+        },
+        {
+          "name": "d30_hits",
+          "type": "numeric"
+        }
+      ],
+      "consumer": "audit_mlb_hits_feature_parity",
+      "probe": "prediction_pfp_pds_join",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "game_date",
+          "type": "text"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "hits",
+          "type": "integer"
+        },
+        {
+          "name": "plate_appearances",
+          "type": "integer"
+        }
+      ],
+      "consumer": "assemble_mlb_hits05_2026_season_to_date_evidence_v1",
+      "probe": "bounded_season_outcome",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "home_win_probability",
+          "type": "double precision"
+        }
+      ],
+      "consumer": "moneyline_audit_compatibility",
+      "probe": "prediction",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "official_winner",
+          "type": "text"
+        }
+      ],
+      "consumer": "moneyline_audit_compatibility",
+      "probe": "outcome",
+      "representative_row_present": true,
+      "returned_rows": 1
+    },
+    {
+      "columns": [
+        {
+          "name": "player_id",
+          "type": "bigint"
+        },
+        {
+          "name": "game_id",
+          "type": "bigint"
+        },
+        {
+          "name": "features",
+          "type": "jsonb"
+        },
+        {
+          "name": "feature_set_tag",
+          "type": "text"
+        },
+        {
+          "name": "model_tag",
+          "type": "text"
+        }
+      ],
+      "consumer": "bvp_readback_compatibility",
+      "probe": "prop_features_precomputed",
+      "representative_row_present": true,
+      "returned_rows": 1
+    }
+  ],
+  "current_user": "proppadia_mlb_research_login",
+  "database_name": "postgres",
+  "inherited_research_group": true,
+  "migration_path": "backend/mlb/sql/migrations/20261017_mlb_research_source_read.sql",
+  "migration_result": {
+    "owner_session_user": "postgres",
+    "production_rows_changed": false,
+    "rollback_path": "backend/mlb/sql/migrations/20261017_mlb_research_source_read_rollback.sql",
+    "rollback_sha256": "d2121154ed20874dae945d9c6df12ee42fad9ceb293f16c45ea89fb04aae1594",
+    "status": "COMMITTED",
+    "transaction": "COMMIT"
+  },
+  "migration_sha256": "c19de80ffa71ddb324299dbb750ccd8064833625bb246fcf902b84d8ee8af024",
+  "moneyline_bvp_compatibility": "PASS",
+  "negative_checks": {
+    "delete_no_rows": {
+      "denied": true,
+      "sqlstate": "42501"
+    },
+    "insert_no_rows": {
+      "denied": true,
+      "sqlstate": "42501"
+    },
+    "unrelated_column_select": {
+      "denied": true,
+      "sqlstate": "42501"
+    },
+    "update_no_rows": {
+      "denied": true,
+      "sqlstate": "42501"
+    }
+  },
+  "offline_tests": {
+    "command": "./bin/python -m pytest backend/tests/test_mlb_research_readonly_routing.py backend/mlb/tests/test_mlb_research_source_read_permissions_migration.py -q",
+    "passed": 9,
+    "subtests_passed": 8
+  },
+  "postgres_version": "PostgreSQL 15.8 on aarch64-unknown-linux-gnu, compiled by gcc (GCC) 13.2.0, 64-bit",
+  "pre_migration_scheduled_process_check": "PASS_NO_ACTIVE_MLB_WRAPPER_OR_CHILD",
+  "project_ref": "cnwwhhmpashijqbspvhf",
+  "reviewed_migration_commit": "58da2d87",
+  "routing": "MLB_RESEARCH_DATABASE_URL process-scoped to the already-configured MLB_MONEYLINE_AUDIT_DATABASE_URL for this verifier only",
+  "scheduled_routing_activated": false,
+  "schema_version": "MLB_RESEARCH_SOURCE_READ_DEPLOYMENT_SMOKE_V1",
+  "session_user": "proppadia_mlb_research_login"
+}
