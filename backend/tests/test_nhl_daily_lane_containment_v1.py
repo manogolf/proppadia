@@ -33,6 +33,64 @@ RETAINED_ROSTER = Path(
 )
 
 
+class _SlateDayDatetime(datetime):
+    """Hold the clock at the fixture slate's pregame window."""
+
+    @classmethod
+    def now(cls, tz=None):
+        return cls(2026, 9, 24, 17, tzinfo=UTC).astimezone(tz) if tz else cls(2026, 9, 24, 17)
+
+
+@pytest.fixture
+def slate_day_clock():
+    # Lane scoring is skipped once every canonical game has started, so these
+    # fixtures must run at the slate's pregame time rather than the wall clock.
+    with patch.object(cli, "datetime", _SlateDayDatetime):
+        yield
+
+
+@pytest.fixture
+def phoenix_points_authority():
+    # Points containment is nonblocking only under the reversible Phoenix
+    # authority; HGB production deliberately makes a Points failure blocking.
+    state = {
+        "schema_version": "NHL_POINTS_MODEL_AUTHORITY_V1", "authority_version": 1,
+        "production_authority": cli.PHOENIX_AUTHORITY,
+        "shadow_authorities": [cli.HGB_AUTHORITY],
+    }
+    with patch.object(cli, "selected_production_authority", return_value=state):
+        yield
+
+
+@pytest.fixture
+def preseason_moneyline(tmp_path):
+    # The Moneyline lane reads the research database and writes the operational
+    # cross-market tree. These containment fixtures are a preseason slate, so
+    # stand that lane in as the shadow-only outcome a preseason slate produces.
+    cross_run = tmp_path / "cross_market_run"
+    cross_run.mkdir()
+    (cross_run / "daily_execution_status.json").write_text(
+        json.dumps({"mode": "SHADOW_RESEARCH_ONLY"}) + "\n")
+    inputs = (tmp_path / "cross_schedule.csv", tmp_path / "cross_history.csv", None)
+
+    def export_inputs(_dsn, _slate, directory, **_kwargs):
+        Path(directory).mkdir(parents=True, exist_ok=True)
+        return inputs
+
+    with patch("backend.nhl.cross_market_shadow.canonical_slate_adapter.adapt_canonical_slate",
+               return_value=SimpleNamespace(game_type_code=SimpleNamespace(
+                   eq=lambda _code: SimpleNamespace(all=lambda: True)))), patch(
+            "backend.nhl.cross_market_shadow.moneyline_authority.load_authority",
+            return_value={"fixture": "moneyline-authority"}), patch(
+            "backend.nhl.scripts.run_nhl_mainline_cross_market_capture_warn_only.export_inputs",
+            side_effect=export_inputs), patch(
+            "backend.nhl.cross_market_shadow.core.run_capture", return_value=cross_run), patch(
+            "backend.nhl.cross_market_shadow.core.verify_capture_package"), patch.object(
+            cli, "_cross_market_envelope_from_daily_observation",
+            return_value={"capture_timestamp_utc": "2026-09-24T17:00:00Z"}):
+        yield
+
+
 def recorder() -> DailyRunRecorder:
     value = DailyRunRecorder(
         run_id="test-run", command=["python", "-m", "backend.nhl.cli", "daily"],
@@ -301,19 +359,34 @@ def test_roster_reuse_metadata_mismatch_fails_closed(tmp_path, override, expecte
             canonical_game_ids=GAME_IDS, canonical_game_set_hash=GAME_HASH)
 
 
-def test_reuse_preflight_failure_stops_before_daily_implementation(tmp_path, monkeypatch):
+def test_tampered_reuse_fails_in_roster_lane_before_roster_child(tmp_path, monkeypatch):
+    # Reuse is verified inside the roster lane, after prior-date certification
+    # and schedule validation, and before the roster child can run.
     bad = tmp_path / "bad"
     shutil.copytree(RETAINED_ROSTER, bad)
     (bad / "roster_snapshot.jsonl").write_text("tampered\n")
     monkeypatch.setenv("NHL_DAILY_RECEIPT_ROOT", str(tmp_path / "receipts"))
-    with patch.object(cli, "_cmd_daily_impl") as implementation:
+
+    def implementation(**kwargs):
+        kwargs["recorder"].set_canonical(
+            slate_date=SLATE, season=2026, game_ids=GAME_IDS, game_set_hash=GAME_HASH)
+        cli._capture_daily_slate_roster(
+            slate=SLATE, odds_phase=kwargs["odds_phase"],
+            daily_run_id=kwargs["daily_run_id"], recorder=kwargs["recorder"],
+            reuse_roster_observation=kwargs["reuse_roster_observation"],
+            canonical_games=[SimpleNamespace(game_id=game_id) for game_id in GAME_IDS],
+            game_hash=GAME_HASH)
+
+    with patch.object(cli, "_cmd_daily_impl", side_effect=implementation), patch.object(
+            cli, "run") as child:
         with pytest.raises(RuntimeError, match="MANIFEST_MISMATCH"):
             cli.cmd_daily(
                 with_odds=True, odds_phase="EARLY", reuse_roster_observation=bad)
-    implementation.assert_not_called()
+    child.assert_not_called()
     package = next((tmp_path / "receipts").glob("run_id=*"))
     receipt = json.loads((package / "parent_receipt.json").read_text())
     assert receipt["final_classification"] == "FAILED_BLOCKING"
+    assert receipt["failure"]["lane"] == "roster"
 
 
 def test_reuse_argument_is_explicit():
@@ -339,6 +412,7 @@ def test_successful_child_structured_summary_is_retained():
     assert "human line" not in json.dumps(value.children)
 
 
+@pytest.mark.usefixtures("slate_day_clock", "phoenix_points_authority", "preseason_moneyline")
 def test_blocked_sog_continues_points_saves_odds_without_sog_consumers(tmp_path):
     value = recorder()
     value.finish_lane("legacy_sog", status="BLOCKED_LANE_LOCAL", reason=LEGACY_SOG_TOI_REASON)
@@ -447,6 +521,7 @@ def test_cold_start_sog_is_reference_only_and_creates_nothing(tmp_path):
     assert len(value.lane("cold_start_sog_reference").outputs) == 2
 
 
+@pytest.mark.usefixtures("slate_day_clock", "phoenix_points_authority", "preseason_moneyline")
 @pytest.mark.parametrize("failed_lane", ["points", "saves"])
 def test_prediction_lane_failure_does_not_suppress_other_lane_or_odds(tmp_path, failed_lane):
     value = recorder()
@@ -504,6 +579,7 @@ def test_prediction_lane_failure_does_not_suppress_other_lane_or_odds(tmp_path, 
     assert odds_called == [True]
 
 
+@pytest.mark.usefixtures("slate_day_clock", "phoenix_points_authority", "preseason_moneyline")
 def test_odds_failure_is_warning_and_preserves_current_predictions(tmp_path):
     value = recorder()
     value.finish_lane("legacy_sog", status="BLOCKED_LANE_LOCAL", reason=LEGACY_SOG_TOI_REASON)
