@@ -215,15 +215,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `artifacts/analysis/nhl/moneyline_favorites_pricing_2026-10-17/`;
   frozen parent receipt
   `artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261017T232609902832Z_68bc386f/parent_receipt.json`.
-- Bounded follow-up: fix or explicitly document the full-window Moneyline
-  export fields before external Moneyline filtering. Its V3 probability
-  columns are blank on 105/124 rows, and its `selected_side` agrees with the
-  probability-derived side from the retained V3 ledger on only 60/124 rows.
-  The analysis derives picks from captured ledger probabilities and records
-  per-slate ledger hashes. Preserve prediction identity, chronology, and
-  historical role labels when correcting the exporter. Continue prospective
-  paired pricing evaluation; do not promote models or select thresholds from
-  these retrospective ROI results.
+- Export identity correction: **COMPLETE**. The exporter now binds each V3
+  and V2 candidate to its immutable retained model prediction source, keeps
+  explicit home/away probabilities, derives the model selection from those
+  probabilities, and records source path/hash plus model identity. V3's
+  retained per-game row identity is deterministically derived from the
+  source capture because that artifact has no native per-game identity; V2's
+  native substantive prediction hash is preserved. Historical roles are
+  CHALLENGER/REFERENCE before the October 14 cutover and PRODUCTION/SHADOW
+  after it. Moneyline quote rows retain both HOME and AWAY prices per
+  candidate/book, with `selected_side` and `quote_side` kept distinct.
+- Verification: all 248 model rows match source probabilities and hashes;
+  all selections agree with the home probability; 10,392 qualified Moneyline
+  quote rows include 5,196 per side. The 120-game probability and BetOnline
+  results are unchanged because the prior performance analysis already used
+  the same retained ledger probabilities and chronologically bound prices.
+  Fifteen focused exporter tests pass. Continue prospective paired pricing
+  evaluation; do not promote models or choose thresholds from retrospective
+  ROI results.
 
 ## Verified Complete — Do Not Reopen
 

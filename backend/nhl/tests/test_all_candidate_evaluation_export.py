@@ -1,11 +1,14 @@
 import unittest
 
 from backend.nhl.scripts.export_nhl_all_candidate_evaluation import (
+    canonical_moneyline_quote_side,
     candidate_key,
     deduplicate_candidates,
     deduplicate_quotes,
     evaluate_quote,
     missing_required_arms,
+    moneyline_role_at_prediction,
+    orient_moneyline_candidate,
     quote_is_eligible,
     scope_regular_season_pregame,
 )
@@ -88,6 +91,52 @@ class AllCandidateExportTests(unittest.TestCase):
         self.assertNotEqual(candidate_key(base), candidate_key({**base, "market_line": "3.5"}))
         self.assertNotEqual(candidate_key(base), candidate_key({**base, "model_version": "other"}))
 
+    def test_moneyline_probabilities_keep_home_away_orientation_and_side(self):
+        candidate = self._candidate(
+            market_key="moneyline_home", market_line="", model_family="moneyline",
+            model_version="NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3", selected_side="AWAY",
+            model_role="PRODUCTION", prediction_identity="old-shared-id",
+            scheduled_start_utc="2026-10-13T23:00:00Z",
+        )
+        row = orient_moneyline_candidate(
+            candidate, .62, .38, "2026-10-13T20:00:00Z", "model-sha", "retained.csv", "source-sha",
+            prediction_identity="v3-row-id",
+        )
+        self.assertEqual(row["home_win_probability"], .62)
+        self.assertEqual(row["away_win_probability"], .38)
+        self.assertEqual(row["probability_over"], .62)
+        self.assertEqual(row["probability_under"], .38)
+        self.assertEqual(row["selected_side"], "HOME")
+        self.assertEqual(row["model_role"], "CHALLENGER")
+        self.assertEqual(row["export_model_role"], "PRODUCTION")
+        self.assertEqual(row["prediction_identity"], "v3-row-id")
+        self.assertEqual(row["model_identity_sha256"], "model-sha")
+        self.assertEqual(row["model_prediction_source_sha256"], "source-sha")
+
+    def test_moneyline_missing_or_misoriented_probabilities_fail_closed(self):
+        candidate = self._candidate(
+            market_key="moneyline_home", model_family="moneyline",
+            model_version="NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2",
+        )
+        args = ("2026-10-15T20:00:00Z", "model-sha", "retained.csv", "source-sha")
+        with self.assertRaisesRegex(ValueError, "both be present"):
+            orient_moneyline_candidate(candidate, "", .4, *args)
+        with self.assertRaisesRegex(ValueError, "sum to 1"):
+            orient_moneyline_candidate(candidate, .6, .6, *args)
+
+    def test_moneyline_selection_matches_probabilities_and_cutover_roles(self):
+        v2 = self._candidate(
+            market_key="moneyline_home", model_family="moneyline",
+            model_version="NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2", model_role="SHADOW",
+        )
+        pre = orient_moneyline_candidate(v2, .49, .51, "2026-10-13T20:00:00Z", "v2", "v2.csv", "hash")
+        post = orient_moneyline_candidate(v2, .51, .49, "2026-10-15T20:00:00Z", "v2", "v2.csv", "hash")
+        self.assertEqual(pre["selected_side"], "AWAY")
+        self.assertEqual(pre["model_role"], "REFERENCE")
+        self.assertEqual(post["selected_side"], "HOME")
+        self.assertEqual(post["model_role"], "SHADOW")
+        self.assertEqual(moneyline_role_at_prediction("NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3", "2026-10-15T20:00:00Z"), "PRODUCTION")
+
     def test_quote_rows_keep_book_identity_without_expanding_candidates(self):
         base = {
             "candidate_key": "candidate-1", "sportsbook_key": "draftkings",
@@ -114,6 +163,24 @@ class AllCandidateExportTests(unittest.TestCase):
         }
         result = deduplicate_quotes([valid, {**valid, "sportsbook_key": ""}, {**valid, "observation_timestamp_utc": ""}])
         self.assertEqual(result, [valid])
+
+    def test_moneyline_quote_dedup_keeps_both_sides_per_candidate_and_book(self):
+        base = {
+            "candidate_key": "ml-candidate", "sportsbook_key": "betonlineag", "market_key": "moneyline_home",
+            "quote_side": "HOME", "source_quote_timestamp_utc": "2026-10-16T19:00:00Z",
+            "observation_timestamp_utc": "2026-10-16T19:01:00Z",
+            "quote_qualification_status": "QUALIFIED_AUDITED_MONEYLINE_LEDGER",
+        }
+        away = {**base, "quote_side": "AWAY", "american_price": 105}
+        result = deduplicate_quotes([base, {**base, "observation_timestamp_utc": "2026-10-16T18:59:00Z"}, away])
+        self.assertEqual(len(result), 2)
+        self.assertEqual({row["quote_side"] for row in result}, {"HOME", "AWAY"})
+
+    def test_moneyline_quote_team_names_follow_provider_home_away_orientation(self):
+        self.assertEqual(canonical_moneyline_quote_side("CAR", "CAR", "FLA"), "HOME")
+        self.assertEqual(canonical_moneyline_quote_side("FLA", "CAR", "FLA"), "AWAY")
+        self.assertEqual(canonical_moneyline_quote_side("unknown", "CAR", "FLA"), "")
+        self.assertEqual(canonical_moneyline_quote_side("", "", ""), "")
 
     def test_full_window_scope_excludes_preseason_started_and_unproven_rows(self):
         valid = self._candidate(

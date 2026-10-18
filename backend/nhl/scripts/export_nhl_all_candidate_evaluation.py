@@ -26,15 +26,18 @@ PREDICTION_FIELDS = [
     "model_version", "feature_contract_sha256", "model_identity_sha256",
     "prediction_artifact_sha256", "odds_manifest_sha256", "market_key",
     "market_line", "selected_side", "probability_over", "probability_under",
+    "home_win_probability", "away_win_probability",
     "expected_count", "candidate_policy_status", "game_id", "player_id",
     "goalie_id", "team_id", "opponent_id", "display_name", "outcome_status",
     "outcome_value", "outcome_side", "outcome_source", "outcome_source_timestamp_utc",
     "source_path", "source_sha256", "parent_run_id", "candidate_key",
+    "model_prediction_source_path", "model_prediction_source_sha256", "export_model_role",
 ]
 
 QUOTE_FIELDS = [
     "candidate_key", "canonical_season", "slate_date", "game_id", "player_id",
     "goalie_id", "market_key", "market_line", "selected_side", "model_role",
+    "quote_side",
     "model_family", "model_version", "sportsbook_key", "provider_event_id",
     "provider_market_key", "provider_outcome", "american_price", "decimal_price",
     "source_quote_timestamp_utc", "observation_timestamp_utc", "source_capture_identity", "quote_qualification_status",
@@ -253,6 +256,182 @@ def _emit(rows: list[dict[str, Any]], base: dict[str, Any], p_over: Any,
     base.pop("model_role_tmp", None)
     base["candidate_key"] = candidate_key(base)
     rows.append({field: base.get(field, "") for field in PREDICTION_FIELDS})
+
+
+MONEYLINE_V3 = "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3"
+MONEYLINE_V2 = "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2"
+MONEYLINE_ROLE_CUTOVER_UTC = "2026-10-14T15:27:11+00:00"
+
+
+def moneyline_role_at_prediction(model_version: str, prediction_timestamp_utc: str) -> str:
+    """Return the model's role at the time this prediction was captured."""
+    timestamp = parse_utc(prediction_timestamp_utc)
+    cutover = parse_utc(MONEYLINE_ROLE_CUTOVER_UTC)
+    if timestamp is None or cutover is None:
+        raise ValueError("Moneyline role requires a timezone-aware prediction timestamp")
+    if model_version == MONEYLINE_V3:
+        return "PRODUCTION" if timestamp >= cutover else "CHALLENGER"
+    if model_version == MONEYLINE_V2:
+        return "SHADOW" if timestamp >= cutover else "REFERENCE"
+    raise ValueError(f"unknown Moneyline model version: {model_version}")
+
+
+def canonical_moneyline_quote_side(outcome: Any, home_team: Any, away_team: Any) -> str:
+    """Resolve a retained quote outcome against the provider's game orientation."""
+    value = str(outcome or "").strip().casefold()
+    home = str(home_team or "").strip().casefold()
+    away = str(away_team or "").strip().casefold()
+    if value == "home" or (home and value == home):
+        return "HOME"
+    if value == "away" or (away and value == away):
+        return "AWAY"
+    return ""
+
+
+def orient_moneyline_candidate(candidate: dict[str, Any], home_probability: Any,
+                               away_probability: Any, prediction_timestamp_utc: str,
+                               model_identity_sha256: str, source_path: str,
+                               source_sha256: str, *, prediction_identity: str | None = None) -> dict[str, Any]:
+    """Bind a Moneyline candidate to its retained model row and canonical teams."""
+    ph, pa = _num(home_probability), _num(away_probability)
+    if ph is None or pa is None or not (0 <= ph <= 1 and 0 <= pa <= 1):
+        raise ValueError("Moneyline home and away probabilities must both be present and in [0, 1]")
+    if abs(ph + pa - 1) > 1e-9:
+        raise ValueError("Moneyline home and away probabilities must sum to 1")
+    row = dict(candidate)
+    version = str(row.get("model_version", ""))
+    row["prediction_timestamp_utc"] = prediction_timestamp_utc
+    row["home_win_probability"] = ph
+    row["away_win_probability"] = pa
+    # The legacy generic fields are retained for downstream compatibility;
+    # Moneyline's explicit fields above define their home/away meaning.
+    row["probability_over"] = ph
+    row["probability_under"] = pa
+    row["selected_side"] = "HOME" if ph >= 0.5 else "AWAY"
+    row["model_identity_sha256"] = model_identity_sha256
+    row["model_prediction_source_path"] = source_path
+    row["model_prediction_source_sha256"] = source_sha256
+    row["prediction_artifact_sha256"] = source_sha256
+    row["export_model_role"] = row.get("model_role", "")
+    row["model_role"] = moneyline_role_at_prediction(version, prediction_timestamp_utc)
+    if prediction_identity:
+        row["prediction_identity"] = prediction_identity
+    row["candidate_key"] = candidate_key(row)
+    return row
+
+
+def _moneyline_state_candidates(operational_root: Path, slate_date: str) -> list[Path]:
+    base = operational_root / "cross_market_shadow" / "season=2026" / f"slate_date={slate_date}"
+    states = [p for p in base.glob("run_type=*/state=*") if p.is_dir()]
+    def capture_time(state: Path) -> datetime:
+        status_path = state / "daily_execution_status.json"
+        if not status_path.exists():
+            return datetime.min
+        try:
+            return parse_utc(json.loads(status_path.read_text()).get("run_timestamp_utc")) or datetime.min
+        except (OSError, json.JSONDecodeError):
+            return datetime.min
+    return sorted(states, key=capture_time)
+
+
+def _moneyline_source_row(state: Path, game_id: str, model_version: str,
+                          expected_identity: str = "", expected_timestamp: str = "") -> tuple[dict[str, str], Path, str] | None:
+    if model_version == MONEYLINE_V3:
+        names = ("moneyline_production_predictions.csv", "moneyline_shot_finishing_challenger_v3_predictions.csv")
+        home_key, away_key = "challenger_home_win_probability", "challenger_away_win_probability"
+    elif model_version == MONEYLINE_V2:
+        names = ("moneyline_schedule_logit_v2_shadow_predictions.csv", "v2_immutable_predictions.csv")
+        home_key, away_key = "v2_home_win_probability", "v2_away_win_probability"
+    else:
+        return None
+    for name in names:
+        path = state / name
+        if not path.exists():
+            continue
+        for row in _csv_rows(path):
+            if str(row.get("game_id", "")) != game_id:
+                continue
+            native_identity = row.get("substantive_prediction_sha256", "") if model_version == MONEYLINE_V2 else ""
+            row_time = row.get("prediction_creation_time_utc", "")
+            status_path = state / "daily_execution_status.json"
+            if not row_time and status_path.exists():
+                try:
+                    row_time = json.loads(status_path.read_text()).get("run_timestamp_utc", "")
+                except (OSError, json.JSONDecodeError):
+                    pass
+            if expected_identity and native_identity and native_identity != expected_identity:
+                continue
+            if expected_timestamp and row_time and row_time != expected_timestamp:
+                continue
+            if _num(row.get(home_key)) is None or _num(row.get(away_key)) is None:
+                continue
+            return row, path, _sha(path),
+    return None
+
+
+def bind_moneyline_model_sources(candidates: list[dict[str, Any]], operational_root: Path) -> list[dict[str, Any]]:
+    """Recover each Moneyline model arm from its immutable prospective capture."""
+    states_by_date: dict[str, list[Path]] = {}
+    output: list[dict[str, Any]] = []
+    for original in candidates:
+        row = dict(original)
+        if row.get("model_family") != "moneyline":
+            output.append(row)
+            continue
+        slate = str(row.get("slate_date", ""))
+        states = states_by_date.setdefault(slate, _moneyline_state_candidates(operational_root, slate))
+        version = str(row.get("model_version", ""))
+        identity = str(row.get("prediction_identity", "")) if version == MONEYLINE_V2 else ""
+        if identity.startswith("retained-row-sha256:"):
+            identity = ""
+        expected_time = str(row.get("prediction_timestamp_utc", "")) if version == MONEYLINE_V2 else ""
+        found = None
+        for state in reversed(states):
+            found = _moneyline_source_row(state, str(row.get("game_id", "")), version, identity, expected_time)
+            if found:
+                source, source_path, _ = found
+                timestamp = source.get("prediction_creation_time_utc", "")
+                if not timestamp:
+                    status_path = state / "daily_execution_status.json"
+                    if status_path.exists():
+                        timestamp = json.loads(status_path.read_text()).get("run_timestamp_utc", "")
+                start = parse_utc(row.get("scheduled_start_utc"))
+                pred = parse_utc(timestamp)
+                if start is None or pred is None or not pred < start:
+                    continue
+                break
+        if found is None:
+            raise ValueError(f"missing retained {version} prediction source for {slate} game {row.get('game_id')}")
+        source, path, digest = found
+        timestamp = source.get("prediction_creation_time_utc", "")
+        if not timestamp:
+            status_path = path.parent / "daily_execution_status.json"
+            timestamp = json.loads(status_path.read_text()).get("run_timestamp_utc", "")
+        if not timestamp:
+            raise ValueError(f"missing retained Moneyline prediction timestamp for {slate} game {row.get('game_id')}")
+        home_key = "challenger_home_win_probability" if version == MONEYLINE_V3 else "v2_home_win_probability"
+        away_key = "challenger_away_win_probability" if version == MONEYLINE_V3 else "v2_away_win_probability"
+        model_identity = source.get("model_parameter_sha256" if version == MONEYLINE_V3 else "control_artifact_sha256", "")
+        if not model_identity:
+            raise ValueError(f"missing retained model identity for {version} on {slate} game {row.get('game_id')}")
+        derived_identity = None
+        if version == MONEYLINE_V3:
+            payload = json.dumps({"slate_date": slate, "game_id": str(row.get("game_id")), "model_version": version,
+                                  "prediction_timestamp_utc": timestamp, "home_probability": _num(source.get(home_key)),
+                                  "away_probability": _num(source.get(away_key)), "model_identity_sha256": model_identity,
+                                  "prediction_artifact_sha256": digest}, sort_keys=True, separators=(",", ":"))
+            derived_identity = "retained-moneyline-row-sha256:" + hashlib.sha256(payload.encode()).hexdigest()
+        else:
+            derived_identity = source.get("substantive_prediction_sha256") or None
+            if derived_identity is None:
+                payload = json.dumps({"slate_date": slate, "game_id": str(row.get("game_id")), "model_version": version,
+                                      "prediction_timestamp_utc": timestamp, "home_probability": _num(source.get(home_key)),
+                                      "away_probability": _num(source.get(away_key)), "model_identity_sha256": model_identity,
+                                      "prediction_artifact_sha256": digest}, sort_keys=True, separators=(",", ":"))
+                derived_identity = "retained-moneyline-row-sha256:" + hashlib.sha256(payload.encode()).hexdigest()
+        output.append(orient_moneyline_candidate(row, source.get(home_key), source.get(away_key), timestamp,
+            model_identity, str(path), digest, prediction_identity=derived_identity))
+    return output
 
 
 def load_candidates(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -731,16 +910,16 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
             player_id = names.get((game_id, str(q.get("description") or "").strip().casefold()), "")
             if market == "moneyline_home":
                 book_candidates = [c for c in by_game.get(game_id, []) if c.get("market_key") == market]
+                quote_side = canonical_moneyline_quote_side(q.get("outcome"), q.get("home_team"), q.get("away_team"))
                 side_matched = False
                 for c in book_candidates:
-                    outcome_name = str(q.get("outcome") or "").strip().casefold()
-                    expected_name = str(q.get("home_team") if c.get("selected_side") == "HOME" else q.get("away_team") or "").strip().casefold()
-                    if outcome_name != expected_name: continue
+                    if not quote_side:
+                        continue
                     side_matched = True
                     quote_player = ""
                     implied = _american_implied(price)
                     candidate = c
-                    _consider_quote(output, diagnostics, candidate, q, obs_dir, obs_sha, odds_manifest_sha, observed, source_time, price, decimal, implied, quote_player)
+                    _consider_quote(output, diagnostics, candidate, q, obs_dir, obs_sha, odds_manifest_sha, observed, source_time, price, decimal, implied, quote_player, quote_side)
                 if not side_matched:
                     unmatched("UNMATCHED_RETAINED_QUOTE", "no candidate has the quoted canonical game side")
                 continue
@@ -756,7 +935,7 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
                 if side != c.get("selected_side"): continue
                 side_matched = True
                 _consider_quote(output, diagnostics, c, q, obs_dir, obs_sha, odds_manifest_sha, observed, source_time, price, decimal, _american_implied(price), player_id)
-                key = (c["candidate_key"], str(q.get("bookmaker", "")))
+                key = (c["candidate_key"], str(q.get("bookmaker", "")), "")
                 if key in output:
                     output[key]["source_parent_run_id"] = source_parent_run_id
                     output[key]["source_capture_identity"] = source_capture_identity
@@ -778,7 +957,7 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
                 continue
             side = str(qrow.get("side_orientation", ""))
             for candidate in by_game.get(game_id, []):
-                if candidate.get("market_key") != "moneyline_home" or candidate.get("selected_side") != side:
+                if candidate.get("market_key") != "moneyline_home":
                     continue
                 source_time = qrow.get("source_update_timestamp_utc", "")
                 observed = qrow.get("market_observation_timestamp_utc", "")
@@ -796,7 +975,7 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
                 row = {
                     "candidate_key": candidate["candidate_key"], "canonical_season": candidate["canonical_season"], "slate_date": candidate["slate_date"],
                     "game_id": game_id, "player_id": "", "goalie_id": "", "market_key": "moneyline_home", "market_line": "",
-                    "selected_side": side, "model_role": candidate["model_role"], "model_family": candidate["model_family"], "model_version": candidate["model_version"],
+                    "selected_side": candidate["selected_side"], "quote_side": side, "model_role": candidate["model_role"], "model_family": candidate["model_family"], "model_version": candidate["model_version"],
                     "sportsbook_key": synthetic["bookmaker"], "provider_event_id": "", "provider_market_key": "h2h", "provider_outcome": side,
                     "american_price": price, "decimal_price": decimal, "source_quote_timestamp_utc": source_time,
                     "observation_timestamp_utc": observed, "source_capture_identity": f"cross_market_state_{slate_dir.name.split('=', 1)[-1]}",
@@ -805,16 +984,19 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
                     "odds_manifest_sha256": manifest_sha, "parent_run_id": candidate.get("parent_run_id", ""),
                     "source_parent_run_id": "",
                 }
-                probability = candidate.get("probability_over") if side == "HOME" else candidate.get("probability_under")
+                probability = candidate.get("home_win_probability") if side == "HOME" else candidate.get("away_win_probability")
+                if probability in (None, ""):
+                    probability = candidate.get("probability_over") if side == "HOME" else candidate.get("probability_under")
                 row = evaluate_quote(row, probability)
-                output[(candidate["candidate_key"], synthetic["bookmaker"])] = row
+                output[(candidate["candidate_key"], synthetic["bookmaker"], side)] = row
     return list(output.values()), diagnostics
 
 
 def _consider_quote(output: dict[tuple[str, str], dict[str, Any]], diagnostics: list[dict[str, Any]],
                     candidate: dict[str, Any], q: dict[str, Any], obs_dir: Path, obs_sha: str,
                     odds_manifest_sha: str, observed: str, source_time: str, price: int,
-                    decimal: float | None, implied: float | None, player_id: str) -> None:
+                    decimal: float | None, implied: float | None, player_id: str,
+                    quote_side: str = "") -> None:
     source_path = str(obs_dir / "normalized_odds.jsonl")
     quote = {"source_quote_timestamp_utc": source_time, "observation_timestamp_utc": observed}
     if not quote_is_eligible(quote, candidate):
@@ -823,7 +1005,8 @@ def _consider_quote(output: dict[tuple[str, str], dict[str, Any]], diagnostics: 
         "candidate_key": candidate["candidate_key"], "canonical_season": candidate["canonical_season"], "slate_date": candidate["slate_date"],
         "game_id": candidate["game_id"], "player_id": candidate.get("player_id", "") if candidate["market_key"] != "goalie_saves" else "",
         "goalie_id": candidate.get("goalie_id", ""), "market_key": candidate["market_key"],
-        "market_line": candidate["market_line"], "selected_side": candidate["selected_side"], "model_role": candidate["model_role"],
+        "market_line": candidate["market_line"], "selected_side": candidate["selected_side"],
+        "quote_side": quote_side or candidate["selected_side"], "model_role": candidate["model_role"],
         "model_family": candidate["model_family"], "model_version": candidate["model_version"], "sportsbook_key": q.get("bookmaker", ""),
         "provider_event_id": q.get("provider_event_id", ""), "provider_market_key": q.get("market", ""),
         "provider_outcome": q.get("outcome", ""), "american_price": price, "decimal_price": decimal or "",
@@ -832,9 +1015,14 @@ def _consider_quote(output: dict[tuple[str, str], dict[str, Any]], diagnostics: 
         "implied_probability": implied if implied is not None else "", "source_path": source_path, "source_sha256": obs_sha,
         "parent_run_id": candidate.get("parent_run_id", ""), "odds_manifest_sha256": odds_manifest_sha,
     }
-    probability = candidate.get("probability_over") if candidate.get("selected_side") == "OVER" else candidate.get("probability_under")
+    if candidate.get("market_key") == "moneyline_home":
+        probability = candidate.get("home_win_probability") if row["quote_side"] == "HOME" else candidate.get("away_win_probability")
+        if probability in (None, ""):
+            probability = candidate.get("probability_over") if row["quote_side"] == "HOME" else candidate.get("probability_under")
+    else:
+        probability = candidate.get("probability_over") if candidate.get("selected_side") == "OVER" else candidate.get("probability_under")
     row = evaluate_quote(row, probability)
-    key = (candidate["candidate_key"], str(q.get("bookmaker", "")))
+    key = (candidate["candidate_key"], str(q.get("bookmaker", "")), row["quote_side"] if candidate.get("market_key") == "moneyline_home" else "")
     prior = output.get(key)
     rank = (0 if str(q.get("market", "")).endswith("_alternate") else 1,
             parse_utc(row["observation_timestamp_utc"]))
@@ -851,8 +1039,8 @@ def _american_implied(price: int) -> float | None:
 
 
 def deduplicate_quotes(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Keep the latest eligible line quote per candidate and sportsbook."""
-    selected: dict[tuple[str, str], dict[str, Any]] = {}
+    """Keep latest eligible quote per candidate/book, and per side for Moneyline."""
+    selected: dict[tuple[str, str, str], dict[str, Any]] = {}
     for row in rows:
         if not str(row.get("quote_qualification_status", "")).startswith("QUALIFIED_"):
             continue
@@ -860,7 +1048,8 @@ def deduplicate_quotes(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         if not parse_utc(row.get("source_quote_timestamp_utc")) or not parse_utc(row.get("observation_timestamp_utc")):
             continue
-        key = (str(row["candidate_key"]), str(row["sportsbook_key"]))
+        quote_side = str(row.get("quote_side", "")) if row.get("market_key") == "moneyline_home" else ""
+        key = (str(row["candidate_key"]), str(row["sportsbook_key"]), quote_side)
         rank = (0 if str(row.get("provider_market_key", "")).endswith("_alternate") else 1,
                 parse_utc(row.get("observation_timestamp_utc")))
         prior = selected.get(key)
@@ -900,6 +1089,7 @@ def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, An
     if not slate_date:
         predictions = add_ungraded_slate_candidates(predictions, root, "2026-10-17")
     scoped, exclusions = scope_regular_season_pregame(predictions)
+    scoped = bind_moneyline_model_sources(scoped, root)
     predictions = deduplicate_candidates(scoped)
     if "2026-10-16" in dates:
         required = {
@@ -957,6 +1147,19 @@ def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, An
             "candidate_rows_without_qualified_quote": sum(not quoted_counts[c["candidate_key"]] for c in subset),
         }
     quote_counts_by_market = Counter(q["market_key"] for q in quotes)
+    moneyline_predictions = [r for r in predictions if r.get("model_family") == "moneyline"]
+    moneyline_quotes = [q for q in quotes if q.get("market_key") == "moneyline_home"]
+    moneyline_validation = {
+        "candidate_count": len(moneyline_predictions),
+        "complete_home_away_probability_count": sum(r.get("home_win_probability") not in (None, "") and r.get("away_win_probability") not in (None, "") for r in moneyline_predictions),
+        "selected_side_agreement_count": sum(r.get("selected_side") == ("HOME" if float(r["home_win_probability"]) >= 0.5 else "AWAY") for r in moneyline_predictions),
+        "model_source_path_and_hash_count": sum(bool(r.get("model_prediction_source_path") and r.get("model_prediction_source_sha256")) for r in moneyline_predictions),
+        "quote_rows_by_side": dict(Counter(q.get("quote_side", "") for q in moneyline_quotes)),
+    }
+    if any(moneyline_validation[key] != len(moneyline_predictions) for key in (
+        "complete_home_away_probability_count", "selected_side_agreement_count", "model_source_path_and_hash_count"
+    )):
+        raise ValueError(f"Moneyline retained identity validation failed: {moneyline_validation}")
     final_receipt_path, final_receipt = latest_daily_receipt(root, "2026-10-17") if not slate_date else (None, {})
     started_ids = [str(x) for x in (final_receipt.get("started_excluded_game_ids") or [])]
     eligible_ids = [str(x) for x in (final_receipt.get("eligible_pregame_game_ids") or [])]
@@ -977,6 +1180,8 @@ def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, An
         "edge_available_quote_count": sum(q.get("edge_status") == "AVAILABLE" for q in quotes),
         "candidate_key_unique_count": len({r["candidate_key"] for r in predictions}),
         "quote_candidate_book_unique_count": len({(r["candidate_key"], r["sportsbook_key"]) for r in quotes}),
+        "quote_candidate_book_side_unique_count": len({(r["candidate_key"], r["sportsbook_key"], r.get("quote_side", "")) for r in quotes}),
+        "moneyline_identity_validation": moneyline_validation,
         "quote_diagnostic_count": len(diagnostics),
         "unmatched_retained_quote_count": len(unmatched_quote_diagnostics),
         "market_counts": dict(sorted(market_counts.items())),

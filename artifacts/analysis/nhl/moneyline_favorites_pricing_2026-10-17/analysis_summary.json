@@ -30,7 +30,7 @@
     "duplicate_candidate_natural_keys": 0,
     "model_arm_pairing_issues": 0,
     "old_89_probability_replay_max_abs_difference": 1.1102230246251565e-16,
-    "v2_candidate_probability_max_abs_difference": 1.1102230246251565e-16
+    "v2_candidate_probability_max_abs_difference": 0.0
   },
   "cutover_period_metrics": {
     "post_cutover": {
@@ -500,7 +500,7 @@
       "v3_accuracy": 0.6666666666666666
     }
   },
-  "frozen_export_quote_rows": 5196,
+  "frozen_export_quote_rows": 10392,
   "ledger_pairing_issues": [],
   "ledger_sources": [
     {
@@ -1471,15 +1471,15 @@
   "source_artifacts": [
     {
       "path": "artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/candidate_predictions.csv",
-      "sha256": "a3d8c6581e2be06cc8ccb1b05221b613e8e7bf7e43baafb0fdb6b07cc3035ee2"
+      "sha256": "af9c23103fb6410a2490aafcf2ab11732b80a84d75f6e83adf09d82c52704083"
     },
     {
       "path": "artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/candidate_quotes.csv",
-      "sha256": "9877332288fb4700951843a3e29f06c16e115747af0360d45f56461de73f2000"
+      "sha256": "fc4a6b42128c0e07bd6f80a8d3910056fc155ca6105dc3d5ed07542c337bbd49"
     },
     {
       "path": "artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/manifest.json",
-      "sha256": "10a0e68ac04903f13b6769650690e364129b50fac9c01cc17a2bd5c840d8f194"
+      "sha256": "21331a6bfa94705affd08686b5b706c25606a77d02a7d62d4d571aee667768cc"
     },
     {
       "path": "artifacts/analysis/nhl/moneyline_prospective_performance/2026-10-13/moneyline_game_level_results.csv",

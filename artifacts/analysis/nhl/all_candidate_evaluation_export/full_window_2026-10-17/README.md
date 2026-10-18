@@ -13,13 +13,24 @@ The October 17 parent receipt's eligible game IDs constrain its unsettled
 predictions to four games; ten games already in progress are excluded by that
 receipt. Those 3,054 candidates remain unresolved and conditional.
 
+Moneyline rows are reconciled to each model's immutable retained prediction
+capture. They carry explicit `home_win_probability` and `away_win_probability`
+fields, a probability-consistent `selected_side`, prediction source path/hash,
+and model identity hash. `model_role` reflects the role at prediction time;
+`export_model_role` retains the role label from the export before this
+correction. V3's row identity is a deterministic hash over the retained model
+row fields because its prediction artifact has no native per-game prediction
+identity. V2 preserves its native substantive prediction hash.
+
 `candidate_quotes.csv` retains the latest chronology-qualified quote per
-candidate and sportsbook. Source market update and observation timestamps must
-precede the prediction timestamp, which must precede scheduled start. The
+candidate and sportsbook; Moneyline retains both `HOME` and `AWAY` outcomes
+where present. Its `selected_side` is the model's choice, while `quote_side`
+identifies the priced outcome. Source market update and observation timestamps
+must precede the prediction timestamp, which must precede scheduled start. The
 audited Moneyline ledger is used when retained. EV is one-unit expected return;
-edge is model-side probability minus the retained market probability. These
-values are unavailable when the necessary price or probability evidence is
-missing.
+edge is the probability for `quote_side` minus the retained market probability.
+These values are unavailable when the necessary price or probability evidence
+is missing.
 
 `candidate_quote_coverage.csv` records candidates without any chronology-
 qualified quote and retained normalized quotes that could not be bound to a
