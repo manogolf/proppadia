@@ -87,6 +87,17 @@ class SchedulerGuardRepairTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory(prefix="scheduler_guard_unit_")
         self.root = Path(self.tmp.name)
         self.ctx = multiprocessing.get_context("fork")
+        # Prior-day and current-roster readiness read the operational artifact
+        # tree and the database. These fixtures exercise claims and locks only,
+        # so hold readiness satisfied; forked workers inherit these patches.
+        for name, value in (
+            ("ensure_prior_day_official_outcomes", {"status": "FIXTURE_PRIOR_DAY_READY"}),
+            ("require_slate_history_certificate", {"status": "FIXTURE_CERTIFIED_FINAL"}),
+            ("require_slate_roster_observation", {"status": "FIXTURE_ROSTER_READY"}),
+        ):
+            patcher = patch.object(nhl, name, return_value=value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -146,7 +157,9 @@ class SchedulerGuardRepairTest(unittest.TestCase):
              patch.object(nhl, "fetch_markets") as fetch:
             status = nhl.observe(self.root, SLATE, "MIDDAY", False, "fixture")
         fetch.assert_not_called()
-        self.assertEqual(json.loads(status.read_text())["status"], "FAILED_WARN_ONLY")
+        result = json.loads(status.read_text())
+        self.assertEqual(result["status"], "FAILED_WARN_ONLY")
+        self.assertIn("CLAIM_WRITE_FAILED", result["failure"])
 
     def test_request_failure_is_warn_only_and_retry_blocked(self):
         with patch.object(nhl, "utc_now", return_value=NOW), \
@@ -155,7 +168,9 @@ class SchedulerGuardRepairTest(unittest.TestCase):
             first = nhl.observe(self.root, SLATE, "MIDDAY", False, "fixture")
             second = nhl.observe(self.root, SLATE, "MIDDAY", False, "fixture")
         self.assertEqual(fetch.call_count, 1)
-        self.assertEqual(json.loads(first.read_text())["status"], "FAILED_WARN_ONLY")
+        result = json.loads(first.read_text())
+        self.assertEqual(result["status"], "FAILED_WARN_ONLY")
+        self.assertIn("SIMULATED_REQUEST_FAILURE", result["failure"])
         self.assertEqual(json.loads(second.read_text())["status"], "NOOP_PAID_ATTEMPT_ALREADY_EXISTS")
 
     def test_publication_failure_preserves_paid_result_and_blocks_retry(self):
@@ -187,7 +202,9 @@ class SchedulerGuardRepairTest(unittest.TestCase):
             first = nhl.observe(self.root, SLATE, "MIDDAY", False, "fixture")
             second = nhl.observe(self.root, SLATE, "MIDDAY", False, "fixture")
         fetch.assert_not_called()
-        self.assertEqual(json.loads(first.read_text())["status"], "FAILED_WARN_ONLY")
+        result = json.loads(first.read_text())
+        self.assertEqual(result["status"], "FAILED_WARN_ONLY")
+        self.assertIn("INTENT_STATUS_FAILURE", result["failure"])
         self.assertEqual(json.loads(second.read_text())["status"], "NOOP_PAID_ATTEMPT_ALREADY_EXISTS")
 
     def test_partial_claim_blocks_retry_without_reinterpreting_it(self):
