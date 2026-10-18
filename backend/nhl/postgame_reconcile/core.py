@@ -117,12 +117,15 @@ def _one_run(pattern: Path, label: str) -> Path:
 
 
 def _select_cross_market_final_run(*, runs: list[Path], schedule: pd.DataFrame,
-                                  activation: dict[str, Any]) -> tuple[Path | None, dict[str, Any]]:
-    """Require a final card only when the lane is active for this slate.
+                                  activation: dict[str, Any],
+                                  allow_missing_active_final: bool = False
+                                  ) -> tuple[Path | None, dict[str, Any]]:
+    """Require a final card for active evaluation except prior-learning handoff.
 
     A preseason slate is explicitly non-evaluation for Moneyline/Puck Line, so
     no FINAL_PREGAME card is required. Outside preseason, a disabled lane may
-    also have no card. An active lane retains the exact-one invariant.
+    also have no card. An active lane retains the exact-one invariant for direct
+    reconciliation; prior-learning may proceed reference-only without a card.
     """
     if len(runs) > 1:
         raise RuntimeError(f"IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:{len(runs)}")
@@ -135,6 +138,11 @@ def _select_cross_market_final_run(*, runs: list[Path], schedule: pd.DataFrame,
         return None, {"status": "NOT_REQUIRED_PRESEASON", "reason": "PRESEASON_NON_EVALUATION"}
     if activation.get("capture_enabled") is False:
         return None, {"status": "NOT_REQUIRED_LANE_INACTIVE", "reason": "CAPTURE_DISABLED"}
+    if allow_missing_active_final:
+        return None, {
+            "status": "MISSING_ACTIVE_CARD_PRIOR_LEARNING",
+            "reason": "NO_IMMUTABLE_CROSS_MARKET_SOURCE",
+        }
     raise RuntimeError("IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:0")
 
 
@@ -445,7 +453,9 @@ def _verify_cross_market_identities(
                 raise RuntimeError("IMMUTABLE_PUCK_LINE_SUBSTANTIVE_IDENTITY_MISMATCH")
 
 
-def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> dict[str, Any]:
+def resolve_operational_sources(*, slate_date: str, operational_root: Path,
+                                allow_missing_active_final_for_prior_learning: bool = False
+                                ) -> dict[str, Any]:
     """Resolve and fully validate immutable local inputs without I/O outside disk."""
     cross_runs = _cross_market_final_runs(operational_root, slate_date)
     if len(cross_runs) > 1:
@@ -467,13 +477,14 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path) -> d
 
     activation = json.loads(CROSS_MARKET_ACTIVATION_PATH.read_text())
     cross, cross_resolution = _select_cross_market_final_run(
-        runs=cross_runs, schedule=sog_spine, activation=activation)
+        runs=cross_runs, schedule=sog_spine, activation=activation,
+        allow_missing_active_final=allow_missing_active_final_for_prior_learning)
     cross_observed: pd.Timestamp | None = None
     retained_schedule_source: dict[str, str] | None = None
     if cross is None:
         # SOG's immutable, manifest-verified canonical spine supplies the slate
         # identity. No Moneyline/Puck Line prediction or market evidence is
-        # invented when their preseason/non-active card is absent.
+        # invented when their card is absent in a permitted no-capture state.
         retained_schedule_path = operational_root / "slates" / slate_date / "raw_schedule_response.json"
         if not retained_schedule_path.is_file():
             raise RuntimeError("IMMUTABLE_RETAINED_SCHEDULE_SOURCE_MISSING")

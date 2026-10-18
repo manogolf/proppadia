@@ -1503,6 +1503,10 @@ def main() -> int:
     mode.add_argument("--staging-set-preflight", action="store_true")
     mode.add_argument("--correct-staging-set", action="store_true")
     mode.add_argument("--execute", action="store_true")
+    parser.add_argument(
+        "--prior-learning", action="store_true",
+        help="allow missing active FINAL_PREGAME cross-market card only for morning prior-learning reconciliation",
+    )
     parser.add_argument("--date", dest="slate_date")
     parser.add_argument("date_arg", nargs="?")
     parser.add_argument("--env-file", type=Path, default=ROOT / "backend/.env")
@@ -1521,6 +1525,8 @@ def main() -> int:
     slate_date = args.slate_date or args.date_arg
     if not slate_date:
         parser.error("provide --date YYYY-MM-DD or positional YYYY-MM-DD")
+    if args.prior_learning and not (args.authority_roster_acquisition or args.execute):
+        parser.error("--prior-learning is limited to authority-roster acquisition or reconciliation execution")
     try:
         date.fromisoformat(slate_date)
     except ValueError:
@@ -1610,7 +1616,8 @@ def main() -> int:
     if slate_date != "2026-09-19":
         try:
             source_binding = resolve_operational_sources(
-                slate_date=slate_date, operational_root=args.operational_root)
+                slate_date=slate_date, operational_root=args.operational_root,
+                allow_missing_active_final_for_prior_learning=args.prior_learning)
             if args.player_identity_acquisition:
                 typed_sources = _parse_response_source_specs(args.response_source)
                 if (slate_date != SEP24_PLAYER_IDENTITY_SLATE

@@ -240,7 +240,7 @@ def ensure_prior_learning(
         # landing source is required: identities without a safe binding remain
         # unresolved by the reconciliation contract.
         acquired = subprocess.run(
-            [*base, "--authority-roster-acquisition"], cwd=ROOT,
+            [*base, "--authority-roster-acquisition", "--prior-learning"], cwd=ROOT,
             capture_output=True, text=True, check=False)
         if acquired.returncode == 2:
             return {"prior_slate_date": slate_date, "official_outcomes_status": "NOT_FINAL",
@@ -262,6 +262,7 @@ def ensure_prior_learning(
             (acquisition.get("request_accounting") or {}).get("total_logical_requests", 0))
         result = subprocess.run(
             [*base, "--execute",
+             "--prior-learning",
              "--response-source", f"AUTHORITY_RESPONSE_SOURCE={run_id}",
              "--response-source", f"ROSTER_RESPONSE_SOURCE={run_id}"],
             cwd=ROOT, capture_output=True, text=True, check=False)

@@ -105,6 +105,14 @@ official identity/participation evidence remain explicitly unresolved; confirmed
 Saves relief appearances remain outside the conditional starter denominator.
 The prior-day statuses and row counts are retained in the daily parent receipt.
 
+If an active regular-season prior slate has no immutable cross-market
+FINAL_PREGAME capture, morning reconciliation still records verified official
+outcomes and grades other source-backed lanes. Moneyline/Puck Line capture
+grades are marked unavailable because no immutable source exists; no REFRESH
+or later artifact is substituted. A direct reconciliation that requires the
+active cross-market evaluation still enforces exactly one valid FINAL_PREGAME
+capture, and duplicate captures remain blocking.
+
 No separate morning `bin/nhl_postgame_reconcile.sh` or `grade-capture` step is
 required. Intraday REFRESH snapshots remain append-only and retain their
 observation IDs, timestamps, books, lines, prices, and capture identity. 8rain

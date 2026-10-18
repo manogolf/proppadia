@@ -1,6 +1,6 @@
 # NHL Backlog
 
-Plan date: October 17, 2026
+Plan date: October 18, 2026
 Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ## Current Baseline
@@ -102,6 +102,29 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Completion: retain a subsequent valid operational receipt showing that a
   qualified final observed before a later target is included for that target
   while remaining excluded from any earlier target that had already started.
+
+### P2.9 Keep prior-day learning gaps from blocking today's NHL slate
+
+- Status: **CODE CORRECTION COMPLETE — natural-run verification pending**. The
+  October 18 10:07 ET `EARLY` run bootstrapped today's two-game schedule, then
+  prior-day reconciliation stopped because October 17 had one retained
+  `REFRESH` state and no immutable `FINAL_PREGAME` cross-market state. The
+  failed run's governed acquisition made no request; the local source preflight
+  failed first. Morning prior-learning now has an explicit reference-only mode:
+  it can record verified outcomes and grade other source-backed lanes without
+  inventing Moneyline/Puck Line captures. Direct reconciliation still requires
+  exactly one valid card when the active cross-market lane is required, and
+  duplicate cards still block. Same-day `FINAL_PREGAME` remains independent
+  from the morning run.
+- Evidence: failed parent receipt
+  `artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261018T140710290694Z_798473fc/parent_receipt.json`;
+  October 17 `REFRESH` state and activation policy; October 16 exact-one
+  `FINAL_PREGAME` state with verified manifest. Regression tests cover the
+  morning continuation, valid-card path, missing-card reference-only path, and
+  duplicate-card rejection.
+- Next step: verify a later ordinary daily receipt records the prior-learning
+  status and that all normal current-slate lanes continue. Do not fabricate a
+  final capture or weaken direct final-pregame reconciliation.
 
 ### P2.3 Close documented historical source-integrity gaps
 
