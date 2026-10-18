@@ -239,7 +239,7 @@ def _verify_resilient_prop_package(*, run: Path, lane: str, slate_date: str,
     marker = json.loads(marker_path.read_text()) if marker_path.is_file() else {}
     prediction_file = ("immutable_conditional_predictions.csv" if lane == "SAVES"
                        else "immutable_predictions.csv")
-    if prediction_file not in files or (marker and marker.get("status") != "COMPLETE"):
+    if prediction_file not in files or not marker_path.is_file() or marker.get("status") != "COMPLETE":
         raise RuntimeError(f"RESILIENT_{lane}_SOURCE_COMPLETION_INVALID")
     if (metadata.get("slate_date") != slate_date
             or run.name != f"run_id={metadata.get('run_id')}"
@@ -283,8 +283,8 @@ def _verify_resilient_prop_package(*, run: Path, lane: str, slate_date: str,
                          else "input_cutoff_timestamp_utc")
         cutoff = pd.to_datetime(frame[cutoff_column], utc=True, errors="coerce")
         published = pd.to_datetime(frame.prediction_timestamp_utc, utc=True, errors="coerce")
-        durable = pd.to_datetime(marker.get("completed_at_utc")
-                                  or metadata.get("actual_write_timestamp_utc"),
+        durable = pd.to_datetime(durable_publication_timestamp_utc
+                                  or marker.get("completed_at_utc"),
                                   utc=True, errors="coerce")
         starts = pd.to_datetime(frame.canonical_scheduled_start_time_utc, utc=True)
         if (cutoff.isna().any() or pd.isna(durable) or (cutoff > published).any()
@@ -335,8 +335,7 @@ def _verify_resilient_prop_package(*, run: Path, lane: str, slate_date: str,
         raise RuntimeError("RESILIENT_SOG_CANONICAL_GAME_SET_MISMATCH")
     frame = _pregame(frame, "prediction_timestamp_utc", schedule)
     durable = pd.to_datetime(durable_publication_timestamp_utc
-                              or marker.get("completed_at_utc")
-                              or metadata.get("actual_write_timestamp_utc"),
+                              or marker.get("completed_at_utc"),
                               utc=True, errors="coerce")
     starts = pd.to_datetime(frame.canonical_scheduled_start_time_utc, utc=True)
     cutoff = pd.to_datetime(frame.input_cutoff_timestamp_utc, utc=True, errors="coerce")
@@ -1444,6 +1443,52 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         continue
                     source_files_manifest = _verify_manifest(source_run)
                     if is_sog_package:
+                        source_metadata = json.loads((source_run / "run_metadata.json").read_text())
+                        readiness = source_metadata.get("readiness_evidence") or {}
+                        source_cert = readiness.get("prior_day_reconciliation_certificate") or {}
+                        source_roster = readiness.get("current_slate_roster_observation") or {}
+                        if not source_cert.get("package_manifest_sha256") or not source_roster.get("package_manifest_sha256"):
+                            proof_notes.append({
+                                "source_path": str(source_run),
+                                "observer_receipt_path": str(receipt_path),
+                                "excluded_reason": "RESILIENT_SOG_SOURCE_READINESS_EVIDENCE_MISSING",
+                            })
+                            continue
+                        if (source_cert.get("package_manifest_sha256")
+                                != verified_cert["package_manifest_sha256"]
+                                or source_roster.get("package_manifest_sha256") != roster_hash):
+                            raise RuntimeError("RESILIENT_SOG_SOURCE_READINESS_EVIDENCE_CONFLICT")
+                        source_marker_path = source_run / "RUN_COMPLETE.json"
+                        if not source_marker_path.is_file():
+                            proof_notes.append({
+                                "source_path": str(source_run),
+                                "observer_receipt_path": str(receipt_path),
+                                "excluded_reason": "RESILIENT_SOG_SOURCE_COMPLETION_MARKER_MISSING",
+                            })
+                            continue
+                        source_marker = json.loads(source_marker_path.read_text())
+                        if source_marker.get("status") != "COMPLETE":
+                            raise RuntimeError("RESILIENT_SOG_SOURCE_COMPLETION_INVALID")
+                        durable = ""
+                        for linked_output in lane.get("outputs") or []:
+                            linked_path = Path(str(linked_output.get("path") or ""))
+                            if not linked_path.is_file() or linked_path == output_path:
+                                continue
+                            try:
+                                linked_status = json.loads(linked_path.read_text())
+                            except (OSError, ValueError, json.JSONDecodeError):
+                                continue
+                            if (linked_status.get("status") == "CAPTURED"
+                                    and str(linked_status.get("run_dir") or "") == str(source_run)):
+                                durable = str(linked_status.get("durable_publication_timestamp_utc") or "")
+                                break
+                        if not durable:
+                            proof_notes.append({
+                                "source_path": str(source_run),
+                                "observer_receipt_path": str(receipt_path),
+                                "excluded_reason": "RESILIENT_SOG_SOURCE_RECEIPT_OR_DURABLE_PUBLICATION_UNPROVEN",
+                            })
+                            continue
                         output_file = source_run / "immutable_predictions.csv"
                         if "immutable_predictions.csv" not in source_files_manifest:
                             raise RuntimeError("RESILIENT_SOG_PREDICTION_ARTIFACT_MISSING")
@@ -1808,6 +1853,14 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                 child = json.loads(child_path.read_text())
                 if child.get("status") != "CAPTURED" or child.get("slate_date") != slate_date:
                     continue
+                child_cert = child.get("prior_day_reconciliation_certificate") or {}
+                child_roster = child.get("current_slate_roster_observation") or {}
+                if ((child_cert.get("package_manifest_sha256")
+                     and child_cert.get("package_manifest_sha256")
+                     != verified_cert["package_manifest_sha256"])
+                        or (child_roster.get("package_manifest_sha256")
+                            and child_roster.get("package_manifest_sha256") != roster_hash)):
+                    raise RuntimeError(f"RESILIENT_{lane}_CHILD_READINESS_EVIDENCE_CONFLICT")
                 source_run = Path(str(child.get("run_dir") or ""))
                 if not source_run.is_dir():
                     raise RuntimeError(f"RESILIENT_{lane}_SOURCE_PACKAGE_MISSING")
@@ -1832,14 +1885,17 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                 if expected_file not in manifest:
                     raise RuntimeError(f"RESILIENT_{lane}_SOURCE_ARTIFACT_MISSING")
                 prediction_path = source_run / expected_file
+                durable = str(child.get("durable_publication_timestamp_utc") or "")
                 frame = _verify_resilient_prop_package(
-                    run=source_run, lane=lane, slate_date=slate_date, schedule=schedule)
+                    run=source_run, lane=lane, slate_date=slate_date, schedule=schedule,
+                    durable_publication_timestamp_utc=durable or None)
                 if frame.empty:
                     continue
                 marker = json.loads((source_run / "RUN_COMPLETE.json").read_text())
                 if marker.get("status") != "COMPLETE":
                     raise RuntimeError(f"RESILIENT_{lane}_SOURCE_COMPLETION_INVALID")
-                durable = str(marker.get("completed_at_utc") or "")
+                durable = str(child.get("durable_publication_timestamp_utc")
+                              or marker.get("completed_at_utc") or "")
                 timestamp_column = "prediction_timestamp_utc"
                 if lane == "POINTS":
                     group_columns = ["game_id", "player_id", "model_version", "probability_construction"]

@@ -279,6 +279,10 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
                           coverage_status=metadata.get("coverage_status"),
                           prediction_game_ids=metadata.get("prediction_game_ids", []),
                           game_exclusions_path=str(destination / "game_exclusions.csv"))
+            if disposition == "COMPLETE_NEW_APPEND_ONLY":
+                # Recorded only after the immutable package has been atomically published.
+                result["durable_publication_timestamp_utc"] = (
+                    utc_now().isoformat().replace("+00:00", "Z"))
     except RosterObservationNotReady as error:
         result.update(
             status="ROSTER_NOT_READY",

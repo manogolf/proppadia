@@ -101,10 +101,12 @@ and observer-parent-bound Points/Saves/SOG sources are discoverable. A
 standalone mainline Moneyline/Puck Line observer receipt that lacks a distinct
 feature-cutoff timestamp is recorded as
 `RESILIENT_CROSS_MARKET_FEATURE_CUTOFF_UNPROVEN`; its prediction timestamp is
-not substituted for missing cutoff proof. Historical SOG packages without a
-durable-write/completion timestamp are also unqualified. The SOG producer now
-writes and hash-binds `actual_write_timestamp_utc` and
-`RUN_COMPLETE.completed_at_utc` for future captures.
+not substituted for missing cutoff proof. Historical SOG packages without an
+exact source receipt and durable-publication evidence are unqualified. The
+SOG producer writes readiness evidence and a completion marker; its child
+status receipt now records publication confirmation after the final manifest.
+Points/Saves child receipts likewise record publication confirmation after
+their atomic package publication.
 
 The append-only reconciliation package now includes
 `resilient_finalization_index.json` and separate `graded_resilient_*.csv`
@@ -128,12 +130,26 @@ Standalone captured prop status receipts that do not link their package to the
 parent certificate and roster remain unqualified. The resolver reports that
 proof gap and does not infer linkage from neighboring receipts.
 
+Prop durable-publication proof must come from the exact captured child status
+receipt after the immutable package has been published, or from a
+hash-bound completion timestamp in that package. An early
+`actual_write_timestamp_utc` does not prove completion of the manifest or
+publication. A later daily lane end time cannot stand in for an earlier
+observer package's publication time. Points/Saves observers now retain
+`durable_publication_timestamp_utc` after atomic publication; SOG retains the
+same field after writing its completion marker and final manifest. Historical
+sources still qualify when their exact contemporaneous parent receipt binds
+the certificate, roster, child status, and a valid completion timestamp.
+
 Bounded read-only replay of retained final slates on 2026-10-14 and
 2026-10-17 verified the source adapters and separate grading outputs. On
 October 14, Moneyline V3 and V2 shadow and Puck Line selected both staggered
-games from REFRESH; SOG selected 1,482 atomic groups across both games from
-MIDDAY. Points and Saves immutable captures were present but lacked the
-required parent-bound certificate/roster proof. On October 17, the only
+games from REFRESH. A first replay had selected 1,482 SOG groups from MIDDAY,
+but the proof audit invalidated that result: the source had no contemporaneous
+certified parent link, and a later daily receipt had been used as durability
+evidence. The corrected replay selects zero prop groups on October 14;
+Points, Saves, and SOG captures remain ungradeable where their source-time
+certificate/roster or durable-publication linkage was not retained. On October 17, the only
 retained market REFRESH was after first puck and roster reuse failed the
 strict-prestart check, so no source qualified. October 14 legacy grades
 remained unchanged in retained files; recomputed shared grade values matched

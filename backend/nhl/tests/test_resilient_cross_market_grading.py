@@ -46,7 +46,9 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
             roster.mkdir(parents=True)
             (roster / "SHA256SUMS").write_text("fixture manifest\n")
             (roster / "observation_summary.json").write_text(json.dumps({"season": 2026, "phase": "MIDDAY"}))
+            roster_manifest = sha(roster / "SHA256SUMS")
             observer_links = {}
+            source_prop_runs = {}
             for lane, filename, rows in (
                 ("POINTS", "immutable_predictions.csv", [
                     {"run_id": "points1", "game_id": 2026020135, "player_id": 77,
@@ -94,6 +96,7 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
             ):
                 source_prop = root / f"{lane.lower()}_prediction_only/season=2026/slate_date={slate_date}/phase=MIDDAY/run_id={lane.lower()}1"
                 source_prop.mkdir(parents=True)
+                source_prop_runs[lane] = source_prop
                 pd.DataFrame(rows).to_csv(source_prop / filename, index=False)
                 pd.DataFrame([{
                     "game_id": 2026020135,
@@ -114,6 +117,7 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
                 child_status.write_text(json.dumps({
                     "status": "CAPTURED", "slate_date": slate_date,
                     "phase": "MIDDAY", "run_dir": str(source_prop),
+                    "durable_publication_timestamp_utc": "2026-10-18T18:42:01Z",
                 }))
                 observer_links[lane] = {"status": "CAPTURED", "receipt_path": str(child_status)}
             production = pd.DataFrame([{
@@ -167,7 +171,6 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
                 for name in ("moneyline_production_predictions.csv",
                              "moneyline_schedule_logit_v2_shadow_predictions.csv")
             ]
-            roster_manifest = sha(roster / "SHA256SUMS")
             receipt = {
                 "slate_date": slate_date, "feature_cutoff_utc": "2026-10-18T18:35:00Z",
                 "ended_at_utc": "2026-10-18T18:45:00Z",
@@ -280,6 +283,19 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
                                              "resilient_points", "resilient_saves")))
             self.assertTrue(all(frame.resilient_parent_receipt_sha256.notna().all()
                                 for frame in grades.values() if not frame.empty))
+
+            points_run = source_prop_runs["POINTS"]
+            marker_path = points_run / "RUN_COMPLETE.json"
+            marker_path.write_text(json.dumps({"status": "COMPLETE", "run_id": "points1"}))
+            (points_run / "SHA256SUMS").write_text("".join(
+                f"{sha(path)}  {path.name}\n" for path in sorted(points_run.iterdir())
+                if path.name != "SHA256SUMS"
+            ))
+            with self.assertRaisesRegex(RuntimeError, "TIMESTAMP_NOT_PREGAME"):
+                core._verify_resilient_prop_package(
+                    run=points_run, lane="POINTS", slate_date=slate_date,
+                    schedule=schedule,
+                )
 
 
 if __name__ == "__main__":

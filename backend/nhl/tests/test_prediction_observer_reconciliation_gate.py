@@ -218,6 +218,7 @@ class PredictionObserverReconciliationGateTests(unittest.TestCase):
         self.assertEqual(result["status"], "CAPTURED")
         self.assertEqual(result["prior_day_reconciliation_certificate"], certificate)
         self.assertEqual(result["current_slate_roster_observation"], roster_certificate)
+        self.assertTrue(result["durable_publication_timestamp_utc"].endswith("Z"))
 
     def test_valid_certificate_allows_sog_prediction_generation(self):
         now = datetime(2026, 10, 18, 16, 0, tzinfo=timezone.utc)
@@ -243,6 +244,7 @@ class PredictionObserverReconciliationGateTests(unittest.TestCase):
         self.assertEqual(result["status"], "CAPTURED")
         self.assertEqual(result["prior_day_reconciliation_certificate"], certificate)
         self.assertEqual(result["current_slate_roster_observation"], roster_certificate)
+        self.assertTrue(result["durable_publication_timestamp_utc"].endswith("Z"))
 
 
 if __name__ == "__main__":
