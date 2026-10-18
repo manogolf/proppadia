@@ -878,7 +878,13 @@ MLB_PROD12_PROP_TYPES ?= $(MLB_PROD8_PROP_TYPES),hits_runs_rbis,runs_scored,walk
 # Full daily prod12 eval is always all-12. Use MLB_PROD12_WATERLINE_PROP_TYPES for optional narrowed experiments.
 MLB_PROD12_DAILY_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
 MLB_PROD12_WATERLINE_PROP_TYPES ?= hits,total_bases,strikeouts_batting
-MLB_PROD12_PIPELINE_PROP_TYPES ?= $(MLB_PROD12_PROP_TYPES)
+# rbis is excluded from the daily readiness probe: its model was retired
+# (2026-08-03, no production authority) and inline BvP rows are not written for
+# it, so every probe 503s. Remove it from this list again if rbis is revived.
+MLB_PIPELINE_RETIRED_PROBE_PROP_TYPES ?= rbis
+MLB_PROP_LIST_COMMA := ,
+MLB_PROP_LIST_SPACE := $(subst ,, )
+MLB_PROD12_PIPELINE_PROP_TYPES ?= $(subst $(MLB_PROP_LIST_SPACE),$(MLB_PROP_LIST_COMMA),$(strip $(filter-out $(MLB_PIPELINE_RETIRED_PROBE_PROP_TYPES),$(subst $(MLB_PROP_LIST_COMMA), ,$(MLB_PROD12_PROP_TYPES)))))
 MLB_DEGENERATE_PROP_TYPES ?= $(MLB_UNDERSERVED_WATCHLIST_PROP_TYPES)
 MLB_UNDERSERVED_PROP_TYPES ?= $(MLB_UNDERSERVED_PROMOTED_PROP_TYPES),$(MLB_UNDERSERVED_WATCHLIST_PROP_TYPES)
 MLB_UNDERSERVED_PROP_SOURCES ?= mlb_api
