@@ -49,6 +49,15 @@ outcomes; that lane's grading remains unavailable until valid prediction
 evidence exists. Direct reconciliation retains its exact-one-card
 requirements.
 
+The host wake event is preparation for early network responsiveness and
+availability. No separate NHL stir process or LaunchAgent is identified in
+the retained configuration; wake itself does not run NHL code or write NHL
+analytical state. A wake or observer poll is not a reconciliation bypass.
+When an explicitly authorized read-only test fails on sandbox DNS or transport,
+Codex must request elevated network permission and retry that same test before
+classifying the condition as a genuine provider or database connectivity
+failure. Load configured environment values without printing credentials.
+
 After that checkpoint, the current-slate schedule and canonical identities are
 validated, then the existing governed roster child captures official roster
 evidence and transaction-backed player/roster updates in the `roster` lane. It
@@ -70,6 +79,54 @@ ungradeable and missing Saves predictions remain unpredicted starters or
 outcomes. In prior-learning mode an absent Saves card is ungradeable, while a
 present invalid or duplicate card still blocks; direct reconciliation keeps
 its exact-one-card contract.
+
+Points probability ladders have two construction contracts.
+`NHL_POINTS_COUNT_HGB_V1` predicts one nonnegative expected count and derives
+the 0.5, 1.5, and 2.5 exceedance probabilities from the same Poisson count
+distribution. The thresholds are structurally ordered. Its capture validator
+requires exactly those three lines and non-increasing values; a failed ladder
+currently fails the HGB capture as a whole. Frozen Phoenix points scores the
+three thresholds with separate binary models, retains `raw_prob_over`, and
+applies equal-weight non-increasing isotonic projection
+(`EQUAL_WEIGHT_ISOTONIC_EXCEEDANCE_V1`) to published values. Missing/duplicate
+lines, non-finite or out-of-range raw probabilities, and model identity
+failures invalidate a player-game ladder. The prediction-only publisher
+records ladder exclusions per player-game and can retain other eligible
+predictions. However, the shared ladder constructor currently raises on an
+invalid player-game before that per-player exclusion stage, so malformed
+Phoenix input can still fail the batch. This is a known scope mismatch, not
+authorization to change model values or qualification. Raw threshold crossings
+from the independent Phoenix models are repaired by the documented projection;
+they are not themselves invalid published probabilities. A ladder is valid
+only when the required three distinct lines and model identities are present,
+raw values are finite and within `[0,1]`, and the published sequence is
+non-increasing. The HGB count-derived sequence is checked for exact line
+cardinality and ordering at capture validation.
+
+The roster observation is sourced from official NHL team roster endpoints
+(`/v1/roster/{team}/current`, with a season-specific resolved path recorded
+when applicable). “Complete” means every team appearing in the verified
+canonical slate has a source response and every game has normalized rows for
+both scheduled teams, with no missing/unexpected teams, conflicting
+natural-key values, or divergent repeated team snapshots. It is not a
+whole-league roster census nor a guarantee that every dressed player is
+present. Player rows missing canonical IDs are counted as exclusions; current
+roster membership does not prove game participation.
+
+Package integrity and roster coverage are separate: missing response/team or
+per-game coverage makes a package incomplete; malformed source/sections,
+conflicting identities, altered manifest files, absent completion marker,
+wrong date/game-set binding, or non-prestart observation makes it invalid.
+The current verifier requires both complete coverage and valid package
+integrity, and Points/Saves require that slate-level package before either
+lane exports features. There is no maximum-age check beyond date/game binding
+and observation before first puck. Consequently, a missing team/game currently
+blocks unrelated games even when their own roster evidence is present. A
+verified partial-game package could support only games with both teams and
+valid identity/source evidence, but the current writer and observer contract
+do not support that mode. Supporting it requires an explicit partial-coverage
+manifest state and per-game downstream binding; do not simply relax the
+current completeness or hash checks.
 
 Before V1, the optional odds step wrote mutable odds files directly, could retry individual
 provider calls, and represented failures as empty results. V1 retains the same

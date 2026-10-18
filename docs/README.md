@@ -96,6 +96,7 @@ If the question is “what is the active runtime path right now?”:
 
 - `docs/NHL Backlog.md`: prioritized outstanding NHL access, source-integrity, and operational-validation work.
 - `docs/NHL Comprehensive Daily Capture Contract V1.md`: authoritative daily execution order and readiness gates, including prior-day reconciliation certification.
+- The comprehensive capture contract also records the NHL wake/network-responsiveness purpose, the sandbox DNS elevation procedure, Points ladder validity, and roster coverage/integrity semantics. Consult it before diagnosing observer readiness or running authorized DB integration tests.
 - `docs/NHL Prediction-Only Operational Contract V1.md`: Points/Saves immutable capture identity, game-level eligibility, and reconciliation binding contract.
 - `docs/NHL_PROJECT_BOOTSTRAP.md`: NHL startup standard requiring the Project Doctrine from day one.
 - `docs/NHL UX Contract.md`: canonical NHL v1 front-facing UX contract (research + board modes).

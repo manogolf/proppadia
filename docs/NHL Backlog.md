@@ -376,9 +376,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   Both NHL LaunchAgents are loaded and enabled, and installed plists match the
   checked-in files. The mainline agent has `RunAtLoad` and a 900-second
   interval; the morning agent runs at 07:30 local. The wake can start a poll
-  before the morning agent. Its practical effect is to make the host available
-  ahead of scheduled automation; the retained configuration does not identify
-  who created it or record a more specific purpose. The new certificate and roster gates prevent a
+  before the morning agent. Its purpose is early host and network
+  responsiveness ahead of scheduled automation; no separate NHL stir process
+  or LaunchAgent is identified, and wake itself invokes no NHL code or writes
+  NHL analytical state. The new certificate and roster gates prevent a
   pre-morning poll from publishing predictions before prior certification and
   current-slate roster prerequisites are complete.
   No scheduler or power configuration was changed.
@@ -551,6 +552,65 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   observer reconciliation-gate and certificate suites. Still pending: inspect
   a naturally scheduled partial-slate observer package and a later prior-day
   reconciliation receipt; no live execution was performed for this correction.
+
+### P2.13 Resolve NHL roster coverage and Points ladder batch-scope gaps
+
+- Status: **OPEN — contract-preserving design and natural-run evidence pending**.
+  The immutable roster writer requires every scheduled team's response and
+  normalized coverage from both teams in every canonical game, with no
+  natural-key conflict or divergent repeated team snapshots. The reuse and
+  observer validators require that complete slate-level package. Thus one
+  missing team's/game's response prevents Points and Saves from using valid
+  roster evidence for unrelated games. Package hashes, date/game-set binding,
+  completion marker, and strict prestart timing are separate integrity checks
+  and must remain fail-closed. A missing roster package, empty schedule, and
+  corrupt/wrong-date package have distinct states; an empty roster response is
+  not accepted as coverage. There is no maximum observation-age threshold
+  beyond same-slate binding and prestart timing.
+- A verified partial package could safely support only games with valid
+  identities and both teams represented, but the current writer, transaction,
+  and downstream observer contract do not support per-game package binding.
+  Design an explicit partial-coverage state and preserve hashes, source
+  provenance, exclusions, schedule identity, and per-game completeness before
+  implementation. Do not relax the existing full-slate validator in place.
+- Frozen Phoenix Points constructs three separately modeled binary
+  thresholds, retains raw probabilities, and projects them to a monotone
+  ladder. Its prediction-only publisher has player-game exclusion surfaces,
+  but `construct_coherent_ladders()` raises before those exclusions for an
+  incomplete, duplicate, non-finite, or out-of-range player-game ladder;
+  this can fail otherwise valid batch rows. HGB Points derives all thresholds
+  from one Poisson count expectation and validates ladder cardinality/order;
+  its capture also fails as a whole if coherence fails. Preserve model and
+  qualification rules; determine the smallest identity-scoped failure
+  contract and add regression coverage before any code change.
+- Evidence: `backend/nhl/daily_capture.py` roster package writer,
+  `backend/nhl/daily_orchestration.py` reuse validator,
+  `backend/nhl/reconciliation_certificate.py` slate observer gate,
+  `backend/nhl/points_shadow/core.py` Phoenix projection,
+  `backend/nhl/prediction_only/core.py` prediction exclusion stage, and
+  `backend/nhl/points_hgb_shadow.py` HGB capture validation. These findings
+  confirm operational scope limitations; no acquisition or model behavior was
+  changed.
+
+### P2.14 Correct the isolated PP-TOI PostgreSQL regression assertion
+
+- Status: **OPEN — determine whether fixture precision or fill semantics are
+  incorrect**. The previously sandbox-DNS-blocked exact test
+  `backend/nhl/tests/test_points_pp_toi_postgres_integration.py::PpToiPostgresWritePathTests::test_daily_postgame_and_backfill_preserve_recovered_source_values`
+  was rerun with elevated network access and its configured test DSN. It
+  connected successfully, then failed functionally: expected a recovered
+  `5.17` value but observed `5.1666666666666667` for 310 seconds / 60.
+  The isolated test fixture uses unbounded PostgreSQL `numeric` for the target
+  field, so it does not apply a production-style two-decimal scale. The test
+  cleanup rolled back the fixture transaction. Do not classify this as DNS or
+  production data failure; inspect schema/rounding contract before changing
+  either the test or writer.
+- The wake event is intended for early host/network responsiveness. No
+  separate NHL stir process or LaunchAgent is identified; the retained OS wake
+  configuration itself invokes no NHL code or analytical writes. For an
+  explicitly authorized read-only test blocked on sandbox DNS/transport,
+  request elevated permission and retry the exact test before classifying a
+  connectivity failure. No credentials or connection strings belong in logs.
 
 ### P2.3 Close documented historical source-integrity gaps
 
