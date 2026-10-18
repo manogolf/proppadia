@@ -32,6 +32,18 @@ def predictive_output_skip_reason(authority_path: Path = AUTHORITY_PATH) -> str 
     return None
 
 
+def actual_wager_reconcile_skip_reason(
+    authority_path: Path = AUTHORITY_PATH,
+    *,
+    upload_generation_status: str,
+) -> str | None:
+    """Skip reconciliation only when the upload guard and model authority agree."""
+    if upload_generation_status != "SKIPPED operation=production_upload_generation":
+        return None
+    reason = predictive_output_skip_reason(authority_path)
+    return reason if reason == "NO_QUALIFIED_MLB_MODEL" else None
+
+
 def assert_predictive_model_qualified(operation: str) -> None:
     payload = authority()
     if payload.get("authority_status") == "NO_QUALIFIED_MLB_MODEL":

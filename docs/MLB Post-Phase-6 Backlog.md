@@ -635,6 +635,24 @@ writer validation does not authorize a hosted cutover or a different writer.
   change was made. The natural roster path and reconciler remain operationally
   unverified after these local corrections.
 
+- Natural validation correction, `local_daily_20261018T200005Z` (2026-10-18
+  13:00 PT): the run attempted actual-wager reconciliation at 20:10Z and failed
+  because the expected CSV was absent, despite upload stages later recording
+  `skipped_no_qualified_model`. LaunchAgent's ProgramArguments point to
+  `/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh` (installed
+  2026-10-17 17:38 PT, SHA-256
+  `314fcd4e7abae738d19a735c94f3e49a5ee281cf703940ec7402dda33efefeb5`), which
+  lacked the skip branch committed in `e254c9a5` and called the reconciler
+  unconditionally. In wrapper order, the book-upload guard runs before actual
+  reconciliation and exposes its skip status; daily ranking/Quick Card upload
+  prep and their statuses run afterward. The correction consumes the earlier
+  book-upload guard status and confirms `NO_QUALIFIED_MLB_MODEL` before
+  recording the actual-wager reconcile as skipped. The qualified-model path
+  still invokes the reconciler, preserving missing-input failure behavior. A
+  focused offline regression covers absent CSV plus skipped book, ranking, and
+  Quick Card uploads and asserts no reconciler call. The observed natural run
+  is retained unchanged; no wrapper or pipeline was run during this follow-up.
+
 - Production source-read permission subtask: **COMPLETE — deployed and verified
   2026-10-17**. After confirming the production project ref
   `cnwwhhmpashijqbspvhf`, database `postgres`, PostgreSQL 15.8, owner session,

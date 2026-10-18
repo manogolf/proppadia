@@ -1771,7 +1771,7 @@ if [[ -f "${MLB_DAILY_BRIEF_RECONCILE_ROWS_CSV}" && "${reconcile_rows_size}" -gt
     fi
   fi
   if [[ "${actual_reconcile_reused_existing}" != "true" ]]; then
-    actual_upload_skip_reason="$(./bin/python -c 'from backend.mlb.shared.model_authority import predictive_output_skip_reason; print(predictive_output_skip_reason() or "")')"
+    actual_upload_skip_reason="$(./bin/python -c 'import sys; from backend.mlb.shared.model_authority import actual_wager_reconcile_skip_reason; print(actual_wager_reconcile_skip_reason(upload_generation_status=sys.argv[1]) or "")' "${book_upload_guard_status}")"
     if [[ "${actual_upload_skip_reason}" == "NO_QUALIFIED_MLB_MODEL" ]]; then
       actual_reconcile_build_status=skipped_no_qualified_model
       echo "[$(date -u +%FT%TZ)] SKIP completed-slate actual wager reconcile status=SKIPPED reason=NO_QUALIFIED_MLB_MODEL completed_slate_date=${MLB_COMPLETED_SLATE_DATE}"
