@@ -1,0 +1,346 @@
+{
+  "cold_start_arms_separate": {
+    "arm_count": 5,
+    "arms": [
+      {
+        "brier": 0.14747293235709996,
+        "calibration_bias_pred_minus_obs": 0.01422222564430553,
+        "candidate_lines": 14730,
+        "count_mae": 1.0294786605386692,
+        "count_player_games": 4057,
+        "count_rmse": 1.3214591204819308,
+        "interpretation": "unpaired population; not directly comparable to production/blends",
+        "log_loss": 0.5042593449990574,
+        "model_role": "OPERATIONAL_SHADOW_A",
+        "model_version": "baseline_v1_cold_start_shadow:A_PRIOR_SEASON_CARRY_FORWARD",
+        "player_games": 4910,
+        "selected_side_accuracy": 0.7859666420179114,
+        "settled_line_rows": 12171,
+        "unresolved_line_rows": 2559
+      },
+      {
+        "brier": 0.1526508947714133,
+        "calibration_bias_pred_minus_obs": 0.012229221013121683,
+        "candidate_lines": 14730,
+        "count_mae": 1.056986563536063,
+        "count_player_games": 4057,
+        "count_rmse": 1.3532060394024148,
+        "interpretation": "unpaired population; not directly comparable to production/blends",
+        "log_loss": 0.5201050761431883,
+        "model_role": "OPERATIONAL_SHADOW_B",
+        "model_version": "baseline_v1_cold_start_shadow:B_PRIOR_SEASON_RECENCY_WEIGHTED",
+        "player_games": 4910,
+        "selected_side_accuracy": 0.7783255278941746,
+        "settled_line_rows": 12171,
+        "unresolved_line_rows": 2559
+      },
+      {
+        "brier": 0.14745695086297547,
+        "calibration_bias_pred_minus_obs": 0.01858940196810782,
+        "candidate_lines": 14730,
+        "count_mae": 1.040502402590954,
+        "count_player_games": 4057,
+        "count_rmse": 1.3207735968824537,
+        "interpretation": "unpaired population; not directly comparable to production/blends",
+        "log_loss": 0.4529299393366733,
+        "model_role": "OPERATIONAL_SHADOW_C",
+        "model_version": "baseline_v1_cold_start_shadow:C_MULTISEASON_SHRUNK_PLAYER",
+        "player_games": 4910,
+        "selected_side_accuracy": 0.7881850299893188,
+        "settled_line_rows": 12171,
+        "unresolved_line_rows": 2559
+      },
+      {
+        "brier": 0.14644737819602976,
+        "calibration_bias_pred_minus_obs": 0.02156585867625832,
+        "candidate_lines": 15879,
+        "count_mae": 1.0401162968032132,
+        "count_player_games": 4298,
+        "count_rmse": 1.3152561104257758,
+        "interpretation": "unpaired population; not directly comparable to production/blends",
+        "log_loss": 0.45001477436952275,
+        "model_role": "CHAMPION_D",
+        "model_version": "baseline_v1_cold_start_shadow:D_PLAYER_ROLE_HIERARCHICAL",
+        "player_games": 5293,
+        "selected_side_accuracy": 0.785248953001396,
+        "settled_line_rows": 12894,
+        "unresolved_line_rows": 2985
+      },
+      {
+        "brier": 0.14624537342707405,
+        "calibration_bias_pred_minus_obs": 0.014837082794943446,
+        "candidate_lines": 15879,
+        "count_mae": 1.0307488607167063,
+        "count_player_games": 4298,
+        "count_rmse": 1.3137196309345376,
+        "interpretation": "unpaired population; not directly comparable to production/blends",
+        "log_loss": 0.4505522311521339,
+        "model_role": "OPERATIONAL_SHADOW_G",
+        "model_version": "baseline_v1_cold_start_shadow:G_COLD_START_TO_CURRENT_SEASON_BLEND",
+        "player_games": 5293,
+        "selected_side_accuracy": 0.7888940592523654,
+        "settled_line_rows": 12894,
+        "unresolved_line_rows": 2985
+      }
+    ]
+  },
+  "date_window": {
+    "date_count": 8,
+    "end": "2026-10-17",
+    "start": "2026-10-10"
+  },
+  "limitations": [
+    "Only eight dates with retained common production/25-75/50-50 prospective captures are evaluable; the export begins earlier, but these arms were not retained before October 10.",
+    "Probabilistic metrics count correlated 1.5/2.5/3.5 lines; count error is once per player-game.",
+    "Only BetOnline model-selected-side prices are used for descriptive one-unit ROI; the market/quote population is incomplete and selection is not a wager record.",
+    "Official participation is reported only where the retained grade file records it; unresolved and blank status are not relabeled as nonparticipation.",
+    "Evaluation is descriptive, small-window prospective evidence and does not authorize model promotion."
+  ],
+  "official_grade_participation_sources": [
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-10/reconciliation=fbe3605043e75c263b78/graded_sog.csv",
+      "sha256": "94420c7880ead0073296f44f8745a7db6d120e9274897b5f6e0fec997658b23f"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-11/reconciliation=e7da8655562d8ca577a9/graded_sog.csv",
+      "sha256": "3694c53742864ffccf6e076cedef9c9b80cab3751af97c0d9db5fa207f19321f"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-12/reconciliation=3d69dd4ed0bce1fe9846/graded_sog.csv",
+      "sha256": "2d042c60d4d074ef14eeea0078dd76222ea8d24a7742b303aba3df94dc436b35"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-13/reconciliation=ba0c2b3c3ef1bd1ddb99/graded_sog.csv",
+      "sha256": "2dfd1b798fcc3e6d01a3f96047bbb4cea4491072ab6c5a1dea953476e0a4a3c2"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-14/reconciliation=dab06367045879865ae9/graded_sog.csv",
+      "sha256": "d7d333e84b0a862ca952bb681cc5029224a07cccd69a0cf0d2fd3079f05b8e7c"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-15/reconciliation=79a343d22cf8540ff8c3/graded_sog.csv",
+      "sha256": "126235d7e3db04aa103bf23871fbee10f518e75cb7db27b278bad61098d4e717"
+    },
+    {
+      "path": "artifacts/operational/nhl/postgame_reconciliation/2026-10-16/reconciliation=15db83a2cf11c383bef5/graded_sog.csv",
+      "sha256": "47a9516613d35d6cd596307d1bb34d43d855e473b344b74642f50d82cd264f9c"
+    }
+  ],
+  "outputs": {
+    "betonline_pricing.csv": "6f09469cb30ddb26d4b49cadc86becc451018c0dafdc12c058314ad43b95c919",
+    "calibration_bins.csv": "cce102ef7b8f76b9196cca659ee5afda9b886683f34ba04c44912b2af2262d22",
+    "cold_start_arm_metrics.csv": "19297ec37e7af8b5f28fb859a8a5a0d7df2b3fbb26c50050486bfea58c05bfc4",
+    "docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.md": "cfcedf4820214e24d66fcd8407f3c40cbd8cab37ff479c2bf3b13ac0fade79e9",
+    "metrics.csv": "cada98c04466e9ca71d4c7e718ed1f4d60d66d1ceed3e57e3f72855388b55c4c",
+    "paired_deltas.csv": "6fc244b93c8100822b284b57a558f221e7dc1639e15509d676274d440730b297",
+    "paired_sog_candidates_unfiltered.csv": "8dc1862b6f126de274e33609d62c733cc423cab84c0ffcc1098af59ac9335784",
+    "report.md": "cfcedf4820214e24d66fcd8407f3c40cbd8cab37ff479c2bf3b13ac0fade79e9"
+  },
+  "population": {
+    "arm_counts": {
+      "blend_25_75": {
+        "dates": [
+          "2026-10-10",
+          "2026-10-11",
+          "2026-10-12",
+          "2026-10-13",
+          "2026-10-14",
+          "2026-10-15",
+          "2026-10-16",
+          "2026-10-17"
+        ],
+        "line_candidates": 5295,
+        "player_games": 1765,
+        "settled_line_rows": 3843,
+        "unresolved_line_rows": 1452
+      },
+      "blend_50_50": {
+        "dates": [
+          "2026-10-10",
+          "2026-10-11",
+          "2026-10-12",
+          "2026-10-13",
+          "2026-10-14",
+          "2026-10-15",
+          "2026-10-16",
+          "2026-10-17"
+        ],
+        "line_candidates": 5295,
+        "player_games": 1765,
+        "settled_line_rows": 3843,
+        "unresolved_line_rows": 1452
+      },
+      "production_d10": {
+        "dates": [
+          "2026-10-10",
+          "2026-10-11",
+          "2026-10-12",
+          "2026-10-13",
+          "2026-10-14",
+          "2026-10-15",
+          "2026-10-16",
+          "2026-10-17"
+        ],
+        "line_candidates": 5295,
+        "player_games": 1765,
+        "settled_line_rows": 3843,
+        "unresolved_line_rows": 1452
+      }
+    },
+    "candidate_policy": "NOT_APPLIED",
+    "exact_common_line_rows": 5295,
+    "exact_common_player_games": 1765,
+    "explicit_nonparticipating_player_games": 0,
+    "missing_arm_identity_counts": {},
+    "outcome_status_counts_line_rows": {
+      "SETTLED": 3843,
+      "UNRESOLVED": 1452
+    },
+    "participation_status_counts_player_games": {
+      "APPEARED": 1281,
+      "NOT_YET_RECONCILED": 181,
+      "UNRESOLVED_IN_EXPORT": 303
+    },
+    "started_game_exclusions": 0
+  },
+  "prediction_source_artifacts": [
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/predictions.csv",
+      "sha256": "1cfec196d4a7928f3cf272e015e6b632b7d0bb1c7faa6b9b974520f326fbf0ed"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/predictions.csv",
+      "sha256": "19b71b0b320f406838754b811fa615913a848a086248485e4be30b19d5c3a95c"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/predictions.csv",
+      "sha256": "d45a14d98f0c7aa5bb2415e99878dfb0249b5ec58f3e40f47e79912a48c4695d"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/predictions.csv",
+      "sha256": "cfad052a138cdf59c8d372f30329cf9a73f927dff4eddbf3c324033e9a7cf066"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/predictions.csv",
+      "sha256": "ebeb79d97204bd6e6f5c29b7730377ee81906fb8b864ba5b4d38b9d969ca284f"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/predictions.csv",
+      "sha256": "0136987f6fb0706d4983575ab9ebdafa3d77b9b6f0dc1a530f557ca729d5f9da"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/predictions.csv",
+      "sha256": "c51fe759ed8f07dcda5ea920666ee09c2f543211e2075dfc9c29969419bb23a2"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/predictions.csv",
+      "sha256": "1682e720d8c1a073329ed4e8759560424b10d8d0f4a060c4758f4ea142a06836"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-14/run_id=nhldaily_20261014T192554086407Z_2b980c9e/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/predictions.csv",
+      "sha256": "878fc7b13299c65953176d8ab9bc6181947c31b90346eb28c3b34c1016a33540"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-14/run_id=nhldaily_20261014T192554086407Z_2b980c9e/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/predictions.csv",
+      "sha256": "f6743de03b7de459159e7d0349f1407c91be0b01c645b00576db4228628e7d90"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-15/run_id=nhldaily_20261016T005559712749Z_422ddbda/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/predictions.csv",
+      "sha256": "16a57ae8b4a115a635f5142f69b50c56bf2a2221a45a03e61767a3443da32b31"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-15/run_id=nhldaily_20261016T005559712749Z_422ddbda/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/predictions.csv",
+      "sha256": "4b92ff6300ebdfbb39d60a9591e545885be9c236ea30d8423b27dd55326a8ff6"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-16/run_id=nhldaily_20261017T014044807848Z_1cdc56f6/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/predictions.csv",
+      "sha256": "297459a3595fbe0fb2f4ac4e43199f4707d388ff213efd984fb91394dd5e107b"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-16/run_id=nhldaily_20261017T014044807848Z_1cdc56f6/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/predictions.csv",
+      "sha256": "09a1f407dbee24058e102462ef5ef06fbe63a97b3935eedf0e6bb925593a053e"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-17/run_id=nhldaily_20261017T232609902832Z_68bc386f/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/predictions.csv",
+      "sha256": "72f1489b2ebb39729c8f8532dd3577f7a5c89899aeedc367b6956f87c7dd1876"
+    },
+    {
+      "path": "artifacts/operational/nhl/sog_fixed_blend_shadows/season=2026/slate_date=2026-10-17/run_id=nhldaily_20261017T232609902832Z_68bc386f/model=NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1/predictions.csv",
+      "sha256": "bbe14dac8382b93ed79498646fe69a12d19f2e40737155d071b73c23a83577bd"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261010T225230603101Z_6239a125/sog_predictions_wide_calibrated.csv",
+      "sha256": "b86cfcd0f6274db8248a8f571694bfd828689de93b254b6cd36348beb3e3f307"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261011T201233254402Z_92264a17/sog_predictions_wide_calibrated.csv",
+      "sha256": "3e0a11fbaa8097c339f3736add944ec93f23f802f74061b6183ed3ffff96c0a7"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261012T220438660693Z_ab8ff694/sog_predictions_wide_calibrated.csv",
+      "sha256": "098873be5b12ecce27b2f30f19cd2b7f1d52466b0ecec959cfca9d9eb0b7f801"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261013T201458522957Z_22deb90f/sog_predictions_wide_calibrated.csv",
+      "sha256": "e62fe5303e98b69ea9b67c3e4eb08d545e22422440910fa76e350477125bc8c8"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261014T192554086407Z_2b980c9e/sog_predictions_wide_calibrated.csv",
+      "sha256": "cd173f49ca3fea102b803dbf90d6995ad1047b29c259ba847e2fc0786c76aaea"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261016T005559712749Z_422ddbda/sog_predictions_wide_calibrated.csv",
+      "sha256": "8effbec7e03b0794e1ad6fe89d800cf7c0a9590fef1b6dcb871c16c521611c1d"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261017T014044807848Z_1cdc56f6/sog_predictions_wide_calibrated.csv",
+      "sha256": "f63869bd817b1c519ec6ada2a91a1c7b5cf89cbdadf1b50ae39795bcd92c9a99"
+    },
+    {
+      "path": "backend/nhl/data/processed/daily_runs/nhldaily_20261017T232609902832Z_68bc386f/sog_predictions_wide_calibrated.csv",
+      "sha256": "04930e6ad7ce19d40b36212492055f04824a7507674de9f18f0e932d26758016"
+    }
+  ],
+  "pricing_rows_source_sha256": "fc4a6b42128c0e07bd6f80a8d3910056fc155ca6105dc3d5ed07542c337bbd49",
+  "prior_grade_crosscheck": {
+    "grade_sources": [
+      {
+        "path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-10/run_id=nhldaily_20261010T225230603101Z_6239a125/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/graded_predictions.csv",
+        "sha256": "47258162d10d39a9338dfe23584eef0d52d8d2e5fba3db2def1be8fe703fa4a9"
+      },
+      {
+        "path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-11/run_id=nhldaily_20261011T201233254402Z_92264a17/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/graded_predictions.csv",
+        "sha256": "d6c04287997277a47f17a751dd60bdcdfb02524dcbfc8d0c2692fe2ecb41753f"
+      },
+      {
+        "path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-12/run_id=nhldaily_20261012T220438660693Z_ab8ff694/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/graded_predictions.csv",
+        "sha256": "433fa5568bcf3940c572df8b9f7506a9b7a25831298bd286dc673167cc98d13f"
+      },
+      {
+        "path": "artifacts/operational/nhl/sog_fixed_blend_grades/slate_date=2026-10-13/run_id=nhldaily_20261013T201458522957Z_22deb90f/model=NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1/graded_predictions.csv",
+        "sha256": "192805733a0b7cf41a9cf8e59e6a725ddf3d089aabb257038a32800771418a0b"
+      }
+    ],
+    "primary_outcome_policy": "honor frozen full-window candidate export; do not promote older grade labels into its outcome status",
+    "prior_settled_export_unresolved_line_rows": 9,
+    "prior_settled_export_unresolved_player_games": 3
+  },
+  "schema_version": "NHL_SOG_PAIRED_BLEND_EVALUATION_V1",
+  "source_export_manifest_path": "artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/manifest.json",
+  "source_export_manifest_sha256": "21331a6bfa94705affd08686b5b706c25606a77d02a7d62d4d571aee667768cc",
+  "source_predictions_sha256": "af9c23103fb6410a2490aafcf2ab11732b80a84d75f6e83adf09d82c52704083",
+  "source_quotes_sha256": "fc4a6b42128c0e07bd6f80a8d3910056fc155ca6105dc3d5ed07542c337bbd49",
+  "sportsbook_quote_policy": {
+    "hindsight_best_price_selection": false,
+    "selection": "latest retained chronology-qualified quote per candidate/book/side; bet only model-selected side",
+    "sportsbook": "betonlineag"
+  },
+  "study": "prospective exact three-arm SOG comparison",
+  "validation": {
+    "all_export_probabilities_and_expected_counts_match_retained_source_ledgers": true,
+    "all_three_arms_share_outcome_and_scheduled_start": true,
+    "prediction_chronology_pass": true,
+    "quote_rows_unique_per_candidate_and_book": true,
+    "quotes_source_observation_prediction_start_order_validated": true
+  }
+}

@@ -234,6 +234,42 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   evaluation; do not promote models or choose thresholds from retrospective
   ROI results.
 
+### P2.8 Evaluate SOG production versus D10/D20 fixed blends
+
+- Status: **ANALYSIS COMPLETE — descriptive paired prospective evaluation**.
+  The corrected full-window export contains 5,295 exact common candidate-line
+  rows across production D10, D10/D20 25/75, and D10/D20 50/50, from October
+  10–17. All three probabilities and expected counts were checked against
+  their retained prediction ledgers, with strict feature-cutoff/prediction/
+  scheduled-start ordering. The settled population is 3,843 line rows / 1,281
+  player-games; 1,452 rows / 484 player-games remain unresolved, and no
+  explicit nonparticipating status is present in this common population.
+- Results: the 25/75 blend has Brier 0.14717, log loss 0.45441, selected-side
+  accuracy 78.48%, and player-game count MAE 1.0202; production has 0.14961,
+  0.46396, 78.17%, and 1.0331, respectively. The 50/50 blend is slightly
+  behind 25/75 on Brier, log loss, and count error, but has marginally higher
+  selected-side accuracy. Both blends improve Brier/log loss on five of seven
+  settled dates and worsen both on October 11 and October 16. The 25/75 blend
+  is the primary prospective challenger; 50/50 remains the comparator. No
+  production authority or scoring behavior changes.
+- Pricing: fixed BetOnline model-selected-side quotes cover 700 settled
+  candidate lines where all three arms have quotes. Descriptive one-unit ROI
+  is -6.47% production, -6.22% 25/75, and -6.52% 50/50. Quote coverage is
+  incomplete, and these correlated line-level returns are not an independent
+  wager sample. No alternative bookmaker price was substituted.
+- Separate A/B/C/D/G cold-start metrics are retained; they have different
+  populations and are not ranked against the primary paired trio. The frozen
+  export leaves three October 10–11 player-games (nine line rows) unresolved
+  even though the earlier fixed-blend grade package contains settled labels;
+  primary metrics honor the full-window export, and the source-coverage
+  mismatch remains for follow-up.
+- Evidence: `docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.md`;
+  `artifacts/analysis/nhl/sog_paired_blend_evaluation_full_window_2026-10-17/`;
+  reproducible reader `backend/nhl/scripts/evaluate_nhl_sog_paired_blends_full_window.py`.
+- Next: retain the paired captures through more slates and resolve the three
+  outcome-coverage discrepancies from existing official evidence before any
+  retrospective re-grade. Do not promote from this short, correlated sample.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** 46,379 2023–24 shot-attempt corrections;
