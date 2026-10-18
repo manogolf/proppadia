@@ -308,6 +308,41 @@ def mlb_ingest_session_identity(conn) -> Dict[str, str]:
         raise RuntimeError(f"restricted MLB role identity read failed{suffix}") from None
 
 
+def mlb_ingest_identity_evidence(conn) -> Dict[str, Any]:
+    """Return receipt-safe identity evidence without labeling owner routes restricted."""
+    restricted_enabled = mlb_ingest_restricted_mode_enabled()
+    identity: Dict[str, Any] = mlb_ingest_session_identity(conn) if restricted_enabled else {}
+    if not restricted_enabled:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT session_user::text, current_user::text")
+                row = cur.fetchone()
+            if isinstance(row, dict):
+                session_user = row.get("session_user")
+                current_user = row.get("current_user")
+            else:
+                session_user, current_user = tuple(row or ())
+            if not session_user or not current_user:
+                raise RuntimeError("MLB database identity query returned no complete identity")
+            identity = {
+                "session_user": str(session_user),
+                "current_user": str(current_user),
+            }
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            state = _sqlstate(exc)
+            suffix = f" (SQLSTATE {state})" if state else f" ({type(exc).__name__})"
+            raise RuntimeError(f"MLB database identity read failed{suffix}") from None
+    return {
+        **identity,
+        "restricted_ingest_enabled": restricted_enabled,
+        "restricted_role": MLB_INGEST_ROLE if restricted_enabled else None,
+        "role_transition": f"SET ROLE {MLB_INGEST_ROLE}" if restricted_enabled else "NONE",
+        "restricted_identity_verified": restricted_enabled,
+    }
+
+
 def _db_url() -> str:
     url = get_database_url()
     if not url:

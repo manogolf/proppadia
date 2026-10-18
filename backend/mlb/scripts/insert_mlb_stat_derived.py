@@ -36,7 +36,7 @@ from backend.mlb.identity.playable_terminal_v1 import (
     classify_playable_terminal,
     reconcile_schedule_by_game_pk,
 )
-from backend.shared.db.pg import pg_connect, scalar_int_result
+from backend.shared.db.pg import mlb_ingest_identity_evidence, pg_connect, scalar_int_result
 
 
 BATTER_PROP_TYPES = [
@@ -1561,6 +1561,7 @@ def run(
     at_bats_backfilled = 0
 
     with pg_connect(require_streak_read=True) as conn:
+        database_identity = mlb_ingest_identity_evidence(conn)
         mtp_has_game_type = _table_has_column(conn, "model_training_props", "game_type")
         if not quiet:
             print(f"ℹ️ model_training_props.game_type column detected: {mtp_has_game_type}")
@@ -1613,6 +1614,7 @@ def run(
                             "finality_contract_version": playable_terminal_contract.CONTRACT_VERSION,
                             "finality_contract_sha256_at_start": runtime_finality_sha256,
                         },
+                        "database_identity": database_identity,
                         "schedule_source": {
                             "path": str(schedule_path), "sha256": schedule_sha256,
                             "observed_at_utc": schedule_observed_at_utc,
@@ -2124,6 +2126,7 @@ def run(
                         "finality_contract_version": playable_terminal_contract.CONTRACT_VERSION,
                         "finality_contract_sha256_at_start_and_commit": runtime_finality_sha256,
                     },
+                    "database_identity": database_identity,
                     "schedule_source": {
                         "path": str(schedule_path), "sha256": schedule_sha256,
                         "observed_at_utc": schedule_observed_at_utc,
@@ -2243,6 +2246,7 @@ def run(
                                 "finality_contract_version": playable_terminal_contract.CONTRACT_VERSION,
                                 "finality_contract_sha256_at_start": runtime_finality_sha256,
                             },
+                            "database_identity": database_identity,
                             "schedule_source": {
                                 "path": str(schedule_path), "sha256": schedule_sha256,
                                 "observed_at_utc": schedule_observed_at_utc,

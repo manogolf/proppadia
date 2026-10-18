@@ -30,6 +30,7 @@ from urllib3.util.retry import Retry
 
 from backend.shared.db.pg import (
     configure_mlb_ingest_connection,
+    mlb_ingest_identity_evidence,
     mlb_ingest_restricted_mode_enabled,
     verify_mlb_ingest_production_target,
 )
@@ -229,8 +230,11 @@ def main() -> int:
     upserts = 0
     team_label_conflicts = 0
     active_ids: Set[int] = set()
+    identity_evidence: Dict[str, object]
+    inactive_marker_rows_changed = 0
 
     with _connect_db(db) as conn:
+        identity_evidence = mlb_ingest_identity_evidence(conn)
         try:
             conn.prepare_threshold = 0  # type: ignore[attr-defined]
         except Exception:
@@ -266,11 +270,14 @@ def main() -> int:
 
                 min_success = max(total - 1, 1)
                 if ok >= min_success and active_ids:
-                    changed = _mark_inactive(
+                    inactive_marker_rows_changed = _mark_inactive(
                         cur, cols, active_ids,
                         successful_teams=ok, total_teams=total,
                     )
-                    print(f"[inactive-mark] marker rows changed={changed}", flush=True)
+                    print(
+                        f"[inactive-mark] marker rows changed={inactive_marker_rows_changed}",
+                        flush=True,
+                    )
                     print("[inactive-mark] done", flush=True)
                 else:
                     print(
@@ -281,6 +288,28 @@ def main() -> int:
         f"PASS mlb full roster refresh date={target_date} "
         f"teams_ok={ok}/{total} team_fail={fail} roster_rows={roster_rows} upserts={upserts} "
         f"team_label_conflicts={team_label_conflicts}"
+    )
+    print(
+        "MLB_ROSTER_EXECUTION_RECEIPT_JSON="
+        + json.dumps(
+            {
+                "schema_version": "MLB_ROSTER_EXECUTION_RECEIPT_V1",
+                "status": "COMPLETE" if fail == 0 else "COMPLETE_WITH_TEAM_WARNINGS",
+                "target_date": target_date,
+                "team_count": total,
+                "teams_succeeded": ok,
+                "teams_failed": fail,
+                "roster_rows_observed": roster_rows,
+                "roster_upsert_calls": upserts,
+                "inactive_marker_rows_changed": inactive_marker_rows_changed,
+                "team_label_conflicts": team_label_conflicts,
+                "transaction_status": "COMMITTED",
+                "database_identity": identity_evidence,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        flush=True,
     )
     return 0
 

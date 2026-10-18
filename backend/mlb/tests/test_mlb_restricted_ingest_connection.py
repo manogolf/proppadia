@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import unittest
+from contextlib import nullcontext
+from io import StringIO
 from unittest.mock import patch
 
 from backend.shared.db import pg
@@ -72,6 +75,11 @@ class _Connection:
         self.closed = True
 
 
+class _RosterConnection(_Connection):
+    def transaction(self):
+        return nullcontext()
+
+
 class MlbRestrictedIngestConnectionTests(unittest.TestCase):
     def test_success_sets_role_and_verifies_same_connection_identity_and_acl(self):
         conn = _Connection(row=_OK_ROW)
@@ -122,6 +130,34 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "role identity assertion failed"):
             pg.mlb_ingest_session_identity(conn)
+
+    def test_identity_evidence_records_set_role_for_restricted_connection(self):
+        conn = _Connection(row=_OK_ROW)
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_OPT_IN_ENV: "1", pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url"},
+        ):
+            evidence = pg.mlb_ingest_identity_evidence(conn)
+
+        self.assertEqual(evidence["session_user"], "proppadia_mlb_ingest_login")
+        self.assertEqual(evidence["current_user"], "proppadia_mlb_ingest")
+        self.assertTrue(evidence["restricted_ingest_enabled"])
+        self.assertTrue(evidence["restricted_identity_verified"])
+        self.assertEqual(evidence["role_transition"], "SET ROLE proppadia_mlb_ingest")
+
+    def test_unrestricted_identity_cannot_be_labeled_as_restricted(self):
+        conn = _Connection(
+            row={"session_user": "postgres", "current_user": "postgres"}
+        )
+        with patch.dict(os.environ, {}, clear=True):
+            evidence = pg.mlb_ingest_identity_evidence(conn)
+
+        self.assertEqual(evidence["session_user"], "postgres")
+        self.assertEqual(evidence["current_user"], "postgres")
+        self.assertFalse(evidence["restricted_ingest_enabled"])
+        self.assertFalse(evidence["restricted_identity_verified"])
+        self.assertIsNone(evidence["restricted_role"])
+        self.assertEqual(evidence["role_transition"], "NONE")
 
     def test_wrong_login_or_role_fails_closed(self):
         conn = _Connection(row={**_OK_ROW, "current_user": "postgres"})
@@ -306,6 +342,42 @@ class MlbRestrictedIngestConnectionTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "project reference mismatch"):
                 roster._connect_db("wrong-target")
         connect.assert_not_called()
+
+    def test_roster_success_emits_identity_and_write_disposition_receipt(self):
+        from backend.mlb.scripts import refresh_mlb_players_rosters as roster
+
+        conn = _RosterConnection(row=_OK_ROW)
+        output = StringIO()
+        with patch.dict(
+            os.environ,
+            {pg.MLB_INGEST_OPT_IN_ENV: "1", pg.MLB_INGEST_DATABASE_URL_ENV: "restricted-url"},
+        ), patch.object(roster, "_db_url", return_value="restricted-url"), patch.object(
+            roster, "_session"
+        ), patch.object(roster, "_fetch_teams", return_value=[(1, "AAA")]), patch.object(
+            roster,
+            "_fetch_team_roster",
+            return_value=[{"player_id": 123, "player_name": "Sample Player"}],
+        ), patch.object(roster, "_connect_db", return_value=conn), patch.object(
+            roster, "_upsert_player", return_value=False
+        ), patch.object(roster, "_mark_inactive", return_value=1), patch(
+            "sys.argv", ["refresh_mlb_players_rosters.py"]
+        ), patch("sys.stdout", output):
+            self.assertEqual(roster.main(), 0)
+
+        marker = "MLB_ROSTER_EXECUTION_RECEIPT_JSON="
+        receipt_line = next(line for line in output.getvalue().splitlines() if line.startswith(marker))
+        receipt = json.loads(receipt_line[len(marker):])
+        self.assertEqual(receipt["schema_version"], "MLB_ROSTER_EXECUTION_RECEIPT_V1")
+        self.assertEqual(receipt["database_identity"]["session_user"], "proppadia_mlb_ingest_login")
+        self.assertEqual(receipt["database_identity"]["current_user"], "proppadia_mlb_ingest")
+        self.assertEqual(
+            receipt["database_identity"]["role_transition"],
+            "SET ROLE proppadia_mlb_ingest",
+        )
+        self.assertTrue(receipt["database_identity"]["restricted_identity_verified"])
+        self.assertEqual(receipt["transaction_status"], "COMMITTED")
+        self.assertEqual(receipt["roster_upsert_calls"], 1)
+        self.assertEqual(receipt["inactive_marker_rows_changed"], 1)
 
 
 if __name__ == "__main__":

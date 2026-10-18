@@ -675,10 +675,37 @@ writer validation does not authorize a hosted cutover or a different writer.
   `workspace build failed rc=1`. There is no run-specific
   `START mlb-today workspace materialized view refresh` or
   `refresh_today_workspace_views()` evidence after that failure. Thus the four
-  materialized views and `/mlb/today` remain unverified for this run; the
-  existing qualified-model gate and source-readiness warning must be addressed
-  before the next natural-run confirmation. No refresh was retried as part of
-  this read-only verification.
+  materialized views and `/mlb/today` remain unverified for this run. No refresh
+  was retried as part of this read-only verification.
+- Follow-up trace confirms the missing slate was downstream of the existing
+  qualification gate, not a date or filename mismatch: the run's retained
+  StatsAPI schedule has one game on 2026-10-17 (`849816`, description `ALCS
+  Game 4`, source `gameType=L`), while the wrapper explicitly logged
+  `SKIP MLB slate output: NO_QUALIFIED_MLB_MODEL` at 23:38:37Z. The workspace
+  build began at 23:38:48Z and requires the archived qualified slate and wide
+  files under `backend/mlb/exports/odds_history/2026-10-17/`. The postseason
+  phase classification was left as recorded by the source. No safe workspace
+  input can be produced from this run without bypassing the qualified-model
+  gate or changing the workspace's input contract, so no wrapper or workspace
+  behavior was changed. Offline checks confirm that the missing input fails
+  closed and a retained populated slate loads 134 rows. On a later natural run,
+  workspace verification requires the existing production slate producer to
+  emit date-matched qualified slate and wide files; then confirm nonzero staging,
+  `SET ROLE proppadia_mlb_ingest`, the refresh function's four-view order, and
+  `/mlb/today` readback.
+- Restricted writer receipts now capture separate `session_user` and
+  `current_user`, the `SET ROLE proppadia_mlb_ingest` transition, and an
+  explicit restricted-identity verification flag. Stat-derived date receipts
+  include this evidence; the roster writer emits a versioned JSON execution
+  receipt in its retained stdout. Unrestricted connections report their actual
+  identity with restricted flags false and no restricted role label. Offline
+  tests cover both connection modes. The October 17 receipts remain historical
+  and unchanged; the new evidence will first appear on the next natural run.
+- Reconciliation remains legitimately blocked by official source readiness:
+  the Oct 16 finalized-data check found zero `model_training_props` and
+  `player_stats` rows, and the bounded recovery refused game `849817` because
+  its official player-stat payload was missing. No source or reconciliation
+  writes were made.
 
 ### P2.3 Review broad API-role permissions against consumer dependencies
 
