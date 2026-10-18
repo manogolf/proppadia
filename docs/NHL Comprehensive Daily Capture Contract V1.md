@@ -31,6 +31,63 @@ The comprehensive graph is:
 9. optional market attachment from that run-bound observation;
 10. research refresh, archival, integrity checks, and final sanity counts.
 
+## FINAL_PREGAME timing and game-level finalization review (2026-10-18)
+
+Current observer behavior has two timing layers. AUTO phase selection for
+mainline, SOG, Points, and Saves uses the earliest unstarted game's start time:
+the lane selects `FINAL_PREGAME` only when that next game is 20–75 minutes
+away (with lane-specific MIDDAY/no-phase behavior outside the window). Once a
+phase is selected, prediction eligibility and final durable-write checks are
+per game. Thus a later game's timing can open a FINAL_PREGAME poll after an
+earlier game starts, while rows for the started game are excluded.
+
+The immutable publication identity remains slate-and-phase scoped. SOG stops
+if a run already exists for the phase. Points and Saves return the existing
+canonical run idempotently, and competing phase runs fail closed. Mainline's
+ordinary observer suppresses a repeated phase, while forced/refresh behavior
+can create separate states. Direct reconciliation resolves exactly one
+cross-market FINAL_PREGAME state and exactly one SOG FINAL_PREGAME run;
+multiple states/runs are errors. Points may be absent and ungradeable, while
+Saves absence is permitted only by prior-learning mode. Existing Points/Saves
+packages retain the full canonical game spine and can declare a subset of
+eligible and prediction games. REFRESH and MIDDAY mainline states do not
+satisfy the direct cross-market FINAL_PREGAME source requirement.
+
+This creates a staggered-slate coverage gap: if the one phase package is
+published while some later game's required inputs are unavailable, a later
+poll cannot append that game's predictions to the immutable phase package.
+If the first designated window is missed and no card exists, a poll near a
+later game's start can still create a partial card for games that remain
+pregame; already-started games stay excluded. The designated 20–75 minute
+interval is therefore an AUTO scheduling preference, while certified
+prior-day history, valid date-bound roster/source evidence, immutable lineage,
+and strict per-game prestart observation and durable-write timestamps are the
+actual validity controls. Explicit phase requests currently bypass AUTO's
+window choice but not per-game chronology validation.
+
+**Proposed design; not implemented or authorized by this review:** resolve
+each lane/slate into one immutable finalization index that references original
+game-level prediction evidence by artifact path, manifest hash, prediction
+identity, model identity, observation/cutoff timestamps, and canonical game
+identity. Keep the original artifact, phase, values, and timestamps unchanged;
+the index is a post-observation evidence-resolution record, never a new or
+relabeled prediction. Select no more than one source per prediction identity
+under a deterministic documented rule, and record missing games/identities
+as ungradeable. The index would be the single exact-one reconciliation input;
+raw candidate observations remain provenance and are not independently
+counted as final cards. Conflicting or corrupt candidates must block rather
+than be silently selected. This requires explicit policy for whether MIDDAY
+or REFRESH forecasts qualify for grading, separate from whether associated
+market quotes can be attached. Late or absent quotes may limit attachment,
+but cannot change forecast values or timestamps. Cross-market and SOG source
+requirements need deliberate lane-specific treatment before implementation.
+
+Implementation requires regression coverage for staggered starts, missed
+windows, later-game qualification after earlier puck drop, existing-card
+immutability, source selection/conflict behavior, exact-one reconciliation,
+missing/ungradeable games, corruption/date/hash failures, certification and
+roster prerequisites, and delayed quote attachment. See backlog P2.17.
+
 Prior-date reconciliation is the first substantive daily operation after the
 database connectivity check. Daily work may continue only with a verified,
 date-bound complete reconciliation package whose official outcome rows are

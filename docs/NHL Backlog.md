@@ -860,6 +860,45 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   after a valid date-bound package arrives, it proceeds only for individually
   qualified prestart games.
 
+### P2.17 Resolve final-pregame evidence per game without rewriting captures
+
+- Status: **CONFIRMED COVERAGE LIMITATION — design proposed, implementation not authorized**.
+- Evidence: mainline, SOG, Points, and Saves AUTO phase selection is keyed to
+  the earliest unstarted game and its 20–75 minute window. Their publication
+  eligibility and final durability checks are per game. However, each lane's
+  immutable publication identity is slate/phase scoped: SOG will not publish
+  again when the phase run exists; Points/Saves return the same canonical run
+  idempotently and reject competing runs; ordinary mainline polls suppress a
+  repeated phase. Direct reconciliation requires exactly one cross-market
+  FINAL_PREGAME state and one SOG FINAL_PREGAME run. Points absence is
+  ungradeable; Saves absence is allowed only in prior-learning mode.
+- Consequence: if a first immutable phase package excludes a later game because
+  that game's inputs are not yet qualified, subsequent polls cannot add its
+  otherwise valid pregame predictions. A missed first window can still yield
+  a later partial package for unstarted games if no phase card exists. Started
+  games remain excluded. REFRESH/MIDDAY cross-market evidence is not currently
+  accepted as the direct FINAL_PREGAME source. The Oct. 18 18:42Z poll was
+  outside AUTO's window; it retained MIDDAY mainline evidence and no prop
+  FINAL_PREGAME cards, so it does not itself demonstrate a missed eligible
+  prediction window.
+- Proposed minimum design: one immutable lane/slate finalization index that
+  references original prediction artifacts and hashes per prediction identity
+  and game, applies a deterministic source-selection policy, and records
+  missing games/identities as ungradeable. The index must not relabel or
+  rewrite source artifacts or prediction values. It becomes the sole
+  exact-one reconciliation input; conflicting/corrupt sources block. Decide
+  explicitly whether MIDDAY/REFRESH forecasts may qualify for grading, and
+  keep quote attachment independent from forecast chronology. Cross-market
+  and SOG source requirements require lane-specific contract review.
+- Required before implementation: tests for staggered/missed windows, later
+  game capture after earlier start, no rewriting or duplicate final evidence,
+  deterministic selection and conflicts, exact-one reconciliation, partial
+  coverage/ungradeable identities, corrupt/wrong-date/hash evidence, certified
+  history and roster gates, strict prestart durability, and delayed/absent
+  quote attachment. The 20–75 minute AUTO window remains a scheduling
+  preference; per-game prestart chronology and source integrity remain hard
+  requirements.
+
 ### P2.3 Close documented historical source-integrity gaps
 
 - Status: **OPEN** — the research-only
