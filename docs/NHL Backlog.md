@@ -122,6 +122,28 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `FINAL_PREGAME` state with verified manifest. Regression tests cover the
   morning continuation, valid-card path, missing-card reference-only path, and
   duplicate-card rejection.
+- October 18 handoff follow-up: the separate 14:54:54Z mainline observer
+  failure is now attributable to the first local source predicate. Its child
+  was invoked as `--authority-roster-acquisition 2026-10-17` without
+  `--prior-learning`. `resolve_operational_sources()` found zero immutable
+  Oct. 17 FINAL_PREGAME cross-market runs (the retained state is REFRESH),
+  then `_select_cross_market_final_run()` raised
+  `IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:0` because the active
+  regular-season lane was treated as direct reconciliation. This is a
+  code-and-artifact reconstruction: the parent retained only
+  `CalledProcessError ... exit status 5`, not the child's JSON stdout/stderr.
+  The same invocation path differs from `postgame_learning.ensure_prior_learning()`,
+  which supplies `--prior-learning` to authority acquisition and execution.
+  The existing option preserves strict direct-reconciliation cardinality.
+- Passing that option alone is not verified as a complete Oct. 17 recovery:
+  `resolve_operational_sources()` still requires exactly one prospective
+  Saves FINAL_PREGAME source, while Oct. 17 Saves observer statuses include
+  `SAVES_FEATURE_EXPORT_EMPTY` and no immutable Saves card exists. The full
+  source-binding and grading policy must be reviewed before any implementation
+  authorization; do not relax Saves or direct-reconciliation gates based on
+  this incident. The missing cross-market card is a prediction-capture gap,
+  not evidence that official NHL outcomes or authority/roster data were
+  unavailable.
 - Next step: verify a later ordinary daily receipt records the prior-learning
   status and that all normal current-slate lanes continue. Do not fabricate a
   final capture or weaken direct final-pregame reconciliation.
@@ -151,10 +173,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   is `FAILED_WARN_ONLY` with zero odds calls. It failed in
   `ensure_prior_day_official_outcomes()` when the established
   `run_nhl_postgame_reconciliation --authority-roster-acquisition 2026-10-17`
-  child returned exit 5. The observer receipt does not retain the child's
-  diagnostic. Separate Oct. 18 daily receipts document the related local
-  authority blocker `IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:0`;
-  the cross-market outcome package for Oct. 17 is absent. This is a source
+  child returned exit 5. The precise first failing predicate is documented
+  above under P2.9; no child stdout/stderr or status receipt was retained, so
+  the exact emitted diagnostic is reconstructed from the child invocation,
+  deterministic validation order, and retained Oct. 17 source tree. The
+  cross-market outcome package for Oct. 17 is absent. This is a source
   handoff failure, not the removed daily-readiness gate. The matching
   independent POINTS and SAVES observer statuses were `FAILED_WARN_ONLY` and
   SOG was `NOOP_OUTSIDE_WINDOW`; mainline `observe()` still ran, confirming
@@ -175,6 +198,33 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Verification: 96 focused observer, source-integrity, timing, immutable
   capture, prediction-only, and reconciliation-learning tests passed; the
   separate exact-one-final-card prior-learning test set passed (5 tests).
+
+### P2.11 Link independent player-prop observer outcomes from the mainline receipt
+
+- Status: **OPEN — lane failures are retained, but the parent observer receipt
+  does not link them**. The 900-second LaunchAgent invokes Points, Saves, and
+  SOG observers before mainline capture. Each ordinary lane result is written
+  to its own status JSON, but `main()` discards the result map returned by
+  `observe_prediction_only_lanes()`. Unexpected lane exceptions are converted
+  to strings and discarded the same way. A reviewer starting from only the
+  mainline `orchestration_status` receipt therefore cannot tell that the
+  player-prop lanes failed or find their receipts without searching separate
+  lane roots. Current October 18 receipts demonstrate the distinction: Points
+  and Saves each retained `FAILED_WARN_ONLY` (`*_FEATURE_EXPORT_EMPTY`), while
+  SOG retained `NOOP_OUTSIDE_WINDOW`; the corresponding mainline receipt has
+  no lane status references.
+- This does not bypass or weaken the separate readiness owners, and ordinary
+  lane failures are not lost from disk while their status roots are writable.
+  It is an operational discoverability gap, not a production prediction or
+  mainline blocking defect. Keep each lane WARN-only and independent; ensure
+  the parent receipt records each child status and receipt path, including
+  exceptions before a child can write its own status. Do not make mainline
+  capture readiness depend on player-prop success.
+- Evidence: `backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py`;
+  `backend/nhl/scripts/nhl_prediction_only_common.py`;
+  `backend/nhl/scripts/run_nhl_sog_prediction_only_warn_only.py`;
+  October 18 receipts under `artifacts/operational/nhl/{points_prediction_only,saves_prediction_only,sog_prediction_only}/status/2026-10-18/`
+  and `artifacts/operational/nhl/cross_market_shadow/orchestration_status/2026-10-18/`.
 
 ### P2.3 Close documented historical source-integrity gaps
 
