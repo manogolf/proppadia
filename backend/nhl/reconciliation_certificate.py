@@ -20,6 +20,10 @@ REQUIRED_PACKAGE_FILES = {
 }
 
 
+class RosterObservationNotReady(RuntimeError):
+    """The current slate has no roster package yet; a later poll may retry."""
+
+
 def _sha256(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -201,7 +205,7 @@ def require_slate_roster_observation(
     day = Path(roster_root) / f"season={season}" / f"slate_date={slate_date}"
     observations = sorted(day.glob("observation=*") if day.is_dir() else [])
     if not observations:
-        raise RuntimeError("CURRENT_SLATE_ROSTER_OBSERVATION_MISSING")
+        raise RosterObservationNotReady("CURRENT_SLATE_ROSTER_OBSERVATION_MISSING")
     candidate = observations[-1]
     try:
         summary = json.loads((candidate / "observation_summary.json").read_text())

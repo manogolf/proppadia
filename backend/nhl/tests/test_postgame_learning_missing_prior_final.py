@@ -10,7 +10,11 @@ from unittest.mock import patch
 import pandas as pd
 
 from backend.nhl import cli, postgame_learning
-from backend.nhl.postgame_reconcile.core import _select_cross_market_final_run
+from backend.nhl.postgame_reconcile.core import (
+    _resolve_prop_prediction_source,
+    _select_cross_market_final_run,
+)
+from backend.nhl.scripts.run_nhl_postgame_reconciliation import prior_learning_mode_allowed
 
 
 class PriorFinalCaptureGapTests(unittest.TestCase):
@@ -87,6 +91,60 @@ class PriorFinalCaptureGapTests(unittest.TestCase):
         )
         self.assertIsNone(selected)
         self.assertEqual(resolution["status"], "MISSING_ACTIVE_CARD_PRIOR_LEARNING")
+
+    def test_prior_learning_flag_is_limited_to_governed_handoff_stages(self):
+        for mode in ("authority_roster_acquisition", "local_input_preflight",
+                     "database_identity_preflight", "execute"):
+            with self.subTest(mode=mode):
+                self.assertTrue(prior_learning_mode_allowed(**{mode: True}))
+        self.assertFalse(prior_learning_mode_allowed())
+
+    def test_missing_saves_and_cross_market_cards_are_ungradeable_only_in_prior_learning(self):
+        schedule = pd.DataFrame({"game_type_code": [2]})
+        activation = {"capture_enabled": True}
+        with self.assertRaisesRegex(
+                RuntimeError, "IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:0"):
+            _select_cross_market_final_run(
+                runs=[], schedule=schedule, activation=activation)
+        cross, status = _select_cross_market_final_run(
+            runs=[], schedule=schedule, activation=activation,
+            allow_missing_active_final=True)
+        self.assertIsNone(cross)
+        self.assertEqual(status["status"], "MISSING_ACTIVE_CARD_PRIOR_LEARNING")
+
+        for slate_date in ("2026-10-17", "2026-10-18"):
+            with self.subTest(slate_date=slate_date):
+                with self.assertRaisesRegex(
+                        RuntimeError, "IMMUTABLE_SAVES_FINAL_PREGAME_RUN_CARDINALITY:0"):
+                    _resolve_prop_prediction_source(
+                        runs=[], lane="SAVES", slate_date=slate_date,
+                        schedule=pd.DataFrame())
+                saves = _resolve_prop_prediction_source(
+                    runs=[], lane="SAVES", slate_date=slate_date,
+                    schedule=pd.DataFrame(), allow_missing_prediction=True)
+                self.assertEqual(saves["status"], "NOT_GRADEABLE_NO_PREDICTION")
+
+    def test_prior_learning_does_not_soften_duplicate_or_corrupt_present_cards(self):
+        schedule = pd.DataFrame({"game_type_code": [2]})
+        activation = {"capture_enabled": True}
+        with self.assertRaisesRegex(
+                RuntimeError, "IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:2"):
+            _select_cross_market_final_run(
+                runs=[Path("one"), Path("two")], schedule=schedule,
+                activation=activation, allow_missing_active_final=True)
+        with self.assertRaisesRegex(
+                RuntimeError, "IMMUTABLE_SAVES_FINAL_PREGAME_RUN_CARDINALITY:2"):
+            _resolve_prop_prediction_source(
+                runs=[Path("one"), Path("two")], lane="SAVES",
+                slate_date="2026-10-18", schedule=pd.DataFrame(),
+                allow_missing_prediction=True)
+        with patch("backend.nhl.postgame_reconcile.core._verify_prop_source",
+                   side_effect=RuntimeError("IMMUTABLE_SAVES_HASH_MISMATCH")):
+            with self.assertRaisesRegex(RuntimeError, "SAVES_HASH_MISMATCH"):
+                _resolve_prop_prediction_source(
+                    runs=[Path("corrupt")], lane="SAVES",
+                    slate_date="2026-10-18", schedule=pd.DataFrame(),
+                    allow_missing_prediction=True)
 
 
 if __name__ == "__main__":

@@ -175,6 +175,28 @@ that behavior and transaction evidence. Full-slate roster coverage remains the
 current contract. Partial coverage is a separate proposed capability and is
 not established as a correction for the confirmed incidents.
 
+Points/Saves observers classify an absent current-slate roster package as
+`ROSTER_NOT_READY`, write a lane status receipt, and remain eligible to retry
+on a later ordinary poll. They do not start feature export or create a
+prediction attempt in that state. A present but corrupt, contradictory,
+wrong-date, wrong-game-set, incomplete, or non-prestart package remains a
+blocking validation failure. Freshness is established by current-slate date
+and canonical game-set binding plus strictly prestart observation; no separate
+maximum-age threshold is defined by this contract.
+
+The mainline prior-day source handoff uses the reconciler's `--prior-learning`
+mode for authority acquisition, read-only source preflight, database identity
+preflight, and execution. In that mode an absent active Saves or cross-market
+prediction card is explicitly ungradeable and does not block acquisition or
+certification of official outcomes. Any present card is still fully validated;
+duplicates and corrupt or contradictory evidence remain blocking. Direct
+reconciliation keeps exact-one requirements. Before continuing, the mainline
+verifies the completed date-bound reconciliation certificate and checks its
+game IDs against the expected prior-date set. A database result with no games
+continues only when the retained official schedule independently certifies an
+empty date. Child failures retain bounded, redacted stage, exit code, stdout,
+and stderr diagnostics in the parent observer receipt.
+
 Official roster endpoints establish observed team-roster membership only.
 They do not certify dressed players, lines, availability, or confirmed goalie
 starters. Those remain separate evidence and qualification requirements.

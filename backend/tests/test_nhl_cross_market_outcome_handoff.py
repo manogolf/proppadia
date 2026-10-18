@@ -41,7 +41,9 @@ class PriorDayOutcomeHandoffTest(unittest.TestCase):
                 patch.object(capture, "_prior_day_regular_season_game_ids",
                              return_value=self.game_ids), \
                 patch.object(capture.subprocess, "run", side_effect=responses) as run, \
-                patch.object(capture, "load_official_outcomes", return_value=outcomes):
+                patch.object(capture, "_verify_prior_day_package", return_value={
+                    "status": "CERTIFIED_FINAL", "game_ids": self.game_ids,
+                }), patch.object(capture, "load_official_outcomes", return_value=outcomes):
             result = capture.ensure_prior_day_official_outcomes(
                 "unused-dsn", self.slate, outcome_root=Path(tmp),
                 now=datetime(2026, 10, 1, 9, 0, tzinfo=ZoneInfo("America/New_York")),
@@ -52,9 +54,13 @@ class PriorDayOutcomeHandoffTest(unittest.TestCase):
         self.assertEqual(run.call_count, 4)
         commands = [call.args[0] for call in run.call_args_list]
         self.assertIn("--authority-roster-acquisition", commands[0])
+        self.assertIn("--prior-learning", commands[0])
         self.assertIn("--local-input-preflight", commands[1])
+        self.assertIn("--prior-learning", commands[1])
         self.assertIn("--database-identity-preflight", commands[2])
+        self.assertIn("--prior-learning", commands[2])
         self.assertIn("--execute", commands[3])
+        self.assertIn("--prior-learning", commands[3])
         self.assertTrue(all(self.run_id in " ".join(command) for command in commands[1:]))
 
     def test_identity_authorization_requirement_stops_before_reconciliation(self):
@@ -89,15 +95,57 @@ class PriorDayOutcomeHandoffTest(unittest.TestCase):
             (root / self.prior / "reconciliation=fixture").mkdir(parents=True)
             with patch.object(capture, "_prior_day_regular_season_game_ids",
                               return_value=self.game_ids), \
-                    patch.object(capture, "load_official_outcomes",
-                                 return_value=pd.DataFrame({"game_id": self.game_ids})), \
-                    patch.object(capture.subprocess, "run") as run:
+                    patch.object(capture, "_verify_prior_day_package", return_value={
+                        "status": "CERTIFIED_FINAL", "game_ids": self.game_ids,
+                    }) as verify, patch.object(capture.subprocess, "run") as run:
                 result = capture.ensure_prior_day_official_outcomes(
                     "unused-dsn", self.slate, outcome_root=root,
                     now=datetime(2026, 10, 1, 9, 0, tzinfo=ZoneInfo("America/New_York")),
                 )
         self.assertEqual(result["status"], "EXISTING_GOVERNED_PACKAGE_VALID")
+        verify.assert_called_once()
         run.assert_not_called()
+
+    def test_empty_database_game_set_requires_verified_empty_official_schedule(self):
+        with patch.object(capture, "_prior_day_regular_season_game_ids", return_value=[]), \
+                patch.object(capture, "require_prior_day_certificate", return_value={
+                    "status": "VERIFIED_EMPTY_SCHEDULE", "slate_date": self.prior,
+                }) as certify, patch.object(capture.subprocess, "run") as run:
+            result = capture.ensure_prior_day_official_outcomes(
+                "unused-dsn", self.slate,
+                now=datetime(2026, 10, 1, 9, 0, tzinfo=ZoneInfo("America/New_York")),
+            )
+        self.assertEqual(result["status"], "NO_PRIOR_DAY_REGULAR_SEASON_GAMES")
+        certify.assert_called_once()
+        run.assert_not_called()
+
+    def test_prior_day_certificate_must_match_expected_game_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / self.prior / "reconciliation=fixture").mkdir(parents=True)
+            with patch.object(capture, "verify_reconciliation_certificate", return_value={
+                "status": "CERTIFIED_FINAL", "game_ids": [self.game_ids[0]],
+            }), patch.object(capture, "load_official_outcomes") as load:
+                with self.assertRaisesRegex(
+                    RuntimeError, "CROSS_MARKET_PRIOR_DAY_CERTIFIED_GAME_SET_MISMATCH"
+                ):
+                    capture._verify_prior_day_package(root, self.prior, self.game_ids)
+            load.assert_not_called()
+
+    def test_child_failure_diagnostics_are_bounded_and_redacted(self):
+        secret = "postgresql://fixture-user:fixture-secret@db.invalid/fixture"
+        failure = subprocess.CompletedProcess(
+            [], 5, "stdout " + secret + "x" * 2000, "stderr " + secret)
+        with patch.object(capture.subprocess, "run", return_value=failure):
+            with self.assertRaises(capture.PriorDayChildFailure) as caught:
+                capture._run_prior_day_child("authority_roster_acquisition", ["fixture"])
+        receipt = caught.exception.diagnostics
+        self.assertEqual(receipt["stage"], "authority_roster_acquisition")
+        self.assertEqual(receipt["exit_status"], 5)
+        self.assertLessEqual(len(receipt["stdout_tail"]), 1200)
+        self.assertLessEqual(len(receipt["stderr_tail"]), 1200)
+        self.assertNotIn("fixture-secret", json.dumps(receipt))
+        self.assertNotIn("db.invalid", json.dumps(receipt))
 
     def test_optional_challengers_fail_independently_of_control_and_each_other(self):
         value, status = _run_nonblocking_challenger(

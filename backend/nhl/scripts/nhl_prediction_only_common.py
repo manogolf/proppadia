@@ -22,6 +22,7 @@ from backend.nhl.prediction_only.core import (
     publish_saves,
 )
 from backend.nhl.reconciliation_certificate import (
+    RosterObservationNotReady,
     require_slate_history_certificate,
     require_slate_roster_observation,
 )
@@ -274,6 +275,14 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
                           coverage_status=metadata.get("coverage_status"),
                           prediction_game_ids=metadata.get("prediction_game_ids", []),
                           game_exclusions_path=str(destination / "game_exclusions.csv"))
+    except RosterObservationNotReady as error:
+        result.update(
+            status="ROSTER_NOT_READY",
+            readiness_reason=str(error),
+            retry_eligible_on_later_poll=True,
+            feature_export_started=False,
+            prediction_attempt_created=False,
+        )
     except Exception as error:
         result.update(status="FAILED_WARN_ONLY", failure=f"{type(error).__name__}:{error}")
     durable_json(status_path, result)
@@ -299,7 +308,9 @@ def cli(lane: str) -> int:
     )
     payload = json.loads(status.read_text())
     print(status)
-    return 0 if payload["status"] in {"CAPTURED", "NOOP_ALREADY_CAPTURED", "VALID_EMPTY_SLATE"} else 1
+    return 0 if payload["status"] in {
+        "CAPTURED", "NOOP_ALREADY_CAPTURED", "VALID_EMPTY_SLATE", "ROSTER_NOT_READY",
+    } else 1
 
 
 def parse_timestamp(value: str) -> datetime:

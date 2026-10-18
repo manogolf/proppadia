@@ -149,27 +149,31 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   side of that base join left the export empty. The failure occurs before
   model publication, and is not evidence of a missing authorized starter
   article or a failed official outcome source.
-- Missing-card contracts differ by lane: Points already resolves an entirely
-  absent prospective card as `NOT_GRADEABLE_NO_PREDICTION` and emits a
-  zero-row evidence surface; SOG requires one immutable card and also supplies
-  the canonical game spine when the cross-market card is absent; Saves
-  currently requires exactly one card for both acquisition and grading. For
-  the prior-learning handoff, the smallest contract-preserving correction is
-  to treat a missing Saves card like missing Points: permit an explicit
-  not-gradeable status and zero-row surface only under `--prior-learning`,
-  skip Saves grading, and retain exact-one in direct reconciliation. Duplicate
-  cards and any present corrupt card must still fail closed in every mode;
-  valid cards must retain all current manifest, identity, timestamp, and
-  grading checks. No prediction or grade is reconstructed.
-- The observer currently duplicates the acquisition/preflight/execute command
-  sequence instead of using `postgame_learning.ensure_prior_learning()`, whose
-  established path supplies `--prior-learning` to both acquisition and
-  execution and retains bounded child output on errors. After the missing
-  Saves case is supported in that mode, the observer should use that existing
-  path (or a shared helper extracted from it) and preserve structured child
-  stage, exit code, and bounded/redacted stdout/stderr in its receipt. The
-  current `CalledProcessError` receipt only retains the command and exit code;
-  captured child stdout/stderr are dropped. Separate follow-up question:
+- Missing-card contracts differ by lane: Points resolves an absent prospective
+  card as `NOT_GRADEABLE_NO_PREDICTION`; SOG remains the canonical game spine;
+  Saves resolves an absent card the same way only when the reconciler receives
+  `--prior-learning`. Present cards still pass full manifest, identity,
+  timestamp, and grading validation, and duplicate/corrupt cards remain
+  blocking. Direct reconciliation retains exact-one requirements. The October
+  18 failure occurred because mainline omitted `--prior-learning`; its local
+  source preflight therefore applied direct-card semantics before official
+  acquisition.
+- Corrected locally: mainline passes `--prior-learning` through authority
+  acquisition, local source preflight, read-only database identity preflight,
+  and execution. The reconciler accepts that mode only for those governed
+  stages. Before continuing, the observer verifies the immutable
+  date-bound outcome certificate, compares its game set with the expected
+  prior-date games, validates the preserved official source through the
+  existing outcome reader, and requires a verified empty official schedule
+  when no prior games are present. This does not relax daily's
+  `_require_daily_prior_certificate()` gate or permit reference-only learning
+  to certify incomplete outcomes.
+- Corrected locally: bounded child stage, exit status, and redacted stdout/
+  stderr tails are preserved in the mainline observer receipt for nonzero child
+  exits and invalid child receipts. The mainline keeps its typed-source and
+  read-only identity preflight sequence to preserve authority/roster
+  provenance; every stage now uses the established prior-learning semantics.
+  Separate follow-up question:
   should outcome-only prior learning also tolerate an absent SOG prediction
   card by resolving the canonical spine directly from the retained schedule?
   SOG is currently required and is the fallback spine authority; Oct. 17 had
@@ -618,8 +622,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.15 Separate NHL roster acquisition failures from readiness timing
 
-- Status: **DIAGNOSED — preserve reconciliation-first and verify on natural
-  runs; no roster producer correction is established by current evidence**.
+- Status: **IMPLEMENTED LOCALLY — natural-run verification pending**. The
+  roster producer and daily sequence are unchanged; the prior-day source
+  handoff and observer readiness classifications are corrected below.
 - Confirmed incident A, slate 2026-09-30, games
   `2026020006`–`2026020008`: Points and Saves observers each failed at
   14:30:10Z with `POINTS_FEATURE_EXPORT_EMPTY` /
@@ -700,6 +705,30 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   succeeded but roster completion lagged observers, correct sequencing within
   the existing daily graph without a second provider acquisition or retry
   policy change.
+- Implemented locally: mainline authority acquisition, local source
+  preflight, database identity preflight, and reconciliation execution now all
+  use the reconciler's `--prior-learning` semantics. Missing Saves and
+  cross-market cards are explicitly ungradeable in that mode; direct mode,
+  duplicate-card, and present-card integrity requirements remain strict. The
+  mainline checks the completed reconciliation certificate against the
+  expected prior-date game IDs before proceeding. A database query returning
+  no prior games is accepted only with a verified empty official schedule.
+  Child stage, exit code, and bounded redacted stdout/stderr are retained in
+  the parent observer receipt on failure.
+- Implemented locally: a missing current-slate roster package now produces
+  `ROSTER_NOT_READY` in Points/Saves and mainline observer receipts, with
+  `retry_eligible_on_later_poll=true`; feature export and prediction
+  publication are not attempted. Present invalid roster packages remain
+  blocking failures. Later ordinary 900-second polls recheck prerequisites;
+  no manual retry or scheduling change was added. Readiness still requires
+  the date/game-set-bound, complete, hash-valid, strictly prestart package.
+- Verification: 117 focused offline tests passed with 15 subtests across
+  prior-learning modes, absent/duplicate/corrupt prediction cards, official
+  certificate and game-set validation, child diagnostic redaction, the
+  September 30 style roster timing race and later-poll retry, observer gates,
+  game-level prediction publication, and daily startup ordering. No
+  production command, provider request, paid odds call, or database write was
+  run for this correction.
 - Natural-run acceptance: over at least three consecutive ordinary NHL
   slates, including one with first puck before 10:00 PT, confirm (1) a valid
   prior-day certificate precedes schedule and roster work, (2) exactly one

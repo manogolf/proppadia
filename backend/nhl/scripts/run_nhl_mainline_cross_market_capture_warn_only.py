@@ -22,7 +22,13 @@ from backend.nhl.database_access import database_url
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
 from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canonical_slate
 from backend.nhl.cross_market_shadow.official_outcomes import load_official_outcomes
-from backend.nhl.reconciliation_certificate import require_slate_roster_observation
+from backend.nhl.reconciliation_certificate import (
+    RosterObservationNotReady,
+    require_prior_day_certificate,
+    require_slate_history_certificate,
+    require_slate_roster_observation,
+    verify_reconciliation_certificate,
+)
 from backend.nhl.daily_capture import load_canonical_slate
 from backend.nhl.daily_orchestration import redact_sensitive_text
 from backend.nhl.scripts.nhl_prediction_only_common import observe as observe_independent_prediction_only
@@ -33,6 +39,64 @@ from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
 ROOT = Path(__file__).resolve().parents[3]
 DEFAULT_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow"
 DEFAULT_OUTCOME_ROOT = ROOT / "artifacts/operational/nhl/postgame_reconciliation"
+
+
+class PriorDayChildFailure(RuntimeError):
+    """Bounded, redacted child evidence for the parent observer receipt."""
+
+    def __init__(self, stage: str, exit_status: int | None,
+                 stdout: object = "", stderr: object = "", reason: str | None = None):
+        self.stage = stage
+        self.exit_status = exit_status
+        self.diagnostics = {
+            "stage": stage,
+            "exit_status": exit_status,
+            "reason": (redact_sensitive_text(reason)[:500] if reason else None),
+            "stdout_tail": redact_sensitive_text(stdout)[-1200:],
+            "stderr_tail": redact_sensitive_text(stderr)[-1200:],
+        }
+        super().__init__(f"PRIOR_DAY_CHILD_FAILED:{stage}:exit={exit_status}")
+
+
+def _run_prior_day_child(stage: str, command: list[str]) -> subprocess.CompletedProcess:
+    try:
+        result = subprocess.run(
+            command, cwd=str(ROOT), check=False, text=True, capture_output=True,
+            env=os.environ.copy(),
+        )
+    except Exception as error:
+        raise PriorDayChildFailure(
+            stage, None, stderr=redact_sensitive_text(error),
+            reason=f"{type(error).__name__}:{error}",
+        ) from error
+    if result.returncode:
+        raise PriorDayChildFailure(
+            stage, result.returncode, result.stdout, result.stderr,
+        )
+    return result
+
+
+def _verify_prior_day_package(outcome_root: Path, prior_slate: str,
+                              expected_game_ids: list[int]) -> dict[str, object]:
+    day_root = outcome_root / prior_slate
+    packages = sorted(day_root.glob("reconciliation=*") if day_root.is_dir() else [])
+    if len(packages) != 1:
+        raise RuntimeError(
+            f"CROSS_MARKET_PRIOR_DAY_PACKAGE_CARDINALITY:{len(packages)}"
+        )
+    certificate = verify_reconciliation_certificate(packages[0], prior_slate)
+    expected = set(map(int, expected_game_ids))
+    certified = set(map(int, certificate.get("game_ids") or []))
+    if certified != expected:
+        raise RuntimeError(
+            "CROSS_MARKET_PRIOR_DAY_CERTIFIED_GAME_SET_MISMATCH:"
+            f"expected={len(expected)}:actual={len(certified)}"
+        )
+    outcomes = load_official_outcomes(outcome_root)
+    observed = pd.to_numeric(outcomes.game_id, errors="coerce").dropna().astype(int)
+    if not expected.issubset(set(observed)):
+        raise RuntimeError("CROSS_MARKET_PRIOR_DAY_RECONCILIATION_OUTPUT_INCOMPLETE")
+    return certificate
 
 
 def _player_prop_observer_link(path: Path) -> dict[str, object]:
@@ -211,29 +275,38 @@ def ensure_prior_day_official_outcomes(
     prior_slate = (date.fromisoformat(slate) - timedelta(days=1)).isoformat()
     game_ids = _prior_day_regular_season_game_ids(dsn, prior_slate)
     if not game_ids:
-        return {"status": "NO_PRIOR_DAY_REGULAR_SEASON_GAMES", "slate_date": prior_slate}
+        certificate = require_prior_day_certificate(
+            prior_slate, reconciliation_root=outcome_root,
+            slate_root=ROOT / "artifacts/operational/nhl/slates",
+        )
+        if certificate.get("status") != "VERIFIED_EMPTY_SCHEDULE":
+            raise RuntimeError("CROSS_MARKET_PRIOR_DAY_DATABASE_SCHEDULE_MISMATCH")
+        return {"status": "NO_PRIOR_DAY_REGULAR_SEASON_GAMES",
+                "slate_date": prior_slate, "certificate": certificate}
 
     day_root = outcome_root / prior_slate
     packages = sorted(day_root.glob("reconciliation=*") if day_root.is_dir() else [])
     if packages:
-        outcomes = load_official_outcomes(outcome_root)
-        observed = set(pd.to_numeric(outcomes.game_id, errors="coerce").dropna().astype(int))
-        missing = sorted(set(game_ids) - observed)
-        if missing:
-            raise ValueError(
-                "CROSS_MARKET_PRIOR_DAY_RECONCILIATION_INCOMPLETE:"
-                + ",".join(map(str, missing))
-            )
+        certificate = _verify_prior_day_package(outcome_root, prior_slate, game_ids)
         return {"status": "EXISTING_GOVERNED_PACKAGE_VALID", "slate_date": prior_slate,
-                "game_ids": game_ids}
+                "game_ids": game_ids, "certificate": certificate}
+    if day_root.is_dir() and list(day_root.glob(".reconciliation.incomplete.*")):
+        raise RuntimeError("PARTIAL_RECONCILIATION_PACKAGE_REQUIRES_REVIEW")
 
     base = [sys.executable, "-m", "backend.nhl.scripts.run_nhl_postgame_reconciliation"]
-    acquisition = subprocess.run(
-        [*base, "--authority-roster-acquisition", prior_slate], cwd=str(ROOT),
-        check=True, text=True, capture_output=True, env=os.environ.copy(),
+    acquisition = _run_prior_day_child(
+        "authority_roster_acquisition",
+        [*base, "--authority-roster-acquisition", "--prior-learning", prior_slate],
     )
-    acquisition_payload = _parse_json_output(
-        acquisition.stdout, expected_status="COMPLETE")
+    try:
+        acquisition_payload = _parse_json_output(
+            acquisition.stdout, expected_status="COMPLETE")
+    except Exception as error:
+        raise PriorDayChildFailure(
+            "authority_roster_acquisition_receipt", acquisition.returncode,
+            acquisition.stdout, acquisition.stderr,
+            reason=f"{type(error).__name__}:{error}",
+        ) from error
     source_id = str(acquisition_payload.get("run_id") or "")
     if not source_id or set(map(int, acquisition_payload.get("game_ids") or [])) != set(game_ids):
         raise RuntimeError("CROSS_MARKET_PRIOR_DAY_ACQUISITION_GAME_SET_MISMATCH")
@@ -241,17 +314,29 @@ def ensure_prior_day_official_outcomes(
         "--response-source", f"AUTHORITY_RESPONSE_SOURCE={source_id}",
         "--response-source", f"ROSTER_RESPONSE_SOURCE={source_id}",
     ]
-    local = subprocess.run(
-        [*base, "--local-input-preflight", prior_slate, *sources], cwd=str(ROOT),
-        check=True, text=True, capture_output=True, env=os.environ.copy(),
+    local = _run_prior_day_child(
+        "local_input_preflight",
+        [*base, "--local-input-preflight", "--prior-learning", prior_slate, *sources],
     )
-    _parse_json_output(local.stdout, expected_status="LOCAL_INPUTS_VALID")
-    identity = subprocess.run(
-        [*base, "--database-identity-preflight", prior_slate, *sources], cwd=str(ROOT),
-        check=True, text=True, capture_output=True, env=os.environ.copy(),
+    try:
+        _parse_json_output(local.stdout, expected_status="LOCAL_INPUTS_VALID")
+    except Exception as error:
+        raise PriorDayChildFailure(
+            "local_input_preflight_receipt", local.returncode,
+            local.stdout, local.stderr, reason=f"{type(error).__name__}:{error}",
+        ) from error
+    identity = _run_prior_day_child(
+        "database_identity_preflight",
+        [*base, "--database-identity-preflight", "--prior-learning", prior_slate, *sources],
     )
-    identity_payload = _parse_json_output(
-        identity.stdout, expected_status="DATABASE_IDENTITY_PREFLIGHT_VALID")
+    try:
+        identity_payload = _parse_json_output(
+            identity.stdout, expected_status="DATABASE_IDENTITY_PREFLIGHT_VALID")
+    except Exception as error:
+        raise PriorDayChildFailure(
+            "database_identity_preflight_receipt", identity.returncode,
+            identity.stdout, identity.stderr, reason=f"{type(error).__name__}:{error}",
+        ) from error
     partition = identity_payload.get("database_preflight") or {}
     classification = partition.get("classification") or {}
     if (partition.get("authorized_new_official_lookup_ids")
@@ -261,20 +346,15 @@ def ensure_prior_day_official_outcomes(
             "CROSS_MARKET_PRIOR_DAY_PLAYER_IDENTITY_AUTHORIZATION_REQUIRED"
         )
 
-    subprocess.run(
-        [*base, "--execute", prior_slate, *sources], cwd=str(ROOT),
-        check=True, text=True, capture_output=True, env=os.environ.copy(),
+    execution = _run_prior_day_child(
+        "reconciliation_execution",
+        [*base, "--execute", "--prior-learning", prior_slate, *sources],
     )
-    outcomes = load_official_outcomes(outcome_root)
-    observed = set(pd.to_numeric(outcomes.game_id, errors="coerce").dropna().astype(int))
-    missing = sorted(set(game_ids) - observed)
-    if missing:
-        raise RuntimeError(
-            "CROSS_MARKET_PRIOR_DAY_RECONCILIATION_OUTPUT_INCOMPLETE:"
-            + ",".join(map(str, missing))
-        )
+    certificate = _verify_prior_day_package(outcome_root, prior_slate, game_ids)
     return {"status": "GOVERNED_RECONCILIATION_COMPLETE", "slate_date": prior_slate,
-            "game_ids": game_ids, "acquisition_run_id": source_id}
+            "game_ids": game_ids, "acquisition_run_id": source_id,
+            "execution_exit_status": execution.returncode,
+            "certificate": certificate}
 
 
 def export_inputs(dsn: str, slate_date: str, directory: Path, *,
@@ -525,6 +605,9 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
             result["prior_day_outcome_handoff"] = ensure_prior_day_official_outcomes(
                 dsn, slate,
             )
+            result["prior_day_reconciliation_certificate"] = (
+                require_slate_history_certificate(slate)
+            )
             result["current_slate_roster_observation"] = require_slate_roster_observation(slate)
             input_dir = root / "runtime_inputs" / slate / stamp
             if (canonical_raw_path is None) != (canonical_health_path is None):
@@ -592,6 +675,22 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
                                       envelope["capture_timestamp_utc"], phase,
                                       canary_mode=PRESEASON_START <= slate < REGULAR_SEASON_START)
                     result.update(status="CAPTURED", run_dir=str(run))
+        except PriorDayChildFailure as error:
+            result.update(
+                status="FAILED_WARN_ONLY",
+                failure=f"{type(error).__name__}:{error}",
+                prior_day_child_failure=error.diagnostics,
+            )
+            if claim is not None:
+                result["operator_review_required_for_retry"] = True
+        except RosterObservationNotReady as error:
+            result.update(
+                status="ROSTER_NOT_READY",
+                readiness_reason=str(error),
+                retry_eligible_on_later_poll=True,
+                feature_export_started=False,
+                request_attempted=False,
+            )
         except Exception as error:
             result.update(status="FAILED_WARN_ONLY", failure=f"{type(error).__name__}:{error}")
             if claim is not None:

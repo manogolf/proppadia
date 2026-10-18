@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from backend.nhl.reconciliation_certificate import (
+    RosterObservationNotReady,
     require_prior_day_certificate,
     require_slate_roster_observation,
     verify_reconciliation_certificate,
@@ -141,10 +142,29 @@ class ReconciliationCertificateTests(unittest.TestCase):
             "backend.nhl.daily_capture.load_canonical_slate",
             return_value=[type("Game", (), {"game_id": 2026020001})()],
         ):
-            with self.assertRaisesRegex(RuntimeError, "ROSTER_OBSERVATION_MISSING"):
+            with self.assertRaisesRegex(RosterObservationNotReady,
+                                        "ROSTER_OBSERVATION_MISSING"):
                 require_slate_roster_observation(
                     "2026-10-18", slate_root=Path(temp) / "slates",
                     roster_root=Path(temp) / "roster")
+
+    def test_corrupt_roster_evidence_is_not_classified_as_not_ready(self):
+        with tempfile.TemporaryDirectory() as temp, patch(
+            "backend.nhl.daily_capture.load_canonical_slate",
+            return_value=[type("Game", (), {"game_id": 2026020001})()],
+        ), patch(
+            "backend.nhl.daily_orchestration.verify_roster_observation_reuse",
+            side_effect=RuntimeError("ROSTER_OBSERVATION_HASH_MISMATCH"),
+        ):
+            root = Path(temp) / "roster" / "season=2026" / "slate_date=2026-10-18"
+            package = root / "observation=run1"
+            package.mkdir(parents=True)
+            (package / "observation_summary.json").write_text(json.dumps({"phase": "EARLY"}))
+            with self.assertRaisesRegex(RuntimeError, "ROSTER_OBSERVATION_INVALID") as caught:
+                require_slate_roster_observation(
+                    "2026-10-18", slate_root=Path(temp) / "slates",
+                    roster_root=Path(temp) / "roster")
+            self.assertNotIsInstance(caught.exception, RosterObservationNotReady)
 
 
 if __name__ == "__main__":

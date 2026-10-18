@@ -1492,6 +1492,15 @@ def schedule_artifact_environment(request_root: Path) -> dict[str, str]:
     }
 
 
+def prior_learning_mode_allowed(*, authority_roster_acquisition: bool = False,
+                                local_input_preflight: bool = False,
+                                database_identity_preflight: bool = False,
+                                execute: bool = False) -> bool:
+    """Scope reference-only missing-card handling to the prior-learning path."""
+    return any((authority_roster_acquisition, local_input_preflight,
+                database_identity_preflight, execute))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     mode = parser.add_mutually_exclusive_group()
@@ -1505,7 +1514,7 @@ def main() -> int:
     mode.add_argument("--execute", action="store_true")
     parser.add_argument(
         "--prior-learning", action="store_true",
-        help="allow missing active FINAL_PREGAME cross-market card only for morning prior-learning reconciliation",
+        help="allow absent prediction cards as ungradeable only in the governed prior-learning handoff and its read-only preflights",
     )
     parser.add_argument("--date", dest="slate_date")
     parser.add_argument("date_arg", nargs="?")
@@ -1525,8 +1534,15 @@ def main() -> int:
     slate_date = args.slate_date or args.date_arg
     if not slate_date:
         parser.error("provide --date YYYY-MM-DD or positional YYYY-MM-DD")
-    if args.prior_learning and not (args.authority_roster_acquisition or args.execute):
-        parser.error("--prior-learning is limited to authority-roster acquisition or reconciliation execution")
+    if args.prior_learning and not prior_learning_mode_allowed(
+            authority_roster_acquisition=args.authority_roster_acquisition,
+            local_input_preflight=args.local_input_preflight,
+            database_identity_preflight=args.database_identity_preflight,
+            execute=args.execute):
+        parser.error(
+            "--prior-learning is limited to the governed authority acquisition, "
+            "read-only source preflights, or reconciliation execution"
+        )
     try:
         date.fromisoformat(slate_date)
     except ValueError:
