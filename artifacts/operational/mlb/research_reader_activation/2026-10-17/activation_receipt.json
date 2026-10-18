@@ -1,0 +1,126 @@
+{
+  "activation_date_local": "2026-10-17",
+  "captured_at_utc": "2026-10-18T00:14:10Z",
+  "schema_version": "MLB_RESEARCH_READER_ACTIVATION_V1",
+  "status": "ACTIVATED_WITH_NATURAL_RUN_VERIFICATION_PENDING",
+  "scope": "Process-scoped activation of already-approved MLB research readers; no daily wrapper run, permission change, or database write.",
+  "production_permissions_receipt": {
+    "path": "artifacts/operational/mlb/research_source_read_deployment/2026-10-17/verification_receipt.json",
+    "sha256": "e85f96108afab31b56d23e1bdc3008a60e3da25a589ef8eca44b3f2f063d81f9",
+    "migration_commit": "c3c30d8c"
+  },
+  "process_preflight": {
+    "active_mlb_wrapper_or_matching_child": false,
+    "check": "ps -axo pid=,ppid=,lstart=,etime=,stat=,command= filtered for MLB wrapper and known daily child patterns",
+    "research_url_variable_in_backend_env": false,
+    "moneyline_audit_url_in_backend_env": true,
+    "credential_source": "Existing ignored backend/.env; existing Moneyline audit URL is scoped as MLB_RESEARCH_DATABASE_URL only on approved reader processes.",
+    "credential_value_recorded": false,
+    "effective_identity_basis": "Existing deployed receipt confirms the dedicated URL connects as proppadia_mlb_research_login, inheriting proppadia_mlb_research_ro; routed helper enforces this identity and READ ONLY transactions."
+  },
+  "scheduled_invocations_activated": [
+    {
+      "consumer": "report_mlb_hits_environment.py",
+      "orchestration": "daily wrapper -> make mlb-hits-environment-report",
+      "routing_scope": "Makefile recipe environment assignment on this Python command only",
+      "validation": {
+        "result": "PASS",
+        "entrypoint": "make mlb-hits-environment-report",
+        "bounded_as_of_date": "2026-07-24",
+        "database_reads": "completed; 30 starter rows and 28 team evaluation rows reported",
+        "output_location": "/private/tmp/mlb_hits_environment_activation*",
+        "transaction_contract": "READ ONLY transaction and expected research identity enforced by routed SQLAlchemy helper"
+      }
+    },
+    {
+      "consumer": "run_mlb_hits_lane_selector_report.py and nested run_mlb_hits_lane_selector_daily.py",
+      "orchestration": "daily wrapper -> predictive guard -> make mlb-daily-upload-prep",
+      "routing_scope": "Makefile environment assignment on selector report Python command only; following upload-prep recipe does not inherit it",
+      "validation": {
+        "result": "ROUTING_INSTALLED; entrypoint smoke blocked before database read",
+        "entrypoint": "run_mlb_hits_lane_selector_daily.py",
+        "bounded_input_date": "2026-07-24",
+        "reason": "Existing MLBPredictiveModelBlocked gate: MLB_PREDICTIVE_MODEL_BLOCKED_NO_QUALIFIED_MODEL",
+        "database_read_attempted": false
+      }
+    },
+    {
+      "consumer": "build_mlb_overlap_role_profile_watch.py",
+      "orchestration": "daily wrapper -> make mlb-refresh-overlap-role-profile-watch",
+      "routing_scope": "Makefile recipe environment assignment on this Python command only",
+      "validation": {
+        "result": "ROUTING_INSTALLED; bounded entrypoint smoke failed before database read",
+        "bounded_input_date": "2026-07-24",
+        "reason": "One-day local selection/performance join raised KeyError for date_key, player_key, market_key, line_key, and side_key",
+        "database_read_attempted": false
+      }
+    }
+  ],
+  "separately_invoked_readers": [
+    {
+      "consumer": "report_mlb_hits_recency_vs_baseline.py",
+      "daily_schedule_added": false,
+      "bounded_check": "2026-07-24",
+      "result": "Research connection and SELECTs completed; report failed downstream with KeyError d7_hits in its merged dataframe."
+    },
+    {
+      "consumer": "report_mlb_hits_interaction_failure.py",
+      "daily_schedule_added": false,
+      "bounded_check": "2026-07-24",
+      "result": "Research connection and SELECTs completed; report failed downstream with KeyError d7_hits in its merged dataframe."
+    },
+    {
+      "consumer": "audit_mlb_hits_feature_parity.py",
+      "daily_schedule_added": false,
+      "bounded_check": "2026-07-24 training and prediction window",
+      "result": "PASS; entrypoint exited 0 and returned 323 model_training_props/player_derived_stats training rows; bounded prediction joins returned zero rows. Outputs were written under /private/tmp."
+    },
+    {
+      "consumer": "assemble_mlb_hits05_2026_season_to_date_evidence_v1.py",
+      "daily_schedule_added": false,
+      "result": "Not run. Its fixed 2026-03-25 through 2026-08-13 query and full evidence-package output do not provide a bounded smoke mode."
+    }
+  ],
+  "routing_and_compatibility": {
+    "makefile_targets_scoped": [
+      "mlb-hits-environment-report",
+      "mlb-daily-upload-prep selector command",
+      "mlb-refresh-overlap-role-profile-watch"
+    ],
+    "writer_target_non_leakage_tested": [
+      "mlb-roster-refresh-all",
+      "mlb-stat-derived-refresh"
+    ],
+    "generic_database_aliases_changed": false,
+    "writer_routing_changed": false,
+    "moneyline_route_changed": false,
+    "bvp_route_changed": false,
+    "roles_grants_policies_or_credentials_changed": false,
+    "scheduled_jobs_added_or_changed": false,
+    "tracked_daily_wrapper_changed": false,
+    "installed_daily_wrapper_changed": false,
+    "tracked_installed_wrapper_sha256": "db1c97f5558b1bcfc93c99c1719077c0621ce7b9f7572a438ee7c9576847b549",
+    "database_rows_changed": false
+  },
+  "offline_verification": {
+    "command": "./bin/python -m pytest backend/tests/test_mlb_research_readonly_routing.py backend/mlb/tests/test_mlb_research_source_read_permissions_migration.py -q",
+    "result": "PASS",
+    "tests_passed": 10,
+    "subtests_passed": 13,
+    "includes": [
+      "reader routes remain opt-in",
+      "all eight approved readers use the expected helper",
+      "daily Makefile reader process scoping",
+      "no research URL assignment on roster and stat-derived writer targets",
+      "Moneyline/BvP route non-interference",
+      "reviewed source-read migration grant and rollback contracts"
+    ]
+  },
+  "next_natural_run_checks": [
+    "Confirm the daily hits environment report, selector, and overlap watch complete under proppadia_mlb_research_login.",
+    "Confirm unchanged restricted writer identities, writer receipts, schedule behavior, and Moneyline/BvP compatibility.",
+    "Record the first natural restricted source/training INSERT or protected NULL-fill evidence.",
+    "Resolve the daily materialized-view refresh route under its separate owner-only maintenance scope.",
+    "Repair and recheck the recency/interaction downstream d7_hits dataframe failures before treating those standalone reports as healthy."
+  ]
+}

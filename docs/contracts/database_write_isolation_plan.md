@@ -1,7 +1,7 @@
 # Database Write Isolation Plan
 
-**Status: NHL restricted connections active and daily-verified (2026-10-16).**
-The deployment record below describes the NHL cutover. MLB remains unchanged.
+**Status: NHL restricted connections active and daily-verified (2026-10-16); MLB research source-read permissions deployed and approved daily readers process-scoped (2026-10-18).**
+The deployment record below describes the NHL cutover. MLB writer isolation and natural-run verification remain open under P2.2.
 
 This plan pairs the Official Source Verification and Data Authority policy in
 [Project Doctrine](../PROJECT_DOCTRINE.md) with the canonical identity and

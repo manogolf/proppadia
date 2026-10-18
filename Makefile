@@ -1691,7 +1691,7 @@ mlb-bvp-impact-report:
 
 # Track league hits/game environment and annotate today's hits_allowed slate rows.
 mlb-hits-environment-report:
-	$(VENV_PY) backend/mlb/scripts/report_mlb_hits_environment.py --as-of-date "$(MLB_HITS_ENV_AS_OF_DATE)" --lookback-days "$(MLB_HITS_ENV_LOOKBACK_DAYS)" --recent-days "$(MLB_HITS_ENV_RECENT_DAYS)" --starter-baseline-seasons "$(MLB_HITS_ENV_STARTER_BASELINE_SEASONS)" --starter-baseline-min-starts "$(MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS)" --starter-baseline-season-weight-decay "$(MLB_HITS_ENV_STARTER_BASELINE_DECAY)" --slate-offense-weight-last7 "$(MLB_HITS_ENV_SLATE_WEIGHT_LAST7)" --slate-offense-weight-last15 "$(MLB_HITS_ENV_SLATE_WEIGHT_LAST15)" --slate-offense-weight-last30 "$(MLB_HITS_ENV_SLATE_WEIGHT_LAST30)" --slate-offense-factor-min "$(MLB_HITS_ENV_SLATE_FACTOR_MIN)" --slate-offense-factor-max "$(MLB_HITS_ENV_SLATE_FACTOR_MAX)" --slate-date "$(MLB_HITS_ENV_SLATE_DATE)" --slate-csv "$(MLB_HITS_ENV_SLATE_CSV)" --wide-csv "$(MLB_HITS_ENV_WIDE_CSV)" --odds-snapshot "$(MLB_HITS_ENV_ODDS_SNAPSHOT)" --out-json "$(MLB_HITS_ENV_OUT_JSON)" --out-csv "$(MLB_HITS_ENV_OUT_CSV)" --snapshot-dir "$(MLB_HITS_ENV_SNAPSHOT_DIR)" --history-jsonl "$(MLB_HITS_ENV_HISTORY_JSONL)" --eval-tracker-csv "$(MLB_HITS_ENV_EVAL_TRACKER_CSV)"
+	MLB_RESEARCH_DATABASE_URL="$${MLB_RESEARCH_DATABASE_URL:-$${MLB_MONEYLINE_AUDIT_DATABASE_URL:?MLB research read URL is required}}" $(VENV_PY) backend/mlb/scripts/report_mlb_hits_environment.py --as-of-date "$(MLB_HITS_ENV_AS_OF_DATE)" --lookback-days "$(MLB_HITS_ENV_LOOKBACK_DAYS)" --recent-days "$(MLB_HITS_ENV_RECENT_DAYS)" --starter-baseline-seasons "$(MLB_HITS_ENV_STARTER_BASELINE_SEASONS)" --starter-baseline-min-starts "$(MLB_HITS_ENV_STARTER_BASELINE_MIN_STARTS)" --starter-baseline-season-weight-decay "$(MLB_HITS_ENV_STARTER_BASELINE_DECAY)" --slate-offense-weight-last7 "$(MLB_HITS_ENV_SLATE_WEIGHT_LAST7)" --slate-offense-weight-last15 "$(MLB_HITS_ENV_SLATE_WEIGHT_LAST15)" --slate-offense-weight-last30 "$(MLB_HITS_ENV_SLATE_WEIGHT_LAST30)" --slate-offense-factor-min "$(MLB_HITS_ENV_SLATE_FACTOR_MIN)" --slate-offense-factor-max "$(MLB_HITS_ENV_SLATE_FACTOR_MAX)" --slate-date "$(MLB_HITS_ENV_SLATE_DATE)" --slate-csv "$(MLB_HITS_ENV_SLATE_CSV)" --wide-csv "$(MLB_HITS_ENV_WIDE_CSV)" --odds-snapshot "$(MLB_HITS_ENV_ODDS_SNAPSHOT)" --out-json "$(MLB_HITS_ENV_OUT_JSON)" --out-csv "$(MLB_HITS_ENV_OUT_CSV)" --snapshot-dir "$(MLB_HITS_ENV_SNAPSHOT_DIR)" --history-jsonl "$(MLB_HITS_ENV_HISTORY_JSONL)" --eval-tracker-csv "$(MLB_HITS_ENV_EVAL_TRACKER_CSV)"
 
 # Check passive model-context lineage in current-slate artifacts.
 mlb-daily-feature-lineage-health:
@@ -1941,7 +1941,7 @@ mlb-refresh-v2-qc-candidate-watch:
 
 mlb-refresh-overlap-role-profile-watch:
 	@echo "Refreshing overlap role profile watch"
-	$(VENV_PY) backend/mlb/scripts/build_mlb_overlap_role_profile_watch.py
+	MLB_RESEARCH_DATABASE_URL="$${MLB_RESEARCH_DATABASE_URL:-$${MLB_MONEYLINE_AUDIT_DATABASE_URL:?MLB research read URL is required}}" $(VENV_PY) backend/mlb/scripts/build_mlb_overlap_role_profile_watch.py
 
 mlb-refresh-user-over-15-filter-watch:
 	@echo "Refreshing retired research-only user over 1.5 proxy watch"
@@ -2094,7 +2094,7 @@ mlb-daily-reconcile:
 mlb-daily-upload-prep:
 	@echo "Building current upload prep for $(MLB_UPLOAD_PREP_DATE)"
 	@echo "public_catalog_fetch_allowed=$(MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH) cache_only_mode=$(if $(filter 1 true TRUE yes YES,$(MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH)),false,true)"
-	MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH="$(MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH)" $(VENV_PY) -m backend.mlb.scripts.run_mlb_hits_lane_selector_report --date "$(MLB_UPLOAD_PREP_DATE)"
+	MLB_RESEARCH_DATABASE_URL="$${MLB_RESEARCH_DATABASE_URL:-$${MLB_MONEYLINE_AUDIT_DATABASE_URL:?MLB research read URL is required}}" MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH="$(MLB_ALLOW_8RAIN_PUBLIC_CATALOG_FETCH)" $(VENV_PY) -m backend.mlb.scripts.run_mlb_hits_lane_selector_report --date "$(MLB_UPLOAD_PREP_DATE)"
 	$(MAKE) mlb-daily-review-boards MLB_DAILY_REVIEW_BOARDS_DATE="$(MLB_UPLOAD_PREP_DATE)"
 
 mlb-current-upload-prep: mlb-daily-upload-prep

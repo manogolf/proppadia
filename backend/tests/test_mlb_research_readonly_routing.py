@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
@@ -123,6 +124,34 @@ class MlbResearchReadRoutingTests(unittest.TestCase):
         self.assertNotIn("mlb_research_readonly_connection", bvp)
         self.assertIn("MLB_MONEYLINE_AUDIT_DATABASE_URL", moneyline)
         self.assertIn("MLB_MONEYLINE_AUDIT_DATABASE_URL", bvp)
+
+    def test_daily_make_targets_scope_research_url_to_approved_reader_commands(self) -> None:
+        makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
+
+        def target_body(name: str) -> str:
+            match = re.search(rf"(?m)^{re.escape(name)}:", makefile)
+            if match is None:
+                raise AssertionError(f"Make target not found: {name}")
+            next_target = re.search(r"(?m)^[^\s#][^:\n]*:", makefile[match.end():])
+            end = match.end() + next_target.start() if next_target else len(makefile)
+            return makefile[match.start():end]
+
+        expected = {
+            "mlb-hits-environment-report": "report_mlb_hits_environment.py",
+            "mlb-refresh-overlap-role-profile-watch": "build_mlb_overlap_role_profile_watch.py",
+            "mlb-daily-upload-prep": "run_mlb_hits_lane_selector_report",
+        }
+        for target, reader in expected.items():
+            with self.subTest(target=target):
+                body = target_body(target)
+                self.assertIn(reader, body)
+                self.assertIn("MLB_RESEARCH_DATABASE_URL=", body)
+                self.assertIn("MLB_MONEYLINE_AUDIT_DATABASE_URL", body)
+
+        writer_targets = ("mlb-roster-refresh-all", "mlb-stat-derived-refresh")
+        for target in writer_targets:
+            with self.subTest(writer_target=target):
+                self.assertNotIn("MLB_RESEARCH_DATABASE_URL=", target_body(target))
 
 
 if __name__ == "__main__":

@@ -396,7 +396,7 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P2.2 Inventory owner-level database aliases and plan gradual replacement
 
-- Status: **SOURCE READ PERMISSIONS DEPLOYED AND VERIFIED — reader activation and broader alias-replacement criteria remain open**.
+- Status: **SOURCE READ PERMISSIONS DEPLOYED — APPROVED DAILY READER ROUTING ACTIVE; natural-run checks remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as
   `session_user=current_user=postgres`. The restricted alias connected as
   `proppadia_mlb_ingest_login`; after the application's required `SET ROLE`,
@@ -532,22 +532,40 @@ writer validation does not authorize a hosted cutover or a different writer.
   production consumer projections, representative rows, expected result types,
   and denied writes are recorded in the receipt below. Natural scheduled
   application outputs remain pending until process routing is activated.
-- Reader activation sequence remains pending: (1) keep the scheduled wrapper
-  and current process routes unchanged; (2) provide the research URL only to
-  each explicitly opted-in reader process, preserving the writer environment,
-  Moneyline audit URL, and BvP verification URL; (3) exercise direct research
-  readers individually outside the scheduled run; (4) after separate approval,
-  opt the daily report and selector readers in for a natural run and confirm
-  their outputs, writer receipts, and Moneyline/BvP checks; (5) if a reader
-  fails, remove its process-level research URL so the helper returns to its
-  legacy route. Use the paired database rollback only under separate database-
-  change authorization. This prepared code requires no tracked or installed
-  daily-wrapper change.
-  Relevant recurring entrypoints are `mlb-hits-environment-report` (also a
-  nonblocking child of `mlb-daily-refresh`), its selector/reconciliation path,
-  and `build_mlb_overlap_role_profile_watch.py`; the other research/evidence
-  scripts are direct command paths. This prepared code requires no tracked or
-  installed daily-wrapper change.
+- Approved daily reader routing was activated 2026-10-18 through three
+  Makefile recipe-level assignments: `mlb-hits-environment-report`,
+  `mlb-daily-upload-prep` (the `run_mlb_hits_lane_selector_report` and nested
+  selector reader invocation), and `mlb-refresh-overlap-role-profile-watch`.
+  Each assignment scopes `MLB_RESEARCH_DATABASE_URL` to its reader Python
+  process and falls back only to the existing
+  `MLB_MONEYLINE_AUDIT_DATABASE_URL` from ignored `backend/.env`; that
+  established route uses `proppadia_mlb_research_login`. The research alias
+  itself is not present in `backend/.env`. Generic database aliases, writer
+  commands, the Moneyline/BvP routes, wrapper scheduling, and retry behavior
+  remain unchanged. The tracked and installed wrapper hashes still match, so
+  neither wrapper copy changed.
+- `report_mlb_hits_recency_vs_baseline.py`,
+  `report_mlb_hits_interaction_failure.py`,
+  `audit_mlb_hits_feature_parity.py`, and
+  `assemble_mlb_hits05_2026_season_to_date_evidence_v1.py` remain separately
+  invoked; none was added to the daily schedule. The one-day feature-parity
+  entrypoint completed using the research route. The two date-bounded recency
+  reports connected and read through that route but failed downstream with a
+  missing `d7_hits` dataframe column. The overlap watch could not form its
+  local one-day selection join, and the selector entrypoint was blocked by the
+  existing no-qualified-model gate before a database read. The season-to-date
+  assembler was not run because it has a fixed five-month read and writes a
+  full evidence package without a bounded output mode. These independent
+  reader issues are recorded in the activation receipt and do not affect the
+  three daily reader routes.
+- Next natural-run checks remain open: confirm the three reader receipts and
+  outputs under the effective research login; confirm unchanged writer routes
+  and receipts, Moneyline/BvP reads, and ordinary schedule behavior; retain the
+  first natural restricted source/training INSERT or protected NULL-fill
+  evidence; decide and validate a separately approved route for the daily
+  materialized-view refresh. If a reader fails, remove only its process-level
+  research URL. Database rollback still requires separate database-change
+  authorization.
 - Exceptional maintenance remains a separate owner route: migration/rollback
   and phase activation tools, historical correction/backfill/recompute targets,
   and manual training regeneration. They are not daily scheduled consumers and
@@ -590,9 +608,17 @@ writer validation does not authorize a hosted cutover or a different writer.
   (8 columns) reads returned rows through their existing dedicated route.
   Receipt: `artifacts/operational/mlb/research_source_read_deployment/2026-10-17/verification_receipt.json`.
   The research URL was passed only to the one-off verifier process; scheduled
-  reader routing remains inactive. No source, training, prediction, or outcome
+  reader routing was activated separately on 2026-10-18 as recorded in the
+  reader activation receipt. No source, training, prediction, or outcome
   rows were changed. Focused offline routing/migration tests passed: 9 tests
   and 8 subtests.
+- Daily reader routing activation: **COMPLETE — process-scoped on 2026-10-18**.
+  Focused offline tests passed (10 tests, 13 subtests). The hits environment
+  report completed alone for 2026-07-24 and produced bounded output in
+  `/private/tmp`; the feature-parity reader completed for a one-day window and
+  returned 323 training rows. See
+  `artifacts/operational/mlb/research_reader_activation/2026-10-17/activation_receipt.json`
+  for per-reader outcomes and remaining natural-run checks.
 
 ### P2.3 Review broad API-role permissions against consumer dependencies
 
