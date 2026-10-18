@@ -406,6 +406,46 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   lineage against the same certified outcome set; no missing card is
   synthesized.
 
+- October 18 operational readiness check after `79ef060c`: the implemented
+  validator accepts October 16 as `CERTIFIED_FINAL` (two games,
+  `2026020119`, `2026020120`) and rejects October 17 because no reconciliation
+  package or verified empty-schedule evidence exists. Retained October 17
+  schedule health reports 14 games, so `NO_PRIOR_GAMES` is not applicable.
+  No October 17 request-run or reconciliation package is retained. October 18
+  is the current slate, with two future games in its retained schedule; lack
+  of an October 18 outcome package is not yet a prior-day failure.
+- The exact first expected blocker for the next October 18 daily run is
+  October 17 prior-learning source resolution: the governed prior-learning
+  mode allows an absent active cross-market card and permits missing Points
+  predictions as `NOT_GRADEABLE_NO_PREDICTION`, but
+  `_resolve_prop_prediction_source()` still requires exactly one Saves card
+  and raises `IMMUTABLE_SAVES_FINAL_PREGAME_RUN_CARDINALITY:0`. October 17
+  retained Saves observer evidence has repeated `SAVES_FEATURE_EXPORT_EMPTY`
+  failures and no immutable FINAL_PREGAME Saves card. This is missing
+  prediction evidence, not proof that official outcomes do not exist. The
+  current resolver fails before official acquisition can create a
+  reconciliation package; no October 17 official outcome acquisition is
+  retained. A prior-learning-specific absent-Saves/ungraded state is therefore
+  a confirmed contract gap. Keep direct reconciliation strict; permit
+  outcome-only certification only after official source completeness and game
+  coverage validate, while leaving Saves grading explicitly unavailable.
+- Post-`79ef060c` October 18 observer receipts at 16:55:28Z show SOG, Points,
+  and Saves all `FAILED_WARN_ONLY` with
+  `PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED:PRIOR_DATE_EMPTY_SCHEDULE_CERTIFICATE_INVALID`,
+  zero market requests, and no paid credits. This confirms observers stop at
+  the missing October 17 certificate. The two retained October 18 daily parent
+  receipts predate `79ef060c`; they failed on roster-source cardinality and do
+  not verify the corrected daily gate. A post-correction daily result remains
+  unobserved.
+- Current readiness: the October 18 daily run cannot advance under the
+  established contract until October 17 official outcomes can be acquired and
+  certified without inventing its missing Saves prediction. The expected
+  first stop is the missing Saves source predicate above. Track this as an
+  implementation prerequisite, separate from the missing October 17 Saves
+  producer capture. Recheck the retained certificate and natural-run receipts
+  after a contract-preserving correction; no pipeline or observer was invoked
+  for this assessment.
+
 ### P2.10 Repair mainline FINAL_PREGAME observer readiness
 
 - Status: **PRODUCER CORRECTED — natural verification reached a prior-day source blocker**.

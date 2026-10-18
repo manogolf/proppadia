@@ -40,6 +40,14 @@ mismatches block before current-slate schedule acquisition, roster writes,
 history ingestion, evaluation, feature construction, predictions, or odds.
 `NO_PRIOR_GAMES` is accepted only when the retained official NHL schedule
 response and its date-bound health/hash record verify an empty prior date.
+Official-outcome certification is independent of prediction grading. In
+prior-learning mode, a missing immutable lane prediction must remain ungraded
+for that lane and must not be replaced with a synthetic capture. Present
+duplicate, corrupt, or invalid cards remain blocking. Prior-learning must not
+require a missing lane card solely to certify otherwise complete official
+outcomes; that lane's grading remains unavailable until valid prediction
+evidence exists. Direct reconciliation retains its exact-one-card
+requirements.
 
 After that checkpoint, the current-slate schedule and canonical identities are
 validated, then the existing governed roster child captures official roster
