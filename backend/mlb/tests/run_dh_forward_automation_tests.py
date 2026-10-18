@@ -70,6 +70,21 @@ class DHForwardAutomationTests(unittest.TestCase):
         cache.unlink(); calls=[]
         got,used,path,state=retained_source(cfg,1,lambda u:(calls.append(u) or (final,raw)),"r2")
         self.assertEqual(len(calls),1); self.assertEqual(path.read_bytes(),raw); self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),hashlib.sha256(used).hexdigest()); self.assertEqual(state,"IMMUTABLE_LIVE_RESPONSE_RETAINED")
+    def test_capture_skips_cleanly_when_network_unavailable(self):
+        import urllib.error
+        from backend.mlb.scripts import run_mlb_dh_forward_capture as capture
+        def offline(url): raise urllib.error.URLError(OSError(8,"nodename nor servname provided"))
+        with patch.object(capture,"load_config",return_value={"scorer_path":"unused","lock_dir":self.base}), patch.object(capture,"ensure_seed"), \
+                patch.object(capture.joblib,"load"), patch.object(capture,"validate_scorer",return_value="sha"):
+            result=capture.run("2026-10-18",fetch=offline)
+        self.assertEqual(result["decision"],"SKIPPED_NETWORK_UNAVAILABLE"); self.assertEqual(result["new_rows"],0)
+    def test_capture_http_error_still_raises(self):
+        import urllib.error
+        from backend.mlb.scripts import run_mlb_dh_forward_capture as capture
+        def server_error(url): raise urllib.error.HTTPError(url,503,"unavailable",None,None)
+        with patch.object(capture,"load_config",return_value={"scorer_path":"unused","lock_dir":self.base}), patch.object(capture,"ensure_seed"), \
+                patch.object(capture.joblib,"load"), patch.object(capture,"validate_scorer",return_value="sha"):
+            with self.assertRaises(urllib.error.HTTPError): capture.run("2026-10-18",fetch=server_error)
     def test_launchd_wrapper_invocation(self):
         for name,module in (("com.proppadia.mlb.dh-forward-capture.plist","backend.mlb.scripts.run_mlb_dh_forward_capture"),("com.proppadia.mlb.dh-forward-grade.plist","backend.mlb.scripts.run_mlb_dh_forward_grade")):
             payload=plistlib.loads((ROOT/"backend/mlb/launchagents"/name).read_bytes()); self.assertEqual(payload["ProgramArguments"][2],module); self.assertEqual(payload["WorkingDirectory"],str(ROOT))

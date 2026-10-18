@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse, csv, hashlib, json, math, os, shutil, sys
+import argparse, csv, hashlib, json, math, os, shutil, sys, urllib.error
 from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -142,7 +142,14 @@ def score_feed(feed, raw_sha, now, day, artifact, schema_sha, hist, existing_key
 def run(day, force_window=False, fetch=fetch_json):
     config=load_config(); ensure_seed(config); now=datetime.now(timezone.utc); artifact=joblib.load(config["scorer_path"]); schema_sha=validate_scorer(config,artifact)
     with exclusive_lock(config["lock_dir"]/"capture.lock"):
-        schedule,_=fetch(schedule_url(day)); window=capture_window_state(schedule,now,int(config["capture_window_hours_before_first_pitch"]))
+        try: schedule,_=fetch(schedule_url(day))
+        except urllib.error.HTTPError: raise
+        except OSError as exc:
+            # The 10-minute LaunchAgent often fires during a brief maintenance
+            # wake before DNS is back. Nothing has been read or written yet, so
+            # skip cleanly; the next tick retries.
+            return {"decision":"SKIPPED_NETWORK_UNAVAILABLE","new_rows":0,"date":day,"error_class":type(exc).__name__}
+        window=capture_window_state(schedule,now,int(config["capture_window_hours_before_first_pitch"]))
         if window!="ACTIVE" and not force_window:
             return {"decision":"NO_MUTATION_"+window,"new_rows":0,"date":day}
         cache_prior_feeds(config,day,fetch); hist=build_histories(config,day); _,old=read_csv(config["prediction_ledger"]); existing={(r["game_date"],r["game_pk"],r["team_mlb_id"],r["player_mlb_id"],r["scorer_semantic_id"]) for r in old}

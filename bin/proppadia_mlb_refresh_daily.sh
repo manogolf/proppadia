@@ -1101,6 +1101,9 @@ if ! acquire_launchagent_lock "mlb-pipeline" "${MLB_PIPELINE_LOCK_WAIT_SEC:-1800
   exit 75
 fi
 
+# Scheduled runs can start right after the Mac wakes, before DNS is back.
+wait_for_network statsapi.mlb.com "${MLB_NETWORK_WAIT_SEC:-300}" || true
+
 # Durable moneyline shadow lifecycle. The hook owns the database-authoritative
 # once-per-date guard; failures remain visible but never abort the MLB pipeline.
 set +e

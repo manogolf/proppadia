@@ -100,3 +100,30 @@ release_launchagent_locks() {
   done
   LA_ACQUIRED_LOCKS=()
 }
+
+# Wait (bounded) for name resolution after a scheduled wake. LaunchAgents can
+# fire before Wi-Fi and DNS are back, which turns the first provider call into
+# a DNS failure. This only delays the start; it never aborts the wrapper, and
+# provider retry behavior is unchanged.
+wait_for_network() {
+  local host="${1:-statsapi.mlb.com}"
+  local budget_sec="${2:-${LA_NETWORK_WAIT_SEC:-300}}"
+  local interval_sec="${LA_NETWORK_WAIT_INTERVAL_SEC:-10}"
+  local started
+  started="$(_la_now_epoch)"
+  local deadline=$(( started + budget_sec ))
+  while true; do
+    if dscacheutil -q host -a name "$host" 2>/dev/null | grep -q '^ip_address:'; then
+      local waited=$(( $(_la_now_epoch) - started ))
+      if (( waited > 0 )); then
+        echo "[$(date -u +%FT%TZ)] INFO network ready host=${host} waited_sec=${waited}" >&2
+      fi
+      return 0
+    fi
+    if (( $(_la_now_epoch) >= deadline )); then
+      echo "[$(date -u +%FT%TZ)] WARN network not ready after ${budget_sec}s host=${host}; continuing" >&2
+      return 1
+    fi
+    sleep "$interval_sec"
+  done
+}
