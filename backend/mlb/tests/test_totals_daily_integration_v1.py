@@ -84,6 +84,30 @@ def test_daily_0530_is_primary_scoring_pass(monkeypatch, tmp_path):
     assert result["resolved_mode"]==daily.PRIMARY_SCORE and calls==[("score",today),("markets",today)]
 
 
+def test_no_games_in_evaluated_phase_is_idle_not_failure(monkeypatch, tmp_path):
+    today=datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    schedule_path=tmp_path/"schedule.json";schedule_path.write_text("{}")
+    schedule_hash=hashlib.sha256(schedule_path.read_bytes()).hexdigest()
+    monkeypatch.setattr(daily,"score",lambda *args,**kwargs:{"rows":0,"new_rows":0})
+    def no_regular_season(*args,**kwargs): raise RuntimeError("NO_TOTALS_PREDICTIONS_FOR_REGULAR_SEASON")
+    monkeypatch.setattr(daily,"attach_markets",no_regular_season)
+    result=daily.run(today,"2000-01-01","auto","2026-08-07T12:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3",
+        schedule_source_path=schedule_path,expected_schedule_source_sha256=schedule_hash,phase_authority=_phase_authority())
+    assert result["status"]=="TOTALS_SHADOW_DAILY_NO_GAMES_IN_PHASE" and result["market_attachment"] is None
+
+
+def test_other_market_attachment_errors_still_fail(monkeypatch, tmp_path):
+    today=datetime.now(ZoneInfo("America/New_York")).date().isoformat()
+    schedule_path=tmp_path/"schedule.json";schedule_path.write_text("{}")
+    schedule_hash=hashlib.sha256(schedule_path.read_bytes()).hexdigest()
+    monkeypatch.setattr(daily,"score",lambda *args,**kwargs:{"rows":1,"new_rows":1})
+    def broken(*args,**kwargs): raise RuntimeError("MARKET_LEDGER_CORRUPT")
+    monkeypatch.setattr(daily,"attach_markets",broken)
+    with pytest.raises(RuntimeError,match="MARKET_LEDGER_CORRUPT"):
+        daily.run(today,"2000-01-01","auto","2026-08-07T12:30:00Z",tmp_path,tmp_path/"p.sqlite3",tmp_path/"m.sqlite3",
+            schedule_source_path=schedule_path,expected_schedule_source_sha256=schedule_hash,phase_authority=_phase_authority())
+
+
 def test_existing_identity_is_bypassed_before_context_reconstruction(monkeypatch, tmp_path):
     ledger=tmp_path/"p.sqlite3";connection=connect_ledger(ledger);add_prediction(connection,"2026-08-07",10)
     monkeypatch.setattr(shadow,"verified_totals_phase_authority",lambda:_phase_authority(10))

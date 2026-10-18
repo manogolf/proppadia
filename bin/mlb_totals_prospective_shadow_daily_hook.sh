@@ -54,7 +54,8 @@ fi
 c_result_path="artifacts/ops/mlb_totals_c_shadow_daily_${slate_date}_latest.json"
 c_attempt_path="${c_result_path%.json}_attempt_${$}.json"
 c_lifecycle_rc=0
-if [[ "$lifecycle_rc" -eq 0 && -s "$result_path" ]]; then
+# An idle RAW lifecycle (no games in the evaluated phase) gives C nothing to read.
+if [[ "$lifecycle_rc" -eq 0 && -s "$result_path" ]] && grep -q 'TOTALS_SHADOW_DAILY_LIFECYCLE_COMPLETE' "$result_path"; then
   c_started_at="$(date -u +%FT%TZ)"
   echo "[${c_started_at}] START MLB totals C live shadow lifecycle slate_date=${slate_date} completed_through=${completed_through} mode=${mode} run_tag=${run_tag}"
   set +e

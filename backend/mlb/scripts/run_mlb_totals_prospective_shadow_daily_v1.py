@@ -95,18 +95,26 @@ def run(
                              allow_partial=True, evaluation_phase=evaluation_phase,
                              phase_authority=phase_authority))
     scoring = None; markets = None
+    status = "TOTALS_SHADOW_DAILY_LIFECYCLE_COMPLETE"
     if resolved_mode in (PRIMARY_SCORE, SCORE_MISSING):
         scoring = score(slate_date, output_root/slate_date, ledger_path,
                         evaluation_phase=evaluation_phase,
                         phase_authority=phase_authority,
                         schedule_source_path=schedule_source_path,
                         expected_schedule_source_sha256=schedule_source_sha256)
-        markets = attach_markets(slate_date, output_root/slate_date, ledger_path, market_ledger_path,
-                                 evaluation_phase=evaluation_phase,
-                                 phase_authority=phase_authority)
+        try:
+            markets = attach_markets(slate_date, output_root/slate_date, ledger_path, market_ledger_path,
+                                     evaluation_phase=evaluation_phase,
+                                     phase_authority=phase_authority)
+        except RuntimeError as exc:
+            # A slate with no games in the evaluated phase (e.g. regular-season
+            # totals during the postseason) is an idle lane, not a failure.
+            if str(exc) != f"NO_TOTALS_PREDICTIONS_FOR_{evaluation_phase}":
+                raise
+            status = "TOTALS_SHADOW_DAILY_NO_GAMES_IN_PHASE"
     after = counts(connect_ledger(ledger_path))
     return {
-        "status": "TOTALS_SHADOW_DAILY_LIFECYCLE_COMPLETE",
+        "status": status,
         "slate_date": slate_date, "completed_through": completed_through,
         "requested_mode": mode, "resolved_mode": resolved_mode,
         "wrapper_started_at_utc": wrapper_started_at_utc,

@@ -936,6 +936,15 @@ def _build_freshness_audit(
     ):
         payload, err = _load_json(path)
         payload = payload if isinstance(payload, dict) else {}
+        if not err and payload.get("status") == "TOTALS_SHADOW_DAILY_NO_GAMES_IN_PHASE":
+            # The lane ran and correctly found no games in its evaluated phase.
+            rows.append(_freshness_row(
+                section=section, source_file=str(path), source_date=current_slate_date,
+                expected_date=current_slate_date, mtime_utc=_path_mtime_utc(path), load_status="ok",
+                cadence="each governed daily refresh invocation", freshness_status="inactive-by-authority",
+                note=f"idle: no {payload.get('evaluation_phase', 'evaluated-phase')} games on slate",
+            ))
+            continue
         status_ok = not err and (expected_status is None or payload.get("status") == expected_status)
         rows.append(_freshness_row(
             section=section, source_file=str(path), source_date=current_slate_date if status_ok else "",
@@ -1059,6 +1068,15 @@ def _build_freshness_audit(
     if bvp_status == "stale-unexpected" and bvp_prewarm_note:
         bvp_status = "research-refresh-failed"
         bvp_note = bvp_prewarm_note
+    from backend.mlb.shared.bvp_inline import EFFECTIVE_DATE as BVP_INLINE_EFFECTIVE_DATE
+    if (bvp_status in ("stale-unexpected", "missing-unexpected") and not bvp_prewarm_note
+            and current_slate_date >= BVP_INLINE_EFFECTIVE_DATE):
+        # The impact report is built from slate output, which is retired while
+        # no prop model qualifies. Inline BvP acquisition health is reported
+        # separately and still raises research-refresh-failed above.
+        bvp_status = "inactive-by-authority"
+        bvp_note = ("BvP impact report depends on retired slate output (no qualified prop model); "
+                    "governed inline BvP acquisition is certified and tracked separately.")
     rows.append(
         _freshness_row(
             section="BvP Impact",
@@ -1273,7 +1291,8 @@ def _build_freshness_audit(
             generated_at_utc=generated_at_utc,
             load_status=str(source_states.get("today_workspace") or "ok"),
             cadence="inactive legacy player-prop staging service",
-            freshness_status="inactive-by-authority" if ws_status == "not-refreshed" else ws_status,
+            # Retired staging service: its outcome is informational only.
+            freshness_status="fresh" if ws_status == "fresh" else "inactive-by-authority",
             note=str(
                 (today_workspace.get("diagnostics") or {}).get("failure_classification")
                 or today_workspace.get("reason")
@@ -2594,298 +2613,6 @@ def build_markdown(
             lines.append(f"  - `{k}`: `{ck.get('status')}`")
     lines.append("")
 
-    lines.append("## Postgrade Alerts")
-    lines.append(provenance("Postgrade Alerts"))
-    lines.append("- Authority: `INACTIVE_LEGACY` — retained for historical context; not an active operational-health input.")
-    lines.append(
-        f"- Report date: `{postgrade.get('report_date','n/a')}` | "
-        f"alerts `{postgrade.get('alerts_count',0)}` "
-        f"(critical `{postgrade.get('critical_count',0)}`, warning `{postgrade.get('warning_count',0)}`)"
-    )
-    alerts = postgrade.get("alerts") or []
-    if alerts:
-        for a in alerts[:8]:
-            alert_label = a.get("code") or a.get("type") or "n/a"
-            lines.append(
-                f"- [{a.get('severity','n/a')}] `{alert_label}`: {a.get('message') or 'n/a'}"
-            )
-            lines.append(
-                f"  - Alert state: source_date `{a.get('alert_source_date','n/a')}`, "
-                f"generated_at `{a.get('alert_generated_at','n/a')}`, "
-                f"last_changed_at `{a.get('alert_last_changed_at','n/a')}`, "
-                f"age_days `{a.get('alert_age_days','n/a')}`, "
-                f"new_today `{a.get('alert_is_new_today')}`, persistent `{a.get('alert_is_persistent')}`"
-            )
-            if a.get("recommendation"):
-                lines.append(f"  - Recommendation: {a.get('recommendation')}")
-    else:
-        lines.append("- No active postgrade alerts.")
-    lines.append("")
-
-    lines.append("## Model vs Fade")
-    lines.append(provenance("Model vs Fade"))
-    lines.append("- Authority: `INACTIVE_LEGACY_UNPARTITIONED` — no qualified MLB betting model currently consumes this surface.")
-    lines.append("- Metrics, record, paired count, win rate, ROI, and alert comparison: `UNAVAILABLE_PHASE_UNBOUND`.")
-    lines.append(f"- Rows CSV: `{model_vs_fade.get('rows_csv') or 'n/a'}`")
-    lines.append("")
-
-    lines.append("## Prop Outlook Freshness")
-    lines.append(provenance("Prop Outlook Freshness"))
-    lines.append(f"- Regime CSV: `{prop_regime.get('path','n/a')}`")
-    lines.append(
-        f"- Max latest_usable_date: `{prop_regime.get('max_latest_usable_date','n/a')}` | "
-        f"prop count `{prop_regime.get('prop_count','n/a')}` | "
-        f"outs_recorded present `{prop_regime.get('outs_recorded_present')}`"
-    )
-    lines.append(
-        f"- Reporting alignment CSV: `{reporting_alignment.get('path','n/a')}` | "
-        f"stale_outlook_source count `{reporting_alignment.get('stale_outlook_source_count','n/a')}`"
-    )
-    lines.append("")
-
-    lines.append("## Model Performance By Prop")
-    lines.append(provenance("Model Performance By Prop"))
-    lines.append(f"- Rolling summary CSV: `{model_performance.get('summary_path','n/a')}`")
-    lines.append(f"- Daily performance CSV: `{model_performance.get('daily_path','n/a')}`")
-    lines.append("- Performance counts, critical/watch classifications, accuracy, and calibration: `UNAVAILABLE_PHASE_UNBOUND`.")
-    lines.append("")
-
-    lines.append("## Hits Over 1.5 Watch Candidates")
-    lines.append("- Scope: review aid only; not a production rule, selector, upload filter, or threshold change.")
-    lines.append(board_source_line(hits_o15_watch_candidates, "hits_o15_watch_candidates_csv"))
-    lines.append(
-        f"- Candidate definition: Quick Card candidate + hits over 1.5 + `d7_hits_per_game > 1.0` + "
-        f"`starter_expected_hits_allowed >= 5.0`."
-    )
-    lines.append(
-        f"- Row count: `{hits_o15_watch_candidates.get('row_count', 0)}` | "
-        f"A/A `{hits_o15_watch_candidates.get('aa_count', 0)}` | "
-        f"A/B `{hits_o15_watch_candidates.get('ab_count', 0)}`"
-    )
-    top_candidates = [
-        row for row in (hits_o15_watch_candidates.get("top_candidates") or []) if isinstance(row, dict)
-    ][:5]
-    if top_candidates:
-        lines.append("| player | team | opp | tier | odds | d7 | d15 | starter exp | QC score | ranking score |")
-        lines.append("|---|---|---|---|---:|---:|---:|---:|---:|---:|")
-        for row in top_candidates:
-            lines.append(
-                f"| {row.get('player_name') or row.get('player') or ''} | {row.get('team') or ''} | "
-                f"{row.get('opponent') or ''} | `{row.get('combined_tier') or ''}` | "
-                f"`{_num_fmt(row.get('market_price'))}` | `{_num_fmt(row.get('d7_hits_rate'))}` | "
-                f"`{_num_fmt(row.get('d15_hits_rate'))}` | "
-                f"`{_num_fmt(row.get('starter_expected_hits_allowed'))}` | "
-                f"`{_num_fmt(row.get('qc_score'))}` | `{_num_fmt(row.get('ranking_score'))}` |"
-            )
-    elif not board_source_ok(hits_o15_watch_candidates, "hits_o15_watch_candidates_csv"):
-        lines.append("- Top candidates: unavailable because the current-slate watch candidate CSV is missing or unreadable.")
-    else:
-        lines.append("- Top candidates: none available from the current-slate watch candidate artifact.")
-    lines.append("")
-
-    lines.append("## Hits Over 1.5 Layered Candidates")
-    lines.append("- Scope: review aid only; not a production rule, selector, upload filter, or threshold change.")
-    lines.append(board_source_line(hits_o15_layered_candidates, "hits_o15_layered_candidates_csv"))
-    lines.append(
-        f"- Counts: d7_hot `{hits_o15_layered_candidates.get('d7_hot_count', 0)}` | "
-        f"d7+d15 `{hits_o15_layered_candidates.get('d7_d15_count', 0)}` | "
-        f"d7+d15+starter `{hits_o15_layered_candidates.get('d7_d15_favorable_starter_count', 0)}` | "
-        f"QC watch `{hits_o15_layered_candidates.get('qc_watch_count', 0)}`"
-    )
-    aa_counts = hits_o15_layered_candidates.get("aa_counts") if isinstance(hits_o15_layered_candidates.get("aa_counts"), dict) else {}
-    ab_counts = hits_o15_layered_candidates.get("ab_counts") if isinstance(hits_o15_layered_candidates.get("ab_counts"), dict) else {}
-    lines.append(
-        f"- A/A counts: QC watch `{aa_counts.get('layer_4_qc_d7_d15_starter', 0)}` | "
-        f"d7+d15+starter non-QC `{aa_counts.get('layer_3_d7_d15_starter_non_qc', 0)}` | "
-        f"d7+d15 no-starter `{aa_counts.get('layer_2_d7_d15_no_favorable_starter', 0)}` | "
-        f"d7-only discovery `{aa_counts.get('layer_1_d7_hot_not_d15_consistent', 0)}`"
-    )
-    lines.append(
-        f"- A/B counts: QC watch `{ab_counts.get('layer_4_qc_d7_d15_starter', 0)}` | "
-        f"d7+d15+starter non-QC `{ab_counts.get('layer_3_d7_d15_starter_non_qc', 0)}` | "
-        f"d7+d15 no-starter `{ab_counts.get('layer_2_d7_d15_no_favorable_starter', 0)}` | "
-        f"d7-only discovery `{ab_counts.get('layer_1_d7_hot_not_d15_consistent', 0)}`"
-    )
-
-    def layered_candidate_line(row: Dict[str, Any]) -> str:
-        return (
-            f"{row.get('player') or row.get('player_name') or ''} "
-            f"({row.get('team') or ''} vs {row.get('opponent') or ''}, "
-            f"{row.get('combined_tier') or ''}, odds `{_num_fmt(row.get('market_price'))}`, "
-            f"d7 `{_num_fmt(row.get('d7_hits_rate'))}`, d15 `{_num_fmt(row.get('d15_hits_rate'))}`, "
-            f"starter `{_num_fmt(row.get('starter_expected_hits_allowed'))}`)"
-        )
-
-    top_layered_qc = [
-        row for row in (hits_o15_layered_candidates.get("top_qc_watch_candidates") or []) if isinstance(row, dict)
-    ][:3]
-    top_layered_non_qc = [
-        row
-        for row in (hits_o15_layered_candidates.get("top_non_qc_d7_d15_favorable_starter") or [])
-        if isinstance(row, dict)
-    ][:3]
-    if top_layered_qc:
-        lines.append("- Top QC watch candidates: " + "; ".join(layered_candidate_line(row) for row in top_layered_qc))
-    elif not board_source_ok(hits_o15_layered_candidates, "hits_o15_layered_candidates_csv"):
-        lines.append("- Top QC watch candidates: unavailable because the current-slate layered candidate CSV is missing or unreadable.")
-    else:
-        lines.append("- Top QC watch candidates: none available.")
-    if top_layered_non_qc:
-        lines.append(
-            "- Top non-QC d7+d15+favorable starter candidates: "
-            + "; ".join(layered_candidate_line(row) for row in top_layered_non_qc)
-        )
-    elif not board_source_ok(hits_o15_layered_candidates, "hits_o15_layered_candidates_csv"):
-        lines.append(
-            "- Top non-QC d7+d15+favorable starter candidates: unavailable because the current-slate layered candidate CSV is missing or unreadable."
-        )
-    else:
-        lines.append("- Top non-QC d7+d15+favorable starter candidates: none available.")
-    lines.append("")
-
-    lines.append("## Hits Under 1.5 Favorite Audit")
-    lines.append("- Scope: review aid only; not a production rule, selector, upload filter, or threshold change.")
-    lines.append(board_source_line(hits_u15_favorite_audit, "hits_u15_favorite_audit_csv"))
-    lines.append(
-        f"- Counts: all u1.5 `{hits_u15_favorite_audit.get('row_count', 0)}` | "
-        f"d7 cold `{hits_u15_favorite_audit.get('d7_cold_count', 0)}` | "
-        f"d7+d15 cold `{hits_u15_favorite_audit.get('d7_d15_cold_count', 0)}` | "
-        f"d7+d15+tough starter `{hits_u15_favorite_audit.get('d7_d15_tough_starter_count', 0)}` | "
-        f"QC watch `{hits_u15_favorite_audit.get('qc_watch_count', 0)}`"
-    )
-    u15_aa_counts = (
-        hits_u15_favorite_audit.get("aa_counts")
-        if isinstance(hits_u15_favorite_audit.get("aa_counts"), dict)
-        else {}
-    )
-    u15_ab_counts = (
-        hits_u15_favorite_audit.get("ab_counts")
-        if isinstance(hits_u15_favorite_audit.get("ab_counts"), dict)
-        else {}
-    )
-    lines.append(
-        f"- A/A counts: QC watch `{u15_aa_counts.get('layer_4_qc_d7_d15_tough_starter', 0)}` | "
-        f"d7+d15+tough starter non-QC `{u15_aa_counts.get('layer_3_d7_d15_tough_starter_non_qc', 0)}` | "
-        f"d7+d15 no-tough-starter `{u15_aa_counts.get('layer_2_d7_d15_no_tough_starter', 0)}` | "
-        f"d7-only discovery `{u15_aa_counts.get('layer_1_d7_cold_not_d15_consistent', 0)}`"
-    )
-    lines.append(
-        f"- A/B counts: QC watch `{u15_ab_counts.get('layer_4_qc_d7_d15_tough_starter', 0)}` | "
-        f"d7+d15+tough starter non-QC `{u15_ab_counts.get('layer_3_d7_d15_tough_starter_non_qc', 0)}` | "
-        f"d7+d15 no-tough-starter `{u15_ab_counts.get('layer_2_d7_d15_no_tough_starter', 0)}` | "
-        f"d7-only discovery `{u15_ab_counts.get('layer_1_d7_cold_not_d15_consistent', 0)}`"
-    )
-
-    def u15_candidate_line(row: Dict[str, Any]) -> str:
-        return (
-            f"{row.get('player') or row.get('player_name') or ''} "
-            f"({row.get('team') or ''} vs {row.get('opponent') or ''}, "
-            f"{row.get('combined_tier') or ''}, odds `{_num_fmt(row.get('market_price'))}`, "
-            f"d7 `{_num_fmt(row.get('d7_hits_rate'))}`, d15 `{_num_fmt(row.get('d15_hits_rate'))}`, "
-            f"starter `{_num_fmt(row.get('starter_expected_hits_allowed'))}`)"
-        )
-
-    top_u15_qc = [
-        row for row in (hits_u15_favorite_audit.get("top_qc_watch_candidates") or []) if isinstance(row, dict)
-    ][:3]
-    top_u15_non_qc = [
-        row
-        for row in (hits_u15_favorite_audit.get("top_non_qc_d7_d15_tough_starter") or [])
-        if isinstance(row, dict)
-    ][:3]
-    if top_u15_qc:
-        lines.append("- Top QC watch candidates: " + "; ".join(u15_candidate_line(row) for row in top_u15_qc))
-    elif not board_source_ok(hits_u15_favorite_audit, "hits_u15_favorite_audit_csv"):
-        lines.append("- Top QC watch candidates: unavailable because the current-slate u1.5 audit CSV is missing or unreadable.")
-    else:
-        lines.append("- Top QC watch candidates: none available.")
-    if top_u15_non_qc:
-        lines.append(
-            "- Top non-QC d7+d15+tough starter candidates: "
-            + "; ".join(u15_candidate_line(row) for row in top_u15_non_qc)
-        )
-    elif not board_source_ok(hits_u15_favorite_audit, "hits_u15_favorite_audit_csv"):
-        lines.append(
-            "- Top non-QC d7+d15+tough starter candidates: unavailable because the current-slate u1.5 audit CSV is missing or unreadable."
-        )
-    else:
-        lines.append("- Top non-QC d7+d15+tough starter candidates: none available.")
-    lines.append("")
-
-    lines.append("## Hits 1.5 Alternate Discovery")
-    lines.append("- Scope: DISCOVERY ONLY; alternate market; Over-only feed; not production scoring, uploads, or grading.")
-    lines.append(board_source_line(hits_o15_alternate_discovery, "hits_o15_alternate_discovery_csv"))
-    lines.append(
-        f"- Counts: total `{hits_o15_alternate_discovery.get('row_count', 0)}` | "
-        f"d7+d15 `{hits_o15_alternate_discovery.get('d7_d15_count', 0)}` | "
-        f"d7+d15+starter `{hits_o15_alternate_discovery.get('d7_d15_starter_count', 0)}`"
-    )
-
-    def alternate_candidate_line(row: Dict[str, Any]) -> str:
-        return (
-            f"{row.get('player') or row.get('player_name') or ''} "
-            f"({row.get('team') or ''} vs {row.get('opponent') or ''}, "
-            f"{row.get('combined_tier') or ''}, best over `{_num_fmt(row.get('best_over_price'))}`, "
-            f"d7 `{_num_fmt(row.get('d7_hits_rate'))}`, d15 `{_num_fmt(row.get('d15_hits_rate'))}`, "
-            f"starter `{_num_fmt(row.get('starter_expected_hits_allowed'))}`)"
-        )
-
-    top_alternate = [
-        row for row in (hits_o15_alternate_discovery.get("top_candidates") or []) if isinstance(row, dict)
-    ][:3]
-    if top_alternate:
-        lines.append("- Top alternate candidates: " + "; ".join(alternate_candidate_line(row) for row in top_alternate))
-    elif not board_source_ok(hits_o15_alternate_discovery, "hits_o15_alternate_discovery_csv"):
-        lines.append("- Top alternate candidates: unavailable because the current-slate alternate discovery CSV is missing or unreadable.")
-    else:
-        lines.append("- Top alternate candidates: none available.")
-    lines.append("")
-
-    lines.append("## Hits O1.5 Prospective Run 1 Utility")
-    lines.append("- Scope: historical frozen Run 1 process evidence only; separate from current regular/postseason reporting and not a production selector, upload rule, or active candidate capture.")
-    lines.append(
-        f"- Status: `{o15_prospective_status.get('status') or 'n/a'}` | "
-        f"automatic wrapper `{o15_prospective_status.get('automatic_wrapper_status') or 'n/a'}` | "
-        f"producer active `{o15_prospective_status.get('candidate_producer_active')}`"
-    )
-    lines.append("- Frozen/graded/pending outcome counts: `HISTORICAL_SEPARATE_UNPARTITIONED_NOT_CURRENT_EVIDENCE`.")
-    lines.append(
-        f"- Latest frozen date `{o15_prospective_status.get('latest_frozen_candidate_date') or 'n/a'}` | "
-        f"latest grading date `{o15_prospective_status.get('latest_grading_date') or 'n/a'}` | "
-        f"generated `{o15_prospective_status.get('generated_at_utc') or 'n/a'}`"
-    )
-    lines.append(
-        f"- Artifacts: "
-        f"{_format_artifact_markdown_link('machine JSON', o15_prospective_status.get('machine_json'), relative_to_md=ops_brief_md_path)} | "
-        f"{_format_artifact_markdown_link('graded ledger CSV', o15_prospective_status.get('graded_ledger_csv'), relative_to_md=ops_brief_md_path)} | "
-        f"{_format_artifact_markdown_link('prediction ledger CSV', o15_prospective_status.get('prediction_ledger_csv'), relative_to_md=ops_brief_md_path)}"
-    )
-    lines.append("")
-
-    lines.append("## Review Aid Performance")
-    lines.append(provenance("Review Aid Performance"))
-    lines.append("- Scope: legacy review-aid outcome tracking; not a production rule, selector, upload filter, or threshold change.")
-    lines.append("- Board/matched/resolved counts, records, win rates, and ROI: `UNAVAILABLE_PHASE_UNBOUND`.")
-    if str(review_aid_performance.get("status") or "") == "source_not_ready":
-        lines.append(f"- Source-not-ready detail: {review_aid_performance.get('status_detail') or 'n/a'}")
-    lines.append("")
-
-    tier_top_o15 = [
-        row for row in (hits_15_tier_backtest.get("o15_top_recent_combined_tiers") or []) if isinstance(row, dict)
-    ][:3]
-    tier_top_u15 = [
-        row for row in (hits_15_tier_backtest.get("u15_top_recent_combined_tiers") or []) if isinstance(row, dict)
-    ][:3]
-    if tier_top_o15 or tier_top_u15:
-        lines.append("## Reconstructed Hits 1.5 All-Market Tier Audit")
-        lines.append(
-            "- Scope: reconstructed all-market research audit from execution reconcile rows; "
-            "not actual generated board artifact performance and not a production rule, selector, upload filter, or threshold change."
-        )
-        lines.append("- Reconstructed resolved counts, win rates, and ROI: `UNAVAILABLE_PHASE_UNBOUND`.")
-        lines.append("- Source preserved: `artifacts/analysis/mlb/review_aids/hits_15_tier_backtest_summary.json`.")
-        lines.append("")
-
     lines.append("## Path Forward")
     lines.append(provenance("Path Forward"))
     if path_forward:
@@ -2912,27 +2639,6 @@ def build_markdown(
         lines.append(f"- Counts: `{json.dumps(current_bvp.get('counts',current_bvp.get('acquisition_evidence',{}).get('counts',{})),sort_keys=True)}`.")
         lines.append("- Acquisition failures are not model skips. Downstream model/impact authorization remains unchanged; retired prewarm stderr is excluded.")
         lines.append("")
-    lines.append("## BvP Impact")
-    lines.append(provenance("BvP Impact"))
-    lines.append(
-        f"- Label date: `{bvp_impact.get('label_date','n/a')}` | requested slate date: "
-        f"`{bvp_impact.get('requested_slate_date') or bvp_impact.get('label_date','n/a')}` | "
-        f"rows evaluated `{bvp_impact.get('rows_evaluated','n/a')}` "
-        f"of `{bvp_impact.get('rows_total_slate','n/a')}`"
-    )
-    lines.append(
-        f"- Non-zero probability deltas: `{bvp_impact.get('rows_nonzero_delta','n/a')}` | "
-        f"mean abs delta `{_pct(bvp_impact.get('mean_abs_delta_prob'))}` | "
-        f"max abs delta `{_pct(bvp_impact.get('max_abs_delta_prob'))}`"
-    )
-    top_prop = bvp_impact.get("top_prop_impact") or {}
-    if top_prop:
-        lines.append(
-            f"- Top impacted prop type: `{top_prop.get('prop_type')}` "
-            f"(rows `{top_prop.get('rows')}`, mean abs delta `{_pct(top_prop.get('mean_abs_delta_prob'))}`)"
-        )
-    lines.append("")
-
     lines.append("## Hits Environment & Matchups")
     lines.append(provenance("Hits Environment & Matchups"))
     if hits_env.get("fallback_used"):
@@ -3091,28 +2797,6 @@ def build_markdown(
             )
     lines.append("")
 
-    lines.append("## Legacy Player-Prop Workspace Staging")
-    lines.append(provenance("Legacy Player-Prop Workspace Staging"))
-    lines.append("- This is the old player-prop staging service, not the certified moneyline panel mounted on `/mlb/today`.")
-    lines.append(f"requested_slate_date: {today_workspace.get('requested_slate_date')}")
-    lines.append(f"active_slate_date: {today_workspace.get('active_slate_date')}")
-    lines.append(f"row_count: {today_workspace.get('row_count')}")
-    lines.append(f"last_updated: {today_workspace.get('last_updated')}")
-    ws_status = str(today_workspace.get("status") or "fail").upper()
-    lines.append("")
-    lines.append(f"Status: {ws_status}")
-    if ws_status != "PASS":
-        lines.append(f"Reason: {today_workspace.get('reason') or 'unknown'}")
-        diag = today_workspace.get("diagnostics") or {}
-        if diag:
-            lines.append(f"attempted_function: {diag.get('attempted_function')}")
-            lines.append(f"attempted_url: {diag.get('attempted_url')}")
-            lines.append(f"exception_type: {diag.get('exception_type') or 'n/a'}")
-            lines.append(f"exception_message: {diag.get('exception_message') or 'n/a'}")
-            lines.append(f"failure_classification: {diag.get('failure_classification') or 'n/a'}")
-            lines.append(f"retry_attempted: {diag.get('retry_attempted')}")
-            lines.append(f"retry_succeeded: {diag.get('retry_succeeded')}")
-    lines.append("")
     _append_hits05_full_spine_section(lines, hits05_full_spine, ops_brief_md_path=ops_brief_md_path)
     _append_betonline_capture_integrity_section(lines, betonline_capture_integrity, ops_brief_md_path=ops_brief_md_path)
     _append_rolling_candidate_obs_section(lines, rolling_candidate_obs, ops_brief_md_path=ops_brief_md_path)

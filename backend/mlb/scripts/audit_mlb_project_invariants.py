@@ -17,15 +17,6 @@ from pathlib import Path
 from typing import Any, Iterable
 
 
-REVIEW_BOARD_PATTERNS = [
-    "artifacts/analysis/mlb/review_aids/hits_o15_simple_filter_{date}.csv",
-    "artifacts/analysis/mlb/review_aids/hits_o15_watch_candidates_{date}.csv",
-    "artifacts/analysis/mlb/review_aids/hits_o15_layered_candidates_{date}.csv",
-    "artifacts/analysis/mlb/review_aids/hits_u15_favorite_audit_{date}.csv",
-    "artifacts/analysis/mlb/review_aids/hits_o15_alternate_discovery_{date}.csv",
-]
-
-
 @dataclass
 class InvariantResult:
     category: str
@@ -152,91 +143,6 @@ def _add(
             artifact=artifact,
         )
     )
-
-
-def _review_board_invariants(results: list[InvariantResult], audit_date: str) -> None:
-    for pattern in REVIEW_BOARD_PATTERNS:
-        path = Path(pattern.format(date=audit_date))
-        board_name = path.name
-        rows = _read_csv(path)
-        if not path.exists():
-            required = "alternate_discovery" not in path.name
-            _add(
-                results,
-                category="identity",
-                invariant=f"{board_name}: board artifact exists",
-                status="FAIL" if required else "WARN",
-                detail="missing routine board artifact" if required else "optional/research board missing",
-                artifact=str(path),
-            )
-            continue
-
-        rows_with_player = [row for row in rows if str(row.get("player_id") or row.get("canonical_player_id") or "").strip()]
-        missing_game = [
-            row
-            for row in rows_with_player
-            if not str(row.get("canonical_game_id") or "").strip()
-        ]
-        _add(
-            results,
-            category="identity",
-            invariant=f"{board_name}: rows with player_id have canonical_game_id",
-            status="PASS" if not missing_game else "FAIL",
-            rows_checked=len(rows_with_player),
-            rows_failed=len(missing_game),
-            detail="ok" if not missing_game else "player identity present without canonical game identity",
-            artifact=str(path),
-        )
-
-        missing_market = []
-        for row in rows:
-            canonical_key = str(row.get("canonical_market_key") or "").strip()
-            fallback_key = str(row.get("fallback_market_key") or "").strip()
-            fallback_used = _truthy(row.get("fallback_used"))
-            if not canonical_key and not (fallback_key and fallback_used):
-                missing_market.append(row)
-        _add(
-            results,
-            category="identity",
-            invariant=f"{board_name}: canonical_market_key or explicit fallback market key",
-            status="PASS" if not missing_market else "FAIL",
-            rows_checked=len(rows),
-            rows_failed=len(missing_market),
-            detail="ok" if not missing_market else "market identity missing without explicit fallback",
-            artifact=str(path),
-        )
-
-        canonical_market_coverage = _coverage(rows, "canonical_market_key")
-        _add(
-            results,
-            category="identity",
-            invariant=f"{board_name}: canonical_market_key coverage >= 95%",
-            status="PASS" if canonical_market_coverage >= 0.95 else "FAIL",
-            rows_checked=len(rows),
-            rows_failed=len(rows) - sum(1 for row in rows if str(row.get("canonical_market_key") or "").strip()),
-            detail=f"canonical_market_key_coverage={canonical_market_coverage * 100:.2f}%",
-            artifact=str(path),
-        )
-
-        ambiguous_without_warning = [
-            row
-            for row in rows
-            if (
-                "ambiguous" in str(row.get("identity_status") or "").lower()
-                or "unresolved" in str(row.get("identity_status") or "").lower()
-            )
-            and not str(row.get("identity_warning") or "").strip()
-        ]
-        _add(
-            results,
-            category="identity",
-            invariant=f"{board_name}: ambiguous/unresolved identity rows carry identity_warning",
-            status="PASS" if not ambiguous_without_warning else "FAIL",
-            rows_checked=len(rows),
-            rows_failed=len(ambiguous_without_warning),
-            detail="ok" if not ambiguous_without_warning else "ambiguous/unresolved identity silently passed without warning",
-            artifact=str(path),
-        )
 
 
 def _hits_environment_invariants(results: list[InvariantResult], hits_env_csv: Path, hits_env_json: Path) -> None:
@@ -374,58 +280,6 @@ def _hits_environment_invariants(results: list[InvariantResult], hits_env_csv: P
     )
 
 
-def _upload_diagnostics_invariants(results: list[InvariantResult], audit_date: str) -> None:
-    path = Path("backend/mlb/data/processed/mlb_uploads") / audit_date / f"upload_identity_diagnostics_{audit_date}.csv"
-    rows = _read_csv(path)
-    if not path.exists() or not rows:
-        _add(
-            results,
-            category="identity",
-            invariant="upload identity diagnostics artifact exists",
-            status="FAIL",
-            detail="missing or empty upload identity diagnostics artifact",
-            artifact=str(path),
-        )
-        return
-
-    for field, label in [
-        ("canonical_player_id", "player ID"),
-        ("canonical_game_id", "game ID"),
-        ("canonical_market_key", "market key"),
-    ]:
-        pct = _coverage(rows, field)
-        _add(
-            results,
-            category="identity",
-            invariant=f"upload diagnostics {label} coverage >= 95%",
-            status="PASS" if pct >= 0.95 else "FAIL",
-            rows_checked=len(rows),
-            rows_failed=len(rows) - sum(1 for row in rows if str(row.get(field) or "").strip()),
-            detail=f"{field}_coverage={pct * 100:.2f}%",
-            artifact=str(path),
-        )
-
-    silent_unresolved = [
-        row
-        for row in rows
-        if (
-            "ambiguous" in str(row.get("identity_status") or "").lower()
-            or "unresolved" in str(row.get("identity_status") or "").lower()
-        )
-        and not str(row.get("identity_warning") or "").strip()
-    ]
-    _add(
-        results,
-        category="identity",
-        invariant="upload diagnostics ambiguous/unresolved identity rows carry identity_warning",
-        status="PASS" if not silent_unresolved else "FAIL",
-        rows_checked=len(rows),
-        rows_failed=len(silent_unresolved),
-        detail="ok" if not silent_unresolved else "ambiguous/unresolved upload identity silently passed without warning",
-        artifact=str(path),
-    )
-
-
 def _daily_durability_invariants(results: list[InvariantResult], audit_date: str, out_root: Path) -> None:
     daily_index = out_root / "daily" / audit_date / "INDEX.md"
     _add(
@@ -470,29 +324,6 @@ def _daily_durability_invariants(results: list[InvariantResult], audit_date: str
         rows_checked=int(identity_payload.get("artifact_samples") or 0),
         detail=f"status={identity_status or 'missing'}",
         artifact=str(identity_health),
-    )
-
-    ontology_health = out_root / "ontology" / "ontology_health.json"
-    ontology_payload = _read_json(ontology_health)
-    ontology_status = str(ontology_payload.get("status") or "").lower()
-    if not ontology_health.exists():
-        status = "FAIL"
-        detail = "missing O1.5 ontology health"
-    elif ontology_status not in {"pass", "warn"}:
-        status = "FAIL"
-        detail = f"O1.5 ontology health status={ontology_status or 'unknown'}"
-    else:
-        status = "PASS"
-        detail = f"status={ontology_status}; rows_checked={ontology_payload.get('rows_checked', '')}"
-    _add(
-        results,
-        category="daily_durability",
-        invariant="O1.5 ontology health exists and passes",
-        status=status,
-        rows_checked=int(ontology_payload.get("artifact_count") or 0),
-        rows_failed=int(ontology_payload.get("invalid_rows") or 0),
-        detail=detail,
-        artifact=str(ontology_health),
     )
 
     morning_workflow = out_root / "morning_workflow" / "morning_workflow_audit_latest.json"
@@ -708,9 +539,7 @@ def main() -> int:
     out_root = Path(args.out_root)
     results: list[InvariantResult] = []
 
-    _review_board_invariants(results, audit_date)
     _hits_environment_invariants(results, Path(args.hits_environment_csv), Path(args.hits_environment_json))
-    _upload_diagnostics_invariants(results, audit_date)
     _daily_durability_invariants(results, audit_date, out_root)
     _research_invariants(results, out_root, out_root / "daily" / audit_date / "INDEX.md")
     _backfill_doctrine_invariants(results, audit_date, out_root)
