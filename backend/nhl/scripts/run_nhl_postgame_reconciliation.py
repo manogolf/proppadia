@@ -1633,7 +1633,8 @@ def main() -> int:
         try:
             source_binding = resolve_operational_sources(
                 slate_date=slate_date, operational_root=args.operational_root,
-                allow_missing_active_final_for_prior_learning=args.prior_learning)
+                allow_missing_active_final_for_prior_learning=args.prior_learning,
+                allow_missing_final_for_resilient=True)
             if args.player_identity_acquisition:
                 typed_sources = _parse_response_source_specs(args.response_source)
                 if (slate_date != SEP24_PLAYER_IDENTITY_SLATE

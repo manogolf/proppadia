@@ -33,7 +33,7 @@ def canonical_atomic_identity(lane: str, row: dict[str, Any]) -> str:
                     str(row["model_identity"]), str(row["feature_contract_identity"])]
     elif lane == "SOG":
         identity = [lane, game_id, int(row["player_id"]), str(row["contract_arm"]),
-                    str(row["contract_sha256"])]
+                    str(row["contract_sha256"]), float(row["line"])]
     elif lane == "POINTS":
         identity = [lane, game_id, int(row["player_id"]), str(row["model_version"]),
                     str(row["probability_construction"])]
@@ -53,8 +53,11 @@ def validate_atomic_group(lane: str, rows: list[dict[str, Any]]) -> None:
     phases = {str(row.get("phase")) for row in rows}
     timestamps = {str(row.get("prediction_timestamp_utc") or
                        row.get("prediction_creation_time_utc")) for row in rows}
+    cutoffs = {str(row.get("feature_cutoff_timestamp_utc") or
+                    row.get("input_cutoff_timestamp_utc")) for row in rows}
     run_ids = {str(row.get("run_id") or row.get("source_run_id")) for row in rows}
-    if len(phases) != 1 or len(timestamps) != 1 or len(run_ids) != 1:
+    if (len(phases) != 1 or len(timestamps) != 1 or len(run_ids) != 1
+            or len(cutoffs) != 1 or "None" in cutoffs):
         raise RuntimeError("RESILIENT_FINALIZATION_ATOMIC_GROUP_MIXED_SOURCE")
     phase = next(iter(phases))
     if phase not in LANE_PHASES.get(lane, frozenset()):
@@ -121,8 +124,15 @@ def select_latest_atomic_sources(
         if reason is None:
             feature_at = _utc(candidate.get("feature_cutoff_timestamp_utc"), "feature_cutoff")
             published_at = _utc(candidate.get("durable_publication_timestamp_utc"), "durable_publication")
+            prediction_at = _utc(candidate.get("prediction_timestamp_utc"), "prediction_timestamp")
             if feature_at >= starts[game_id]:
                 reason = "FEATURE_CUTOFF_NOT_PREGAME"
+            elif prediction_at >= starts[game_id]:
+                reason = "PREDICTION_NOT_PREGAME"
+            elif feature_at > prediction_at:
+                reason = "FEATURE_CUTOFF_AFTER_PREDICTION"
+            elif prediction_at > published_at:
+                reason = "PREDICTION_AFTER_DURABLE_PUBLICATION"
             elif published_at >= starts[game_id]:
                 reason = "PUBLICATION_NOT_PREGAME"
             elif feature_at > published_at:
@@ -156,12 +166,17 @@ def select_latest_atomic_sources(
             "source_manifest_sha256": str(winner["source_manifest_sha256"]),
             "observer_receipt_path": str(winner["observer_receipt_path"]),
             "observer_receipt_sha256": str(winner["observer_receipt_sha256"]),
+            "observer_parent_receipt_path": winner.get("observer_parent_receipt_path"),
+            "observer_parent_receipt_sha256": winner.get("observer_parent_receipt_sha256"),
             "certificate_sha256": str(winner["certificate_sha256"]),
             "roster_source_sha256": winner.get("roster_source_sha256"),
             "feature_cutoff_timestamp_utc": str(winner["feature_cutoff_timestamp_utc"]),
+            "prediction_timestamp_utc": str(winner["prediction_timestamp_utc"]),
             "durable_publication_timestamp_utc": str(winner["durable_publication_timestamp_utc"]),
             "prediction_payload_sha256": str(winner["prediction_payload_sha256"]),
             "tie_break": "LEXICOGRAPHIC_SOURCE_PATH_IDENTICAL_PAYLOAD" if len(tied) > 1 else None,
+            "source_run_id": winner.get("source_run_id"),
+            "source_row_identity": winner.get("source_row_identity"),
         })
     selected_keys = {item["atomic_prediction_identity"] for item in selected}
     for game_id in games:

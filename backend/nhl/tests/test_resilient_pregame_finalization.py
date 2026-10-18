@@ -22,6 +22,7 @@ def candidate(*, key="p10", game=10, phase="MIDDAY", published="2026-10-18T19:00
         "observer_receipt_sha256": "receipt", "certificate_sha256": "certificate",
         "roster_source_sha256": "roster", "model_identity": "MODEL_V1",
         "feature_contract_identity": "FEATURE_V1", "feature_cutoff_timestamp_utc": published,
+        "prediction_timestamp_utc": published,
         "durable_publication_timestamp_utc": published,
         "prediction_payload_sha256": payload,
     }
@@ -108,6 +109,7 @@ class ResilientPregameSelectionTests(unittest.TestCase):
                             canonical_atomic_identity("MONEYLINE", v3))
         points_rows = [{"run_id": "r1", "phase": "MIDDAY",
                         "prediction_timestamp_utc": "2026-10-18T19:00:00Z",
+                        "feature_cutoff_timestamp_utc": "2026-10-18T18:00:00Z",
                         "line": line} for line in (0.5, 1.5, 2.5)]
         validate_atomic_group("POINTS", points_rows)
         points_rows[-1]["run_id"] = "r2"

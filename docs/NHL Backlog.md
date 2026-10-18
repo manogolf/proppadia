@@ -862,7 +862,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.17 Resolve final-pregame evidence per game without rewriting captures
 
-- Status: **IN PROGRESS — common selector and forward proof linkage implemented; reconciliation adapters and separate grading population remain open**.
+- Status: **IMPLEMENTED — reconciliation source discovery, selection, and separate grading outputs added; natural-run acceptance remains open**.
 - Evidence: mainline, SOG, Points, and Saves AUTO phase selection is keyed to
   the earliest unstarted game and its 20–75 minute window. Their publication
   eligibility and final durability checks are per game. However, each lane's
@@ -890,20 +890,47 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   publication; exact-time identical payloads break ties by lexical source
   path, while conflicting ties fail. Prediction scoring is separate from
   quote matching/returns. No retrospective grade rewrite is allowed.
-- Implemented foundation: `backend/nhl/postgame_reconcile/resilient_finalization.py`
-  defines lane phases, role-aware atomic identity helpers, atomic group checks,
-  proof-required source selection, chronology, empty/partial coverage, and
-  deterministic ties. New Points/Saves/SOG/mainline captures bind checked
-  certificate and roster evidence into manifest-covered metadata. These
-  changes do not yet invoke the selector from reconciliation.
-- Remaining integration: discover and validate lane source packages and
-  matching receipts, verify date-bound certificates and roster/source
-  manifests, materialize selected rows without copying prediction values into
-  source captures, emit separate resilient grade/index files and denominators,
-  and prove legacy output equivalence. Historical captures without proof may
-  qualify only when a matching retained observer receipt proves it; never
-  infer missing certificate evidence.
-- Required before completion: tests for phase combinations, missed windows,
+- Implemented: reconciliation discovers sources through retained daily parent
+  receipts and mainline observer receipts linked to Points/Saves/SOG child
+  receipts. It verifies source manifests and row hashes, exact preceding
+  `CERTIFIED_FINAL` certificate, complete date-bound roster evidence, phase,
+  model/contract identity, and prestart feature/publication times. Moneyline
+  production V3 and shadow V2 remain separate, as do Puck Line and SOG arms.
+  Points ladders (0.5/1.5/2.5) and Saves distributions (18.5–30.5) are selected
+  as complete single-source groups. Invalid present groups are excluded with
+  explicit reasons; corrupt linked packages and conflicting ties fail closed.
+- Reconciliation now emits `resilient_finalization_index.json`, separate
+  `graded_resilient_*.csv` files, missing-prediction surfaces, and summary
+  denominators. Official outcome certification remains prior to grading.
+  Legacy FINAL_PREGAME resolver defaults and `graded_*.csv` grading logic are
+  preserved; the reconciliation command has a separate resilient mode that
+  permits a missing final card to be classified ungradeable while selecting
+  only independently verified resilient evidence. Duplicate/corrupt present
+  final cards remain blocking. No original source capture or historical grade
+  is rewritten.
+- Historical source artifacts without verifiable certificate/roster receipt
+  linkage remain unqualified. No missing proof is inferred. Quote attachment
+  and return evaluation remain separate from prediction-quality scoring.
+- Current discoverability limit: Moneyline/Puck Line outputs linked by daily
+  parent receipts can qualify when their full feature cutoff is bound. A
+  standalone mainline observer capture with no distinct feature-cutoff proof
+  is explicitly excluded as `RESILIENT_CROSS_MARKET_FEATURE_CUTOFF_UNPROVEN`;
+  prediction timestamps are not substituted. Historical SOG packages without
+  durable-write evidence are excluded. The SOG producer now writes a
+  manifest-bound write timestamp and completion marker prospectively.
+- Verification: focused selector and adapter tests cover receipt-bound lane
+  grading for Moneyline production/shadow, Puck Line, SOG, Points, and Saves,
+  coherent Points/Saves groups, source lineage, empty coverage, chronology, and
+  legacy certificate/observer gates.
+  Focused run: 39 passed and 10 subtests passed. The NHL suite excluding the
+  retained-receipt-count assertion and PostgreSQL integration test passed 465
+  tests and 26 subtests. The former expected 45 retained receipts but found 47;
+  the latter could not resolve its configured host in the sandbox. It was not
+  retried with elevated access because it performs database writes, which this
+  task prohibits.
+  Implementation is not yet operationally validated on a naturally reconciled
+  slate with resilient sources present.
+- Remaining acceptance: tests for phase combinations, missed windows,
   staggered starts, later
   game capture after earlier start, no rewriting or duplicate final evidence,
   deterministic selection and conflicts, exact-one reconciliation, partial

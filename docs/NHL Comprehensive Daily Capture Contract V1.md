@@ -78,25 +78,54 @@ contracts remain separate. Points selects a complete player-game ladder and
 Saves a complete goalie-game conditional distribution from one observation.
 
 The common outcome-independent selector is implemented in
-`backend/nhl/postgame_reconcile/resilient_finalization.py`. It selects the
-latest eligible durable publication per atomic identity; equal-time identical
-payloads use lexicographic source path, while differing payloads fail closed.
-It records the full canonical game set, missing coverage, proof references,
-source phase, hashes, model/feature identities, and chronology. It has no
-outcome input. Forward Points, Saves, SOG, and mainline producers now retain
-the checked prior-day certificate and current-slate roster evidence in their
-manifest-covered source metadata. Historical sources without embedded proof
-must use a verifiable matching retained observer receipt; missing proof is
-not inferred.
+`backend/nhl/postgame_reconcile/resilient_finalization.py` and is invoked by
+reconciliation. It selects the latest eligible durable publication per
+atomic identity; equal-time identical payloads use lexicographic source path,
+while differing payloads fail closed. It records the full canonical game set,
+missing coverage, proof references, source phase, hashes, model/feature
+identities, and chronology. It has no outcome input.
 
-**Integration limitation:** lane-specific source discovery, validation,
-materialization of selected prediction rows, separate `RESILIENT_PREGAME`
-grade files and denominators, and legacy-output equivalence are not yet
-implemented. The selector is not yet invoked by reconciliation. Existing
-FINAL_PREGAME source resolution and grades remain unchanged. No historical
-grade is rewritten. Market quote matching and returns remain separate from
-prediction scoring. See backlog P2.17 for required integration and acceptance
-work.
+The reconciliation adapter discovers sources only through retained daily
+parent receipts or a mainline observer receipt that links the independent
+Points/Saves/SOG child receipt. It verifies source manifests, prior-day
+`CERTIFIED_FINAL` packages, date-bound complete roster packages where
+applicable, source identity, atomic ladder/distribution integrity, and
+per-game feature/publication chronology. Supported independent sources are
+Moneyline/Puck Line `MIDDAY`, `FINAL_PREGAME`, and `REFRESH`; SOG, Points, and
+Saves `MIDDAY` and `FINAL_PREGAME`. Moneyline V3 production and V2 shadow,
+Puck Line, SOG contract arms, Points model ladders, and Saves conditional
+distributions remain separate atomic populations.
+
+Current source-proof boundary: daily-parent-bound Moneyline/Puck Line outputs
+and observer-parent-bound Points/Saves/SOG sources are discoverable. A
+standalone mainline Moneyline/Puck Line observer receipt that lacks a distinct
+feature-cutoff timestamp is recorded as
+`RESILIENT_CROSS_MARKET_FEATURE_CUTOFF_UNPROVEN`; its prediction timestamp is
+not substituted for missing cutoff proof. Historical SOG packages without a
+durable-write/completion timestamp are also unqualified. The SOG producer now
+writes and hash-binds `actual_write_timestamp_utc` and
+`RUN_COMPLETE.completed_at_utc` for future captures.
+
+The append-only reconciliation package now includes
+`resilient_finalization_index.json` and separate `graded_resilient_*.csv`
+artifacts with source, parent receipt, certificate, roster, and payload hashes.
+Its summary reports lane coverage and per-output denominators. The established
+`graded_*.csv` FINAL_PREGAME population and its resolver remain distinct. The
+command uses an explicit resilient mode to let official outcome reconciliation
+continue when a FINAL_PREGAME card is absent; the absent legacy prediction is
+classified ungradeable, while resilient selection independently uses only
+verified retained evidence. Duplicate, corrupt, contradictory, or invalid
+present cards remain blocking. Quote matching and observed-price returns are
+not part of prediction-quality grades. No historical grade or source capture
+is rewritten.
+
+Historical sources without embedded readiness proof qualify only when an
+exact linked retained observer/daily receipt proves the certificate and roster
+evidence. Otherwise the index records no qualifying source and an explicit
+coverage gap; it does not infer proof. Natural-run acceptance still requires
+receipt-backed nonempty sources in each lane, staggered-puck coverage, and a
+comparison proving the legacy grade files remain byte-identical. See backlog
+P2.17 for lane-level status and remaining acceptance work.
 
 Prior-date reconciliation is the first substantive daily operation after the
 database connectivity check. Daily work may continue only with a verified,
