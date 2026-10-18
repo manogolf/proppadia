@@ -133,6 +133,7 @@ MLB_ENABLE_HITS05_LIVE_PA_SHADOW="${MLB_ENABLE_HITS05_LIVE_PA_SHADOW:-1}"
 
 MLB_RUN_TS_UTC="$(date -u +%Y%m%dT%H%M%SZ)"
 MLB_RUN_TAG="local_daily_${MLB_RUN_TS_UTC}"
+MLB_SLATE_OUTPUT_GATE_STATUS_FILE="artifacts/ops/mlb_predictive_gate_status/${MLB_DATE_ET}/${MLB_RUN_TAG}.txt"
 MLB_ROLLING_CHECK_OUTPUT="artifacts/ops/mlb_rolling_integrity_receipts/${MLB_DATE_ET}/${MLB_RUN_TAG}.log"
 MLB_BVP_INLINE_RESULT="artifacts/ops/bvp_inline_v1/results/${MLB_DATE_ET}/${MLB_RUN_TAG}.json"
 MLB_BVP_INLINE_RC=0
@@ -1349,7 +1350,8 @@ if [[ "$hits05_full_board_shadow_rc" -ne 0 ]]; then
   echo "[$(date -u +%FT%TZ)] WARN Hits 0.5 full-board shadow hook failed rc=${hits05_full_board_shadow_rc}; continuing normal daily refresh without retrospective reconstruction" >&2
 fi
 
-bin/mlb_slate_output_guarded.sh MLB_DATE="$MLB_DATE_ET"
+MLB_SLATE_OUTPUT_GATE_STATUS_FILE="$MLB_SLATE_OUTPUT_GATE_STATUS_FILE" \
+  bin/mlb_slate_output_guarded.sh MLB_DATE="$MLB_DATE_ET"
 
 # Keep reconcile-compatible snapshot in sync and preserve run-specific odds snapshot.
 if [[ -f "${MLB_ODDS_CANONICAL_JSON}" ]]; then
@@ -1517,7 +1519,10 @@ fi
 
 echo "[$(date -u +%FT%TZ)] START mlb-today workspace build (slate_date=${MLB_DATE_ET})"
 set +e
-.venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py --slate-date "$MLB_DATE_ET" --odds-root "backend/mlb/exports/odds_history"
+.venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py \
+  --slate-date "$MLB_DATE_ET" \
+  --odds-root "backend/mlb/exports/odds_history" \
+  --qualification-status-file "$MLB_SLATE_OUTPUT_GATE_STATUS_FILE"
 today_workspace_build_rc=$?
 
 today_workspace_mv_rc=0
@@ -1533,7 +1538,7 @@ if [[ "$today_workspace_build_rc" -eq 0 ]]; then
     today_workspace_mv_rc=$?
   fi
 elif [[ "$today_workspace_build_rc" -eq 3 ]]; then
-  echo "[$(date -u +%FT%TZ)] SKIP mlb-today workspace build and materialized view refresh: NO_QUALIFIED_PREDICTION_SLATE (NO_QUALIFIED_MLB_MODEL)"
+  echo "[$(date -u +%FT%TZ)] SKIP mlb-today workspace build and materialized view refresh status=EXPECTED_SKIP classification=NO_QUALIFIED_PREDICTION_SLATE reason=NO_QUALIFIED_MLB_MODEL"
 else
   echo "[$(date -u +%FT%TZ)] WARN mlb-today workspace build failed rc=${today_workspace_build_rc}; continuing to daily reports/uploads" >&2
 fi

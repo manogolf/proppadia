@@ -159,6 +159,28 @@ restricted URL, process-scoped opt-in, role/function SQL, captured failure
 status, and absence of an owner-level fallback. Installation follows the
 procedure in `docs/Prod12 Automation Runbook.md` and remains a separate step.
 
+### Qualification-aware workspace handling
+
+The guarded production slate-output command can write a run-scoped status file:
+`SKIPPED operation=production_slate_generation` for the explicit
+`NO_QUALIFIED_MLB_MODEL` gate, `SUCCESS operation=production_slate_generation`
+after qualified slate generation, or `FAILED ...` for other producer failures.
+The tracked daily wrapper now requests this status file and passes it to the
+workspace builder. Only the exact `SKIPPED` status bypasses workspace file
+lookup and returns the expected-skip exit code; the wrapper then skips both
+staging and the restricted refresh, leaving existing materialized views
+untouched. The workspace log classifies the result as `EXPECTED_SKIP`.
+`SUCCESS` continues through the normal file-backed build and
+restricted refresh. If qualified generation succeeded but the slate or wide
+file is missing, the workspace build still fails and the wrapper does not
+refresh the views.
+
+This downstream status handoff is committed in the tracked wrapper but remains
+separate from installation. The installed LaunchAgent wrapper must be updated
+through the reviewed runbook installation procedure before the operational
+path receives the explicit expected-skip log. No gate criteria, prediction
+logic, slate generation, database route, or schedule changed for this handling.
+
 Before an integrated daily run, review the rollback, verify production
 owner/index/role state again, capture source and outcome fingerprints, and
 explicitly authorize installation of the tracked wrapper. Then verify

@@ -31,8 +31,9 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-MODEL_AUTHORITY_PATH = REPO_ROOT / "backend/mlb/config/model_authority.json"
 SKIPPED_NO_QUALIFIED_PREDICTION_SLATE = 3
+QUALIFICATION_SKIP_STATUS = "SKIPPED operation=production_slate_generation"
+QUALIFICATION_SUCCESS_STATUS = "SUCCESS operation=production_slate_generation"
 
 from backend.app.services.mlb.market_odds_service import get_market_to_prop_map
 from backend.mlb.scripts.build_mlb_reconcile_rows import (
@@ -58,12 +59,6 @@ class SnapshotRef:
 
 def _et_today() -> str:
     return datetime.now(ET).date().isoformat()
-
-
-def _model_authority_status() -> Optional[str]:
-    payload = json.loads(MODEL_AUTHORITY_PATH.read_text(encoding="utf-8"))
-    status = payload.get("authority_status")
-    return str(status) if status is not None else None
 
 
 def _clean_str(value: object) -> Optional[str]:
@@ -632,20 +627,36 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     ap.add_argument("--slate-csv", default="", help="Optional explicit path to mlb_slate_output.csv.")
     ap.add_argument("--wide-csv", default="", help="Optional explicit path to mlb_predictions_wide_calibrated.csv.")
     ap.add_argument("--snapshot-json", default="", help="Optional explicit odds snapshot json to load.")
+    ap.add_argument(
+        "--qualification-status-file",
+        default="",
+        help="Status file written by the guarded production slate-output command.",
+    )
     args = ap.parse_args(list(argv) if argv is not None else None)
 
     slate_date = str(args.slate_date).strip()
 
-    # Current slate outputs are model-derived. When production authority blocks
-    # all models, odds and schedule artifacts alone are not sufficient inputs to
-    # the existing workspace contract; report an intentional skip before file
-    # lookup or any database connection is attempted.
-    if _model_authority_status() == "NO_QUALIFIED_MLB_MODEL":
-        print(
-            "[mlb-today-workspace] SKIP status=NO_QUALIFIED_PREDICTION_SLATE "
-            f"reason=NO_QUALIFIED_MLB_MODEL slate_date={slate_date}"
-        )
-        return SKIPPED_NO_QUALIFIED_PREDICTION_SLATE
+    # The guarded slate producer's status is authoritative for this run. Only
+    # its exact qualification skip bypasses input lookup; a successful gate
+    # still requires the normal date-matched files below.
+    qualification_status_file = str(args.qualification_status_file).strip()
+    if qualification_status_file:
+        status_path = Path(qualification_status_file).expanduser()
+        if not status_path.is_file():
+            raise RuntimeError(f"qualification status file not found: {status_path}")
+        qualification_status = status_path.read_text(encoding="utf-8").strip()
+        if qualification_status == QUALIFICATION_SKIP_STATUS:
+            print(
+                "[mlb-today-workspace] SKIP status=EXPECTED_SKIP "
+                "classification=NO_QUALIFIED_PREDICTION_SLATE "
+                f"reason=NO_QUALIFIED_MLB_MODEL slate_date={slate_date}"
+            )
+            return SKIPPED_NO_QUALIFIED_PREDICTION_SLATE
+        if qualification_status != QUALIFICATION_SUCCESS_STATUS:
+            raise RuntimeError(
+                "unexpected production slate qualification status: "
+                f"{qualification_status!r}"
+            )
 
     day_dir = Path(str(args.odds_root)).expanduser() / slate_date
     if not day_dir.exists():

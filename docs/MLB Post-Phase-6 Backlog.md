@@ -688,21 +688,30 @@ writer validation does not authorize a hosted cutover or a different writer.
   not a no-game date. The workspace build began at 23:38:48Z and requires the
   archived model slate and wide prediction files. The postseason phase remains
   classified from the source as `gameType=L`.
-- The workspace consumer now checks model authority before looking up input
-  files or opening a database connection. Under `NO_QUALIFIED_MLB_MODEL`, it
-  emits `SKIP status=NO_QUALIFIED_PREDICTION_SLATE` and returns a distinct
-  status. The tracked daily wrapper recognizes that status and records an
-  intentional workspace and view-refresh skip. Other errors retain the existing
-  warning path; populated qualified inputs retain the existing staging and
-  restricted refresh path. No predictions, placeholder files, or market rows
-  are fabricated. Offline regression coverage checks this exact missing-file
-  case and retained populated slate/wide inputs (134 slate rows and 128 wide
-  rows after the workspace's identity deduplication). The installed wrapper
-  was not changed; install the reviewed tracked wrapper before expecting the
-  natural run log to distinguish this intentional skip from a generic build
-  failure. After a qualified model produces the date-matched files, verify
-  nonzero staging, `SET ROLE proppadia_mlb_ingest`, the refresh function's
-  four-view order, and `/mlb/today` readback.
+- The guarded slate-output command's existing status-file contract is now
+  carried into the workspace build. The daily wrapper supplies a run-scoped
+  status path; the guard writes `SKIPPED operation=production_slate_generation`
+  only when it catches the explicit `NO_QUALIFIED_MLB_MODEL` gate, and writes
+  `SUCCESS operation=production_slate_generation` on qualified completion.
+  The workspace builder skips file lookup only for the exact skip status,
+  reports `status=EXPECTED_SKIP`, and returns a distinct exit code. The wrapper then skips both workspace
+  staging and view refresh, preserving previously populated views. A success
+  status follows the existing path; missing slate or wide files still fail
+  through the existing warning path and do not refresh views. No model gate,
+  prediction, or slate-generation behavior changed, and no placeholder files
+  or market rows are created. Offline regression coverage exercises qualified
+  build success, explicit gate skip, and unexpected missing input, plus the
+  guard's `SUCCESS`/`SKIPPED` status contract. Retained file parsing still
+  confirms 134 slate rows and 128 wide rows after identity deduplication.
+- The tracked wrapper requires separate installation for the operational
+  LaunchAgent to consume this status handoff. It was not installed. At review,
+  tracked and installed wrapper hashes differ; the installed copy has the
+  restricted refresh route but lacks the new status-file handoff. After
+  separately authorized installation, verify the next natural run logs an
+  expected qualification skip without refreshing views. After a qualified
+  model produces date-matched files, verify nonzero staging, `SET ROLE
+  proppadia_mlb_ingest`, the refresh function's four-view order, and
+  `/mlb/today` readback.
 - Restricted writer receipts now capture separate `session_user` and
   `current_user`, the `SET ROLE proppadia_mlb_ingest` transition, and an
   explicit restricted-identity verification flag. Stat-derived date receipts

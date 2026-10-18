@@ -17,19 +17,21 @@ OPERATIONS_RUNBOOK = ROOT / "docs/Prod12 Automation Runbook.md"
 
 
 class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
-    def test_installed_wrapper_matches_tracked_source_after_install(self):
+    def test_pending_status_handoff_is_tracked_but_not_yet_installed(self):
         if not INSTALLED_WRAPPER.exists():
             self.skipTest(f"installed daily wrapper not present: {INSTALLED_WRAPPER}")
         if INSTALLED_WRAPPER.read_bytes() == TRACKED_WRAPPER.read_bytes():
             return
 
-        # Before the separately authorized installation, only the tracked copy
-        # should contain the new restricted refresh call.
+        # The prior installation contains the restricted refresh route, while
+        # the latest qualification-status handoff remains tracked only until a
+        # separately authorized installation.
         tracked = TRACKED_WRAPPER.read_text()
         installed = INSTALLED_WRAPPER.read_text()
         self.assertIn("SELECT mlb.refresh_today_workspace_views();", tracked)
-        self.assertNotIn("SELECT mlb.refresh_today_workspace_views();", installed)
-        self.assertIn("REFRESH MATERIALIZED VIEW mlb.today_market_snapshot;", installed)
+        self.assertIn("SELECT mlb.refresh_today_workspace_views();", installed)
+        self.assertIn("--qualification-status-file", tracked)
+        self.assertNotIn("--qualification-status-file", installed)
 
     def test_runbook_preserves_installed_wrapper_routing_recovery(self):
         runbook = OPERATIONS_RUNBOOK.read_text()
@@ -71,8 +73,27 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
 
     def test_today_workspace_refresh_is_scoped_fixed_and_has_no_owner_fallback(self):
         wrapper = TRACKED_WRAPPER.read_text()
+        self.assertIn(
+            'MLB_SLATE_OUTPUT_GATE_STATUS_FILE="artifacts/ops/mlb_predictive_gate_status/${MLB_DATE_ET}/${MLB_RUN_TAG}.txt"',
+            wrapper,
+        )
+        self.assertIn(
+            'MLB_SLATE_OUTPUT_GATE_STATUS_FILE="$MLB_SLATE_OUTPUT_GATE_STATUS_FILE" \\\n  bin/mlb_slate_output_guarded.sh MLB_DATE="$MLB_DATE_ET"',
+            wrapper,
+        )
+        self.assertIn(
+            '--qualification-status-file "$MLB_SLATE_OUTPUT_GATE_STATUS_FILE"',
+            wrapper,
+        )
+        self.assertIn(
+            'elif [[ "$today_workspace_build_rc" -eq 3 ]]; then\n'
+            '  echo "[$(date -u +%FT%TZ)] SKIP mlb-today workspace build and materialized view refresh status=EXPECTED_SKIP classification=NO_QUALIFIED_PREDICTION_SLATE reason=NO_QUALIFIED_MLB_MODEL"',
+            wrapper,
+        )
         command_start = wrapper.index('  if [[ -z "${MLB_INGEST_DATABASE_URL:-}" ]]')
-        command_end = wrapper.index("\n  fi\nelse\n", command_start) + len("\n  fi")
+        command_end = wrapper.index(
+            '\n  fi\nelif [[ "$today_workspace_build_rc" -eq 3 ]]', command_start
+        ) + len("\n  fi")
         command_block = wrapper[command_start:command_end]
         self.assertIn("SET ROLE proppadia_mlb_ingest;", command_block)
         self.assertIn("SELECT mlb.refresh_today_workspace_views();", command_block)
@@ -146,6 +167,61 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
             self.assertIn("captured_rc=78", missing.stdout)
             self.assertIn("MLB_INGEST_DATABASE_URL is required", missing.stderr)
             self.assertFalse(log.exists())
+
+    def test_slate_gate_adapter_exposes_existing_status_file_contract(self):
+        adapter = (ROOT / "bin/mlb_slate_output_guarded.sh").read_text()
+        guard = (ROOT / "bin/mlb_predictive_command_guarded.sh").read_text()
+        self.assertIn('status_args=(--status-file "${MLB_SLATE_OUTPUT_GATE_STATUS_FILE}")', adapter)
+        self.assertIn('write_status "SUCCESS operation=${operation}"', guard)
+        self.assertIn('write_status "SKIPPED operation=${operation}"', guard)
+        self.assertIn('write_status "FAILED operation=${operation} rc=${command_rc}"', guard)
+
+    def test_slate_gate_writes_success_and_explicit_skip_statuses(self):
+        with tempfile.TemporaryDirectory(prefix="mlb-slate-gate-status-") as temp_dir:
+            temp = Path(temp_dir)
+            fake_make = temp / "make"
+            fake_make.write_text(
+                "#!/bin/sh\n"
+                "if [ \"${GATE_TEST_MODE:-success}\" = skip ]; then\n"
+                "  echo 'MLBPredictiveModelBlocked: MLB_PREDICTIVE_MODEL_BLOCKED_NO_QUALIFIED_MODEL: operation=production_slate_generation' >&2\n"
+                "  exit 1\n"
+                "fi\n"
+                "exit 0\n"
+            )
+            fake_make.chmod(0o755)
+            status_file = temp / "gate_status.txt"
+            env = os.environ.copy()
+            env["PATH"] = f"{temp}:{env.get('PATH', '')}"
+            env["MLB_SLATE_OUTPUT_GATE_STATUS_FILE"] = str(status_file)
+
+            qualified = subprocess.run(
+                ["/bin/zsh", str(ROOT / "bin/mlb_slate_output_guarded.sh"), "MLB_DATE=2026-10-17"],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(qualified.returncode, 0, qualified.stdout + qualified.stderr)
+            self.assertEqual(
+                status_file.read_text().strip(),
+                "SUCCESS operation=production_slate_generation",
+            )
+
+            env["GATE_TEST_MODE"] = "skip"
+            skipped = subprocess.run(
+                ["/bin/zsh", str(ROOT / "bin/mlb_slate_output_guarded.sh"), "MLB_DATE=2026-10-17"],
+                cwd=ROOT,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(skipped.returncode, 0, skipped.stdout + skipped.stderr)
+            self.assertEqual(
+                status_file.read_text().strip(),
+                "SKIPPED operation=production_slate_generation",
+            )
 
     @unittest.skipUnless(shutil.which("make"), "GNU make is required")
     def test_wrapper_roster_and_bvp_calls_deliver_flag_to_only_the_child(self):
