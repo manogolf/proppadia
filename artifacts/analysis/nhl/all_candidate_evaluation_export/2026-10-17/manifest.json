@@ -1,0 +1,185 @@
+{
+  "candidate_count": 1637,
+  "candidate_policy_status": "NOT_APPLIED",
+  "created_from_existing_retained_evidence_only": true,
+  "limitations": [
+    "The row-level retained reconciliation sources do not include the separate prospective SOG production and fixed-blend captures or the puck-line challenger capture; those arms are not inferred from aggregate summaries.",
+    "Retained reconciliation attachments do not provide both source quote and observation timestamps. No quote qualifies for candidate_quotes.csv; all candidates have explicit coverage diagnostics.",
+    "Prediction and outcome rows are combined for evaluation convenience. Outcome fields are postgame append-bound fields and must not be used as pregame inputs."
+  ],
+  "market_counts": {
+    "goalie_saves": 104,
+    "moneyline_home": 4,
+    "player_points": 288,
+    "puck_line_full_game": 2,
+    "shots_on_goal": 1239
+  },
+  "market_model_coverage": {
+    "goalie_saves|NHL_GOALIE_SAVES_PHOENIX_V2|phoenix_v2_conditional_start_operational_amendment_v1|PRODUCTION": {
+      "candidate_rows": 104,
+      "candidate_rows_without_qualified_quote": 104,
+      "settled_outcomes": 104,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 0
+    },
+    "moneyline_home|moneyline|NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3|PRODUCTION": {
+      "candidate_rows": 2,
+      "candidate_rows_without_qualified_quote": 2,
+      "settled_outcomes": 2,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 0
+    },
+    "moneyline_home|moneyline|NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2|SHADOW": {
+      "candidate_rows": 2,
+      "candidate_rows_without_qualified_quote": 2,
+      "settled_outcomes": 2,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 0
+    },
+    "player_points|hist_gradient_boosting|NHL_POINTS_COUNT_HGB_V1|PRODUCTION": {
+      "candidate_rows": 144,
+      "candidate_rows_without_qualified_quote": 144,
+      "settled_outcomes": 105,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 39
+    },
+    "player_points|phoenix|phoenix_v2|SHADOW": {
+      "candidate_rows": 144,
+      "candidate_rows_without_qualified_quote": 144,
+      "settled_outcomes": 105,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 39
+    },
+    "puck_line_full_game|puck_line|NHL_STANDARD_PUCK_LINE_SIMPLE_BASELINE_V1|PRODUCTION": {
+      "candidate_rows": 2,
+      "candidate_rows_without_qualified_quote": 2,
+      "settled_outcomes": 2,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 0
+    },
+    "shots_on_goal|poisson_baseline|baseline_v1_cold_start_shadow:A_PRIOR_SEASON_CARRY_FORWARD|OPERATIONAL_SHADOW_A": {
+      "candidate_rows": 237,
+      "candidate_rows_without_qualified_quote": 237,
+      "settled_outcomes": 189,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 48
+    },
+    "shots_on_goal|poisson_baseline|baseline_v1_cold_start_shadow:B_PRIOR_SEASON_RECENCY_WEIGHTED|OPERATIONAL_SHADOW_B": {
+      "candidate_rows": 237,
+      "candidate_rows_without_qualified_quote": 237,
+      "settled_outcomes": 189,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 48
+    },
+    "shots_on_goal|poisson_baseline|baseline_v1_cold_start_shadow:C_MULTISEASON_SHRUNK_PLAYER|OPERATIONAL_SHADOW_C": {
+      "candidate_rows": 237,
+      "candidate_rows_without_qualified_quote": 237,
+      "settled_outcomes": 189,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 48
+    },
+    "shots_on_goal|poisson_baseline|baseline_v1_cold_start_shadow:D_PLAYER_ROLE_HIERARCHICAL|CHAMPION_D": {
+      "candidate_rows": 264,
+      "candidate_rows_without_qualified_quote": 264,
+      "settled_outcomes": 213,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 51
+    },
+    "shots_on_goal|poisson_baseline|baseline_v1_cold_start_shadow:G_COLD_START_TO_CURRENT_SEASON_BLEND|OPERATIONAL_SHADOW_G": {
+      "candidate_rows": 264,
+      "candidate_rows_without_qualified_quote": 264,
+      "settled_outcomes": 213,
+      "timestamp_qualified_quotes": 0,
+      "unresolved_outcomes": 51
+    }
+  },
+  "model_counts": [
+    {
+      "market_key": "goalie_saves",
+      "model_family": "NHL_GOALIE_SAVES_PHOENIX_V2",
+      "model_role": "PRODUCTION",
+      "model_version": "phoenix_v2_conditional_start_operational_amendment_v1",
+      "rows": 104
+    },
+    {
+      "market_key": "moneyline_home",
+      "model_family": "moneyline",
+      "model_role": "PRODUCTION",
+      "model_version": "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3",
+      "rows": 2
+    },
+    {
+      "market_key": "moneyline_home",
+      "model_family": "moneyline",
+      "model_role": "SHADOW",
+      "model_version": "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2",
+      "rows": 2
+    },
+    {
+      "market_key": "player_points",
+      "model_family": "hist_gradient_boosting",
+      "model_role": "PRODUCTION",
+      "model_version": "NHL_POINTS_COUNT_HGB_V1",
+      "rows": 144
+    },
+    {
+      "market_key": "player_points",
+      "model_family": "phoenix",
+      "model_role": "SHADOW",
+      "model_version": "phoenix_v2",
+      "rows": 144
+    },
+    {
+      "market_key": "puck_line_full_game",
+      "model_family": "puck_line",
+      "model_role": "PRODUCTION",
+      "model_version": "NHL_STANDARD_PUCK_LINE_SIMPLE_BASELINE_V1",
+      "rows": 2
+    },
+    {
+      "market_key": "shots_on_goal",
+      "model_family": "poisson_baseline",
+      "model_role": "OPERATIONAL_SHADOW_A",
+      "model_version": "baseline_v1_cold_start_shadow:A_PRIOR_SEASON_CARRY_FORWARD",
+      "rows": 237
+    },
+    {
+      "market_key": "shots_on_goal",
+      "model_family": "poisson_baseline",
+      "model_role": "OPERATIONAL_SHADOW_B",
+      "model_version": "baseline_v1_cold_start_shadow:B_PRIOR_SEASON_RECENCY_WEIGHTED",
+      "rows": 237
+    },
+    {
+      "market_key": "shots_on_goal",
+      "model_family": "poisson_baseline",
+      "model_role": "OPERATIONAL_SHADOW_C",
+      "model_version": "baseline_v1_cold_start_shadow:C_MULTISEASON_SHRUNK_PLAYER",
+      "rows": 237
+    },
+    {
+      "market_key": "shots_on_goal",
+      "model_family": "poisson_baseline",
+      "model_role": "CHAMPION_D",
+      "model_version": "baseline_v1_cold_start_shadow:D_PLAYER_ROLE_HIERARCHICAL",
+      "rows": 264
+    },
+    {
+      "market_key": "shots_on_goal",
+      "model_family": "poisson_baseline",
+      "model_role": "OPERATIONAL_SHADOW_G",
+      "model_version": "baseline_v1_cold_start_shadow:G_COLD_START_TO_CURRENT_SEASON_BLEND",
+      "rows": 264
+    }
+  ],
+  "predictions_path": "candidate_predictions.csv",
+  "predictions_sha256": "f3998e7c7a9cbd7e41b45a900525d98430da6d59961772d407314ca8c50e59ec",
+  "quote_count": 0,
+  "quote_coverage_path": "candidate_quote_coverage.csv",
+  "quote_coverage_sha256": "fef14347197e4676834809c18ba9a5906dade129d256321aa9f3c5069d0f6cd4",
+  "quote_diagnostic_count": 1637,
+  "quotes_path": "candidate_quotes.csv",
+  "quotes_sha256": "4fd9d7ba10fa496b0f930a614bc3b2c61560eb0aca4be5830143c07963da3c8c",
+  "schema_version": "NHL_ALL_CANDIDATE_EVALUATION_EXPORT_V1",
+  "source_evidence_scope": "latest retained 2026 reconciliation package per slate; bounded to 2026-10-16"
+}

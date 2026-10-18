@@ -157,19 +157,32 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.6 Define and implement an all-candidate raw CSV research export
 
-- Status: **OPEN — contract documented; exporter not implemented**. The
-  current SOG command-deck path retains raw decision ledgers but emits a
-  reference-only combined current-slate CSV; it excludes challenger rows.
-  External filtering needs a create-only raw prediction population that keeps
-  every eligible model arm and no-quote prediction before filters, with
-  timestamped quote rows, natural identities, hashes, and separate derived
-  filter outputs.
+- Status: **PARTIAL — bounded reconciliation export produced; complete source
+  arm and quote lineage remain open**. The offline exporter and focused tests
+  are in `backend/nhl/scripts/export_nhl_all_candidate_evaluation.py` and
+  `backend/nhl/tests/test_all_candidate_evaluation_export.py`. The sample at
+  `artifacts/analysis/nhl/all_candidate_evaluation_export/2026-10-17/` includes
+  a bounded October 16 slate sample of 1,637 rows across Moneyline, Puck Line,
+  SOG, Points, and Saves. It keeps unresolved outcomes, records source
+  hashes, includes every row before candidate filters, and has an explicit
+  per-candidate quote coverage file. The quote CSV is intentionally empty:
+  reconciliation attachments do not preserve both sportsbook quote time and
+  observation time, so a pregame quote cannot be proven from those rows.
+- Remaining blockers: join retained raw odds observations to exact prediction
+  natural identities while preserving source and observation timestamps;
+  include the retained SOG production and qualified fixed-blend/shadow arms;
+  include the Puck Line challenger capture. Do not infer these from daily
+  aggregate grades. Keep all attached-but-unverifiable prices out of the
+  qualified quote file. A future complete export must still separate
+  production/challenger/shadow identities, retain all no-quote candidates,
+  and bind postgame outcomes without using them as pregame inputs.
 - Reference: `docs/nhl/2026_prospective_performance_evaluation_2026-10-17.md`
-  (Practical raw CSV export contract); `docs/NHL SOG Command Deck.md`.
-- Completion: implement and validate the two-file prediction/quote package,
-  explicit quote coverage diagnostics, manifest hashes, and a separate
-  filter-output lineage. Do not change existing manual-upload behavior or
-  imply that a candidate was executed.
+  (Practical raw CSV export contract); `docs/NHL SOG Command Deck.md`; sample
+  export manifest and README in the artifact directory.
+- Completion: verify exact prediction-to-quote temporal lineage for all five
+  markets and all authorized arms, then add separate filter-output lineage.
+  Do not change existing manual-upload behavior or imply that a candidate was
+  executed.
 
 ## Verified Complete — Do Not Reopen
 
