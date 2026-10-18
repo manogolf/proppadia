@@ -105,7 +105,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.9 Enforce prior-day reconciliation before dependent NHL daily work
 
-- Status: **RECONCILIATION-FIRST RESTORED LOCALLY — focused tests pass; natural-run verification pending**. The
+- Status: **RECONCILIATION-FIRST RESTORED — focused tests and first successful natural daily ordering verified; FINAL_PREGAME observer acceptance pending**. The
   October 18 10:07 ET `EARLY` run bootstrapped today's two-game schedule, then
   prior-day reconciliation stopped because October 17 had one retained
   `REFRESH` state and no immutable `FINAL_PREGAME` cross-market state. The
@@ -442,14 +442,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   receipts predate `79ef060c`; they failed on roster-source cardinality and do
   not verify the corrected daily gate. A post-correction daily result remains
   unobserved.
-- Current readiness: the October 18 daily run cannot advance under the
-  established contract until October 17 official outcomes can be acquired and
-  certified without inventing its missing Saves prediction. The expected
-  first stop is the missing Saves source predicate above. Track this as an
-  implementation prerequisite, separate from the missing October 17 Saves
-  producer capture. Recheck the retained certificate and natural-run receipts
-  after a contract-preserving correction; no pipeline or observer was invoked
-  for this assessment.
+- Current readiness supersedes the earlier October 18 blocker assessment:
+  run `nhldaily_20261018T183659295070Z_49d62ee8` reused the valid October 17
+  14-game certificate and completed schedule, current-slate roster, feature,
+  prediction, and odds stages in the established order. The 18:42 natural
+  observer poll accepted the same certificate and verified roster, then
+  selected MIDDAY; player-prop lanes were outside their prediction windows.
+  See P2.15 for evidence. No FINAL_PREGAME observer capture has yet been
+  verified, so the remaining acceptance is a natural in-window poll with
+  complete immutable game-level evidence. The absent historical Saves card
+  remains ungraded; it did not block official outcome certification.
 
 ### P2.10 Repair mainline FINAL_PREGAME observer readiness
 
@@ -622,8 +624,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.15 Separate NHL roster acquisition failures from readiness timing
 
-- Status: **IMPLEMENTED LOCALLY — partial natural-run verification; daily
-  sequencing and full capture verification remain pending**. The
+- Status: **IMPLEMENTED LOCALLY — successful daily reconciliation-to-roster
+  ordering verified; natural FINAL_PREGAME observer acceptance remains pending**. The
   roster producer and daily sequence are unchanged; the prior-day source
   handoff and observer readiness classifications are corrected below.
 - Confirmed incident A, slate 2026-09-30, games
@@ -798,6 +800,44 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   status label; post-correction immutable prediction capture **NOT YET
   VERIFIED**; mainline **EXPECTED READINESS SKIP** before feature export and
   odds. No post-correction paid odds calls occurred.
+- Successful natural run `nhldaily_20261018T183659295070Z_49d62ee8`, 18:36:59–
+  18:40:32Z, supersedes the earlier “daily sequencing not verified” finding:
+  - Its nested prior-learning evidence reuses the October 17
+    `CERTIFIED_FINAL` package for all 14 canonical games. The package completion
+    marker is 18:12:09Z, before this run began. `_cmd_daily_impl` verifies the
+    date-bound certificate before calling schedule import; the retained child
+    order then places schedule import before the current-slate roster child.
+  - The single governed October 18 roster observation covers both games and all
+    four scheduled teams, contains 100 rows from four official API responses,
+    has no missing teams, conflicts, duplicate rows, exclusions, or divergent
+    snapshots, and is strictly prestart at 18:37:02Z. Its manifest and
+    completion marker verify; the 100 player/roster/status upserts are recorded
+    `COMMITTED`.
+  - The separate 686-row `refresh_players_and_roster_today.py` child is not a
+    second current-slate capture. The daily caller passes `SLATE_DATE=yday`
+    during prior-date history finalization; for this run that target is October
+    17. Its 686 roster-status upserts are also recorded `COMMITTED`, and it
+    emits no current-slate observation manifest. The distinct
+    `refresh_all_team_rosters.py` child is the full-league player/identity
+    refresh. No evidence supports removing either historical/full-league step.
+  - Both games (`2026020135`, `2026020136`) were eligible. The feature cutoff
+    was 18:40:03Z, before the first 22:00Z start. SOG retained 91 scored rows
+    (0 unscored), Points 300 rows from 100 scoring inputs, and Saves 9 rows.
+    Prediction and source-feature hashes in the parent match retained files;
+    model identity validation passed for each lane. These are daily run-bound
+    predictions, not independent immutable FINAL_PREGAME observer cards.
+  - The daily odds observation completed with 42/42 authorized credits across
+    three network attempts. Moneyline V3 production and V2 shadow outputs are
+    explicitly `run_type=REFRESH`, bound to that odds manifest; this is not
+    labeled or counted as FINAL_PREGAME. At 18:42:15Z the mainline LaunchAgent
+    retained a separate `MIDDAY` capture and consumed 6 credits. Points/Saves
+    reported `NOOP_OUTSIDE_PREDICTION_WINDOW`, and SOG `NOOP_OUTSIDE_WINDOW`;
+    no lane FINAL_PREGAME card was retained by that poll.
+  - The daily run, roster, and odds manifests each pass checksum verification.
+    The remaining natural-run acceptance is a poll inside the 20–75 minute
+    first-start window: verify qualified prestart game cards and immutable
+    manifests, including SOG’s missing-roster classification after a valid
+    roster has arrived. The 18:42 no-op does not exercise P2.16.
 
 ### P2.16 Classify SOG roster-not-ready observer results
 

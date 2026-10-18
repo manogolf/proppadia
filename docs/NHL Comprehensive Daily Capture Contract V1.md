@@ -201,6 +201,45 @@ Official roster endpoints establish observed team-roster membership only.
 They do not certify dressed players, lines, availability, or confirmed goalie
 starters. Those remain separate evidence and qualification requirements.
 
+### Natural-run verification (October 18, 2026)
+
+Daily run `nhldaily_20261018T183659295070Z_49d62ee8` completed READY from
+18:36:59Z to 18:40:32Z. Its October 17 `CERTIFIED_FINAL` package covered all 14
+games and completed at 18:12:09Z. The daily implementation validates that
+date-bound certificate before current-slate schedule import; the retained
+child order places schedule import before the one governed October 18 roster
+observation. That observation contains 100 rows from four official NHL API
+team-roster responses, covers both scheduled games and all four teams, is
+strictly prestart, has no missing teams or conflicts, and has valid manifest
+and completion hashes. Its corresponding player and roster-status writes are
+recorded COMMITTED.
+
+The same daily graph separately ran `refresh_players_and_roster_today.py`
+with `SLATE_DATE=yday` during October 17 history finalization. Its 686-row
+committed refresh did not create or replace the October 18 immutable roster
+observation. The `refresh_all_team_rosters.py` child is a separate full-league
+player and identity refresh. The available receipts and caller inputs support
+these as distinct history/full-league preparation stages; no removal is
+justified by the current evidence.
+
+The daily run retained both eligible games in SOG (91 scored rows, none
+unscored), Points (300 predictions from 100 scoring inputs), and Saves (9
+predictions). Their feature cutoff was 18:40:03Z, before the first game start
+at 22:00Z; recorded source and prediction hashes match retained artifacts and
+model identity checks passed. Its odds observation used 42 of 42 authorized
+credits over three network attempts. The Moneyline V3/V2 package is explicitly
+`REFRESH` and uses that odds manifest; it is not a FINAL_PREGAME package.
+
+At 18:42:15Z the next retained mainline poll produced a separate `MIDDAY`
+capture and used 6 credits. Points and Saves reported
+`NOOP_OUTSIDE_PREDICTION_WINDOW`; SOG reported `NOOP_OUTSIDE_WINDOW`. No
+FINAL_PREGAME observer card was retained by that poll. Natural acceptance
+therefore remains pending for an observer poll within the configured 20–75
+minute first-start window, including verified game-level card coverage and
+immutable manifests. That poll must also confirm SOG's missing-roster status
+classification when the roster package is absent; an outside-window no-op
+does not exercise that condition. See backlog P2.15–P2.16.
+
 Before V1, the optional odds step wrote mutable odds files directly, could retry individual
 provider calls, and represented failures as empty results. V1 retains the same
 comprehensive graph while placing immutable roster evidence before roster DML,
