@@ -1,0 +1,40 @@
+{
+  "schema_version": "MLB_QUALIFICATION_AWARE_WORKSPACE_WRAPPER_INSTALLATION_V1",
+  "installed_at_utc": "2026-10-18T00:38:31Z",
+  "source_commit": "59ad1360e11da6e83cd2771e29e3d9bd9f1fb92b",
+  "tracked_source": "bin/proppadia_mlb_refresh_daily.sh",
+  "tracked_sha256": "314fcd4e7abae738d19a735c94f3e49a5ee281cf703940ec7402dda33efefeb5",
+  "installed_path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+  "installed_sha256": "314fcd4e7abae738d19a735c94f3e49a5ee281cf703940ec7402dda33efefeb5",
+  "installed_mode": "0755",
+  "backup_path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh.pre_qualification_skip_20261018T003831Z",
+  "backup_sha256": "db1c97f5558b1bcfc93c99c1719077c0621ce7b9f7572a438ee7c9576847b549",
+  "verification": {
+    "reviewed_source_hash_matched": true,
+    "pre_install_launchagent_state": "not running",
+    "pre_install_matching_processes": false,
+    "post_install_matching_processes": false,
+    "cmp_tracked_and_installed": "PASS",
+    "tracked_shell_syntax": "PASS",
+    "installed_shell_syntax": "PASS",
+    "focused_tests": {
+      "command": "./bin/python -m pytest backend/mlb/tests/test_mlb_today_workspace_slate_inputs.py backend/mlb/tests/test_mlb_daily_restricted_writer_routing.py -q",
+      "result": "PASS",
+      "passed": 12
+    },
+    "git_diff_check": "PASS",
+    "launchagent_label": "com.proppadia.mlb.refresh.daily",
+    "launchagent_plist": "/Users/jerrystrain/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist",
+    "launchagent_loaded": true,
+    "launchagent_enabled": true,
+    "launchagent_state_after_install": "not running",
+    "launchagent_program_path": "/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh",
+    "launchagent_or_schedule_modified": false
+  },
+  "daily_wrapper_manually_launched": false,
+  "production_acquisition_performed": false,
+  "production_database_write_performed": false,
+  "reconciliation_write_performed": false,
+  "materialized_view_refresh_performed": false,
+  "rollback": "Restore the timestamped backup only if a later rollback is authorized and required."
+}

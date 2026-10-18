@@ -703,13 +703,18 @@ writer validation does not authorize a hosted cutover or a different writer.
   build success, explicit gate skip, and unexpected missing input, plus the
   guard's `SUCCESS`/`SKIPPED` status contract. Retained file parsing still
   confirms 134 slate rows and 128 wide rows after identity deduplication.
-- The tracked wrapper requires separate installation for the operational
-  LaunchAgent to consume this status handoff. It was not installed. At review,
-  tracked and installed wrapper hashes differ; the installed copy has the
-  restricted refresh route but lacks the new status-file handoff. After
-  separately authorized installation, verify the next natural run logs an
-  expected qualification skip without refreshing views. After a qualified
-  model produces date-matched files, verify nonzero staging, `SET ROLE
+- The qualification-aware wrapper was installed at the existing LaunchAgent
+  path on 2026-10-18 after confirming the job was idle and no matching MLB
+  wrapper or child process was active. The installed executable is byte-identical
+  to the tracked source at commit `59ad1360`, mode `0755`; the prior executable
+  is retained at
+  `/Users/jerrystrain/bin/proppadia_mlb_refresh_daily.sh.pre_qualification_skip_20261018T003831Z`.
+  Installation evidence, including hashes, LaunchAgent state, and focused test
+  results, is recorded in
+  `docs/operations/mlb_qualification_aware_workspace_wrapper_installation_receipt_2026-10-18.json`.
+  The next natural run must show `EXPECTED_SKIP` and no staging or view refresh
+  when qualification is explicitly skipped. After a qualified model produces
+  date-matched files, verify nonzero staging, `SET ROLE
   proppadia_mlb_ingest`, the refresh function's four-view order, and
   `/mlb/today` readback.
 - Restricted writer receipts now capture separate `session_user` and
