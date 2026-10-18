@@ -135,18 +135,51 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   The same invocation path differs from `postgame_learning.ensure_prior_learning()`,
   which supplies `--prior-learning` to authority acquisition and execution.
   The existing option preserves strict direct-reconciliation cardinality.
-- Passing that option alone is not verified as a complete Oct. 17 recovery:
-  `resolve_operational_sources()` still requires exactly one prospective
-  Saves FINAL_PREGAME source, while Oct. 17 Saves observer statuses include
-  `SAVES_FEATURE_EXPORT_EMPTY` and no immutable Saves card exists. The full
-  source-binding and grading policy must be reviewed before any implementation
-  authorization; do not relax Saves or direct-reconciliation gates based on
-  this incident. The missing cross-market card is a prediction-capture gap,
-  not evidence that official NHL outcomes or authority/roster data were
-  unavailable.
-- Next step: verify a later ordinary daily receipt records the prior-learning
-  status and that all normal current-slate lanes continue. Do not fabricate a
-  final capture or weaken direct final-pregame reconciliation.
+- October 18 source-contract review: `run_nhl_postgame_reconciliation` calls
+  `resolve_operational_sources()` before authority-roster acquisition creates
+  any official request. That resolver fully validates the local prediction
+  sources as well as the canonical slate. Its exact-one Saves-card check is
+  therefore a grading/source-binding dependency, not a prerequisite for
+  acquiring official game outcomes. October 17 status receipts show repeated
+  `SAVES_FEATURE_EXPORT_EMPTY` failures and no immutable Saves card. The Saves
+  observer raises this when `export_saves_from_denali.sql` returns a
+  header-only CSV. Its `base` CTE requires a slate `roster_status` row joined
+  to `nhl.games` and a player ID present in `goalie_game_logs_raw`; the later
+  joins are left joins. Retained offline evidence cannot distinguish which
+  side of that base join left the export empty. The failure occurs before
+  model publication, and is not evidence of a missing authorized starter
+  article or a failed official outcome source.
+- Missing-card contracts differ by lane: Points already resolves an entirely
+  absent prospective card as `NOT_GRADEABLE_NO_PREDICTION` and emits a
+  zero-row evidence surface; SOG requires one immutable card and also supplies
+  the canonical game spine when the cross-market card is absent; Saves
+  currently requires exactly one card for both acquisition and grading. For
+  the prior-learning handoff, the smallest contract-preserving correction is
+  to treat a missing Saves card like missing Points: permit an explicit
+  not-gradeable status and zero-row surface only under `--prior-learning`,
+  skip Saves grading, and retain exact-one in direct reconciliation. Duplicate
+  cards and any present corrupt card must still fail closed in every mode;
+  valid cards must retain all current manifest, identity, timestamp, and
+  grading checks. No prediction or grade is reconstructed.
+- The observer currently duplicates the acquisition/preflight/execute command
+  sequence instead of using `postgame_learning.ensure_prior_learning()`, whose
+  established path supplies `--prior-learning` to both acquisition and
+  execution and retains bounded child output on errors. After the missing
+  Saves case is supported in that mode, the observer should use that existing
+  path (or a shared helper extracted from it) and preserve structured child
+  stage, exit code, and bounded/redacted stdout/stderr in its receipt. The
+  current `CalledProcessError` receipt only retains the command and exit code;
+  captured child stdout/stderr are dropped. Separate follow-up question:
+  should outcome-only prior learning also tolerate an absent SOG prediction
+  card by resolving the canonical spine directly from the retained schedule?
+  SOG is currently required and is the fallback spine authority; Oct. 17 had
+  a valid SOG card, so this did not cause the incident. Do not change these
+  contracts in this documentation-only review.
+- Next step: after the mode-scoped Saves behavior and observer handoff are
+  separately authorized and implemented, verify a later ordinary daily receipt
+  records prior-learning status and all normal current-slate lanes continue.
+  Resolve the SOG schedule-spine question separately. Do not fabricate a final
+  capture or weaken direct final-pregame reconciliation.
 
 ### P2.10 Repair mainline FINAL_PREGAME observer readiness
 
