@@ -79,6 +79,12 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix="nhl_prediction_only_")
         self.root = Path(self.tmp.name)
+        self.enterContext(patch.object(observer, "require_slate_history_certificate", return_value={
+            "status": "CERTIFIED_FINAL", "slate_date": "2026-09-20",
+        }))
+        self.enterContext(patch.object(observer, "require_slate_roster_observation", return_value={
+            "status": "VERIFIED_CURRENT_SLATE_ROSTER", "slate_date": SLATE,
+        }))
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -301,7 +307,8 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         with patch.object(mainline, "observe_independent_prediction_only", side_effect=independent), \
              patch.object(mainline, "observe_sog_prediction_only", side_effect=sog):
             result = mainline.observe_prediction_only_lanes(SLATE, "MIDDAY", "fixture", datetime.now(timezone.utc))
-        self.assertTrue(result["POINTS"].startswith("FAILED_WARN_ONLY"))
+        self.assertEqual(result["POINTS"]["status"], "FAILED_BEFORE_RECEIPT")
+        self.assertIn("POINTS_FIXTURE_FAILURE", result["POINTS"]["failure"]["message"])
         self.assertEqual(order, ["POINTS", "SAVES", "SOG"])
 
         call_order = []
@@ -311,7 +318,7 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
              patch.object(mainline, "database_url",
                           side_effect=lambda access: database_accesses.append(access) or "fixture-dsn"), \
              patch.object(mainline, "observe_prediction_only_lanes", side_effect=lambda *a: call_order.append("predictions")), \
-             patch.object(mainline, "observe", side_effect=lambda *a: (call_order.append("mainline_observer") or self.root / "status.json")), \
+             patch.object(mainline, "observe", side_effect=lambda *a, **kwargs: (call_order.append("mainline_observer") or self.root / "status.json")), \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(mainline.main(), 0)
         self.assertEqual(call_order, ["predictions", "mainline_observer"])

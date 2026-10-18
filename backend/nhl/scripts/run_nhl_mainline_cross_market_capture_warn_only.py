@@ -22,6 +22,7 @@ from backend.nhl.database_access import database_url
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
 from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canonical_slate
 from backend.nhl.cross_market_shadow.official_outcomes import load_official_outcomes
+from backend.nhl.reconciliation_certificate import require_slate_roster_observation
 from backend.nhl.daily_capture import load_canonical_slate
 from backend.nhl.daily_orchestration import redact_sensitive_text
 from backend.nhl.scripts.nhl_prediction_only_common import observe as observe_independent_prediction_only
@@ -524,6 +525,7 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
             result["prior_day_outcome_handoff"] = ensure_prior_day_official_outcomes(
                 dsn, slate,
             )
+            result["current_slate_roster_observation"] = require_slate_roster_observation(slate)
             input_dir = root / "runtime_inputs" / slate / stamp
             if (canonical_raw_path is None) != (canonical_health_path is None):
                 raise ValueError("BOTH_CANONICAL_SLATE_PATHS_REQUIRED")

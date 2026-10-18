@@ -20,6 +20,10 @@ from backend.nhl.prediction_only.core import (
     publish_points,
     publish_saves,
 )
+from backend.nhl.reconciliation_certificate import (
+    require_slate_history_certificate,
+    require_slate_roster_observation,
+)
 from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
 from backend.nhl.scripts.run_nhl_sog_prediction_only_warn_only import phase_for
 
@@ -194,6 +198,10 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
             raise RuntimeError(f"RETROSPECTIVE_PREDICTION_FORBIDDEN:NOT_BEFORE_{PROSPECTIVE_NOT_BEFORE}")
         if not dsn:
             raise RuntimeError("DATABASE_URL_MISSING")
+        result["prior_day_reconciliation_certificate"] = require_slate_history_certificate(
+            slate_date)
+        result["current_slate_roster_observation"] = require_slate_roster_observation(
+            slate_date)
         games, features = export_lane_inputs(dsn, lane, season, slate_date, observation_timestamp)
         if games.empty:
             result.update(status="VALID_EMPTY_SLATE", phase=None, prediction_rows=0)

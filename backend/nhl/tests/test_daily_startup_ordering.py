@@ -16,6 +16,70 @@ from backend.nhl.performance_summary import _validate_production_sog_game_set
 
 
 class DailyStartupOrderingTests(unittest.TestCase):
+    def test_no_prior_games_requires_verified_empty_schedule(self):
+        result = {
+            "prior_slate_date": "2026-10-17",
+            "reconciliation_status": "NO_PRIOR_GAMES",
+            "official_outcomes_status": "NO_PRIOR_GAMES",
+            "reconciliation_package": None,
+        }
+        certificate = {"status": "VERIFIED_EMPTY_SCHEDULE",
+                      "slate_date": "2026-10-17", "schedule_sha256": "schedule-hash"}
+        with patch.object(cli, "require_prior_day_certificate", return_value=certificate) as verify:
+            self.assertEqual(cli._require_daily_prior_certificate("2026-10-17", result), certificate)
+        verify.assert_called_once_with("2026-10-17")
+
+    def test_verified_no_prior_games_permits_ordered_current_slate_work(self):
+        events = []
+        recorder = DailyRunRecorder(run_id="empty-prior-test", command=[], phase="EARLY")
+        prior_result = {"prior_slate_date": "2026-10-17",
+                        "reconciliation_status": "NO_PRIOR_GAMES",
+                        "official_outcomes_status": "NO_PRIOR_GAMES",
+                        "reconciliation_package": None}
+        empty_certificate = {"status": "VERIFIED_EMPTY_SCHEDULE",
+                             "slate_date": "2026-10-17", "schedule_sha256": "empty-hash"}
+        game = SimpleNamespace(game_id=2026020001)
+        with patch.object(cli, "require_db_url", return_value="db"), patch.object(
+            cli, "run", side_effect=lambda *args, **kwargs: None
+        ), patch.object(cli, "et_today", return_value="2026-10-18"), patch.object(
+            cli, "et_yesterday", return_value="2026-10-17"), patch.object(
+            cli, "prior_et_slate", return_value="2026-10-17"), patch.object(
+            cli, "ensure_prior_learning",
+            side_effect=lambda _: events.append("reconciliation") or prior_result.copy(),
+        ), patch.object(cli, "require_prior_day_certificate", return_value=empty_certificate), patch.object(
+            cli, "_bootstrap_daily_canonical_slate",
+            side_effect=lambda **kwargs: events.append("schedule") or
+            ({"completion_status": "READY"}, [game], "current-hash"),
+        ), patch.object(cli, "_capture_daily_slate_roster",
+                        side_effect=lambda **kwargs: events.append("roster")), patch.object(
+            cli, "_refresh_all_team_rosters_for_daily",
+            side_effect=lambda **kwargs: events.append("downstream") or
+            (_ for _ in ()).throw(RuntimeError("stop-after-no-prior-continuation")),
+        ):
+            with patch.dict("os.environ", {}, clear=False), self.assertRaisesRegex(
+                RuntimeError, "stop-after-no-prior-continuation"
+            ):
+                cli._cmd_daily_impl(with_odds=False, morning_only=False,
+                                    odds_phase="EARLY", daily_run_id="test",
+                                    recorder=recorder)
+        self.assertEqual(events, ["reconciliation", "schedule", "roster", "downstream"])
+        self.assertEqual(recorder.prior_learning["certificate"], empty_certificate)
+
+    def test_no_package_not_final_and_incomplete_statuses_block(self):
+        for status, outcome_status in (("NO_PACKAGE", "NOT_FINAL"),
+                                       ("NOT_FINAL", "NOT_FINAL"),
+                                       ("CREATED", "INCOMPLETE")):
+            result = {"prior_slate_date": "2026-10-17",
+                      "reconciliation_status": status,
+                      "official_outcomes_status": outcome_status,
+                      "reconciliation_package": None}
+            with self.subTest(status=status), patch.object(
+                cli, "require_prior_day_certificate"
+            ) as verify:
+                with self.assertRaises(RuntimeError):
+                    cli._require_daily_prior_certificate("2026-10-17", result)
+                verify.assert_not_called()
+
     def test_bootstrap_records_canonical_set_from_schedule_before_lane_checks(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
@@ -46,69 +110,41 @@ class DailyStartupOrderingTests(unittest.TestCase):
                     cli._bootstrap_daily_canonical_slate(slate="2026-10-11", recorder=recorder)
             self.assertIsNone(recorder.canonical_game_set_hash)
 
-    def test_schedule_bootstrap_precedes_prior_day_learning(self):
-        events = []
-        recorder = DailyRunRecorder(run_id="test", command=[], phase="EARLY")
-        with tempfile.TemporaryDirectory() as temp:
-            with patch.object(cli, "ROOT", Path(temp)), patch.object(
-                cli, "require_db_url", return_value="db"
-            ), patch.object(cli, "run", side_effect=lambda *a, **k: events.append("db")), patch.object(
-                cli, "et_today", return_value="2026-10-11"
-            ), patch.object(cli, "et_yesterday", return_value="2026-10-10"), patch.object(
-                cli, "prior_et_slate", return_value="2026-10-10"
-            ), patch.object(cli, "_bootstrap_daily_canonical_slate",
-                            side_effect=lambda **kw: (events.append("schedule"), {}, [], "empty-hash")[1:]), patch.object(
-                cli, "ensure_prior_learning", side_effect=lambda _: events.append("prior-learning") or
-                (_ for _ in ()).throw(RuntimeError("stop-after-order-check"))
-            ):
-                with patch.dict("os.environ", {}, clear=False):
-                    with self.assertRaisesRegex(RuntimeError, "stop-after-order-check"):
-                        cli._cmd_daily_impl(with_odds=False, morning_only=False,
-                                            odds_phase="EARLY", daily_run_id="test",
-                                            recorder=recorder)
-        self.assertLess(events.index("schedule"), events.index("prior-learning"))
-
-    def test_roster_capture_completes_before_prior_learning_failure(self):
+    def test_prior_day_certification_precedes_schedule_and_roster(self):
         events = []
         recorder = DailyRunRecorder(run_id="test", command=[], phase="EARLY")
         game = SimpleNamespace(game_id=2026020084)
-        with tempfile.TemporaryDirectory() as temp, patch.object(
-            cli, "ROOT", Path(temp)
-        ), patch.object(cli, "require_db_url", return_value="db"), patch.object(
+        prior_result = {"prior_slate_date": "2026-10-17",
+                        "reconciliation_status": "CREATED",
+                        "official_outcomes_status": "FINAL",
+                        "reconciliation_package": "/certificate/package"}
+        certificate = {"status": "CERTIFIED_FINAL",
+                       "package_path": "/certificate/package",
+                       "package_manifest_sha256": "manifest-hash",
+                       "game_ids": [2026020083], "game_count": 1}
+        with patch.object(cli, "require_db_url", return_value="db"), patch.object(
             cli, "run", side_effect=lambda *a, **k: events.append("db")
         ), patch.object(cli, "et_today", return_value="2026-10-18"), patch.object(
             cli, "et_yesterday", return_value="2026-10-17"
         ), patch.object(cli, "prior_et_slate", return_value="2026-10-17"), patch.object(
-            cli, "_bootstrap_daily_canonical_slate",
-            side_effect=lambda **kw: (
-                events.append("schedule") or
-                ({"completion_status": "READY"}, [game], "canonical-hash")
-            ),
-        ), patch.object(cli, "_capture_daily_slate_roster") as capture, patch.object(
             cli, "ensure_prior_learning",
-            side_effect=lambda _: events.append("prior-learning") or
-            (_ for _ in ()).throw(RuntimeError("missing-prior-card")),
-        ):
-            def complete_roster(**kwargs):
-                events.append("roster")
-                kwargs["recorder"].finish_lane("roster", status="COMPLETE")
-            capture.side_effect = complete_roster
+            side_effect=lambda _: events.append("reconciliation") or prior_result.copy(),
+        ), patch.object(cli, "require_prior_day_certificate", return_value=certificate), patch.object(
+            cli, "_bootstrap_daily_canonical_slate",
+            side_effect=lambda **kw: events.append("schedule") or
+            ({"completion_status": "READY"}, [game], "canonical-hash"),
+        ), patch.object(cli, "_capture_daily_slate_roster",
+                        side_effect=lambda **kw: events.append("roster") or
+                        (_ for _ in ()).throw(RuntimeError("stop-after-order-check"))):
             with patch.dict("os.environ", {}, clear=False), self.assertRaisesRegex(
-                RuntimeError, "missing-prior-card"
+                RuntimeError, "stop-after-order-check"
             ):
-                cli._cmd_daily_impl(
-                    with_odds=True, morning_only=False, odds_phase="EARLY",
-                    daily_run_id="test", recorder=recorder,
-                )
-
+                cli._cmd_daily_impl(with_odds=False, morning_only=False,
+                                    odds_phase="EARLY", daily_run_id="test",
+                                    recorder=recorder)
+        self.assertLess(events.index("reconciliation"), events.index("schedule"))
         self.assertLess(events.index("schedule"), events.index("roster"))
-        self.assertLess(events.index("roster"), events.index("prior-learning"))
-        self.assertEqual(recorder.lane("roster").status, "COMPLETE")
-        self.assertIsNone(recorder.prior_learning)
-        capture.assert_called_once()
-        self.assertEqual(capture.call_args.kwargs["slate"], "2026-10-18")
-        self.assertEqual(capture.call_args.kwargs["canonical_games"], [game])
-        self.assertEqual(capture.call_args.kwargs["game_hash"], "canonical-hash")
+        self.assertEqual(recorder.prior_learning["certificate"], certificate)
 
     def test_roster_capture_uses_one_official_roster_child_and_receipt_identity(self):
         recorder = DailyRunRecorder(run_id="daily-1", command=[], phase="EARLY")
@@ -163,6 +199,16 @@ class DailyStartupOrderingTests(unittest.TestCase):
             cli, "run"
         ), patch.object(cli, "et_today", return_value="2026-10-18"), patch.object(
             cli, "et_yesterday", return_value="2026-10-17"), patch.object(
+            cli, "prior_et_slate", return_value="2026-10-17"), patch.object(
+            cli, "ensure_prior_learning", return_value={
+                "prior_slate_date": "2026-10-17",
+                "reconciliation_status": "NO_PRIOR_GAMES",
+                "official_outcomes_status": "NO_PRIOR_GAMES",
+                "reconciliation_package": None,
+            }
+        ), patch.object(cli, "require_prior_day_certificate", return_value={
+            "status": "VERIFIED_EMPTY_SCHEDULE", "slate_date": "2026-10-17",
+        }), patch.object(
             cli, "_bootstrap_daily_canonical_slate",
             side_effect=RuntimeError("schedule-not-ready"),
         ), patch.object(cli, "_capture_daily_slate_roster") as capture:
@@ -175,29 +221,30 @@ class DailyStartupOrderingTests(unittest.TestCase):
                 )
         capture.assert_not_called()
 
-    def test_roster_failure_prevents_prior_learning(self):
+    def test_nonfinal_reconciliation_prevents_schedule_and_roster(self):
         recorder = DailyRunRecorder(run_id="test", command=[], phase="EARLY")
-        game = SimpleNamespace(game_id=2026020084)
-        with tempfile.TemporaryDirectory() as temp, patch.object(
-            cli, "ROOT", Path(temp)
-        ), patch.object(cli, "require_db_url", return_value="db"), patch.object(
+        with patch.object(cli, "require_db_url", return_value="db"), patch.object(
             cli, "run"
         ), patch.object(cli, "et_today", return_value="2026-10-18"), patch.object(
             cli, "et_yesterday", return_value="2026-10-17"), patch.object(
-            cli, "_bootstrap_daily_canonical_slate",
-            return_value=({"completion_status": "READY"}, [game], "hash"),
-        ), patch.object(cli, "_capture_daily_slate_roster",
-                        side_effect=RuntimeError("official-roster-failed")), patch.object(
-            cli, "ensure_prior_learning"
-        ) as learning:
+            cli, "prior_et_slate", return_value="2026-10-17"), patch.object(
+            cli, "ensure_prior_learning", return_value={
+                "prior_slate_date": "2026-10-17",
+                "reconciliation_status": "NOT_FINAL",
+                "official_outcomes_status": "NOT_FINAL",
+                "reconciliation_package": None,
+            }
+        ), patch.object(cli, "_bootstrap_daily_canonical_slate") as schedule, patch.object(
+            cli, "_capture_daily_slate_roster") as capture:
             with patch.dict("os.environ", {}, clear=False), self.assertRaisesRegex(
-                RuntimeError, "official-roster-failed"
+                RuntimeError, "PRIOR_DAY_RECONCILIATION_BLOCKING:NOT_FINAL"
             ):
                 cli._cmd_daily_impl(
                     with_odds=False, morning_only=False, odds_phase="EARLY",
                     daily_run_id="test", recorder=recorder,
                 )
-        learning.assert_not_called()
+        schedule.assert_not_called()
+        capture.assert_not_called()
 
     def test_roster_capture_does_not_touch_prior_learning_feature_tables(self):
         source = (cli.SCRIPTS_DIR / "refresh_players_and_roster_today.py").read_text()
@@ -209,6 +256,10 @@ class DailyStartupOrderingTests(unittest.TestCase):
         daily_source = Path(cli.__file__).read_text()
         self.assertLess(
             daily_source.index("recorder.prior_learning = ensure_prior_learning(prior_date_et)"),
+            daily_source.index("_bootstrap_daily_canonical_slate(\n        slate=slate"),
+        )
+        self.assertLess(
+            daily_source.index("_bootstrap_daily_canonical_slate(\n        slate=slate"),
             daily_source.index("# 2) Seed features for today (SOG + Saves)."),
         )
 

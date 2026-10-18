@@ -17,6 +17,10 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import psycopg
 from backend.nhl.database_access import database_url
+from backend.nhl.reconciliation_certificate import (
+    require_slate_history_certificate,
+    require_slate_roster_observation,
+)
 
 from backend.nhl.sog_cold_start.core import build_predictions, sha256_file
 from backend.nhl.scripts.nhl_observer_provenance import observer_provenance
@@ -94,7 +98,7 @@ def write_manifest(directory:Path)->None:
 def observe(*,slate:str,requested:str,dsn:str,root:Path,now:datetime|None=None)->Path:
     now=now or utc_now();status_dir=root/"status"/slate;status_dir.mkdir(parents=True,exist_ok=True);stamp=now.strftime("%Y%m%dT%H%M%S.%fZ")+"_"+uuid.uuid4().hex[:8];status_path=status_dir/f"prediction_{stamp}.json"
     result={"slate_date":slate,"status":"RUNNING","market_requests":0,"paid_credits":0,"warning_only":True,
-            "morning_readiness_dependency":"NONE_PREDICTION_ONLY",
+            "morning_readiness_dependency":"PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED",
             "provider_event_dependency":"NONE","market_credential_access":False,
             **observer_provenance(Path(__file__),now)}
     if slate<="2026-09-19":
@@ -102,6 +106,8 @@ def observe(*,slate:str,requested:str,dsn:str,root:Path,now:datetime|None=None)-
         durable_json(status_path,result);return status_path
     try:
         if not dsn:raise RuntimeError("SUPABASE_DB_URL_MISSING")
+        result["prior_day_reconciliation_certificate"]=require_slate_history_certificate(slate)
+        result["current_slate_roster_observation"]=require_slate_roster_observation(slate)
         schedule,features=export_features(dsn,slate,now);phase,reason=phase_for(schedule,now,requested);result.update(phase=phase,phase_gate=reason)
         if phase is None:result["status"]="NOOP_OUTSIDE_WINDOW";durable_json(status_path,result);return status_path
         with lock(root,slate,phase):

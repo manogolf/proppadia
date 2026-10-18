@@ -42,7 +42,7 @@ def resolve_date(v):
  return date.fromisoformat(v).isoformat()
 
 def main():
- ap=argparse.ArgumentParser();ap.add_argument("--slate-date",required=True);ap.add_argument("--dry-run",action="store_true");ap.add_argument("--env-file",type=Path,default=ROOT/"backend/.env");ap.add_argument("--output-root",type=Path,default=OPS);ap.add_argument("--fixture-scenario",choices=["valid_empty","nonempty","sog_cold_start","schedule_failure","partial_slate","export_failure","db_failure","roster_failure","preparation_failure","shadow_failure","finalization_failure","interrupted"]);ap.add_argument("--hold-lock-seconds",type=float,default=0);ap.add_argument("--recovery-authorization",choices=[SECOND_RECOVERY_AUTHORIZATION])
+ ap=argparse.ArgumentParser();ap.add_argument("--slate-date",required=True);ap.add_argument("--dry-run",action="store_true");ap.add_argument("--env-file",type=Path,default=ROOT/"backend/.env");ap.add_argument("--output-root",type=Path,default=OPS);ap.add_argument("--fixture-scenario",choices=["valid_empty","nonempty","sog_cold_start","schedule_failure","partial_slate","export_failure","db_failure","roster_failure","preparation_failure","reconciliation_failure","shadow_failure","finalization_failure","interrupted"]);ap.add_argument("--hold-lock-seconds",type=float,default=0);ap.add_argument("--recovery-authorization",choices=[SECOND_RECOVERY_AUTHORIZATION])
  a=ap.parse_args(); slate=resolve_date(a.slate_date); season=int(slate[:4]) if int(slate[5:7])>=7 else int(slate[:4])-1
  if season not in {2025,2026}: raise SystemExit(f"WRONG_CANONICAL_SEASON_FOR_SEASON_2026_ORCHESTRATION:{season}")
  outroot=a.output_root.resolve(); lockdir=outroot/"locks";lockdir.mkdir(parents=True,exist_ok=True);lockpath=lockdir/f"{slate}.lock"
@@ -86,34 +86,34 @@ def main():
  try:
   scenario=a.fixture_scenario
   stage("01_db_and_environment",database_check_command(),fixture_result="FAIL_DB_UNAVAILABLE" if scenario=="db_failure" else None)
-  stage("02_schedule_fetch",[PY,ROOT/"backend/nhl/scripts/import_schedule_today.py"],["01_db_and_environment"],"FAIL_SCHEDULE_FETCH" if scenario=="schedule_failure" else None)
+  stage("02_reconciliation_first_daily_prerequisites",[PY,"-m","backend.nhl.cli","daily","--morning-only"],["01_db_and_environment"],"FAIL_RECONCILIATION" if scenario=="reconciliation_failure" else ("FAIL_ROSTER_REFRESH" if scenario=="roster_failure" else ("FAIL_PREPARATION" if scenario=="preparation_failure" else None)))
   if scenario:
    games=0 if scenario=="valid_empty" else 2
    completion="PARTIAL" if scenario=="partial_slate" else ("VALID_EMPTY_SLATE" if games==0 else "READY")
    source_health={"slate_date":slate,"canonical_season":season,"completion_status":completion,"downstream_ready":completion in {"READY","VALID_EMPTY_SLATE"},"normalized_game_count":games}
   else: source_health=json.loads((SLATE_HEALTH/slate/"slate_health.json").read_text())
-  if source_health.get("slate_date")!=slate or source_health.get("canonical_season")!=season or not source_health.get("downstream_ready"):raise RuntimeError("SLATE_HEALTH_BLOCKED")
+  if source_health.get("slate_date")!=slate or source_health.get("canonical_season")!=season or not source_health.get("downstream_ready") or (scenario=="schedule_failure"):raise RuntimeError("SLATE_HEALTH_BLOCKED")
   status["valid_empty_slate"]=source_health["completion_status"]=="VALID_EMPTY_SLATE";status["schedule_game_count"]=source_health["normalized_game_count"]
-  stage("03_slate_health_gate",["internal","validate_date_season_completion"],["02_schedule_fetch"])
+  stage("03_certified_slate_health_gate",["internal","daily receipt and date-bound schedule health"],["02_reconciliation_first_daily_prerequisites"])
   spine=run/"canonical_game_spine.csv"
-  stage("04_canonical_slate_export",[PY,ROOT/"backend/nhl/scripts/export_canonical_slate_spine.py","--slate-date",slate,"--output",spine],["03_slate_health_gate"],"FAIL_EXPORT" if scenario=="export_failure" else None)
+  stage("04_canonical_slate_export",[PY,ROOT/"backend/nhl/scripts/export_canonical_slate_spine.py","--slate-date",slate,"--output",spine],["03_certified_slate_health_gate"],"FAIL_EXPORT" if scenario=="export_failure" else None)
   if scenario:
    spine.write_text("canonical_season,slate_date,game_id\n"+(f"{season},{slate},2026020001\n{season},{slate},2026020002\n" if source_health["normalized_game_count"] else ""))
   status["canonical_game_spine_sha256"]=hashlib.sha256(spine.read_bytes()).hexdigest()
   status["canonical_game_count"]=source_health["normalized_game_count"]
   if status["valid_empty_slate"]:
-   for sid in ["05_stable_upstream_daily","06_team_history_readiness","07_player_history_readiness","08_mainline_prerequisites","09_sog_prerequisites","10_points_prerequisites","11_saves_prerequisites"]:
+   for sid in ["06_team_history_readiness","07_player_history_readiness","08_mainline_prerequisites","09_sog_prerequisites","10_points_prerequisites","11_saves_prerequisites"]:
     status["stages"].append({"stage_id":sid,"command":"none","start_time":utc(),"end_time":utc(),"state":"SKIPPED_VALID_EMPTY_SLATE","exit_status":0,"input_identities":["04_canonical_slate_export"],"output_identities":[],"row_counts":{},"warnings":[],"failure_class":None,"downstream_allowed":True})
    status.update(team_history_readiness="NOT_REQUIRED_VALID_EMPTY_SLATE",player_history_readiness="NOT_REQUIRED_VALID_EMPTY_SLATE",mainline_prerequisite_readiness="VALID_EMPTY_SLATE",sog_prerequisite_readiness="VALID_EMPTY_SLATE",points_prerequisite_readiness="VALID_EMPTY_SLATE",saves_prerequisite_readiness="VALID_EMPTY_SLATE")
   else:
-   stable=stage("05_stable_upstream_daily",[PY,"-m","backend.nhl.cli","daily","--morning-only"],["04_canonical_slate_export"],"FAIL_ROSTER_REFRESH" if scenario=="roster_failure" else ("FAIL_PREPARATION" if scenario=="preparation_failure" else None))
+   stable=next(x for x in status["stages"] if x["stage_id"]=="02_reconciliation_first_daily_prerequisites")
    sog_lane_blocked=scenario=="sog_cold_start"
    if not scenario and not a.dry_run:
-    stable_stdout=(run/"05_stable_upstream_daily.stdout.log").read_text()
+    stable_stdout=(run/"02_reconciliation_first_daily_prerequisites.stdout.log").read_text()
     sog_lane_blocked="SOG_PREREQUISITE_BLOCKED_LANE_LOCAL" in stable_stdout
     if sog_lane_blocked:
      stable["state"]="PASS_WITH_BOUNDED_LIMITS";stable["warnings"].append("SOG_PREREQUISITE_BLOCKED_LANE_LOCAL");atomic_json(healthpath,status)
-   stage("06_team_history_readiness",["internal","daily morning-only completed-game history stages"],["05_stable_upstream_daily"]);status["team_history_readiness"]="READY"
+   stage("06_team_history_readiness",["internal","daily morning-only completed-game history stages"],["02_reconciliation_first_daily_prerequisites"]);status["team_history_readiness"]="READY"
    stage("07_player_history_readiness",["internal","daily morning-only roster/SOG history stages"],["06_team_history_readiness"]);status["player_history_readiness"]="READY"
    stage("08_mainline_prerequisites",["internal","canonical spine plus team history"],["06_team_history_readiness"]);status["mainline_prerequisite_readiness"]="READY"
    if sog_lane_blocked:

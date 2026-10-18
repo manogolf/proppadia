@@ -395,7 +395,7 @@ def main() -> int:
 
 ## 07:30 local LaunchAgent
 
-`com.proppadia.nhl.morning-orchestration` runs `.venv/bin/python backend/nhl/scripts/run_nhl_morning_orchestration.py --slate-date today --env-file backend/.env`. It performs database/environment preflight, official schedule acquisition, slate health, canonical spine export, stable daily history/roster prerequisites, and per-lane readiness. It does not capture markets, score, create candidates, upload, execute, or grade.
+`com.proppadia.nhl.morning-orchestration` runs `.venv/bin/python backend/nhl/scripts/run_nhl_morning_orchestration.py --slate-date today --env-file backend/.env`. It performs database/environment preflight, then invokes the reconciliation-first `daily --morning-only` graph; that graph certifies the prior date before current schedule acquisition, roster capture, or history preparation. The orchestrator exports the canonical spine and evaluates per-lane readiness only after the daily child succeeds. It does not capture markets, score, create candidates, upload, execute, or grade.
 
 ```sh
 launchctl print gui/$(id -u)/com.proppadia.nhl.morning-orchestration | rg 'state =|runs =|last exit code'

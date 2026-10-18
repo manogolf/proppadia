@@ -14,9 +14,12 @@ from backend.nhl.postgame_reconcile.core import _select_cross_market_final_run
 
 
 class PriorFinalCaptureGapTests(unittest.TestCase):
-    def test_daily_morning_passes_not_final_prior_status_and_reaches_roster_stage(self):
+    def test_daily_morning_blocks_not_final_before_current_slate_acquisition(self):
         recorder = cli.DailyRunRecorder(run_id="morning-test", command=[], phase="EARLY")
-        prior_not_final = {"reconciliation_status": "NOT_FINAL"}
+        prior_not_final = {"prior_slate_date": "2026-10-17",
+                           "official_outcomes_status": "NOT_FINAL",
+                           "reconciliation_status": "NOT_FINAL",
+                           "reconciliation_package": None}
         with tempfile.TemporaryDirectory() as temp, patch.object(cli, "ROOT", Path(temp)), patch.object(
             cli, "require_db_url", return_value="test-dsn"
         ), patch.object(cli, "run"), patch.object(cli, "et_today", return_value="2026-10-18"), patch.object(
@@ -25,13 +28,14 @@ class PriorFinalCaptureGapTests(unittest.TestCase):
             cli, "_bootstrap_daily_canonical_slate", return_value=({}, [], "empty-slate-hash")
         ), patch.object(cli, "ensure_prior_learning", return_value=prior_not_final), patch.object(
             cli, "_refresh_all_team_rosters_for_daily", side_effect=RuntimeError("REACHED_ROSTER_STAGE")
-        ) as refresh:
+        ) as refresh, patch.object(cli, "_bootstrap_daily_canonical_slate") as schedule:
             with patch.dict("os.environ", {}, clear=False), self.assertRaisesRegex(
-                RuntimeError, "REACHED_ROSTER_STAGE"
+                RuntimeError, "PRIOR_DAY_RECONCILIATION_BLOCKING:NOT_FINAL"
             ):
                 cli._cmd_daily_impl(with_odds=False, morning_only=False, odds_phase="EARLY",
                                     daily_run_id="morning-test", recorder=recorder)
-        refresh.assert_called_once()
+        refresh.assert_not_called()
+        schedule.assert_not_called()
 
     def test_one_valid_final_capture_is_still_selected(self):
         run = Path("valid-final-capture")

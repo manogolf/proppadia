@@ -5,7 +5,7 @@
 The canonical comprehensive command is:
 
 ```sh
-.venv/bin/python -m backend.nhl.cli daily --with-odds
+./bin/python -m backend.nhl.cli daily --with-odds
 ```
 
 `bin/nhl_ops.sh daily` is a wrapper for that module command. Git history
@@ -21,9 +21,9 @@ identified by its single starting year, such as season `2026`.
 The comprehensive graph is:
 
 1. database sanity;
-2. current-date schedule acquisition and canonical-slate validation;
-3. current-slate roster capture and player normalization;
-4. prior-date outcome finalization;
+2. prior-date official outcome acquisition, reconciliation, and certification;
+3. current-date schedule acquisition and canonical-slate validation;
+4. current-slate roster capture and player normalization;
 5. full-league roster refresh;
 6. prior-date log, shift, manpower, and feature finalization;
 7. feature construction, prediction scoring, and prediction durability;
@@ -31,22 +31,29 @@ The comprehensive graph is:
 9. optional market attachment from that run-bound observation;
 10. research refresh, archival, integrity checks, and final sanity counts.
 
-The current-slate roster capture follows verified schedule and canonical team
-identity readiness and runs before prior-date learning. Its official source
-observation and transaction-backed player/roster updates are independently
-recorded in the `roster` lane. A prior-date learning failure can still stop
-later daily features and predictions, but it does not prevent the current
-roster evidence from being captured and reported. A valid empty slate skips
-the roster child. Schedule validation and the roster child remain blocking
-prerequisites for downstream work.
+Prior-date reconciliation is the first substantive daily operation after the
+database connectivity check. Daily work may continue only with a verified,
+date-bound complete reconciliation package whose official outcome rows are
+FINAL and exactly cover the admitted game set. `NOT_FINAL`, `NO_PACKAGE`,
+incomplete outcomes, malformed or corrupt packages, and date/game-set
+mismatches block before current-slate schedule acquisition, roster writes,
+history ingestion, evaluation, feature construction, predictions, or odds.
+`NO_PRIOR_GAMES` is accepted only when the retained official NHL schedule
+response and its date-bound health/hash record verify an empty prior date.
+
+After that checkpoint, the current-slate schedule and canonical identities are
+validated, then the existing governed roster child captures official roster
+evidence and transaction-backed player/roster updates in the `roster` lane. It
+runs once; explicit roster reuse disables provider fetching. Schedule and
+roster failures remain blocking for downstream work. A valid empty current
+slate skips the roster child after the prior-date checkpoint.
 
 Before V1, the optional odds step wrote mutable odds files directly, could retry individual
 provider calls, and represented failures as empty results. V1 retains the same
 comprehensive graph while placing immutable roster evidence before roster DML,
 placing prediction durability before optional odds, and binding market builders
-only to the current immutable observation. Current-slate roster capture does
-not depend on prior-day outcome or grading readiness. Prediction work does not
-depend on odds availability or canonical market matching.
+only to the current immutable observation. Prediction work does not depend on
+odds availability or canonical market matching.
 
 ## Odds observations
 

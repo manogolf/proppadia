@@ -103,9 +103,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   qualified final observed before a later target is included for that target
   while remaining excluded from any earlier target that had already started.
 
-### P2.9 Keep prior-day learning gaps from blocking today's NHL slate
+### P2.9 Enforce prior-day reconciliation before dependent NHL daily work
 
-- Status: **CODE CORRECTION COMPLETE — natural-run verification pending**. The
+- Status: **RECONCILIATION-FIRST RESTORED LOCALLY — focused tests pass; natural-run verification pending**. The
   October 18 10:07 ET `EARLY` run bootstrapped today's two-game schedule, then
   prior-day reconciliation stopped because October 17 had one retained
   `REFRESH` state and no immutable `FINAL_PREGAME` cross-market state. The
@@ -227,29 +227,17 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   historical evidence does not establish that every earlier date emptied at
   the same join stage; the exact zero-roster chronology above is confirmed
   for October 17.
-- Smallest justified producer correction: make the existing governed
+- Superseded roster-first proposal: make the existing governed
   current-slate roster observation and canonical identity import available
   before the Saves pregame window, independently of a prior-day learning
-  failure (for example, run that roster stage after schedule freeze and before
-  `ensure_prior_learning()` can stop the daily graph). Keep the same NHL
-  roster source, canonical player identity and goalie-history membership
-  checks, and strict whole-slate pre-puck validation. Do not add a current
-  player-table fallback or relax goalie/source qualification. The existing
-  `test_daily_startup_ordering.py` checks schedule-before-learning but does not
-  cover roster-stage ordering; add a focused ordering regression with any
-  future implementation. Separately, the mode-scoped missing-Saves handling
-  documented above remains necessary for official prior-day outcomes, but it
-  cannot restore October 17 prediction evidence.
-- Roster sequencing correction implemented locally: after the date-bound
-  schedule health and canonical game set are validated, daily now runs the
-  existing `refresh_players_and_roster_today.py` capture before
-  `ensure_prior_learning()`. The roster lane and its immutable observation
-  summary are recorded before prior-day learning starts; a subsequent prior-day
-  failure therefore leaves roster status complete in the parent receipt while
-  the shared prerequisite stage still fails and prevents downstream scoring.
-  Valid empty slates skip the roster child. Schedule validation remains a hard
-  prerequisite. Reused observations retain their existing canonical-set
-  verification and `NHL_FETCH_DISABLE=1` behavior.
+- `142b2619` moved current-slate schedule and roster acquisition ahead of prior
+  learning to protect the early-start roster window. Under the governing
+  reconciliation-first decision, that ordering is incorrect: a failed prior
+  day must stop before those current-slate source operations, even if a
+  pregame opportunity is missed. The daily graph now reconciles first, then
+  imports and validates the current schedule, then runs the existing roster
+  child once. The redundant `import_roster_today.py` acquisition removed by
+  `142b2619` remains removed; no duplicate provider fetch is restored.
 - Removed the adjacent current-slate `import_roster_today.py` invocation that
   set both `SKIP_ROSTER_STATUS=1` and `SKIP_PLAYERS=1`. That path still fetched
   every slate team but performed neither identity nor roster-status writes;
@@ -258,20 +246,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   player/roster-status writes in one transaction. This removes a redundant
   provider acquisition from the current-slate stage without changing the
   separate full-league roster refresh.
-- Focused offline regression coverage in
-  `backend/nhl/tests/test_daily_startup_ordering.py` proves schedule → roster →
-  prior-learning order, roster receipt completion despite a missing-card
-  failure, single child invocation and date binding, explicit reuse with
-  provider fetching disabled, and schedule/roster failure stopping behavior.
-  It also asserts feature seeding remains after prior-day learning. Verification:
-  `./bin/python -m pytest backend/nhl/tests/test_daily_startup_ordering.py
-  backend/nhl/tests/test_postgame_learning_missing_prior_final.py -q` (18 passed).
-- Remaining: prior-day outcome reconciliation can still block feature scoring
-  and downstream daily lanes after the roster stage; the separate missing-Saves
-  prediction-card contract remains unresolved. Verify the new roster receipt on
-  the next natural pre-puck daily run. Keep the SOG schedule-spine question
-  separate. Do not fabricate a final capture or weaken direct final-pregame
-  reconciliation.
+- The governed `refresh_players_and_roster_today.py` child remains the single
+  current-slate roster acquisition and retains official source provenance,
+  canonical identity normalization, immutable observation evidence, and
+  explicit reuse with `NHL_FETCH_DISABLE=1`. It now runs after certification.
+  No current roster evidence is written when prior-day reconciliation fails.
+- Remaining: validate the new package certificate and ordering on a natural
+  run; early-start slates may miss current roster and pregame opportunities
+  when prior reconciliation fails. That is an accepted consequence. The
+  separate missing-Saves prediction-card contract remains unresolved; it must
+  not be disguised as successful grading or outcome certification.
 
 - Reconciliation-first integrity review (October 18): the governing contract
   requires a completed, date-bound reconciliation package before prior-day
@@ -284,19 +268,21 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   checks before market capture. `ensure_prior_learning()` verifies an existing
   package, but callers must also require `official_outcomes_status == FINAL`
   and exact expected-game coverage before using it as a downstream checkpoint.
-- Confirmed daily integrity gap: `_cmd_daily_impl()` accepts `NOT_FINAL` and
+- Confirmed and corrected daily integrity gap: prior to this correction,
+  `_cmd_daily_impl()` accepted `NOT_FINAL` and
   `NO_PACKAGE` from `ensure_prior_learning()` and proceeds into full-league
   roster refresh, prior-date raw-log seeding/promotion, SOG evaluation, feature
   export, and prediction scoring. The regression
   `test_daily_morning_passes_not_final_prior_status_and_reaches_roster_stage`
   encodes that continuation. In particular, a `NOT_FINAL` result means there
   is no completed package certifying that date; subsequent learning and
-  prediction work must stop. `NO_PRIOR_GAMES` is a valid exception only when a
+  prediction work must stop. The former continuation regression has been
+  replaced by a block-before-schedule check. `NO_PRIOR_GAMES` is a valid exception only when a
   date-bound retained schedule has been verified and is genuinely empty.
-  `run_nhl_morning_orchestration.py` can then treat a successful morning child
-  as history readiness, so the daily false-success can also mask the missing
-  certificate upstream.
-- Confirmed independent-observer gap: the 900-second mainline wrapper invokes
+  `run_nhl_morning_orchestration.py` treated a successful morning child as
+  history readiness, masking the missing certificate upstream. Daily now
+  blocks those statuses before current-slate schedule acquisition.
+- Confirmed and corrected independent-observer gap: the 900-second mainline wrapper invokes
   SOG, Points, and Saves observers before `observe()`. The mainline observer's
   own prior-outcome gate remains before its history export, phase decision,
   and any paid odds request. The three prop observers, however, read strict-
@@ -306,11 +292,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   historical rows to a completed package. The SOG observer reads finalized
   `skater_game_logs_raw` rows before the cutoff and likewise has no package
   gate. Its prediction snapshots retain aggregate features, not contributing
-  game IDs or a reconciliation-package identity.
+  game IDs or a reconciliation-package identity. All three publication entry
+  points now perform a read-only prior-date certificate check before history
+  feature export; a failed check writes an explicit WARN-only status and no
+  prediction. The child records the certificate path, manifest hash, and game
+  IDs when valid.
 - Evaluation has the same dependency boundary: daily invokes
   `evaluate_sog_predictions.py` after `ensure_prior_learning()`, but the daily
   `NOT_FINAL` continuation permits it to read raw-log truth without a package
-  certificate. `points_hgb_shadow.grade_prior_hgb_capture` verifies a
+  certificate. Daily now requires and embeds the verified certificate before
+  reaching SOG evaluation. `points_hgb_shadow.grade_prior_hgb_capture` verifies a
   reconciliation package. The inspected NHL LaunchAgents are the mainline
   900-second observer and morning orchestration; no NHL model-training
   LaunchAgent was found. The offline Moneyline challenger fitter verifies
@@ -337,10 +328,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   handoff. This is a legitimate missing-prediction exception only if outcome
   certification is kept distinct from lane grading. `65b09546` removes
   unrelated prop readiness from the mainline gate and preserves the mainline's
-  own official-outcome check; it does not add a prior-certificate gate to the
-  independently dispatched props. `142b2619` moves current-slate roster
-  acquisition before prior learning; this is safe independent acquisition and
-  does not certify or consume prior-day learned state. `3c934768` adds parent
+  own official-outcome check; this correction adds the same read-only
+  certificate requirement to the independently dispatched props. `142b2619`
+  moved schedule and roster acquisition before prior learning; that sequencing
+  is reversed while retaining its useful removal of a redundant roster fetch.
+  `3c934768` adds parent
   receipt links to child status evidence and changes visibility only.
 - The missing-Saves contract remains distinct from official-outcome integrity.
   A missing required Saves capture must remain visible and block Saves grading;
@@ -353,23 +345,43 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   invalid present cards remain blocking in every mode. Existing source
   handoff and missing-Saves items above still require a contract-preserving
   implementation; do not infer a grade from absent prediction evidence.
-- Smallest justified correction (not implemented): keep schedule validation
-  and current-slate roster capture before prior learning; in
-  `_cmd_daily_impl()`, allow downstream history ingestion, evaluation, feature
-  export, and predictions only after a verified complete prior-date package
-  with `official_outcomes_status == FINAL` and exact date/game coverage. Permit
-  `NO_PRIOR_GAMES` only after verified empty-schedule evidence. Treat
-  `NOT_FINAL`, `NO_PACKAGE`, incomplete outcomes, malformed packages, and
-  source/game-set mismatches as visible blocking failures before any dependent
-  work. Replace the test that currently expects `NOT_FINAL` continuation.
-  Apply the same read-only certificate check before independent Points, Saves,
-  and SOG historical feature exports/publications; do not trigger duplicate
-  outcome acquisition from each observer. Preserve mainline's existing gate.
-  Bind SOG evaluation truth to the certified outcome package or prove exact
-  equality of its evaluated game set and official outcome rows. Training entry
-  points must either verify the same package authority or document their
-  existing immutable, hash-pinned source contract as a separate certified
-  input.
+- Implemented correction: the daily graph now performs database connectivity,
+  prior-date official outcome acquisition/reconciliation/certification,
+  current-date schedule validation, current-slate roster capture, then all
+  history-dependent evaluation, feature, and prediction work. A shared
+  read-only certificate validator checks package hashes, completion/date,
+  exact admitted/outcome game-set equality, official source labels/timestamps,
+  FINAL states, and scores. No-package continuation is limited to a validated
+  empty official schedule with matching date-bound health and raw-response
+  hash. NOT_FINAL, NO_PACKAGE, incomplete/non-final outcomes, corrupt
+  artifacts, wrong dates, and game-set mismatches stop before schedule or
+  roster acquisition. The existing one-child governed roster path remains;
+  duplicate roster fetching was not restored.
+- The morning orchestration now invokes the same `daily --morning-only` path
+  immediately after database connectivity. It no longer imports the current
+  schedule before that command. It reads date-bound schedule health and exports
+  the canonical spine only after daily reconciliation, schedule, roster, and
+  history preparation succeed.
+- The Points/Saves common observer and standalone SOG observer use the shared
+  read-only prior-day certificate gate and require a verified current-slate
+  schedule plus the complete, strictly prestart immutable roster observation
+  before exporting features. The mainline observer retains its existing
+  official-outcome validator and now requires that roster observation before
+  history export, phase selection, and odds access. No observer starts
+  duplicate acquisition; independent poll timing waits for the same governed
+  daily roster artifact.
+- Actual warm-up ownership: `pmset -g sched` reports a repeating 05:27 daily
+  `wakepoweron`; no NHL stir/warm-up executable or LaunchAgent was found. This
+  OS wake event itself invokes no NHL code and writes no NHL/database state.
+  Both NHL LaunchAgents are loaded and enabled, and installed plists match the
+  checked-in files. The mainline agent has `RunAtLoad` and a 900-second
+  interval; the morning agent runs at 07:30 local. The wake can start a poll
+  before the morning agent. Its practical effect is to make the host available
+  ahead of scheduled automation; the retained configuration does not identify
+  who created it or record a more specific purpose. The new certificate and roster gates prevent a
+  pre-morning poll from publishing predictions before prior certification and
+  current-slate roster prerequisites are complete.
+  No scheduler or power configuration was changed.
 - Required focused coverage: package complete and exact-game-set acceptance;
   NOT_FINAL, NO_PACKAGE, incomplete/non-final outcome, corrupt/hash-mismatched
   package, and missing/extra outcome rows block before log promotion/evaluation/
@@ -379,7 +391,14 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   is absent and preserves status evidence; missing Points/Saves/SOG cards
   separate outcome certification from that lane's grade; duplicate/corrupt
   present cards remain failures; SOG evaluation excludes any uncertified
-  outcome rows. Natural-run acceptance requires parent and child receipts to
+  outcome rows. Implemented focused tests cover certificate acceptance,
+  missing/non-final/incomplete/corrupt/wrong-date/partial package failures,
+  verified empty schedule, daily ordering and blocking, observer blocking, and
+  valid-package prediction publication. Verification: 147 tests and 21
+  subtests passed across the focused suites; `bash -n bin/nhl_ops.sh` and
+  `git diff --check` passed. The retained Oct. 16 package validates as
+  `CERTIFIED_FINAL` with its two admitted/outcome game IDs. No production run
+  or live scheduler/power change was performed. Natural-run acceptance requires parent and child receipts to
   show the exact prior-date package ID/hash, FINAL status, and admitted game
   set before any dependent stage starts, with explicit blocking status on an
   invalid or absent certificate. Confirm independent current-slate roster

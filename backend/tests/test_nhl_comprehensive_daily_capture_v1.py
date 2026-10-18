@@ -153,6 +153,10 @@ class ComprehensiveDailyCaptureTests(unittest.TestCase):
         ])
         self.assertEqual(explicit_replay.reuse_odds_observation, Path("/immutable/package"))
         graph = cli.DAILY_EXECUTION_GRAPH
+        self.assertLess(graph.index("PRIOR_DATE_OUTCOME_FINALIZATION"),
+                        graph.index("CANONICAL_SCHEDULE_AND_SLATE_VALIDATION"))
+        self.assertLess(graph.index("CANONICAL_SCHEDULE_AND_SLATE_VALIDATION"),
+                        graph.index("SLATE_ROSTER_CAPTURE_AND_NORMALIZATION"))
         self.assertLess(graph.index("SLATE_ROSTER_CAPTURE_AND_NORMALIZATION"),
                         graph.index("FEATURE_AND_PREDICTION_DURABILITY"))
         self.assertLess(graph.index("FEATURE_AND_PREDICTION_DURABILITY"),

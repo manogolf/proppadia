@@ -147,6 +147,8 @@ class CrossMarketObserverReadinessTest(unittest.TestCase):
             with patch.object(capture, "utc_now", return_value=NOW), \
                  patch.object(capture, "ensure_prior_day_official_outcomes",
                               return_value={"status": "EXISTING_GOVERNED_PACKAGE_VALID"}), \
+                 patch.object(capture, "require_slate_roster_observation",
+                              return_value={"status": "VERIFIED_CURRENT_SLATE_ROSTER"}), \
                  patch.object(capture, "export_inputs",
                               side_effect=ValueError("CROSS_MARKET_OFFICIAL_OUTCOME_EVIDENCE_MISSING")), \
                  patch.object(capture, "fetch_markets") as fetch:

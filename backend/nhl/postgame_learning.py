@@ -28,6 +28,10 @@ from backend.nhl.points_hgb_shadow import (
     discover_daily_points_authority,
     grade_prior_hgb_capture,
 )
+from backend.nhl.reconciliation_certificate import (
+    verify_reconciliation_certificate,
+    verified_empty_schedule,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -58,30 +62,8 @@ def _sha(path: Path) -> str:
 
 
 def verify_reconciliation_package(path: Path, slate_date: str) -> dict:
-    path = Path(path).resolve()
-    manifest = path / "SHA256SUMS"
-    if not manifest.is_file():
-        raise RuntimeError("RECONCILIATION_PACKAGE_MANIFEST_MISSING")
-    entries = {}
-    for line in manifest.read_text().splitlines():
-        try:
-            digest, name = line.split("  ", 1)
-        except ValueError:
-            raise RuntimeError("RECONCILIATION_PACKAGE_MANIFEST_INVALID") from None
-        file_path = path / name
-        if Path(name).name != name or not file_path.is_file() or _sha(file_path) != digest:
-            raise RuntimeError("RECONCILIATION_PACKAGE_HASH_MISMATCH")
-        entries[name] = digest
-    marker = json.loads((path / "RUN_COMPLETE.json").read_text())
-    summary = json.loads((path / "summary.json").read_text())
-    if marker.get("status") != "COMPLETE" or summary.get("status") != "COMPLETE":
-        raise RuntimeError("RECONCILIATION_PACKAGE_NOT_COMPLETE")
-    if summary.get("slate_date") != slate_date:
-        raise RuntimeError("RECONCILIATION_PACKAGE_SLATE_MISMATCH")
-    required = {"canonical_game_outcomes.csv", "graded_moneyline.csv", "graded_puck_line.csv"}
-    if not required.issubset(entries):
-        raise RuntimeError("RECONCILIATION_PACKAGE_REQUIRED_OUTPUT_MISSING")
-    return summary
+    verify_reconciliation_certificate(path, slate_date)
+    return json.loads((Path(path) / "summary.json").read_text())
 
 
 def _existing_reconciliation(root: Path, slate_date: str) -> Path | None:
@@ -99,12 +81,28 @@ def _existing_reconciliation(root: Path, slate_date: str) -> Path | None:
 
 def _retained_schedule_game_count(slate_date: str) -> int | None:
     path = ROOT / "artifacts/operational/nhl/slates" / slate_date / "raw_schedule_response.json"
-    if not path.is_file():
+    health_path = path.with_name("slate_health.json")
+    if not path.is_file() or not health_path.is_file():
         return None
     payload = json.loads(path.read_text())
-    weeks = payload.get("gameWeek") or []
-    return sum(len(day.get("games") or []) for day in weeks
-               if str(day.get("date")) == slate_date)
+    health = json.loads(health_path.read_text())
+    digest = _sha(path)
+    if (health.get("slate_date") != slate_date
+            or health.get("downstream_ready") is not True
+            or health.get("source") != f"https://api-web.nhle.com/v1/schedule/{slate_date}"
+            or health.get("raw_source_hash") != digest):
+        raise RuntimeError("PRIOR_DATE_SCHEDULE_CERTIFICATE_INVALID")
+    weeks = payload.get("gameWeek")
+    if not isinstance(weeks, list):
+        raise RuntimeError("PRIOR_DATE_SCHEDULE_SCHEMA_INVALID")
+    count = sum(len(day.get("games") or []) for day in weeks
+                if str(day.get("date")) == slate_date)
+    expected = health.get("normalized_game_count")
+    if expected is None or int(expected) != count:
+        raise RuntimeError("PRIOR_DATE_SCHEDULE_GAME_COUNT_MISMATCH")
+    if count == 0:
+        verified_empty_schedule(slate_date, slate_root=path.parents[1])
+    return count
 
 
 def _write_phase_restatement(package: Path, root: Path) -> Path:

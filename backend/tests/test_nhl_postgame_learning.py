@@ -92,6 +92,13 @@ class NHLPostgameLearningTest(unittest.TestCase):
             schedule = root / "artifacts/operational/nhl/slates" / slate / "raw_schedule_response.json"
             schedule.parent.mkdir(parents=True)
             schedule.write_text(json.dumps({"gameWeek": [{"date": slate, "games": []}]}))
+            (schedule.parent / "slate_health.json").write_text(json.dumps({
+                "slate_date": slate, "completion_status": "VALID_EMPTY_SLATE",
+                "downstream_ready": True,
+                "source": f"https://api-web.nhle.com/v1/schedule/{slate}",
+                "raw_source_hash": hashlib.sha256(schedule.read_bytes()).hexdigest(),
+                "normalized_game_count": 0,
+            }))
             with patch("backend.nhl.postgame_learning.ROOT", root), \
                     patch("backend.nhl.postgame_learning.subprocess.run") as run:
                 result = ensure_prior_learning(slate, reconciliation_root=root / "reconciliations")
@@ -132,14 +139,18 @@ class NHLPostgameLearningTest(unittest.TestCase):
             package = root / "2026-09-29" / "reconciliation=abc"
             package.mkdir(parents=True)
             games = pd.DataFrame([{
+                "canonical_season": 2026, "slate_date": "2026-09-29", "game_id": 2026010001,
                 "game_type_code": 2, "official_full_game_winner": "HOME",
                 "official_final_home_goals": 3, "official_final_away_goals": 1,
-                "official_final": True, "outcome_source_timestamp_utc": "2026-09-30T10:00:00Z",
+                "official_final": True, "outcome_source": "NHL_OFFICIAL_GAMECENTER",
+                "outcome_source_timestamp_utc": "2026-09-30T10:00:00Z",
             }])
             ml = pd.DataFrame([{
                 **games.iloc[0].to_dict(), "model_favored_team": "HOME", "home_team": "HOME",
             }])
             pl = ml.copy()
+            games[["canonical_season", "slate_date", "game_id"]].to_csv(
+                package / "canonical_admitted_slate.csv", index=False)
             games.to_csv(package / "canonical_game_outcomes.csv", index=False)
             ml.to_csv(package / "graded_moneyline.csv", index=False)
             pl.to_csv(package / "graded_puck_line.csv", index=False)

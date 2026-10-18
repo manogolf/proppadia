@@ -3,7 +3,7 @@
 NHL pipeline CLI
 
 Commands:
-  daily        Run the full daily pipeline (schedule/roster → features → score → site files).
+  daily        Reconcile prior date, then run schedule/roster → features → score → site files.
   fetch-odds   Fetch NHL player props odds (SOG + Saves + Points) to nhl/site/data JSON.
   build-sog    Build nhl/site/data/sog_with_market.csv from latest predictions + odds.
   build-saves  Build nhl/site/data/saves_with_market.csv from latest predictions + odds.
@@ -114,6 +114,7 @@ from backend.nhl.market_attachment_retention import retain_market_attachment_pac
 from backend.nhl.postgame_learning import (
     current_et_slate, ensure_prior_learning, prior_et_slate,
 )
+from backend.nhl.reconciliation_certificate import require_prior_day_certificate
 
 
 # ---------- bootstrap env ----------
@@ -174,9 +175,9 @@ _ACTIVE_DAILY_LANE = "shared_prerequisites"
 
 DAILY_EXECUTION_GRAPH = (
     "DATABASE_SANITY",
+    "PRIOR_DATE_OUTCOME_FINALIZATION",
     "CANONICAL_SCHEDULE_AND_SLATE_VALIDATION",
     "SLATE_ROSTER_CAPTURE_AND_NORMALIZATION",
-    "PRIOR_DATE_OUTCOME_FINALIZATION",
     "FULL_LEAGUE_ROSTER_REFRESH",
     "FEATURE_AND_PREDICTION_DURABILITY",
     "OPTIONAL_GOVERNED_ODDS_OBSERVATION",
@@ -2489,7 +2490,7 @@ def _roster_refresh_environment(
 
 
 def _bootstrap_daily_canonical_slate(*, slate: str, recorder: DailyRunRecorder):
-    """Import and freeze today's schedule before prior learning or lane checks."""
+    """Import and freeze today's schedule after prior-day certification."""
     run([PY, SCRIPTS_DIR / "import_schedule_today.py"], env={"SLATE_DATE": slate})
     slate_health_path = ROOT / "artifacts" / "operational" / "nhl" / "slates" / slate / "slate_health.json"
     if not slate_health_path.exists():
@@ -2571,6 +2572,30 @@ def _capture_daily_slate_roster(
     _ACTIVE_DAILY_LANE = "shared_prerequisites"
 
 
+def _require_daily_prior_certificate(prior_date: str, result: dict) -> dict:
+    status = result.get("reconciliation_status")
+    if result.get("prior_slate_date") != prior_date:
+        raise RuntimeError("PRIOR_DAY_LEARNING_DATE_MISMATCH")
+    if status == "NO_PRIOR_GAMES":
+        certificate = require_prior_day_certificate(prior_date)
+        if (result.get("official_outcomes_status") != "NO_PRIOR_GAMES"
+                or certificate.get("status") != "VERIFIED_EMPTY_SCHEDULE"
+                or result.get("reconciliation_package") is not None):
+            raise RuntimeError("PRIOR_DAY_EMPTY_SCHEDULE_NOT_CERTIFIED")
+        return certificate
+    if status not in {"CREATED", "REUSED_VALID_PACKAGE"}:
+        raise RuntimeError(f"PRIOR_DAY_RECONCILIATION_BLOCKING:{status or 'MISSING_STATUS'}")
+    if result.get("official_outcomes_status") != "FINAL":
+        raise RuntimeError("PRIOR_DAY_OFFICIAL_OUTCOMES_NOT_FINAL")
+    package = result.get("reconciliation_package")
+    certificate = require_prior_day_certificate(prior_date)
+    if not package or Path(package).resolve() != Path(certificate["package_path"]).resolve():
+        raise RuntimeError("PRIOR_DAY_RECONCILIATION_PACKAGE_IDENTITY_MISMATCH")
+    if certificate.get("status") != "CERTIFIED_FINAL":
+        raise RuntimeError("PRIOR_DAY_RECONCILIATION_CERTIFICATE_INVALID")
+    return certificate
+
+
 # ---------- daily pipeline ----------
 
 # --- REPLACE the very top of cmd_daily(with_odds: bool) down through the two print() lines ---
@@ -2619,42 +2644,34 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     print(f"SLATE_DATE (ET): {slate}" + (" (honor env)" if honor_env else ""))
     print(f"PRIOR_DATE (ET): {yday}" + (" (honor env)" if honor_env else ""))
 
-    # --- Daily artifact dirs (your weekly cleanup automation) ---
+    # 0) DB sanity
+    run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", "SELECT now();"])
+
+    # Reconcile and certify yesterday before schedule, roster, history, or model
+    # work can enter the daily graph. This governed path never invokes Odds API.
+    prior_date_et = prior_et_slate()
+    recorder.prior_learning = ensure_prior_learning(prior_date_et)
+    recorder.prior_learning["certificate"] = _require_daily_prior_certificate(
+        prior_date_et, recorder.prior_learning)
+    print("NHL_PRIOR_DAY_LEARNING=" + json.dumps(recorder.prior_learning, sort_keys=True))
+
+    # Create working directories only after the prior-date checkpoint passes.
     DAILY_EXPORTS_DIR = ROOT / "backend" / "nhl" / "exports" / "daily"
     DAILY_NAMES_DIR = DAILY_EXPORTS_DIR / "names"
     DAILY_SOG_FEATURES_DIR = DAILY_EXPORTS_DIR / "sog_features"
     for d in (DAILY_NAMES_DIR, DAILY_SOG_FEATURES_DIR):
         d.mkdir(parents=True, exist_ok=True)
 
-    # 0) DB sanity
-    run(["psql", db, "-v", "ON_ERROR_STOP=1", "-c", "SELECT now();"])
-
-    # Establish and freeze the current slate before prior-day learning performs
-    # any production-lane lineage checks against retained daily receipts.
+    # Current-slate schedule and roster evidence follow the prior-date
+    # certificate. The roster remains one governed acquisition/normalization.
     slate_health, canonical_games, game_hash = _bootstrap_daily_canonical_slate(
         slate=slate, recorder=recorder)
-
-    # Current-slate roster evidence is independent of prior-day grading. Capture
-    # it as soon as the canonical game and team identities are verified so a
-    # missing prior prediction card cannot consume the pregame observation window.
     if slate_health.get("completion_status") == "READY":
         _capture_daily_slate_roster(
             slate=slate, odds_phase=odds_phase, daily_run_id=daily_run_id,
             recorder=recorder, reuse_roster_observation=reuse_roster_observation,
             canonical_games=canonical_games, game_hash=game_hash,
         )
-
-    # Complete yesterday's official learning handoff before history updates.
-    # Official NHL requests are governed; this path never invokes Odds API.
-    prior_date_et = prior_et_slate()
-    recorder.prior_learning = ensure_prior_learning(prior_date_et)
-    print("NHL_PRIOR_DAY_LEARNING=" + json.dumps(recorder.prior_learning, sort_keys=True))
-    if recorder.prior_learning.get("reconciliation_status") in {
-        "CREATED", "REUSED_VALID_PACKAGE", "NOT_FINAL", "NO_PACKAGE", "NO_PRIOR_GAMES",
-    }:
-        pass
-    else:
-        raise RuntimeError("PRIOR_DAY_LEARNING_STATUS_INVALID")
 
     # 0b) Full-league roster/player refresh (all teams, not slate-limited).
     # Explicit roster reuse prohibits a second roster-provider acquisition.
@@ -3471,41 +3488,6 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     pending_error: BaseException | None = None
     receipt_path: Path | None = None
     try:
-        # Reuse is an explicit pre-execution contract. Validate against the
-        # retained canonical slate before DB access, roster DML, or any provider.
-        if reuse_roster_observation is not None or reuse_odds_observation is not None:
-            preflight_slate = et_today()
-            slate_root = ROOT / "artifacts" / "operational" / "nhl" / "slates" / preflight_slate
-            preflight_games = load_canonical_slate(
-                slate_date=preflight_slate,
-                raw_schedule_path=slate_root / "raw_schedule_response.json",
-                slate_health_path=slate_root / "slate_health.json",
-            )
-            preflight_hash = canonical_game_set_hash(game.game_id for game in preflight_games)
-            recorder.set_canonical(
-                slate_date=preflight_slate,
-                season=infer_nhl_season_from_date_yyyy_mm_dd(preflight_slate),
-                game_ids=[game.game_id for game in preflight_games],
-                game_set_hash=preflight_hash,
-            )
-            if reuse_roster_observation is not None:
-                recorder.roster_observation = verify_roster_observation_reuse(
-                    reuse_roster_observation,
-                    season=infer_nhl_season_from_date_yyyy_mm_dd(preflight_slate),
-                    slate_date=preflight_slate,
-                    phase=odds_phase,
-                    canonical_game_ids=[game.game_id for game in preflight_games],
-                    canonical_game_set_hash=preflight_hash,
-                )
-            if reuse_odds_observation is not None:
-                capture_odds_observation(
-                    root=ODDS_OBSERVATION_ROOT,
-                    season=infer_nhl_season_from_date_yyyy_mm_dd(preflight_slate),
-                    slate_date=preflight_slate, phase=odds_phase,
-                    parent_daily_run_id=daily_run_id,
-                    canonical_games=preflight_games, provider=None, authorized=False,
-                    reuse_observation_dir=reuse_odds_observation,
-                )
         _cmd_daily_impl(
             with_odds=with_odds, morning_only=morning_only,
             odds_phase=odds_phase, daily_run_id=daily_run_id,

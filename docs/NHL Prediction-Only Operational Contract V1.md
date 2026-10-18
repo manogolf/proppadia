@@ -33,7 +33,25 @@ Saves:
 
 Points retains each frozen line-model probability as `raw_prob_over`, then constructs the operational ladder with an equal-weight non-increasing isotonic projection. The line meanings remain `P(points >= 1)`, `P(points >= 2)`, and `P(points >= 3)` for 0.5, 1.5, and 2.5. Projection version and model lineage are recorded in each run; no candidate is emitted when price evidence is absent. Saves retains the complete conditional-on-start distribution. Authorized starter sources include NHL.com projected-lineup articles (`NHL_COM_PROJECTED_LINEUP`) and any separately governed source explicitly supplied to the gate. An NHL.com record qualifies as `PROJECTED` only when it has an exact scheduled game date and matchup, identifies the team, explicitly names one starter, binds that name to exactly one canonical goalie ID on that team, and is captured fresh and before scheduled start. Article URL/identity, content hash, capture time, and publication date or timestamp are retained; date-only publication metadata remains date-only. `CONFIRMED` remains distinct. Ambiguous, stale, conflicting, unauthorized, post-start, or market-only identity cannot qualify a prediction. The policy allowlist does not itself acquire articles; Saves remains blocked on runs without qualifying captured evidence.
 
-The installed 900-second observer invokes Points, Saves, and SOG prediction-only lanes before consulting the market-readiness gate. A lane failure is WARN-only and isolated. It cannot create or retry a paid request.
+Every Points, Saves, and SOG observer validates the immediately prior date's
+reconciliation certificate before reading historical feature rows or
+publishing a prediction. It also requires the validated current-date schedule
+and the complete, strictly prestart immutable roster observation produced by
+the daily roster child. The gate is read-only and never starts a second
+reconciliation or acquisition path. A missing, incomplete, wrong-date,
+corrupt, or non-final certificate produces an explicit failed observer status
+and no prediction. Missing, mismatched, incomplete, or post-start roster
+evidence likewise blocks publication. A verified empty official prior-date
+schedule is the only no-package exception; an empty current slate requires no
+roster package and produces no prediction.
+
+The installed 900-second observer continues to invoke these lane entry points
+before consulting the market-readiness gate. Each child enforces the
+reconciliation certificate itself, so LaunchAgent wake timing and independent
+invocation cannot bypass the integrity checkpoint. A lane failure remains
+WARN-only for unrelated market capture and cannot create or retry a paid
+request. Mainline capture retains its own official-outcome validation before
+history export, phase selection, and paid odds access.
 
 ## Comprehensive daily runner integration
 
