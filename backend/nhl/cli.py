@@ -1711,6 +1711,15 @@ def _record_completed_moneyline_capture(
     recorder.finish_lane("moneyline", outputs=outputs, provider_requests=0, credits_consumed=0)
 
 
+def _sog_integrity_eligible_game_args(
+    prediction_identity: Mapping[str, Any] | None,
+) -> list[str]:
+    if prediction_identity is None or "eligible_pregame_game_ids" not in prediction_identity:
+        raise RuntimeError("SOG_ELIGIBLE_GAME_IDS_MISSING_FOR_INTEGRITY")
+    game_ids = prediction_identity["eligible_pregame_game_ids"]
+    return ["--eligible-game-ids", ",".join(str(int(game_id)) for game_id in game_ids)]
+
+
 def _run_independent_daily_lanes(
     *, recorder: DailyRunRecorder, db: str, slate: str, with_odds: bool,
     odds_phase: str, daily_run_id: str, canonical_games,
@@ -2414,11 +2423,14 @@ def _run_independent_daily_lanes(
                 research_warnings.append(redact_sensitive_text(
                     f"{label}:{type(error).__name__}:{error}"))
         try:
-            run([
+            integrity_command = [
                 PY, SCRIPTS_DIR / "sog_integrity_report.py", "--slate-date", slate,
                 "--feature-key", "shots_on_goal_denali", "--db-toi-check",
                 "--db-toi-source", "nhl.skater_game_logs_raw", "--db-toi-days-back", "30",
-            ])
+            ]
+            integrity_command.extend(
+                _sog_integrity_eligible_game_args(legacy_sog_prediction))
+            run(integrity_command)
         except Exception as error:
             research_warnings.append(redact_sensitive_text(
                 f"SOG_INTEGRITY:{type(error).__name__}:{error}"))
@@ -3244,6 +3256,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     legacy_sog_identity = _require_current_prediction_artifact(
         calibrated_pred_path, slate=slate, expected_sha256=None)
     legacy_sog_identity.update(sog_scored_metadata)
+    legacy_sog_identity["eligible_pregame_game_ids"] = list(
+        sog_eligibility["eligible_pregame_game_ids"])
     sog_components = [("scorer", SCRIPTS_DIR / ("score_sog_poisson_baseline.py" if sog_scorer == "poisson_baseline" else "score_sog_denali_pairings_ordinal_lgbm.py"))]
     if sog_scorer == "ordinal_lgbm":
         sog_components.extend((f"ordinal_model:{path.relative_to(ordinal_root).as_posix()}", path)

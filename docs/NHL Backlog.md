@@ -69,14 +69,27 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.1 Diagnose the October 17 SOG integrity exit status 2
 
-- Status: **OPEN — investigate when SOG integrity work is otherwise in scope**.
-  The October 17 parent receipt records exit status 2, but the script's
-  diagnostic output was not retained.
-- References: `artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261017T183423404733Z_4ab6390a/parent_receipt.json`;
-  `backend/nhl/scripts/sog_integrity_report.py`.
-- Completion: capture the complete diagnostic output during an appropriate
-  SOG integrity investigation, identify and document the cause, and record
-  whether it requires a code or data correction.
+- Status: **RESOLVED — bounded diagnostic-scope defect corrected**. The parent
+  receipt retains the child exit code but not stdout/stderr. A restricted,
+  read-only reproduction identified the fatal check: the report compared every
+  historical slate feature pair with prediction coverage, including games
+  excluded by the run's pregame cutoff. It found 44 missing pairs, all in
+  already-started games `2026020121` (43) and `2026020130` (1). Both start
+  before the retained `2026-10-17T23:28:49Z` feature cutoff. Passing the
+  existing eligible game IDs to this diagnostic makes its completeness check
+  match the SOG scoring population; it does not change scoring or feature
+  qualification. The corrected restricted read returned 181 eligible pairs
+  and zero missing predictions. The prior-day total-TOI check was 72/72
+  populated, with zero null, zero, sub-minute, over-35-minute, or negative
+  observations.
+- References: `artifacts/operational/nhl/daily_runs/run_id=nhldaily_20261017T232609902832Z_68bc386f/parent_receipt.json`;
+  `docs/nhl/sog_integrity_warning_resolution_2026-10-18.md`;
+  `backend/nhl/scripts/sog_integrity_report.py` and
+  `backend/nhl/cli.py`.
+- Next natural-run verification: confirm the child command carries the
+  run's `eligible_pregame_game_ids`, reports zero missing prediction pairs
+  for that scope, and remains exit 0. Keep the separate source-coverage and
+  feature-quality checks active.
 
 ### P2.2 Verify the target-specific Moneyline chronology correction
 
@@ -104,6 +117,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Completion: ensure the research exporter preserves unknown-versus-zero
   semantics and has a focused regression check. Keep unresolved observations
   NULL unless new official evidence validates them individually.
+
+### P2.4 Validate bounded preseason total-TOI NULL population
+
+- Status: **OPEN — source validation required; no repair authorized**. A
+  bounded read-only 30-day diagnostic found 140 NULL `toi_minutes` across
+  four completed game-type-1 games: `2026010002` (2026-09-19, 32 rows),
+  `2026010020` and `2026010022` (2026-09-21, 36 rows each), and
+  `2026010044` (2026-09-24, 36 rows). The same 30-day window had one zero
+  total-TOI row and 3,419 NULL `pp_toi_minutes` values. These are reported
+  diagnostics, not the cause of the October 17 exit code; the script applies
+  no failure threshold to these window counts. Do not infer zero TOI or repair
+  the 140 rows without official source evidence and a separately authorized
+  correction.
+- Completion: validate the exact player-game rows against official final-game
+  boxscores and source coverage, retain a hashed before/after proposal, and
+  obtain separate authorization before any production correction.
 
 ## Verified Complete — Do Not Reopen
 

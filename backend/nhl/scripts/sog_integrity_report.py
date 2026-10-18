@@ -150,6 +150,33 @@ def run_psql(db_url: str, sql: str) -> str | None:
 def _coerce_num(s: pd.Series) -> pd.Series:
     return pd.to_numeric(s, errors="coerce")
 
+
+def parse_game_ids(value: str | None) -> list[int] | None:
+    """Parse a comma-separated game scope; an explicit blank means no games."""
+    if value is None:
+        return None
+    if not value.strip():
+        return []
+    try:
+        game_ids = sorted({int(part.strip()) for part in value.split(",")})
+    except ValueError as error:
+        raise ValueError("ELIGIBLE_GAME_IDS_INVALID") from error
+    if any(game_id <= 0 for game_id in game_ids):
+        raise ValueError("ELIGIBLE_GAME_IDS_INVALID")
+    return game_ids
+
+
+def eligible_game_filter_sql(game_ids: list[int] | None) -> str:
+    """Return the optional SQL scope for the prediction-completeness contract."""
+    if game_ids is None:
+        return ""
+    normalized = sorted({int(game_id) for game_id in game_ids})
+    if any(game_id <= 0 for game_id in normalized):
+        raise ValueError("ELIGIBLE_GAME_IDS_INVALID")
+    if not normalized:
+        return " AND FALSE"
+    return " AND game_id IN (" + ", ".join(str(game_id) for game_id in normalized) + ")"
+
 def db_toi_integrity_check(
     db_url: str,
     slate: str,
@@ -249,7 +276,12 @@ def db_toi_integrity_check(
         if out2:
             print("[sog_integrity] window_toi| " + out2)
 
-def db_sog_contract_check(db_url: str, slate: str, min_shift_games: int = 3) -> None:
+def db_sog_contract_check(
+    db_url: str,
+    slate: str,
+    min_shift_games: int = 3,
+    eligible_game_ids: list[int] | None = None,
+) -> None:
     """
     Contract check (SOG):
       A) internal completeness: every eligible-to-score (player_id, game_id) must have >=1 nhl.predictions row with prop='shots_on_goal'
@@ -257,6 +289,7 @@ def db_sog_contract_check(db_url: str, slate: str, min_shift_games: int = 3) -> 
     """
     print("\n=== DB SOG contract ===")
     print(f"[sog_integrity] slate={slate} min_shift_games={min_shift_games}")
+    eligible_game_filter = eligible_game_filter_sql(eligible_game_ids)
 
     sql = f"""
 WITH params AS (
@@ -269,6 +302,7 @@ slate_pairs AS (
     v.game_date::date   AS game_date
   FROM nhl.training_features_nhl_sog_enriched_pregame_v2 v
   WHERE v.game_date = DATE '{slate}'
+    {eligible_game_filter.replace('game_id', 'v.game_id', 1)}
 ),
 prior_shift_games AS (
   SELECT
@@ -907,8 +941,18 @@ def main() -> None:
     ap.add_argument("--db-toi-check", action="store_true", help="run TOI integrity checks (optional)")
     ap.add_argument("--db-toi-source", default="nhl.skater_game_logs_raw", help="table/view to use for TOI checks")
     ap.add_argument("--db-toi-days-back", type=int, default=30, help="days back for TOI window rollup")
+    ap.add_argument(
+        "--eligible-game-ids",
+        default=None,
+        help="optional comma-separated game IDs eligible for this prediction run; blank means none",
+    )
 
     args = ap.parse_args()
+
+    try:
+        eligible_game_ids = parse_game_ids(args.eligible_game_ids)
+    except ValueError as error:
+        ap.error(str(error))
 
     slate = args.slate_date or os.environ.get("SLATE_DATE")
     if not slate:
@@ -1222,7 +1266,10 @@ def main() -> None:
 
         # CONTRACT (A): eligible-to-score pairs must have a SOG prediction row in nhl.predictions.
         # This is the only "cycle detection" check we keep in this report.
-        db_sog_contract_check(db_url, slate, min_shift_games=3)
+        db_sog_contract_check(
+            db_url, slate, min_shift_games=3,
+            eligible_game_ids=eligible_game_ids,
+        )
 
     else:
         print("\n[sog_integrity] (DB checks skipped) Set SUPABASE_DB_URL or pass --db-url to enable.")
