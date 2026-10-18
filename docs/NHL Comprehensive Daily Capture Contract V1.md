@@ -141,7 +141,7 @@ same field after writing its completion marker and final manifest. Historical
 sources still qualify when their exact contemporaneous parent receipt binds
 the certificate, roster, child status, and a valid completion timestamp.
 
-## Prediction evidence classes: policy review (not yet authorized)
+## Prediction evidence classes: research-only classification
 
 Prediction-value validity and compliance with reconciliation-first operations
 are separate questions. The existing governed `RESILIENT_PREGAME` definition
@@ -152,7 +152,7 @@ not by itself establish that a prediction was mathematically invalid, but
 neither may adjacent or later receipts be used to assert operational
 compliance retroactively.
 
-The following evidence labels are proposed for a separate research-only
+The following evidence labels are implemented for a separate research-only
 evaluation population. They do not qualify a source for governed
 reconciliation, model promotion, prospective claims, or replacement of a
 legacy grade:
@@ -190,63 +190,29 @@ conflicting values, corrupt manifests, or after-start timestamps are excluded
 or blocking according to scope. No missing value, timestamp, certificate, or
 roster proof may be reconstructed.
 
-Bounded artifact inventory (counts are candidate rows, not accepted or graded
-research coverage): October 14 SOG has 1,482 MIDDAY and 1,491
-FINAL_PREGAME rows across two games; Points has 282 MIDDAY and 285
-FINAL_PREGAME rows; Saves has 117 in each phase. October 17 SOG has 11,262
-FINAL_PREGAME rows across 14 games. October 18 SOG MIDDAY has 1,593 rows,
-96 players, and two games (2026020135 and 2026020136), with the package
-metadata and row cutoffs at 16:10:14.719263Z and scheduled starts at 22:00Z
-and 00:00Z. Counts across phases overlap and must not be summed as unique
-coverage. October 17 Points/Saves and October 18 Points/Saves produced no
-immutable phase package in the retained inventory reviewed here.
+Bounded artifact inventory and research evaluation are recorded under backlog
+P2.17. In brief, the October 18 SOG MIDDAY package contains 1,593 rows for 96
+players across games `2026020135` and `2026020136`; its 16:10:14.719263Z
+prediction and feature timestamps precede scheduled starts at 22:00Z and
+00:00Z. The linked child/mainline receipts corroborate prestart execution, but
+do not bind its manifest hash or reconciliation/roster prerequisites. It is
+not governed reconciliation evidence. October 17 SOG has 11,262 rows but
+lacks source-time certified-history and roster linkage. October 14 prop
+packages have valid manifests, input snapshots, and prestart times, but lack
+the same governed source-time proof.
 
-On October 18, the SOG child status says `CAPTURED` at 16:10:14.719263Z and
-the mainline observer receipt at 16:10:17.147155Z links that child status.
-The package has a valid current manifest and prediction/input snapshots, but
-neither retained receipt binds that manifest hash or a post-publication
-timestamp. The SOG producer explicitly declared no morning-readiness
-dependency; the contemporaneous mainline receipt records prior-day
-reconciliation failure. The package's feature and prediction timestamps
-precede both scheduled starts, and its rows have distinct identities, but this
-is only `CORROBORATED_PREGAME` candidate evidence under the proposed research
-standard. It is not reconciliation-first evidence. The 2026-10-17 SOG file
-also declares a 15:47:20.064127Z cutoff before the first 17:00Z start, but
-current-slate roster and source-time certified-history proof are not linked;
-its 11,262 rows remain candidate-only. October 14 prop packages have valid
-manifests, complete markers (Points/Saves), input snapshots, and declared
-prestart times; their observer status and parent records do not bind all
-source-time certificate/roster and durable-publication proof required by the
-governed population. Existing legacy FINAL_PREGAME grading is unaffected.
-
-The reviewed evidence establishes no specific altered prediction values or
-post-start generation in these candidate packages: source values are
-manifest-checked, identities are unique within the inspected SOG files, and
-declared cutoffs precede their game starts. It does not establish that
-historical files were never replaced after their receipts, nor that every
-feature input was available at the asserted cutoff. Host file times are
-corroborative at most, not a trusted publication clock. Therefore no
-additional scored/gradeable coverage is confirmed under this review. The
-separate research population requires an explicit policy decision and
-implementation; existing governed selectors and historical grades remain
-unchanged until then.
-
-Bounded read-only replay of retained final slates on 2026-10-14 and
-2026-10-17 verified the source adapters and separate grading outputs. On
-October 14, Moneyline V3 and V2 shadow and Puck Line selected both staggered
-games from REFRESH. A first replay had selected 1,482 SOG groups from MIDDAY,
-but the proof audit invalidated that result: the source had no contemporaneous
-certified parent link, and a later daily receipt had been used as durability
-evidence. The corrected replay selects zero prop groups on October 14;
-Points, Saves, and SOG captures remain ungradeable where their source-time
-certificate/roster or durable-publication linkage was not retained. On October 17, the only
-retained market REFRESH was after first puck and roster reuse failed the
-strict-prestart check, so no source qualified. October 14 legacy grades
-remained unchanged in retained files; recomputed shared grade values matched
-exactly for Moneyline, Puck Line, Points, and Saves. SOG had only three
-floating-point round-trip differences below 3.31e-24, with the retained grade
-timestamp used. See backlog P2.17 for per-lane counts, proof exclusions,
-verification details, and remaining natural-run acceptance.
+The separately implemented research evaluator classifies retained atomic
+groups and grades only against independently verified certified-final
+outcome packages. On October 14 it selected 497 SOG groups (1,491 rows), 95
+Points ladder groups (285 rows), and 9 Saves distributions (117 rows); on
+October 17 it selected 3,754 SOG groups (11,262 rows). Those groups are
+`CORROBORATED_PREGAME`, not `VERIFIED_PROSPECTIVE`. Replay reproduced retained
+SOG, Points, and Saves values and identities from snapshots within `1e-12`;
+this does not prove historical input availability at the asserted cutoff.
+October 18's 531 SOG groups (1,593 rows) were not graded because no complete
+certified-final outcome package was retained. No Points/Saves package was
+found for October 17 or 18. October 14 and 17 legacy grade-file hashes were
+unchanged. See P2.17 for scored denominators, metrics, and limitations.
 
 Prior-date reconciliation is the first substantive daily operation after the
 database connectivity check. Daily work may continue only with a verified,

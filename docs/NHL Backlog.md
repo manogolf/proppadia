@@ -1017,26 +1017,64 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   captured source exists after that acceptance baseline in the inspected
   artifacts, so the receipt changes have not yet received live natural-run
   acceptance.
-- Evidence-policy review (read-only; no policy implementation authorized):
-  distinguish `VERIFIED_PROSPECTIVE`, `CORROBORATED_PREGAME`, and
-  `CHRONOLOGY_UNVERIFIED` for a future, separately labeled research-only
-  evaluation population. The contract defines minimum identity/value/input
-  evidence and contemporaneous chronology witnesses. These labels do not
-  relax existing governed `RESILIENT_PREGAME` certificate, roster, receipt,
-  or durable-publication requirements and cannot feed promotion or replace
-  legacy grades. Candidate inventory, not accepted coverage: 10/14 MIDDAY SOG
-  1,482, Points 282, Saves 117; 10/14 FINAL_PREGAME SOG 1,491, Points 285,
-  Saves 117; 10/17 SOG FINAL_PREGAME 11,262 across 14 games; and 10/18 SOG
-  MIDDAY 1,593 across two games and 96 players. Phases overlap, so counts are
-  not additive unique coverage. On 10/18 the SOG child status and mainline
-  observer receipt corroborate prestart execution, but neither binds the
-  current manifest hash or post-write timestamp; the contemporaneous mainline
-  receipt also records failed prior reconciliation. This is not governed
-  evidence. No new scored/gradeable coverage is confirmed, and no altered
-  values or after-start generation were found in inspected candidate files.
-  Historical replacement after receipt and actual availability of every input
-  at its asserted cutoff remain unresolved. Require explicit policy approval
-  before implementing any separate research path; do not infer missing proof.
+- Research evidence classification and grading: **IMPLEMENTED; bounded offline
+  evaluation complete; prospective natural-run acceptance remains open.** The
+  separate research-only population uses `VERIFIED_PROSPECTIVE`,
+  `CORROBORATED_PREGAME`, and `CHRONOLOGY_UNVERIFIED`; it does not relax
+  governed `RESILIENT_PREGAME`, alter legacy grades, or feed promotion or
+  betting-edge claims. The read-only evaluator is
+  `backend/nhl/scripts/evaluate_nhl_prediction_evidence_research.py`; code and
+  focused tests are in `backend/nhl/research/prediction_evidence.py` and
+  `backend/nhl/tests/test_nhl_prediction_evidence_research.py`.
+- Bounded outputs: `artifacts/analysis/nhl/prediction_evidence_research/`
+  `evaluation=a418d176b1fac502` (ignored generated evidence; do not stage).
+  Certified outcomes were verified for 10/14 (2 games) and 10/17 (14 games).
+  October 14 selected 497 SOG atomic model/player groups (1,491 rows), 95
+  Points player-game ladders (285 rows), and 9 Saves goalie-game distributions
+  (117 rows). October 17 selected 3,754 SOG groups (11,262 rows). Every
+  selected group classified `CORROBORATED_PREGAME`; none was
+  `VERIFIED_PROSPECTIVE`. October 18 selected 531 SOG groups (1,593 rows) for
+  two games, but did not grade them because no complete certified-final
+  outcomes existed in the retained set. No Points/Saves package was found on
+  October 17 or 18. Candidate phases overlap and are not additive.
+- Graded denominators: 10/14 had 1,233 participating SOG rows (258 unique
+  game-player-line identities), 210 participating Points rows (70 players x
+  3 lines), and 52 started-goalie Saves rows (4 goalies x 13 lines). October
+  17 SOG had 8,727 participating rows (2,127 unique game-player-line
+  identities). Nonparticipants and nonstarters remain in output artifacts but
+  are excluded by the lane graders from scored metrics. These selections add
+  497 SOG, 95 Points, and 9 Saves atomic groups beyond prior governed resilient
+  selections on 10/14 and 3,754 SOG groups on 10/17; they add zero prediction
+  identities beyond the existing legacy FINAL_PREGAME grade sets. October 18
+  is not yet gradeable.
+- Replay reproduced all retained SOG, Points, and Saves packages in scope
+  with matching identities and maximum probability/value differences below
+  `1e-12` (maximum observed approximately `3.6e-15`). Replay does not prove
+  historical input availability at the asserted cutoff. Receipt chronology
+  and retained snapshots support `CORROBORATED_PREGAME`, but historical source
+  hashes are not bound at publication and source-time certificate/roster proof
+  is incomplete. Legacy grade hashes for 10/14 and 10/17 were identical
+  before/after. Research artifacts contain the grade rows, source references,
+  denominators, exclusions, and per-role/line Brier and log-loss metrics;
+  quote/return eligibility is separate. Summary `input_set_sha256` is
+  `de3613525452e4fa1ee2ec9fbaf69a4807091f58de8ada521b6443c23b26ab97`.
+- Observed Brier/log-loss ranges across the artifact's model-role/line slices:
+  10/14 SOG `0.0605–0.2448` / `0.2142–0.8504`; Points
+  `0.3324–0.4057` / `0.9611–1.1373`; Saves `0.0136–0.3262` /
+  `0.1174–0.8901`. October 17 SOG: `0.0796–0.2364` /
+  `0.2802–0.7218`. These small retained slates and selected participation
+  populations support descriptive research metrics only.
+- Reproduce with `./bin/python -m
+  backend.nhl.scripts.evaluate_nhl_prediction_evidence_research`; the evaluator
+  hashes source inputs and code into a new append-only local evaluation
+  directory. The generated CSVs remain ignored and are not committed.
+- Verification: 7 focused evidence-classification tests and 12 existing
+  resilient-selection/grading tests passed (19 total); `git diff --check`
+  passed. This is offline implementation and retained-artifact acceptance,
+  not natural-run acceptance. Retrospective file replacement and actual
+  availability of every historical feature input at its asserted cutoff
+  remain unresolved; no timestamp, outcome, certificate, or roster proof was
+  reconstructed.
 - Remaining acceptance: tests for phase combinations, missed windows,
   staggered starts, later
   game capture after earlier start, no rewriting or duplicate final evidence,
