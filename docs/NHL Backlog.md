@@ -161,8 +161,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   October 17, 2026**. The offline exporter and focused tests are in
   `backend/nhl/scripts/export_nhl_all_candidate_evaluation.py` and
   `backend/nhl/tests/test_all_candidate_evaluation_export.py`. The full-window
-  package is at
+  README and lightweight manifest are at
   `artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/`.
+  Its three full-window CSV outputs are generated local artifacts and are
+  intentionally not tracked in Git. A fresh checkout does not contain them;
+  regenerate from retained local evidence with the documented exporter and use
+  the manifest's relative filenames and SHA-256 values to verify local outputs.
   It covers **September 29 through October 17**. Game-type-1 preseason rows
   from September 19–26 and rows without proven regular-season identity are
   excluded and counted in the manifest. The October 16 bounded sample remains

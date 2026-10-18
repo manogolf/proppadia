@@ -1,5 +1,18 @@
 # NHL 2026 full-window prospective candidate export
 
+The three CSV outputs described below are generated local artifacts and are
+intentionally not tracked in Git. A fresh checkout includes this README, the
+lightweight `manifest.json`, and the offline exporter, but not the CSV files.
+Manifest filenames and SHA-256 values identify and verify locally generated
+outputs; they do not promise that those outputs are committed. Regenerate the
+export from retained local evidence with:
+
+```sh
+./bin/python -m backend.nhl.scripts.export_nhl_all_candidate_evaluation \
+  --root artifacts/operational/nhl \
+  --out artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17
+```
+
 This read-only package covers retained canonical 2026 regular-season evidence
 from September 29 through October 17, 2026. September 19–26 source rows are
 game type 1 preseason; rows without a regular-season identity are excluded.

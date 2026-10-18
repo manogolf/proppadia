@@ -82,6 +82,10 @@ data/**
 artifacts/**
 !artifacts/.gitkeep
 !artifacts/README.md
+# Generated NHL full-window candidate CSVs are reproducible local artifacts.
+artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/candidate_predictions.csv
+artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/candidate_quotes.csv
+artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17/candidate_quote_coverage.csv
 backend/nhl/models/**
 backend/_legacy/nhl/models/**
 
