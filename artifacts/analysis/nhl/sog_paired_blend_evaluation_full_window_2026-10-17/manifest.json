@@ -130,11 +130,13 @@
     "betonline_pricing.csv": "6f09469cb30ddb26d4b49cadc86becc451018c0dafdc12c058314ad43b95c919",
     "calibration_bins.csv": "cce102ef7b8f76b9196cca659ee5afda9b886683f34ba04c44912b2af2262d22",
     "cold_start_arm_metrics.csv": "19297ec37e7af8b5f28fb859a8a5a0d7df2b3fbb26c50050486bfea58c05bfc4",
-    "docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.md": "cfcedf4820214e24d66fcd8407f3c40cbd8cab37ff479c2bf3b13ac0fade79e9",
-    "metrics.csv": "cada98c04466e9ca71d4c7e718ed1f4d60d66d1ceed3e57e3f72855388b55c4c",
-    "paired_deltas.csv": "6fc244b93c8100822b284b57a558f221e7dc1639e15509d676274d440730b297",
-    "paired_sog_candidates_unfiltered.csv": "8dc1862b6f126de274e33609d62c733cc423cab84c0ffcc1098af59ac9335784",
-    "report.md": "cfcedf4820214e24d66fcd8407f3c40cbd8cab37ff479c2bf3b13ac0fade79e9"
+    "docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.md": "2c9c25c75cb533f5c5cbea3f7660ba19aef77bacd44a5f483ef8760156d98a76",
+    "docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.summary.json": "4df2ca9cc83675562696132863f23d2b1edb70d175402672a64b3cd07cfded6d",
+    "metrics.csv": "543138d6e62fb4a1854d61c5ef4ff63b5ec9e4b6e84f2244d60465651c330e7c",
+    "paired_deltas.csv": "031ca9b49c8b29d1446987de8d1367dfac0d3727d94d18233351e2cab6581bf0",
+    "paired_sog_candidates_unfiltered.csv": "f01563ec6b2b7a97b2610119ac89576eeae1ad042552c47a0ef97bea5d575369",
+    "report.md": "2c9c25c75cb533f5c5cbea3f7660ba19aef77bacd44a5f483ef8760156d98a76",
+    "sportsbook_coverage.csv": "97277f6d0c00144084a6b6bf9c9a205632e4acd30be08d852abc774ad6996a68"
   },
   "population": {
     "arm_counts": {

@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[3]
 EXPORT = ROOT / "artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17"
 OUT = ROOT / "artifacts/analysis/nhl/sog_paired_blend_evaluation_full_window_2026-10-17"
 DOC_REPORT = ROOT / "docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.md"
+DOC_SUMMARY = ROOT / "docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.summary.json"
 PRODUCTION = "baseline_v1"
 BLEND25 = "NHL_SOG_D10_D20_FIXED_BLEND_25_75_V1"
 BLEND50 = "NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1"
@@ -69,6 +70,29 @@ def outcome_selected(actual: float, line: float, side: str) -> int:
     return int((side == "OVER" and over) or (side == "UNDER" and not over))
 
 
+def paired_probability_delta(rows: list[dict], challenger_label: str) -> dict:
+    """Return challenger-minus-production probability deltas on paired rows."""
+    if not rows:
+        raise ValueError("paired probability delta requires at least one row")
+    brier_deltas = []
+    log_loss_deltas = []
+    disagreements = 0
+    for row in rows:
+        y = outcome_over(float(row["actual_sog"]), float(row["market_line"]))
+        production_p = float(row["production_d10_probability_over"])
+        challenger_p = float(row[f"{challenger_label}_probability_over"])
+        brier_deltas.append((challenger_p - y) ** 2 - (production_p - y) ** 2)
+        log_loss_deltas.append(logloss(y, challenger_p) - logloss(y, production_p))
+        disagreements += row[f"{challenger_label}_selected_side"] != row["production_d10_selected_side"]
+    return {
+        "brier_delta_vs_production": sum(brier_deltas) / len(rows),
+        "log_loss_delta_vs_production": sum(log_loss_deltas) / len(rows),
+        "brier_improved_rows": sum(delta < -1e-15 for delta in brier_deltas),
+        "brier_worsened_rows": sum(delta > 1e-15 for delta in brier_deltas),
+        "selected_side_disagreements": disagreements,
+    }
+
+
 def logloss(y: int, p: float) -> float:
     p = min(max(p, 1e-15), 1 - 1e-15)
     return -(y * math.log(p) + (1 - y) * math.log(1 - p))
@@ -85,6 +109,35 @@ def american_profit(price: float) -> float:
 def source_path(value: str) -> Path:
     p = Path(value)
     return p if p.is_absolute() else ROOT / p
+
+
+def qualified_quote_books(paired: list[dict], quote_rows: list[dict]) -> dict[str, set[str]]:
+    """Validate selected-side quote chronology and return books by candidate."""
+    candidates = {row[f"{label}_candidate_key"]: (row, label)
+                  for row in paired for label in LABELS.values()}
+    books: dict[str, set[str]] = defaultdict(set)
+    seen = set()
+    for quote in quote_rows:
+        if quote["quote_qualification_status"] != "QUALIFIED_SOURCE_AND_OBSERVATION_PRECEDE_PREDICTION":
+            continue
+        found = candidates.get(quote["candidate_key"])
+        if found is None:
+            continue
+        candidate, label = found
+        if quote["quote_side"] != candidate[f"{label}_selected_side"]:
+            raise ValueError(f"qualified quote side differs from model side: {quote['candidate_key']}")
+        source_time = utc(quote["source_quote_timestamp_utc"])
+        observation_time = utc(quote["observation_timestamp_utc"])
+        prediction_time = utc(candidate[f"{label}_prediction_timestamp_utc"])
+        start_time = utc(candidate["scheduled_start_utc"])
+        if not source_time <= observation_time <= prediction_time < start_time:
+            raise ValueError(f"qualified quote chronology failed: {quote['candidate_key']}")
+        key = (quote["candidate_key"], quote["sportsbook_key"])
+        if key in seen:
+            raise ValueError(f"duplicate qualified candidate/book quote: {key}")
+        seen.add(key)
+        books[quote["candidate_key"]].add(quote["sportsbook_key"])
+    return books
 
 
 def main() -> None:
@@ -180,6 +233,8 @@ def main() -> None:
             label = LABELS[a]
             row.update({f"{label}_probability_over": r["probability_over"], f"{label}_probability_under": r["probability_under"],
                         f"{label}_selected_side": r["selected_side"], f"{label}_expected_count": r["expected_count"],
+                        f"{label}_prediction_timestamp_utc": r["prediction_timestamp_utc"],
+                        f"{label}_feature_cutoff_utc": r["feature_cutoff_utc"],
                         f"{label}_model_role": r["model_role"], f"{label}_prediction_identity": r["prediction_identity"],
                         f"{label}_source_path": r["source_path"], f"{label}_source_sha256": r["source_sha256"],
                         f"{label}_parent_run_id": r["parent_run_id"], f"{label}_candidate_key": r["candidate_key"],
@@ -277,12 +332,14 @@ def main() -> None:
         r["betonline_all_three_arms_quoted"] = all(quote_flags)
 
     # Outcome and metric rows; probability observations retain line correlation explicitly.
+    qualified_books = qualified_quote_books(paired, quote_rows)
     metric_rows = []
     calibration_rows = []
     groupers = [("overall", lambda r: "ALL"), ("date", lambda r: r["slate_date"]),
                 ("line", lambda r: r["market_line"]), ("rate_group", lambda r: r["rate_group"]),
                 ("divergence_group", lambda r: r["divergence_group"]),
-                ("d10_d20_direction", lambda r: r["d10_d20_direction"])]
+                ("d10_d20_direction", lambda r: r["d10_d20_direction"]),
+                ("production_selected_side", lambda r: r["production_d10_selected_side"])]
     for group_name, key_fn in groupers:
         groups: dict[str, list[dict]] = defaultdict(list)
         for r in paired:
@@ -330,24 +387,40 @@ def main() -> None:
     # Paired deltas per settled line row/date and full-population date stability.
     comparisons = []
     settled = [r for r in paired if r["outcome_status"] == "SETTLED"]
+    candidate_by_arm = {
+        label: {row[f"{label}_candidate_key"] for row in paired}
+        for label in LABELS.values()
+    }
+    all_books = sorted({book for books in qualified_books.values() for book in books})
+    sportsbook_coverage = []
+    for book in all_books:
+        for label in LABELS.values():
+            keys = candidate_by_arm[label]
+            all_rows = [r for r in paired if r[f"{label}_candidate_key"] in keys and book in qualified_books.get(r[f"{label}_candidate_key"], set())]
+            settled_rows = [r for r in settled if book in qualified_books.get(r[f"{label}_candidate_key"], set())]
+            sportsbook_coverage.append({"sportsbook": book, "model": label,
+                "paired_line_rows": len(paired), "qualified_paired_quote_rows": len(all_rows),
+                "paired_quote_coverage": len(all_rows) / len(paired) if paired else None,
+                "settled_line_rows": len(settled), "qualified_settled_quote_rows": len(settled_rows),
+                "settled_quote_coverage": len(settled_rows) / len(settled) if settled else None})
+        common_settled = sum(all(book in qualified_books.get(r[f"{label}_candidate_key"], set()) for label in LABELS.values()) for r in settled)
+        common_paired = sum(all(book in qualified_books.get(r[f"{label}_candidate_key"], set()) for label in LABELS.values()) for r in paired)
+        sportsbook_coverage.append({"sportsbook": book, "model": "all_three_arms",
+            "paired_line_rows": len(paired), "qualified_paired_quote_rows": common_paired,
+            "paired_quote_coverage": common_paired / len(paired) if paired else None,
+            "settled_line_rows": len(settled), "qualified_settled_quote_rows": common_settled,
+            "settled_quote_coverage": common_settled / len(settled) if settled else None})
     for scope, fn in [("overall", lambda r:"ALL"),("date",lambda r:r["slate_date"]),("line",lambda r:r["market_line"]),
                       ("rate_group",lambda r:r["rate_group"]),("divergence_group",lambda r:r["divergence_group"]),
-                      ("d10_d20_direction",lambda r:r["d10_d20_direction"])]:
+                      ("d10_d20_direction",lambda r:r["d10_d20_direction"]),
+                      ("production_selected_side",lambda r:r["production_d10_selected_side"])]:
         groups=defaultdict(list)
         for r in settled: groups[fn(r)].append(r)
         for k, rows in sorted(groups.items()):
             for arm in (BLEND25,BLEND50):
                 label=LABELS[arm]
-                ds=[]
-                for r in rows:
-                    y=outcome_over(float(r["actual_sog"]),float(r["market_line"]))
-                    pprod=float(r["production_d10_probability_over"]); pblend=float(r[f"{label}_probability_over"])
-                    ds.append(((pblend-y)**2-(pprod-y)**2,logloss(y,pblend)-logloss(y,pprod)))
-                comparisons.append({"group_type":scope,"group":k,"challenger":label,"settled_line_rows":len(rows),
-                                    "brier_delta_vs_production":sum(x[0] for x in ds)/len(ds),
-                                    "log_loss_delta_vs_production":sum(x[1] for x in ds)/len(ds),
-                                    "brier_improved_rows":sum(x[0] < -1e-15 for x in ds),"brier_worsened_rows":sum(x[0] > 1e-15 for x in ds),
-                                    "selected_side_disagreements":sum(r[f"{label}_selected_side"]!=r["production_d10_selected_side"] for r in rows)})
+                delta = paired_probability_delta(rows, label)
+                comparisons.append({"group_type":scope,"group":k,"challenger":label,"settled_line_rows":len(rows),**delta})
 
     # Quote coverage and one-unit return: the exact same single book/policy; no best-price selection.
     quote_metrics=[]
@@ -388,6 +461,7 @@ def main() -> None:
     write_csv(OUT/"metrics.csv", metric_rows)
     write_csv(OUT/"paired_deltas.csv", comparisons)
     write_csv(OUT/"betonline_pricing.csv", quote_metrics)
+    write_csv(OUT/"sportsbook_coverage.csv", sportsbook_coverage)
     write_csv(OUT/"calibration_bins.csv", calibration_rows)
 
     cold_arms = sorted({r["model_version"] for r in all_prediction_rows if "cold_start_shadow" in r["model_version"]})
@@ -463,7 +537,7 @@ def main() -> None:
                             "all_three_arms_share_outcome_and_scheduled_start":True,"quotes_source_observation_prediction_start_order_validated":True,
                             "quote_rows_unique_per_candidate_and_book":True},
               "cold_start_arms_separate":{"arm_count":len(cold_summary),"arms":cold_summary},
-              "outputs":{p.name:sha(p) for p in [OUT/"paired_sog_candidates_unfiltered.csv",OUT/"metrics.csv",OUT/"paired_deltas.csv",OUT/"betonline_pricing.csv",OUT/"calibration_bins.csv",OUT/"cold_start_arm_metrics.csv"]},
+              "outputs":{p.name:sha(p) for p in [OUT/"paired_sog_candidates_unfiltered.csv",OUT/"metrics.csv",OUT/"paired_deltas.csv",OUT/"betonline_pricing.csv",OUT/"sportsbook_coverage.csv",OUT/"calibration_bins.csv",OUT/"cold_start_arm_metrics.csv"]},
               "limitations":["Only eight dates with retained common production/25-75/50-50 prospective captures are evaluable; the export begins earlier, but these arms were not retained before October 10.",
                               "Probabilistic metrics count correlated 1.5/2.5/3.5 lines; count error is once per player-game.",
                               "Only BetOnline model-selected-side prices are used for descriptive one-unit ROI; the market/quote population is incomplete and selection is not a wager record.",
@@ -477,13 +551,14 @@ def main() -> None:
     quote_overall=[r for r in quote_metrics if r["population"]=="common_three_arm_quote_population"]
     lines=["# NHL 2026 paired SOG production and D10/D20 blend evaluation","",
            f"The exact common prospective population is {len(paired):,} candidate-line rows over {len({(r['slate_date'],r['game_id'],r['player_id']) for r in paired}):,} player-games and {len({r['slate_date'] for r in paired})} dates ({min(r['slate_date'] for r in paired)} through {max(r['slate_date'] for r in paired)}). All three model arms are present on every included slate/game/player/line identity.","",
+           "The compact machine-readable summary is `docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.summary.json`. The unfiltered paired CSV and detailed result CSVs are generated local artifacts, ignored by the repository's `artifacts/**` rule, and are not tracked. Recreate them by first running the documented full-window exporter, then `./bin/python -m backend.nhl.scripts.evaluate_nhl_sog_paired_blends_full_window`.","",
            "## Population and outcomes","",
            "| Arm | Candidate lines | Player-games | Settled lines | Unresolved lines |","|---|---:|---:|---:|---:|"]
     for label,x in arm_counts.items(): lines.append(f"| {label} | {x['line_candidates']:,} | {x['player_games']:,} | {x['settled_line_rows']:,} | {x['unresolved_line_rows']:,} |")
     lines += ["",f"The primary scored population has {statuses.get('SETTLED',0):,} settled line rows ({settled_player_games:,} settled player-games) and {statuses.get('UNRESOLVED',0):,} unresolved rows ({unresolved_player_games:,} unresolved player-games). The retained data contains no explicit nonparticipating status for this common population; zero SOG counts are settled observations, while blank or unresolved participation is not assumed to mean nonparticipation.","",
-           "## Overall settled metrics","","| Model | n line rows | Brier | Log loss | Selected-side accuracy | Calibration bias | Decile ECE | Count MAE (player-game) | Count RMSE |","|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
+           "## Overall settled metrics","","| Model | n line rows | Brier | Log loss | Selected-side accuracy | Observed OVER | Mean predicted OVER | Calibration bias | Decile ECE | Count MAE (player-game) | Count RMSE |","|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for label in LABELS.values():
-        x=overall[label]; lines.append(f"| {label} | {x['settled_line_rows']:,} | {x['brier']:.5f} | {x['log_loss']:.5f} | {x['selected_side_accuracy']:.3%} | {x['calibration_bias_pred_minus_obs']:+.5f} | {x['equal_count_decile_ece']:.5f} | {x.get('count_mae',float('nan')):.4f} | {x.get('count_rmse',float('nan')):.4f} |")
+        x=overall[label]; lines.append(f"| {label} | {x['settled_line_rows']:,} | {x['brier']:.5f} | {x['log_loss']:.5f} | {x['selected_side_accuracy']:.3%} | {x['observed_over_rate']:.3%} | {x['mean_predicted_over_probability']:.3%} | {x['calibration_bias_pred_minus_obs']:+.5f} | {x['equal_count_decile_ece']:.5f} | {x.get('count_mae',float('nan')):.4f} | {x.get('count_rmse',float('nan')):.4f} |")
     lines += ["", "## Paired changes from production","", "| Challenger | Brier delta | Log-loss delta | Rows with lower Brier | Rows with higher Brier | Side disagreements |","|---|---:|---:|---:|---:|---:|"]
     for label,x in delta_by.items(): lines.append(f"| {label} | {x['brier_delta_vs_production']:+.6f} | {x['log_loss_delta_vs_production']:+.6f} | {x['brier_improved_rows']:,} | {x['brier_worsened_rows']:,} | {x['selected_side_disagreements']:,} |")
     metric_lookup = {(r["group_type"], r["group"], r["model"]): r for r in metric_rows}
@@ -491,7 +566,7 @@ def main() -> None:
     lines += ["", "## Lines, rate groups, and D10/D20 divergence", "",
               "| Segment | Player-games | Challenger | Brier delta vs production | Log-loss delta vs production | Count MAE |",
               "|---|---:|---|---:|---:|---:|"]
-    for gtype in ("line", "rate_group", "divergence_group", "d10_d20_direction"):
+    for gtype in ("line", "rate_group", "divergence_group", "d10_d20_direction", "production_selected_side"):
         for group in sorted({r["group"] for r in metric_rows if r["group_type"] == gtype}):
             for challenger in ("blend_25_75", "blend_50_50"):
                 delta = delta_lookup[(gtype, group, challenger)]
@@ -502,9 +577,33 @@ def main() -> None:
     lines += ["", "## Date stability","", "| Date | Challenger | Settled lines | Brier delta | Log-loss delta |","|---|---|---:|---:|---:|"]
     for x in date_deltas:
         lines.append(f"| {x['group']} | {x['challenger']} | {x['settled_line_rows']:,} | {x['brier_delta_vs_production']:+.6f} | {x['log_loss_delta_vs_production']:+.6f} |")
-    lines += ["", "## Fixed-book pricing","",f"Pricing uses BetOnline only, at the model-selected side, with the full export's latest chronology-qualified candidate/book/side quote rule. On the common settled population where all three arms have a BetOnline quote:","","| Model | Common quote rows | One-unit net profit | Descriptive ROI |","|---|---:|---:|---:|"]
+    date_summaries = []
+    for label in ("blend_25_75", "blend_50_50"):
+        xs = [x for x in date_deltas if x["challenger"] == label]
+        better = [x["group"] for x in xs if x["brier_delta_vs_production"] < 0 and x["log_loss_delta_vs_production"] < 0]
+        worse = [x["group"] for x in xs if x["brier_delta_vs_production"] > 0 and x["log_loss_delta_vs_production"] > 0]
+        date_summaries.append(f"{label} improved both scores on {len(better)} dates ({', '.join(better)}) and worsened both on {len(worse)} ({', '.join(worse) or 'none'}).")
+    lines += ["", "Across the seven settled dates, " + " ".join(date_summaries)]
+    for label in ("blend_25_75", "blend_50_50"):
+        slices = [x for x in comparisons if x["challenger"] == label and x["group_type"] in ("rate_group", "divergence_group", "d10_d20_direction") and x["group"] != "EQUAL"]
+        strongest = min(slices, key=lambda x:x["brier_delta_vs_production"])
+        weakest = max(slices, key=lambda x:x["brier_delta_vs_production"])
+        lines.append(f"{label} strongest slice: {strongest['group_type']} {strongest['group']} ({strongest['settled_line_rows']:,} lines, Brier {strongest['brier_delta_vs_production']:+.6f}, log loss {strongest['log_loss_delta_vs_production']:+.6f}); weakest: {weakest['group_type']} {weakest['group']} ({weakest['settled_line_rows']:,} lines, Brier {weakest['brier_delta_vs_production']:+.6f}, log loss {weakest['log_loss_delta_vs_production']:+.6f}).")
+    over_delta = delta_lookup[("production_selected_side", "OVER", "blend_25_75")]
+    under_delta = delta_lookup[("production_selected_side", "UNDER", "blend_25_75")]
+    over_pg = metric_lookup[("production_selected_side", "OVER", "production_d10")]["settled_player_games"]
+    under_pg = metric_lookup[("production_selected_side", "UNDER", "production_d10")]["settled_player_games"]
+    lines.append(f"On production-selected OVER lines ({over_pg:,} player-games), 25/75 changes Brier/log loss by {over_delta['brier_delta_vs_production']:+.6f}/{over_delta['log_loss_delta_vs_production']:+.6f}; on production-selected UNDER lines ({under_pg:,} player-games), by {under_delta['brier_delta_vs_production']:+.6f}/{under_delta['log_loss_delta_vs_production']:+.6f}. These are fixed slices by the production selection, not post-hoc challenger thresholds.")
+    lines.append("A player-game can appear in both side slices when production selected different sides at different lines; line-level rows are correlated.")
+    lines += ["", "## Sportsbook coverage and fixed-book pricing","",
+              "Coverage below counts a candidate only when the selected-side quote is source- and observation-qualified before that model arm's prediction, with prediction before scheduled start. The denominator is settled candidate-line rows; a line can be counted once for each sportsbook. The complete per-book/per-arm results are in `sportsbook_coverage.csv`.","",
+              "| Sportsbook | Three-arm common settled lines | Coverage |","|---|---:|---:|"]
+    common_book_rows = [r for r in sportsbook_coverage if r["model"] == "all_three_arms"]
+    for x in sorted(common_book_rows, key=lambda r:(-r["qualified_settled_quote_rows"],r["sportsbook"]))[:5]:
+        lines.append(f"| {x['sportsbook']} | {x['qualified_settled_quote_rows']:,}/{x['settled_line_rows']:,} | {x['settled_quote_coverage']:.1%} |")
+    lines += ["",f"Pricing uses BetOnline only, at the model-selected side, with the full export's latest chronology-qualified candidate/book/side quote rule. On the common settled population where all three arms have a BetOnline quote:","","| Model | Common quote rows | One-unit net profit | Descriptive ROI |","|---|---:|---:|---:|"]
     for x in quote_overall: lines.append(f"| {x['model']} | {x['qualified_quote_rows']:,} | {x['one_unit_net_profit']:+.2f} | {x['roi_per_one_unit_risked']:+.2%} |")
-    lines += ["", "The 700 common quoted rows are 18.2% of 3,843 settled line observations; each arm's individual BetOnline coverage is 715/3,843 (18.6%) for production, 709 (18.4%) for 25/75, and 708 (18.4%) for 50/50. Ten probability deciles are in `calibration_bins.csv`. The full quote-coverage, per-date ROI, line/date/rate/divergence metrics, and paired unfiltered rows are in the adjacent CSVs. ROI is descriptive for quoted candidate lines; correlated lines and repeated players mean it is not an independent wager sample. No alternative-book price substitution was made.","",
+    lines += ["", "The fixed-book ROI rows are descriptive. Correlated lines and repeated players mean these are not independent wager samples. No alternative-book price substitution was made. Ten probability deciles are in `calibration_bins.csv`; the complete per-date ROI, line/date/rate/divergence metrics, quote coverage, and unfiltered paired rows are in the adjacent CSVs.","",
               "## Cold-start arms","","A/B/C/D/G cold-start arms are evaluated separately in `cold_start_arm_metrics.csv`. Their populations and model contracts differ from the production and fixed-blend trio, so those scores are descriptive and are not ranked against the paired comparison.","",
               "| Arm | Candidate lines | Settled lines | Brier | Log loss | Selected-side accuracy | Count MAE |","|---|---:|---:|---:|---:|---:|---:|"]
     for x in cold_summary:
@@ -522,6 +621,36 @@ def main() -> None:
     DOC_REPORT.write_text(report_text,encoding="utf-8")
     manifest["outputs"]["report.md"] = sha(OUT/"report.md")
     manifest["outputs"][str(DOC_REPORT.relative_to(ROOT))] = sha(DOC_REPORT)
+    summary = {
+        "schema_version": "NHL_SOG_PAIRED_BLEND_SUMMARY_V1",
+        "study": "prospective exact three-arm SOG comparison",
+        "source": {
+            "export_manifest_path": str((EXPORT / "manifest.json").relative_to(ROOT)),
+            "export_manifest_sha256": sha(EXPORT / "manifest.json"),
+            "predictions_sha256": sha(input_predictions),
+            "quotes_sha256": sha(input_quotes),
+        },
+        "date_window": manifest["date_window"],
+        "population": manifest["population"],
+        "overall_metrics": [r for r in metric_rows if r["group_type"] == "overall"],
+        "date_metrics": [r for r in metric_rows if r["group_type"] == "date"],
+        "line_metrics": [r for r in metric_rows if r["group_type"] == "line"],
+        "date_deltas": [r for r in comparisons if r["group_type"] == "date"],
+        "line_deltas": [r for r in comparisons if r["group_type"] == "line"],
+        "subgroup_deltas": [r for r in comparisons if r["group_type"] in (
+            "rate_group", "divergence_group", "d10_d20_direction", "production_selected_side")],
+        "calibration_bins": calibration_rows,
+        "sportsbook_coverage": sportsbook_coverage,
+        "betonline_pricing": quote_metrics,
+        "local_unfiltered_paired_csv": {
+            "path": str((OUT / "paired_sog_candidates_unfiltered.csv").relative_to(ROOT)),
+            "sha256": sha(OUT / "paired_sog_candidates_unfiltered.csv"),
+        },
+        "validation": manifest["validation"],
+        "limitations": manifest["limitations"],
+    }
+    DOC_SUMMARY.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    manifest["outputs"][str(DOC_SUMMARY.relative_to(ROOT))] = sha(DOC_SUMMARY)
     (OUT/"manifest.json").write_text(json.dumps(manifest,indent=2,sort_keys=True)+"\n",encoding="utf-8")
     print(json.dumps({"output":str(OUT.relative_to(ROOT)),"arm_counts":arm_counts,"paired_line_rows":len(paired),"outcomes":dict(statuses),"overall":overall,"overall_deltas":delta_by,"common_book_quotes":quote_overall,"date_deltas":date_deltas,"cold_start_arms":cold_summary},indent=2,sort_keys=True))
 

@@ -2,6 +2,8 @@
 
 The exact common prospective population is 5,295 candidate-line rows over 1,765 player-games and 8 dates (2026-10-10 through 2026-10-17). All three model arms are present on every included slate/game/player/line identity.
 
+The compact machine-readable summary is `docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.summary.json`. The unfiltered paired CSV and detailed result CSVs are generated local artifacts, ignored by the repository's `artifacts/**` rule, and are not tracked. Recreate them by first running the documented full-window exporter, then `./bin/python -m backend.nhl.scripts.evaluate_nhl_sog_paired_blends_full_window`.
+
 ## Population and outcomes
 
 | Arm | Candidate lines | Player-games | Settled lines | Unresolved lines |
@@ -14,11 +16,11 @@ The primary scored population has 3,843 settled line rows (1,281 settled player-
 
 ## Overall settled metrics
 
-| Model | n line rows | Brier | Log loss | Selected-side accuracy | Calibration bias | Decile ECE | Count MAE (player-game) | Count RMSE |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| production_d10 | 3,843 | 0.14961 | 0.46396 | 78.168% | +0.01609 | 0.03377 | 1.0331 | 1.3383 |
-| blend_25_75 | 3,843 | 0.14717 | 0.45441 | 78.480% | +0.01506 | 0.02493 | 1.0202 | 1.3169 |
-| blend_50_50 | 3,843 | 0.14749 | 0.45590 | 78.506% | +0.01530 | 0.02802 | 1.0218 | 1.3203 |
+| Model | n line rows | Brier | Log loss | Selected-side accuracy | Observed OVER | Mean predicted OVER | Calibration bias | Decile ECE | Count MAE (player-game) | Count RMSE |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| production_d10 | 3,843 | 0.14961 | 0.46396 | 78.168% | 23.679% | 25.288% | +0.01609 | 0.03377 | 1.0331 | 1.3383 |
+| blend_25_75 | 3,843 | 0.14717 | 0.45441 | 78.480% | 23.679% | 25.186% | +0.01506 | 0.02493 | 1.0202 | 1.3169 |
+| blend_50_50 | 3,843 | 0.14749 | 0.45590 | 78.506% | 23.679% | 25.210% | +0.01530 | 0.02802 | 1.0218 | 1.3203 |
 
 ## Paired changes from production
 
@@ -55,6 +57,10 @@ The primary scored population has 3,843 settled line rows (1,281 settled player-
 | d10_d20_direction: D20_ABOVE_D10 | 628 | blend_50_50 | -0.000420 | -0.005897 |  |
 | d10_d20_direction: EQUAL | 59 | blend_25_75 | +0.000000 | +0.000000 |  |
 | d10_d20_direction: EQUAL | 59 | blend_50_50 | +0.000000 | +0.000000 |  |
+| production_selected_side: OVER | 472 | blend_25_75 | -0.005784 | -0.016774 |  |
+| production_selected_side: OVER | 472 | blend_50_50 | -0.004451 | -0.012809 |  |
+| production_selected_side: UNDER | 1260 | blend_25_75 | -0.001791 | -0.008157 |  |
+| production_selected_side: UNDER | 1260 | blend_50_50 | -0.001672 | -0.007143 |  |
 
 ## Date stability
 
@@ -75,7 +81,23 @@ The primary scored population has 3,843 settled line rows (1,281 settled player-
 | 2026-10-16 | blend_25_75 | 105 | +0.007276 | +0.018080 |
 | 2026-10-16 | blend_50_50 | 105 | +0.004292 | +0.010990 |
 
-## Fixed-book pricing
+Across the seven settled dates, blend_25_75 improved both scores on 5 dates (2026-10-10, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15) and worsened both on 2 (2026-10-11, 2026-10-16). blend_50_50 improved both scores on 5 dates (2026-10-10, 2026-10-12, 2026-10-13, 2026-10-14, 2026-10-15) and worsened both on 1 (2026-10-16).
+blend_25_75 strongest slice: divergence_group MODERATE_GAP_1_TO_2 (990 lines, Brier -0.006234, log loss -0.026826); weakest: divergence_group LARGE_GAP_GE_2 (225 lines, Brier +0.001640, log loss -0.000934).
+blend_50_50 strongest slice: divergence_group MODERATE_GAP_1_TO_2 (990 lines, Brier -0.005086, log loss -0.021389); weakest: d10_d20_direction D20_ABOVE_D10 (1,884 lines, Brier -0.000420, log loss -0.005897).
+On production-selected OVER lines (472 player-games), 25/75 changes Brier/log loss by -0.005784/-0.016774; on production-selected UNDER lines (1,260 player-games), by -0.001791/-0.008157. These are fixed slices by the production selection, not post-hoc challenger thresholds.
+A player-game can appear in both side slices when production selected different sides at different lines; line-level rows are correlated.
+
+## Sportsbook coverage and fixed-book pricing
+
+Coverage below counts a candidate only when the selected-side quote is source- and observation-qualified before that model arm's prediction, with prediction before scheduled start. The denominator is settled candidate-line rows; a line can be counted once for each sportsbook. The complete per-book/per-arm results are in `sportsbook_coverage.csv`.
+
+| Sportsbook | Three-arm common settled lines | Coverage |
+|---|---:|---:|
+| espnbet | 1,097/3,843 | 28.5% |
+| novig | 917/3,843 | 23.9% |
+| draftkings | 781/3,843 | 20.3% |
+| courtside | 779/3,843 | 20.3% |
+| ballybet | 759/3,843 | 19.8% |
 
 Pricing uses BetOnline only, at the model-selected side, with the full export's latest chronology-qualified candidate/book/side quote rule. On the common settled population where all three arms have a BetOnline quote:
 
@@ -85,7 +107,7 @@ Pricing uses BetOnline only, at the model-selected side, with the full export's 
 | blend_25_75 | 700 | -43.56 | -6.22% |
 | blend_50_50 | 700 | -45.63 | -6.52% |
 
-The 700 common quoted rows are 18.2% of 3,843 settled line observations; each arm's individual BetOnline coverage is 715/3,843 (18.6%) for production, 709 (18.4%) for 25/75, and 708 (18.4%) for 50/50. Ten probability deciles are in `calibration_bins.csv`. The full quote-coverage, per-date ROI, line/date/rate/divergence metrics, and paired unfiltered rows are in the adjacent CSVs. ROI is descriptive for quoted candidate lines; correlated lines and repeated players mean it is not an independent wager sample. No alternative-book price substitution was made.
+The fixed-book ROI rows are descriptive. Correlated lines and repeated players mean these are not independent wager samples. No alternative-book price substitution was made. Ten probability deciles are in `calibration_bins.csv`; the complete per-date ROI, line/date/rate/divergence metrics, quote coverage, and unfiltered paired rows are in the adjacent CSVs.
 
 ## Cold-start arms
 

@@ -269,7 +269,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   mismatch remains for follow-up.
 - Evidence: `docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.md`;
   `artifacts/analysis/nhl/sog_paired_blend_evaluation_full_window_2026-10-17/`;
+  compact machine-readable summary `docs/nhl/2026_sog_paired_blend_evaluation_2026-10-17.summary.json`;
   reproducible reader `backend/nhl/scripts/evaluate_nhl_sog_paired_blends_full_window.py`.
+- Coverage now validates selected-side quote chronology across all retained
+  books; fixed-book ROI remains a BetOnline-only descriptive comparison. The
+  unfiltered paired dataset and detailed CSV tables remain generated local
+  outputs and are not staged for Git.
 - Next: retain the paired captures through more slates and resolve the three
   outcome-coverage discrepancies from existing official evidence before any
   retrospective re-grade. Do not promote from this short, correlated sample.

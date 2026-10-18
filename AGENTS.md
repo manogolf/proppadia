@@ -9,6 +9,7 @@
 - Before changing a database caller, inspect the relevant SQL schema, returned column aliases, actual Python result shape, and connection routing.
 - Prefer narrow corrections to demonstrated defects. Avoid repeating completed historical audits, adding defensive frameworks, or building speculative infrastructure.
 - Preserve unrelated worktree changes. Commit coherent completed corrections locally; never push without explicit authorization.
+- Commit source code, tests, documentation, and small reproducibility manifests. Do not stage generated research datasets, especially CSV exports, unless explicitly authorized. Respect existing `artifacts/**` ignore rules; do not use `git add -f` to bypass ignored generated data without explicit authorization. Before committing, inspect staged paths and sizes. Keep large generated outputs local with regeneration instructions and checksums, and do not delete unrelated research artifacts to reduce commit size.
 - Distinguish routine production acquisition from unusually large historical backfills. Do not inhibit ordinary odds collection; inspect and control spending for unusually large backfills before execution.
 - Respect established MLB/NHL workflow boundaries and current operational priorities; do not broaden a task into another sport or workflow.
 
