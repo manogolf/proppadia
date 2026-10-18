@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 import psycopg
-from backend.nhl.database_access import database_url
+from backend.nhl.database_access import database_url, psql_command_without_password
 import requests
 
 from backend.nhl.official_request_journal import (
@@ -1160,6 +1160,7 @@ def _run(command: list[str], slate_date: str, dsn: str,
         # Fail before spawning a network-capable child if the shared governed
         # context is absent, inconsistent, or has been partially overwritten.
         RequestContext.from_env(required=True)
+    command, env = psql_command_without_password(command, env)
     try:
         subprocess.run(command, cwd=ROOT, env=env, check=True)
     except subprocess.CalledProcessError as error:

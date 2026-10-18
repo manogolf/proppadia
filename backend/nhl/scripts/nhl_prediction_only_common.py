@@ -13,7 +13,11 @@ from pathlib import Path
 
 import pandas as pd
 import psycopg
-from backend.nhl.database_access import database_url, restricted_mode
+from backend.nhl.database_access import (
+    database_url,
+    psql_command_without_password,
+    restricted_mode,
+)
 
 from backend.nhl.prediction_only.core import (
     PROSPECTIVE_NOT_BEFORE,
@@ -72,10 +76,12 @@ def durable_json(path: Path, payload: dict) -> None:
 
 
 def _psql_export(dsn: str, sql_path: Path, slate_date: str) -> pd.DataFrame:
-    result = subprocess.run(
+    command, env = psql_command_without_password(
         ["psql", dsn, "--no-psqlrc", "-q", "-v", "ON_ERROR_STOP=1",
-         "-v", f"slate_date={slate_date}", "-f", str(sql_path)],
-        cwd=ROOT, check=True, capture_output=True, text=True,
+         "-v", f"slate_date={slate_date}", "-f", str(sql_path)]
+    )
+    result = subprocess.run(
+        command, cwd=ROOT, check=True, capture_output=True, text=True, env=env,
     )
     return pd.read_csv(io.StringIO(result.stdout))
 

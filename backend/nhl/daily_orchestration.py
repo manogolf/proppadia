@@ -481,7 +481,9 @@ class DailyRunRecorder:
         staging.mkdir(parents=True, exist_ok=False)
         try:
             receipt = staging / "parent_receipt.json"
-            receipt.write_text(json.dumps(self.payload(), indent=2, sort_keys=True) + "\n")
+            # Final catch-all: no connection URI may reach a retained receipt.
+            receipt.write_text(redact_sensitive_text(
+                json.dumps(self.payload(), indent=2, sort_keys=True)) + "\n")
             marker = staging / "RUN_COMPLETE.json"
             marker.write_text(json.dumps({
                 "schema_version": RECEIPT_SCHEMA,

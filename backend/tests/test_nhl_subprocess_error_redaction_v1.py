@@ -83,5 +83,60 @@ class SubprocessErrorRedactionTests(unittest.TestCase):
         self.assertNotIn(_SENTINEL, str(caught.exception.stderr))
 
 
+class PsqlPasswordArgvTests(unittest.TestCase):
+    def _completed(self, *args, **kwargs):
+        return subprocess.CompletedProcess(args[0], 0, stdout="", stderr="")
+
+    def test_helper_moves_password_into_child_environment(self):
+        from backend.nhl.database_access import psql_command_without_password
+
+        command, env = psql_command_without_password(
+            ["psql", _FAKE_DSN, "-c", "SELECT 1"], {"PATH": "/usr/bin"})
+        self.assertNotIn(_SENTINEL, " ".join(command))
+        self.assertEqual(command[1], "postgresql://fixture-user@db.invalid/fixture")
+        self.assertEqual(env["PGPASSWORD"], _SENTINEL)
+        self.assertEqual(env["PATH"], "/usr/bin")
+
+    def test_helper_leaves_non_psql_commands_unchanged(self):
+        from backend.nhl.database_access import psql_command_without_password
+
+        command, env = psql_command_without_password(["collector", _FAKE_DSN], {})
+        self.assertEqual(command, ["collector", _FAKE_DSN])
+        self.assertNotIn("PGPASSWORD", env)
+
+    def test_legacy_mode_cli_run_keeps_password_off_argv(self):
+        with patch.dict("os.environ", {"NHL_DB_ACCESS_MODE": "legacy"}), \
+                patch.object(cli.sp, "run", side_effect=self._completed) as spawned, \
+                contextlib.redirect_stdout(io.StringIO()):
+            cli.run(["psql", _FAKE_DSN, "-c", "SELECT 1"])
+        argv = spawned.call_args.args[0]
+        self.assertNotIn(_SENTINEL, " ".join(argv))
+        self.assertEqual(spawned.call_args.kwargs["env"]["PGPASSWORD"], _SENTINEL)
+
+    def test_direct_psql_helpers_keep_password_off_argv(self):
+        with patch.dict("os.environ", {"NHL_DB_ACCESS_MODE": "legacy"}), \
+                patch.object(cli.sp, "run", side_effect=lambda *a, **k: subprocess.CompletedProcess(
+                    a[0], 0, stdout='{"x": 1}', stderr="")) as spawned:
+            cli.psql_one_row(_FAKE_DSN, "SELECT 1 AS x")
+        argv = spawned.call_args.args[0]
+        self.assertNotIn(_SENTINEL, " ".join(argv))
+        self.assertEqual(spawned.call_args.kwargs["env"]["PGPASSWORD"], _SENTINEL)
+
+    def test_psql_one_row_failure_redacts_stderr(self):
+        with patch.dict("os.environ", {"NHL_DB_ACCESS_MODE": "legacy"}), \
+                patch.object(cli.sp, "run", side_effect=lambda *a, **k: subprocess.CompletedProcess(
+                    a[0], 2, stdout="", stderr=f"could not connect: {_FAKE_DSN}")):
+            with self.assertRaises(RuntimeError) as caught:
+                cli.psql_one_row(_FAKE_DSN, "SELECT 1 AS x")
+        self.assertNotIn(_SENTINEL, str(caught.exception))
+
+    def test_postgame_psql_child_keeps_password_off_argv(self):
+        with patch.object(reconciliation.subprocess, "run") as spawned:
+            reconciliation._run(["psql", _FAKE_DSN, "-f", "x.sql"], "2026-09-24", _FAKE_DSN)
+        argv = spawned.call_args.args[0]
+        self.assertNotIn(_SENTINEL, " ".join(argv))
+        self.assertEqual(spawned.call_args.kwargs["env"]["PGPASSWORD"], _SENTINEL)
+
+
 if __name__ == "__main__":
     unittest.main()

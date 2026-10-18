@@ -14,6 +14,7 @@ from pathlib import Path
 from collections.abc import Mapping
 from datetime import datetime, timezone
 from backend.nhl.daily_orchestration import redact_sensitive_text
+from backend.nhl.database_access import psql_command_without_password
 
 import numpy as np
 import pandas as pd
@@ -307,8 +308,9 @@ def capture_points_export_snapshot(
             command = ["psql", "--no-psqlrc", "--pset", "pager=off", "-q",
                        "-v", "ON_ERROR_STOP=1", db_url,
                        "-v", f"slate_date={slate_date}", "-f", str(script)]
+            command, child_env = psql_command_without_password(command, psql_environment)
             process = subprocess.run(command, cwd=str(Path(export_sql).resolve().parents[3]),
-                                     env=dict(psql_environment), capture_output=True, check=False)
+                                     env=child_env, capture_output=True, check=False)
             if feature_path.is_file():
                 observed_feature_bytes = feature_path.read_bytes()
                 feature_bytes = observed_feature_bytes or None

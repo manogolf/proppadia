@@ -29,6 +29,7 @@ from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
 from backend.nhl.odds_markets import NHL_COMPREHENSIVE_PROP_MARKETS_CSV
 from backend.nhl.database_access import (
     database_url as nhl_database_url,
+    psql_command_without_password as nhl_psql_command_without_password,
     psql_dsn_without_password as nhl_psql_dsn_without_password,
     restricted_mode as nhl_restricted_mode,
     routed_database_environment as nhl_routed_database_environment,
@@ -490,11 +491,15 @@ def run_psql_bytes(db_url: str, sql: str, *, timeout: Optional[int] = None) -> b
     """
     if nhl_restricted_mode():
         db_url = nhl_database_url("research")
-    return subprocess.check_output(
-        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-c", sql],
-        stderr=subprocess.STDOUT,
-        timeout=timeout,
+    cmd, env = nhl_psql_command_without_password(
+        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-c", sql]
     )
+    try:
+        return subprocess.check_output(
+            cmd, stderr=subprocess.STDOUT, timeout=timeout, env=env,
+        )
+    except subprocess.CalledProcessError as exc:
+        raise safe_called_process_error(exc, cmd) from None
 
 def is_testing() -> bool:
     return os.environ.get("TESTING") == "1"
@@ -668,6 +673,8 @@ def run(
                     break
             if not replaced_dsn:
                 raise RuntimeError("NHL_RESTRICTED_PSQL_DSN_UNRECOGNIZED")
+    else:
+        cmd, e = nhl_psql_command_without_password(cmd, e)
     cmd_for_log = _format_cmd_for_log(cmd)
     print("▶", cmd_for_log)
     started = time.monotonic()
@@ -801,10 +808,11 @@ def run_psql_file_to_path(
     cmd += ["-c", "SET statement_timeout=0;"]
     cmd += ["-f", str(sql_file)]
 
+    cmd, env = nhl_psql_command_without_password(cmd, _psql_env())
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         try:
-            sp.run(cmd, env=_psql_env(), check=True, stdout=f)
+            sp.run(cmd, env=env, check=True, stdout=f)
         except sp.CalledProcessError as exc:
             raise safe_called_process_error(exc, cmd) from None
 
@@ -814,9 +822,11 @@ def run_psql(sql: str) -> str:
 
     db_url = nhl_database_url("research")
 
-    cmd = ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-A", "-F", ",", "-t", "-c", sql]
+    cmd, env = nhl_psql_command_without_password(
+        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-A", "-F", ",", "-t", "-c", sql]
+    )
     try:
-        p = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        p = subprocess.run(cmd, check=True, capture_output=True, text=True, env=env)
     except subprocess.CalledProcessError as exc:
         raise safe_called_process_error(exc, cmd) from None
     return p.stdout
@@ -825,16 +835,16 @@ def psql_one_row(db_url: str, sql: str) -> dict:
     if nhl_restricted_mode():
         db_url = nhl_database_url("research")
     wrapped = f"SELECT row_to_json(t) FROM ({sql}) t;"
-    res = sp.run(
-        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", wrapped],
-        capture_output=True, text=True
+    cmd, env = nhl_psql_command_without_password(
+        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", wrapped]
     )
+    res = sp.run(cmd, capture_output=True, text=True, env=env)
     if res.returncode != 0:
         raise RuntimeError(
             "psql_one_row failed.\n"
             f"SQL:\n{wrapped}\n\n"
-            f"STDOUT:\n{res.stdout}\n\n"
-            f"STDERR:\n{res.stderr}\n"
+            f"STDOUT:\n{redact_sensitive_text(res.stdout)}\n\n"
+            f"STDERR:\n{redact_sensitive_text(res.stderr)}\n"
         )
 
     out = (res.stdout or "").strip()
@@ -897,10 +907,11 @@ def psql_stdout(sql_file: Path, *, vars: dict[str, str] | None = None) -> bytes:
     cmd += ["-c", "SET statement_timeout=0;"]
     cmd += ["-f", str(sql_file)]
 
+    cmd, env = nhl_psql_command_without_password(cmd, _psql_env())
     res = sp.run(
         cmd,
         cwd=str(ROOT),
-        env=_psql_env(),
+        env=env,
         check=False,
         capture_output=True,
         text=False,  # IMPORTANT: keep stdout as bytes
@@ -1064,13 +1075,16 @@ def export_sog_denali_features(
         FROM s, nn;
         """
 
-        proc = sp.run(
+        guard_cmd, guard_env = nhl_psql_command_without_password(
             ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", guard_sql],
-            check=True,
-            capture_output=True,
-            text=True,
-            env=_psql_env(),
+            _psql_env(),
         )
+        try:
+            proc = sp.run(
+                guard_cmd, check=True, capture_output=True, text=True, env=guard_env,
+            )
+        except sp.CalledProcessError as exc:
+            raise safe_called_process_error(exc, guard_cmd) from None
 
         # output format: n_rows|nn_d10_cov|nn_d20_cov|nn_d10_avail|nn_d20_avail
         parts = proc.stdout.strip().split("|")
@@ -1095,19 +1109,21 @@ def export_sog_denali_features(
     # ------------------------------------------------------------------
     # EXPORT
     # ------------------------------------------------------------------
+    export_cmd, export_env = nhl_psql_command_without_password(
+        [
+            "psql",
+            db_url,
+            "-v", "ON_ERROR_STOP=1",
+            "-v", f"slate_date={slate_date}",
+            "-f", str(sql_path),
+        ],
+        _psql_env(),
+    )
     with out_path.open("w", encoding="utf-8", newline="") as f:
-        sp.run(
-            [
-                "psql",
-                db_url,
-                "-v", "ON_ERROR_STOP=1",
-                "-v", f"slate_date={slate_date}",
-                "-f", str(sql_path),
-            ],
-            check=True,
-            stdout=f,
-            env=_psql_env(),
-        )
+        try:
+            sp.run(export_cmd, check=True, stdout=f, env=export_env)
+        except sp.CalledProcessError as exc:
+            raise safe_called_process_error(exc, export_cmd) from None
 
     # ------------------------------------------------------------------
     # POST-EXPORT GUARD: ensure artifact is real + has ID columns
@@ -2855,10 +2871,15 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
 
     # --- EARLY EXIT: no NHL games on this slate date ---
     no_games_sql = f"SELECT COUNT(*) FROM nhl.games WHERE game_date = DATE '{slate}';"
-    res = sp.run(
-        ["psql", require_db_url("research"), "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", no_games_sql],
-        capture_output=True, text=True, check=True
+    no_games_cmd, no_games_env = nhl_psql_command_without_password(
+        ["psql", require_db_url("research"), "-v", "ON_ERROR_STOP=1", "-t", "-A", "-c", no_games_sql]
     )
+    try:
+        res = sp.run(
+            no_games_cmd, capture_output=True, text=True, check=True, env=no_games_env,
+        )
+    except sp.CalledProcessError as exc:
+        raise safe_called_process_error(exc, no_games_cmd) from None
     game_count = int((res.stdout or "").strip() or "0")
     if game_count == 0:
         print(f"ℹ️ No NHL games for {slate} (ET) — skipping scoring/export steps (prior-date finalization already done).")
@@ -3182,7 +3203,10 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                 raise RuntimeError(
                     "Defense surprise shadow failed with NHL_SOG_DEFENSE_SHADOW_REQUIRED=1."
                 ) from exc
-            print(f"⚠️ defense surprise shadow failed; continuing without sidecar: {exc}")
+            print(
+                "⚠️ defense surprise shadow failed; continuing without sidecar: "
+                f"{redact_sensitive_text(exc)}"
+            )
 
     # ---- GUARD: ordinal predictions must exist + match slate ----
     calib_path = calibrated_pred_path
@@ -3273,7 +3297,10 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                 raise RuntimeError(
                     "Segmented SOG calibration failed with NHL_SOG_SEGMENTED_CALIBRATION_REQUIRED=1."
                 ) from exc
-            print(f"⚠️ segmented SOG calibration failed; continuing with ordinal output: {exc}")
+            print(
+                "⚠️ segmented SOG calibration failed; continuing with ordinal output: "
+                f"{redact_sensitive_text(exc)}"
+            )
 
     sog_scored_metadata, sog_unscored_metadata = validate_sog_prediction_artifacts(
         scored_path=calibrated_pred_path,

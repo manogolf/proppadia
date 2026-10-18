@@ -32,6 +32,8 @@ from zoneinfo import ZoneInfo
 import unicodedata
 import pandas as pd
 import subprocess
+
+from backend.nhl.database_access import psql_command_without_password
 from io import StringIO
 
 # ---------- helpers ----------
@@ -351,9 +353,11 @@ ORDER BY game_id, player_id, line;
 """
 
     # Use psql so we don't require SQLAlchemy.
-    cmd = ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-A", "-F", ",", "-t", "-c", sql]
+    cmd, env = psql_command_without_password(
+        ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-A", "-F", ",", "-t", "-c", sql]
+    )
     try:
-        res = subprocess.run(cmd, check=True, capture_output=True, text=True)
+        res = subprocess.run(cmd, check=True, capture_output=True, text=True, env=env)
     except subprocess.CalledProcessError as e:
         stderr = (e.stderr or "").strip()
         stdout = (e.stdout or "").strip()
@@ -466,12 +470,10 @@ COPY (
 """.strip()
 
     try:
-        proc = subprocess.run(
-            ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-c", sql],
-            check=True,
-            text=True,
-            capture_output=True,
+        cmd, env = psql_command_without_password(
+            ["psql", db_url, "-v", "ON_ERROR_STOP=1", "-c", sql]
         )
+        proc = subprocess.run(cmd, check=True, text=True, capture_output=True, env=env)
     except subprocess.CalledProcessError as e:
         die(f"DB query failed for predictions spine: {e.stderr.strip() or e.stdout.strip()}")
 

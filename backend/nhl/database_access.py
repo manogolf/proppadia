@@ -8,7 +8,8 @@ operations-result DSNs and never falls back to a legacy variable.
 from __future__ import annotations
 
 import os
-from typing import Mapping
+from pathlib import Path
+from typing import Mapping, Sequence
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
 
 
@@ -36,6 +37,28 @@ def psql_dsn_without_password(url: str) -> tuple[str, str | None]:
     netloc = f"{quote(username, safe='')}@{hostname}" if username else hostname
     safe_url = urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))
     return safe_url, password
+
+
+def psql_command_without_password(
+    cmd: Sequence[object], environ: Mapping[str, str] | None = None,
+) -> tuple[list[str], dict[str, str]]:
+    """Move any password in a psql argv DSN into the child's PGPASSWORD.
+
+    Keeps the password out of process listings and out of command text that
+    failure handlers copy into logs and receipts.
+    """
+    args = [str(part) for part in cmd]
+    env = dict(os.environ if environ is None else environ)
+    if not args or Path(args[0]).name != "psql":
+        return args, env
+    for index, token in enumerate(args[1:], start=1):
+        if token.startswith(("postgres://", "postgresql://")):
+            safe_dsn, password = psql_dsn_without_password(token)
+            args[index] = safe_dsn
+            if password:
+                env["PGPASSWORD"] = password
+            break
+    return args, env
 
 
 def restricted_mode(environ: Mapping[str, str] | None = None) -> bool:
