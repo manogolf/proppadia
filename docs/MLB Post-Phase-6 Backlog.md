@@ -741,6 +741,156 @@ writer validation does not authorize a hosted cutover or a different writer.
   its official player-stat payload was missing. No source or reconciliation
   writes were made.
 
+### Postseason exact-game authority and delayed-start status — diagnosis 2026-10-18
+
+- Active authority: `active_selection.json` selects V4 descriptor SHA-256
+  `7828f1bdd35fa9fa763d8e7100a4215d4fa5fb928d13497535f27872bdd47a77`;
+  the active selection bytes hash to
+  `1a3a1ea4e5935c247ef0ac96e06595727233c7086d704543b73cd548693a1d57`.
+  V4 has 2,934 exact games, 15 postseason identities, and date coverage through
+  2026-10-05. Its proposal hash is
+  `bd6753e5fe4c9d3eca4f3b083d20ea56c791686ff9988e430c69c348a040796d`.
+  The prepared V4 child added only Division Series games
+  `849823, 849825, 849828, 849829, 849830, 849835` from its two pinned
+  schedule sources; V4 is now promoted and active. It does not cover the
+  current ALCS games. No later prepared ALCS candidate descriptor was found in
+  the inspected authority snapshot tree.
+- Hash-verified retained current-slate schedule census for Oct 16–18 finds
+  exactly two postseason gamePks absent from V4: `849817` and `849816`. Both
+  are 2026 `gameType=L`, phase `POSTSEASON`, round
+  `LEAGUE_CHAMPIONSHIP_SERIES`, source label `AL Championship Series`.
+  `849817` was listed for official date Oct 16 at
+  `2026-10-17T00:00:00Z`; its Oct 16 23:30Z current-slate observation was
+  status `(Preview, P, PI, Delayed Start)`, reason `Inclement Weather`, with
+  no relationship fields. Its Oct 18 row is scheduled for
+  `2026-10-18T21:08:00Z`, official date Oct 18, with
+  `rescheduledFrom=2026-10-17T00:00:00Z`, no rescheduled gamePk/date or resume
+  fields, and status `(Preview, S, S, Scheduled)` before the later
+  `(Preview, P, P, Pre-Game)` observation. The Oct 17 history response records
+  the original `849817` as `(Final, D, DR, Postponed)` / Rain, then the Oct 18
+  schedule response retains the same gamePk and explicit `rescheduledFrom`;
+  its selection receipt labels it `ALCS Game 5, Makeup of 10/16`. This is
+  sufficient retained evidence for one rescheduled exact-game identity, not a
+  second game. The old appearance's changed `officialDate` and the source
+  description changing from Game 4 to Game 5 are explained by the explicit
+  same-PK reschedule relationship; no team, season, gameType, or series-label
+  conflict was found.
+- `849816` is the separate ALCS Game 4: official date Oct 17, scheduled
+  `2026-10-18T00:08:00Z`, with no reschedule/resume relationship fields. Its
+  Oct 18 history receipts report `(Final, F, F, Final)`. It is not the makeup
+  game and must remain a separate exact authority record.
+- Schedule evidence hashes (paths are under
+  `artifacts/ops/mlb_current_slate_sources/`): Oct 16 scheduled `849817`
+  `c113b20b6cee9743148b878214eaa22335e284c38f84f61077bf213ef474399d`;
+  Oct 16 18:00Z/20:00Z scheduled source
+  `0dcec094c71f116e0bd32c5f0dc20c709746bc303f8526ea989bdf91c8b59b8b`;
+  Oct 16 delayed-start observation
+  `50e2a6d70ec32797a9cfacbda05fd549a290d49c6d753e905751cdfb7800554c`;
+  Oct 17 12:00Z/15:00Z 849816 schedule
+  `ab5a19155ddc389d2a59d2bca60e39e9daa1b5fb1274e51d55aefb740550b248`;
+  Oct 17 18:00Z/20:00Z 849816 schedule
+  `770ba78173153be0a873419fc8c9ea1b491df429b04f429132f84ac5615a45cc`;
+  Oct 17 23:30Z 849816 pre-game schedule
+  `eb9df5f1fb5c99802a512c6283939e04902112fa0a5f3d5a3a4f663955bdcc8d`;
+  Oct 18 rescheduled `849817` current schedule
+  `22f0d8d72f4b126487b64a65f363a68a605795815f7be1e6dd53fa7634597133`;
+  Oct 18 15:00Z rescheduled `849817` current schedule
+  `25e643297292ff12cb4f082be7dc9099d828d464eedb5f4052e383c67a6fd558`;
+  Oct 18 later pre-game schedule
+  `3a3c1a8946b98e9d8ef04f230507331386a9080c7382f2fea9bf11b700aa07c4`.
+  Corresponding history schedule hashes: Oct 16 pre-delay
+  `9046263ecb0f6ac45fb5a8eba4964f87a0c9da2c8c5b36480d67a22c3262c3ec`,
+  Oct 16 18:00Z scheduled
+  `323df0c70179d1dd6252bd7a9bb97923746a91ba796df4454d70ae2f1a642095`,
+  delayed `9727b5fd087e484491736ba7402331ab8318a137a27e5bdac12fc7f340bbc295`,
+  Oct 17 postponed/849816 history slate
+  `e4d2702e081d5daefeac97d6c69e3d6f74ae1980e55ace938ebacd0577aa1f72`,
+  Oct 17 18:00Z/20:00Z postponed/849816 history slate
+  `0ca8446b11800c8f94cc63c629c05840331e4f744820586f522ec63b653f6157`,
+  Oct 17 later pre-game history slate
+  `39713994efc29bd4e271e8e8a33e0f172911393c0984a4334275cde3ed0dba5b`,
+  Oct 18 early slate `7bef90a46dffd94a967b4fb75dc2ba00a1a26d5dd46534a642526dca4b843f3d`,
+  Oct 18 15:00Z history slate
+  `977818d600e9f423151632997e942d9650873d723f2690943a9f4b71804fd448`,
+  later pre-game slate `d5adc80cf2e97a7ba67e8d67a4081ba14061d1aac7e28155a0fdb238219a14b4`.
+- Selection receipts: Oct 16 12:00Z scheduled selection
+  `411e5c85b2625e431c6ff3aa772a8a92b0a27a1b562b5d5487a6892bc170bfaf`,
+  Oct 16 15:00Z scheduled selection
+  `d2241b56915c3f83f9def7a39183c91570169229ae00f4b3759e24998b099b07`,
+  Oct 16 18:00Z scheduled selection
+  `bd4bee0ed38c1f21ff221fe2649ad723b1325197c55e6940fccd5c047c03de19`,
+  final Oct 16 scheduled selection
+  `b3c36b98eaad1f641d323d764d047c59c7015945eda97d383abc6fe8cb3ae56e`;
+  Oct 18 selection receipts
+  `6c9c1b4c987e37bbacff708bd210a3157c082ce82f822f39aa85c87aac725f70`,
+  `690baf124ccb723eefa5d7c3d474f119f4d78b39701186f7cf01dc800875070f`,
+  and `b3c891f1c72309e6d6adb8b809ea56f6f1cad0aff50a25690e3a717982a208e6`.
+  The Oct 18 selection files show 849817's old postponed and replacement
+  appearances together and separately select final 849816. Run-bound Moneyline
+  attempt receipt hashes, in run order, are Oct 16 12:00Z
+  `15d1f73bf21fea685d6a1b648ae37aa9c9c2d83ed07359bede4064c27147ec2f`,
+  15:00Z `1f2d065c6193a5f61bda09d1ca9f0eb5b7200a7cbc7fd362b8132c021b1b98bb`,
+  18:00Z `d4795bbaf51abdc92c622174416da2f2373df5ae00bcf8aa34933b9834a4f911`,
+  20:00Z `700c26d618b55e51db607ab19a8e5ae507bef66bf7276b5f3bf0a999dae4439b`,
+  and Oct 18 12:00Z `764928ed13bdde3479b74dfaeb5c4d3fac1460849546d2ef629ee5d0942fd45b`,
+  15:00Z `db34ca54b0591f01cc27158be70999a8909285357359199fa5fd54e5f0c8b696`,
+  18:00Z `372558ed2a30d405b6a62d09f4834eab23328be15674ca269c2d2a722189c08a`.
+  These are all retained attempt receipts in those date folders; no Oct 17
+  attempt receipt or selection receipt is present. Generated attempt receipts
+  are `COMPLETED` under V4, bind their current schedule source hash and the
+  active descriptor, and include source-bound exact game decisions. All
+  inspected source and receipt hashes were recomputed from retained bytes; no
+  provider or database access was used.
+- The runtime overlay in
+  `backend/mlb/season_transition/runtime_schedule_authority_v1.py` rejects
+  `(Preview, P, PI, Delayed Start)`: `_validate_new_postseason_game` allows
+  Preview/S/S, Preview/P/P, selected Live tuples, and Final/F/F or Final/O/O.
+  This is distinct from missing exact-game authority and from terminal
+  postponement evidence. Keep `Postponed` / `(Final, D, DR)` rejected by this
+  runtime overlay; the Moneyline history finality selector already classifies
+  it as non-playable and does not fetch a final feed for that appearance.
+- Smallest source-bound authority proposal: prepare a new immutable versioned
+  child of active V4 with exactly `849817` and `849816`, derived from and pinned
+  to retained current-slate schedules `c113b20b6cee9743148b878214eaa22335e284c38f84f61077bf213ef474399d`,
+  `50e2a6d70ec32797a9cfacbda05fd549a290d49c6d753e905751cdfb7800554c`,
+  `ab5a19155ddc389d2a59d2bca60e39e9daa1b5fb1274e51d55aefb740550b248`,
+  `22f0d8d72f4b126487b64a65f363a68a605795815f7be1e6dd53fa7634597133`, and
+  `3a3c1a8946b98e9d8ef04f230507331386a9080c7382f2fea9bf11b700aa07c4`, with
+  retained history corroboration hashes listed above. Preserve V4 rows
+  byte-for-byte, bind all schedule source hashes and relationship fields, and
+  describe exact-date coverage as Oct 16–18 only where supported by the
+  selected sources. Do not extend the
+  agreement V4 acquisition horizon or infer any other game. A descriptor
+  activation is a separate reviewed action.
+- Separate narrow status-policy proposal: admit exactly
+  `(abstractGameState=Preview, abstractGameCode=P, codedGameState=P,
+  statusCode=PI, detailedState=Delayed Start)` for a complete, hash-verified
+  new postseason schedule identity; retain existing tuples and fail closed for
+  unknown, inconsistent, conflicting, and terminal statuses. This only addresses the
+  observed Oct 16 delayed-start shape. The code paths are
+  `backend/mlb/scripts/run_mlb_public_game_moneyline_daily_v1.py`,
+  `backend/mlb/scripts/build_mlb_predictions_wide.py`,
+  `backend/mlb/scripts/run_mlb_exact_game_feature_shadow_v1.py`,
+  `backend/mlb/scripts/audit_mlb_moneyline_probability_region_premise_v1.py`,
+  `backend/mlb/scripts/run_mlb_totals_c_shadow_daily_v1.py`,
+  `backend/mlb/scripts/run_mlb_totals_prospective_shadow_daily_v1.py`,
+  `backend/mlb/scripts/run_mlb_totals_prospective_shadow_v1.py`,
+  `backend/mlb/scripts/score_mlb_hits05_full_board_shadow_v1.py`,
+  `backend/mlb/totals_predictions/phase_gating_v1.py`, and
+  `backend/mlb/hits05_full_board_shadow/phase_gating_v1.py`. The source
+  extension affects active-descriptor loading in these same consumers. The
+  offline test paths to update are
+  `backend/mlb/tests/test_mlb_postseason_runtime_schedule_authority_v1.py`,
+  `backend/mlb/tests/test_mlb_wide_runtime_schedule_phase_authority_v1.py`,
+  `backend/mlb/tests/test_mlb_2026_moneyline_phase_gating_v1.py`,
+  `backend/mlb/tests/test_mlb_2026_totals_phase_gating_v1.py`, and
+  `backend/mlb/tests/test_mlb_2026_full_board_hits_phase_gating_v1.py`.
+  Cover the exact delayed tuple, unknown and conflicting tuples, terminal
+  postponement rejection, both exact ALCS game identities, unknown gamePk
+  rejection, and byte-identical preservation of the V4 predecessor rows.
+- Status: **DIAGNOSED — proposals pending ChatGPT review**. No authority,
+  allowlist, database, source, or run state was changed for this diagnosis.
+
 ### P2.3 Review broad API-role permissions against consumer dependencies
 
 - Status: **PENDING — initial MLB dependencies and narrow research-read gap
