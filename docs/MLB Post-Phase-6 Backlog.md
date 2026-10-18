@@ -753,8 +753,9 @@ writer validation does not authorize a hosted cutover or a different writer.
   The prepared V4 child added only Division Series games
   `849823, 849825, 849828, 849829, 849830, 849835` from its two pinned
   schedule sources; V4 is now promoted and active. It does not cover the
-  current ALCS games. No later prepared ALCS candidate descriptor was found in
-  the inspected authority snapshot tree.
+  current ALCS games. At diagnosis time no later prepared ALCS candidate
+  descriptor was present in the authority snapshot tree; the follow-up proposal
+  below now prepares one without changing active selection.
 - Hash-verified retained current-slate schedule census for Oct 16–18 finds
   exactly two postseason gamePks absent from V4: `849817` and `849816`. Both
   are 2026 `gameType=L`, phase `POSTSEASON`, round
@@ -888,8 +889,42 @@ writer validation does not authorize a hosted cutover or a different writer.
   Cover the exact delayed tuple, unknown and conflicting tuples, terminal
   postponement rejection, both exact ALCS game identities, unknown gamePk
   rejection, and byte-identical preservation of the V4 predecessor rows.
-- Status: **DIAGNOSED — proposals pending ChatGPT review**. No authority,
-  allowlist, database, source, or run state was changed for this diagnosis.
+- Proposal prepared 2026-10-18: `docs/contracts/mlb_2026_postseason_alcs_authority_v5/`
+  and `backend/mlb/season_transition/authority_snapshots/v5/`. The governed
+  inactive child appends exactly 849816 and 849817 to the unchanged V4
+  proposal prefix: 2,936 rows total, 17 postseason records, scheduled-date
+  coverage through Oct 18. Descriptor SHA-256
+  `fa639c543ba77bab4ca4a5a853ec78cb10eaf2163b7cebddad6156eeed4d941d`,
+  proposal SHA-256
+  `2eac7837294784c925d14d054cb5278f400baa1a5431fba310a14021cdce1ec5`,
+  source-manifest SHA-256
+  `7aa66ac4e6a5fe71a1869ec88cbae1136063150750ff7d5332935a73c9af6e09`,
+  and source-set SHA-256
+  `99761a634131cd885da524ab83b9eca9404058bbdee3dc17307955aa4caae812`.
+  Selected source schedules are pinned at SHA-256 `ab5a19155ddc389d2a59d2bca60e39e9daa1b5fb1274e51d55aefb740550b248`
+  (849816), `22f0d8d72f4b126487b64a65f363a68a605795815f7be1e6dd53fa7634597133`
+  (849817, including `rescheduledFrom`), and
+  `7bef90a46dffd94a967b4fb75dc2ba00a1a26d5dd46534a642526dca4b843f3d`
+  (849816 corroboration). The source set also pins the Oct 16 delayed-start
+  schedule, Oct 18 repeated schedule observations, Oct 18 postponement history,
+  and all three Oct 18 selection receipts listed above.
+- The proposed active-selection JSON SHA-256 is
+  `1690f8be895918ca0dab962ed252f6df8b7e93cfccb84c870f8209be16d6e04a`.
+  The actual active-selection file remains byte-identical at
+  `1a3a1ea4e5935c247ef0ac96e06595727233c7086d704543b73cd548693a1d57` and
+  selects V4. No regular-season close, source schedule, runtime allowlist,
+  database, or run state was modified.
+- Offline checks passed: the V5 package validator returned
+  `GOVERNED_CHILD_VALID_INACTIVE`; focused authority/status/runtime tests passed
+  (16 tests). The delayed-start implementation is isolated in
+  `runtime_schedule_status_policy_proposal_v1.py` and is not imported by the
+  active overlay. Separate authorization remains required to compare-and-swap
+  `active_selection.json` to the proposed V5 selection and to wire the exact
+  `Preview / P / PI / Delayed Start` tuple into
+  `RuntimeScheduleAuthority._validate_new_postseason_game` while keeping
+  conflicting identity, unknown status, and `Final / D / DR` rejected.
+- Status: **PREPARED — governed V5 child and inactive runtime-policy proposal
+  ready for ChatGPT review; not activated**.
 
 ### P2.3 Review broad API-role permissions against consumer dependencies
 

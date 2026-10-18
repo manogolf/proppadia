@@ -1,0 +1,87 @@
+{
+  "contract_name": "MLB_2026_PHASE_AUTHORITY_EXPLICIT_SOURCE_SET_V1",
+  "parent_descriptor_path": "backend/mlb/season_transition/authority_snapshots/v4/descriptor.json",
+  "parent_descriptor_sha256": "7828f1bdd35fa9fa763d8e7100a4215d4fa5fb928d13497535f27872bdd47a77",
+  "schema_version": 1,
+  "source_set_id": "MLB_2026_POSTSEASON_ALCS_V5_RETAINED_OCT16_OCT18",
+  "sources": [
+    {
+      "source_path": "artifacts/ops/mlb_current_slate_sources/2026-10-17/local_daily_20261017T123004Z/moneyline_schedule.json",
+      "source_sha256": "ab5a19155ddc389d2a59d2bca60e39e9daa1b5fb1274e51d55aefb740550b248",
+      "source_bytes": 3497,
+      "selected_game_pks": [849816]
+    },
+    {
+      "source_path": "artifacts/ops/mlb_current_slate_sources/2026-10-18/local_daily_20261018T123005Z/moneyline_schedule.json",
+      "source_sha256": "22f0d8d72f4b126487b64a65f363a68a605795815f7be1e6dd53fa7634597133",
+      "source_bytes": 3590,
+      "selected_game_pks": [849817]
+    },
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-18/20261018T123007262453Z_2026-08-05_2026-10-18_7bef90a46dffd94a967b4fb75dc2ba00a1a26d5dd46534a642526dca4b843f3d.json",
+      "source_sha256": "7bef90a46dffd94a967b4fb75dc2ba00a1a26d5dd46534a642526dca4b843f3d",
+      "source_bytes": 4581812,
+      "selected_game_pks": [849816]
+    }
+  ],
+  "corroborating_schedule_evidence": [
+    {
+      "source_path": "artifacts/ops/mlb_current_slate_sources/2026-10-16/local_daily_20261016T233004Z/moneyline_schedule.json",
+      "source_sha256": "50e2a6d70ec32797a9cfacbda05fd549a290d49c6d753e905751cdfb7800554c",
+      "source_bytes": 5228,
+      "game_pks": [849817],
+      "evidence_role": "SOURCE_VERIFIED_DELAYED_START_STATUS"
+    },
+    {
+      "source_path": "artifacts/ops/mlb_current_slate_sources/2026-10-18/local_daily_20261018T153004Z/moneyline_schedule.json",
+      "source_sha256": "25e643297292ff12cb4f082be7dc9099d828d464eedb5f4052e383c67a6fd558",
+      "source_bytes": 3590,
+      "game_pks": [849817],
+      "evidence_role": "REPEATED_RESCHEDULED_GAME_OBSERVATION"
+    },
+    {
+      "source_path": "artifacts/ops/mlb_current_slate_sources/2026-10-18/local_daily_20261018T180005Z/moneyline_schedule.json",
+      "source_sha256": "3a3c1a8946b98e9d8ef04f230507331386a9080c7382f2fea9bf11b700aa07c4",
+      "source_bytes": 5281,
+      "game_pks": [849817],
+      "evidence_role": "PRE_GAME_RESCHEDULED_GAME_OBSERVATION"
+    },
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-18/20261018T153006027579Z_2026-08-05_2026-10-18_977818d600e9f423151632997e942d9650873d723f2690943a9f4b71804fd448.json",
+      "source_sha256": "977818d600e9f423151632997e942d9650873d723f2690943a9f4b71804fd448",
+      "source_bytes": 4582102,
+      "game_pks": [849816, 849817],
+      "evidence_role": "SELECTION_RECEIPT_SOURCE"
+    },
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-18/20261018T180006979615Z_2026-08-05_2026-10-18_d5adc80cf2e97a7ba67e8d67a4081ba14061d1aac7e28155a0fdb238219a14b4.json",
+      "source_sha256": "d5adc80cf2e97a7ba67e8d67a4081ba14061d1aac7e28155a0fdb238219a14b4",
+      "source_bytes": 4583793,
+      "game_pks": [849816, 849817],
+      "evidence_role": "POSTPONEMENT_RESCHEDULE_IDENTITY_CORROBORATION"
+    }
+  ],
+  "selection_evidence": [
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-18/20261018T123007262453Z_2026-08-05_2026-10-18_7bef90a46dffd94a967b4fb75dc2ba00a1a26d5dd46534a642526dca4b843f3d_1e20ab2f91a0dbac2cf3be8e715555adaadef76655090d6154209799a450ef22.selection.json",
+      "source_sha256": "6c9c1b4c987e37bbacff708bd210a3157c082ce82f822f39aa85c87aac725f70",
+      "source_bytes": 1668107,
+      "schedule_sha256": "7bef90a46dffd94a967b4fb75dc2ba00a1a26d5dd46534a642526dca4b843f3d",
+      "game_pks": [849816, 849817]
+    },
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-18/20261018T153006027579Z_2026-08-05_2026-10-18_977818d600e9f423151632997e942d9650873d723f2690943a9f4b71804fd448_34aba0083ed19df05cb2cd7e6e09324e44fa47de7e713524ce9ac9c986f29fcc.selection.json",
+      "source_sha256": "690baf124ccb723eefa5d7c3d474f119f4d78b39701186f7cf01dc800875070f",
+      "source_bytes": 1668107,
+      "schedule_sha256": "977818d600e9f423151632997e942d9650873d723f2690943a9f4b71804fd448",
+      "game_pks": [849816, 849817]
+    },
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-18/20261018T180006979615Z_2026-08-05_2026-10-18_d5adc80cf2e97a7ba67e8d67a4081ba14061d1aac7e28155a0fdb238219a14b4_205b01fab63996d51d08b803fa2f71d821df181690affc1a9a48f74f977b4805.selection.json",
+      "source_sha256": "b3c891f1c72309e6d6adb8b809ea56f6f1cad0aff50a25690e3a717982a208e6",
+      "source_bytes": 1668106,
+      "schedule_sha256": "d5adc80cf2e97a7ba67e8d67a4081ba14061d1aac7e28155a0fdb238219a14b4",
+      "game_pks": [849816, 849817]
+    }
+  ]
+}
