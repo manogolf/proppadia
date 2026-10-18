@@ -128,7 +128,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.10 Repair mainline FINAL_PREGAME observer readiness
 
-- Status: **PRODUCER CORRECTED LOCALLY — focused verification passed**.
+- Status: **PRODUCER CORRECTED — natural verification reached a prior-day source blocker**.
   October 17 had 95 active LaunchAgent polls, all blocked as
   `NOOP_MORNING_NOT_READY` with zero paid calls. The live observer's daily
   receipt gate required unrelated SOG, Points, and Saves outputs even though
@@ -144,10 +144,34 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   runtime mainline authority. Direct reconciliation's exact-one
   FINAL_PREGAME requirement is unchanged. No Oct. 17 capture was created or
   relabeled.
-- Next natural verification: inspect the next ordinary scheduled observer
-  result and manifest. It should report either capture success or a specific
-  mainline source/authority failure. Do not manually trigger or reconstruct
-  Oct. 17 evidence.
+- Natural verification: loaded LaunchAgent `gui/501` points to this checkout,
+  the checked-in and installed plists match, and its 14:54:54Z invocation
+  recorded the corrected script SHA-256. Receipt
+  `artifacts/operational/nhl/cross_market_shadow/orchestration_status/2026-10-18/capture_20261018T145454.174832Z_6bd3c389bd16406d83db1b3c20e85ee6.json`
+  is `FAILED_WARN_ONLY` with zero odds calls. It failed in
+  `ensure_prior_day_official_outcomes()` when the established
+  `run_nhl_postgame_reconciliation --authority-roster-acquisition 2026-10-17`
+  child returned exit 5. The observer receipt does not retain the child's
+  diagnostic. Separate Oct. 18 daily receipts document the related local
+  authority blocker `IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:0`;
+  the cross-market outcome package for Oct. 17 is absent. This is a source
+  handoff failure, not the removed daily-readiness gate. The matching
+  independent POINTS and SAVES observer statuses were `FAILED_WARN_ONLY` and
+  SOG was `NOOP_OUTSIDE_WINDOW`; mainline `observe()` still ran, confirming
+  those lane results did not block it. The Oct. 18 comprehensive daily runs
+  had stopped in shared prerequisites before their prediction lanes started.
+- The retained Oct. 18 canonical schedule has two games, starting at 22:00Z
+  and 00:00Z. At the observer timestamp the first start was about 425 minutes
+  away, so AUTO would select `MIDDAY`; however, the source failure occurred
+  before schedule export and phase selection. No Oct. 18 capture state or
+  paid-attempt claim was created. Exact-one FINAL_PREGAME package lineage,
+  eligible-game coverage, prediction identities, quote chronology, and
+  manifest validation therefore remain unverified.
+- Remaining: resolve the missing prior-day official-outcome handoff under its
+  existing governance, then inspect a later ordinary observer receipt and
+  verify phase, exactly one immutable final package when in-window, eligible
+  games, prediction and odds provenance, and package manifest. Do not rerun
+  manually or relax the direct reconciliation cardinality rule.
 - Verification: 96 focused observer, source-integrity, timing, immutable
   capture, prediction-only, and reconciliation-learning tests passed; the
   separate exact-one-final-card prior-learning test set passed (5 tests).
