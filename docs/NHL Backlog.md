@@ -173,13 +173,78 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   should outcome-only prior learning also tolerate an absent SOG prediction
   card by resolving the canonical spine directly from the retained schedule?
   SOG is currently required and is the fallback spine authority; Oct. 17 had
-  a valid SOG card, so this did not cause the incident. Do not change these
-  contracts in this documentation-only review.
-- Next step: after the mode-scoped Saves behavior and observer handoff are
-  separately authorized and implemented, verify a later ordinary daily receipt
-  records prior-learning status and all normal current-slate lanes continue.
-  Resolve the SOG schedule-spine question separately. Do not fabricate a final
-  capture or weaken direct final-pregame reconciliation.
+  a valid SOG card, so this did not cause the incident. No prediction-source
+  contract was changed in that documentation-only review.
+- October 17 Saves empty-export root cause: the observer dispatches
+  `nhl_prediction_only_common.observe(lane="SAVES")`, whose
+  `export_lane_inputs()` runs `backend/nhl/sql/export_saves_from_denali.sql`.
+  At the first failed poll (14:31:58Z), the frozen regular-season schedule had
+  14 games (`2026020121`–`2026020134`), with first puck at 17:00Z. At each of
+  the four polls inside the 20–75 minute FINAL_PREGAME window (15:47, 16:02,
+  16:17, 16:32Z), bounded SELECT-only checks as the restricted NHL research
+  role found zero slate `roster_status` identities with `asof_ts` at or before
+  that poll, zero matching `nhl.players` identities, and zero goalie-history
+  joins. The observer receipt confirms the feature CSV was header-only. The
+  base population therefore became zero at its first required join,
+  `roster_status rs JOIN nhl.games g`, before canonical player binding or the
+  `goalie_game_logs_raw` membership join. This was missing, not-yet-acquired
+  slate roster data at the first empty stage. There is no evidence of an
+  identity conflict or of goalie-history membership being the limiting join;
+  the later acquired roster contained 64 goalie identities that matched
+  goalie history. The later LEFT JOINs cannot account for the zero rows.
+- The daily receipts explain the source timing. Runs at 14:30:08Z and
+  18:08:23Z failed `shared_prerequisites` on
+  `IMMUTABLE_POINTS_FINAL_PREGAME_RUN_CARDINALITY:0`; both recorded the roster
+  lane as `NOT_STARTED`. `_cmd_daily_impl()` calls `ensure_prior_learning()`
+  before the current-slate roster refresh and later target-date roster
+  observation. The independent 900-second Saves observer does not acquire
+  rosters; it only reads the database. The first retained October 17 roster
+  observation arrived at 18:36:36Z, 1h36m after first puck, and recorded 687
+  unique game/player rows, 28/28 team coverage, 64 goalie rows, no conflicts
+  or exclusions, and `strictly_prestart=false`. A later 18:48:12Z Saves poll
+  had nonempty features but failed
+  `WHOLE_SLATE_PRESTART_GATE_FAILED_PARTIAL_SLATE_FORBIDDEN`; having 41.8
+  minutes until the next unstarted game did not override the whole-slate
+  pre-puck rule. The pregame capture window was therefore missed before the
+  data became available, and no valid immutable October 17 Saves
+  FINAL_PREGAME card could be produced from then-available evidence. At the
+  first 14:31 poll itself AUTO was outside the prediction window; the four
+  later eligible polls failed on the empty roster-backed source.
+- The separate comprehensive daily Saves lanes later produced 59 goalie
+  identities/767 conditional rows and 17 identities/221 rows in their
+  October 17 runs, after first puck and with started games excluded. Those
+  daily outputs are not the immutable full-slate FINAL_PREGAME source and
+  cannot replace it or be relabeled for grading. The October 17 slate is
+  absent from the prospective Saves card population; its outcomes cannot be
+  scored against a prediction that was never durably captured. Do not
+  reconstruct a card.
+- The same `SAVES_FEATURE_EXPORT_EMPTY` receipt occurred 48 times across 11
+  slate dates from September 22 through October 18. Immutable Saves
+  FINAL_PREGAME run directories exist for the affected dates through October
+  16, indicating those early empty exports later recovered before their
+  capture windows. October 17 has no card; October 18 had six such failures
+  through 15:25Z and no card in the retained tree at inspection. The retained
+  historical evidence does not establish that every earlier date emptied at
+  the same join stage; the exact zero-roster chronology above is confirmed
+  for October 17.
+- Smallest justified producer correction: make the existing governed
+  current-slate roster observation and canonical identity import available
+  before the Saves pregame window, independently of a prior-day learning
+  failure (for example, run that roster stage after schedule freeze and before
+  `ensure_prior_learning()` can stop the daily graph). Keep the same NHL
+  roster source, canonical player identity and goalie-history membership
+  checks, and strict whole-slate pre-puck validation. Do not add a current
+  player-table fallback or relax goalie/source qualification. The existing
+  `test_daily_startup_ordering.py` checks schedule-before-learning but does not
+  cover roster-stage ordering; add a focused ordering regression with any
+  future implementation. Separately, the mode-scoped missing-Saves handling
+  documented above remains necessary for official prior-day outcomes, but it
+  cannot restore October 17 prediction evidence.
+- Next step: authorize and implement the roster-before-prior-learning source
+  ordering correction and mode-scoped missing-Saves outcome handling, then
+  verify a natural pre-puck receipt. Keep the SOG schedule-spine question
+  separate. Do not fabricate a final capture or weaken direct final-pregame
+  reconciliation.
 
 ### P2.10 Repair mainline FINAL_PREGAME observer readiness
 
