@@ -13,6 +13,11 @@
 - Distinguish routine production acquisition from unusually large historical backfills. Do not inhibit ordinary odds collection; inspect and control spending for unusually large backfills before execution.
 - Respect established MLB/NHL workflow boundaries and current operational priorities; do not broaden a task into another sport or workflow.
 
+## Git workflow
+- After completing each step, commit the changes with a short, clear message describing what changed.
+- Keep each commit small and focused on one step.
+- Never force-push or rewrite history unless I ask.
+
 # Python environment
 
 - Always run repository Python commands with `./bin/python`.
