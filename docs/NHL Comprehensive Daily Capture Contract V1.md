@@ -128,6 +128,57 @@ do not support that mode. Supporting it requires an explicit partial-coverage
 manifest state and per-game downstream binding; do not simply relax the
 current completeness or hash checks.
 
+### Roster availability incident finding (October 18, 2026)
+
+The retained incidents do not establish one recurring NHL roster-provider,
+identity, or database defect. Two distinct operational conditions are
+confirmed:
+
+- On September 30, the Points and Saves observers each recorded
+  `*_FEATURE_EXPORT_EMPTY` at 14:30:10Z. The same daily run had started at
+  14:30:08Z; its existing `refresh_players_and_roster_today.py` child completed
+  at 14:32:11Z with an immutable, hash-verified six-team observation and a
+  committed transaction (239 player and roster rows). This is a confirmed
+  observer/readiness timing race on a successful acquisition, not evidence of
+  a failed official endpoint or failed database write. The roster observation
+  was prestart, and immutable Points/Saves FINAL_PREGAME captures were later
+  retained for the date.
+- On October 17, prior-day learning failed before the current-slate roster
+  stage; the two retained failed daily attempts recorded the roster lane as
+  `NOT_STARTED`. On October 18, the 14:30Z parent failed its governed prior-day
+  authority/roster child with
+  `IMMUTABLE_SAVES_FINAL_PREGAME_RUN_CARDINALITY:0`; only schedule import had
+  completed, and no roster observation or roster database transaction was
+  attempted. These are reconciliation/source-certification stops, not roster
+  endpoint, normalization, or roster-write failures. Current reconciliation-
+  first behavior is intentional and must not be bypassed to recover a pregame
+  opportunity.
+
+The October 17 source query and later complete observation are documented in
+backlog P2.9. Repeated empty feature exports on other dates are symptoms only
+unless their date-bound daily receipt, source-response journal, and database
+transaction evidence identify the first failed stage. A later successful
+roster package does not prove its source response or database rows existed at
+an earlier observer poll. Do not generalize a provider outage,
+team-normalization failure, or transaction failure from an empty export.
+
+The durable operating correction is to preserve the single governed roster
+child after successful prior-day certification and current-slate schedule
+validation, and have observers require its valid same-slate certificate before
+feature export. An observer that starts earlier must report the unmet
+certificate/readiness condition without treating an empty feature query as a
+provider diagnosis. If certification fails, stop and repair the actual
+prior-day evidence or contract; do not move roster acquisition ahead of
+certification. The current code already enforces the certificate and roster
+prerequisites before Points/Saves feature export; natural runs must confirm
+that behavior and transaction evidence. Full-slate roster coverage remains the
+current contract. Partial coverage is a separate proposed capability and is
+not established as a correction for the confirmed incidents.
+
+Official roster endpoints establish observed team-roster membership only.
+They do not certify dressed players, lines, availability, or confirmed goalie
+starters. Those remain separate evidence and qualification requirements.
+
 Before V1, the optional odds step wrote mutable odds files directly, could retry individual
 provider calls, and represented failures as empty results. V1 retains the same
 comprehensive graph while placing immutable roster evidence before roster DML,

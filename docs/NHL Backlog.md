@@ -556,6 +556,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 ### P2.13 Resolve NHL roster coverage and Points ladder batch-scope gaps
 
 - Status: **OPEN — contract-preserving design and natural-run evidence pending**.
+  Partial roster coverage remains a separate proposed capability. The October
+  18 recurrence review below did not establish it as a correction for any
+  confirmed acquisition failure; do not implement it as a workaround for
+  blocked or late roster acquisition.
   The immutable roster writer requires every scheduled team's response and
   normalized coverage from both teams in every canonical game, with no
   natural-key conflict or divergent repeated team snapshots. The reuse and
@@ -611,6 +615,107 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   explicitly authorized read-only test blocked on sandbox DNS/transport,
   request elevated permission and retry the exact test before classifying a
   connectivity failure. No credentials or connection strings belong in logs.
+
+### P2.15 Separate NHL roster acquisition failures from readiness timing
+
+- Status: **DIAGNOSED — preserve reconciliation-first and verify on natural
+  runs; no roster producer correction is established by current evidence**.
+- Confirmed incident A, slate 2026-09-30, games
+  `2026020006`–`2026020008`: Points and Saves observers each failed at
+  14:30:10Z with `POINTS_FEATURE_EXPORT_EMPTY` /
+  `SAVES_FEATURE_EXPORT_EMPTY`. The daily run began at 14:30:08Z. Its existing
+  `refresh_players_and_roster_today.py` child completed at 14:32:11Z, and the
+  parent receipt records exit 0, transaction `COMMITTED`, 239 player rows,
+  239 roster rows, and 239 roster-status upserts. The immutable package
+  verifies all six scheduled teams, three games, 142 snapshot rows, no
+  conflicts/exclusions, and prestart observation; all manifest hashes and the
+  completion marker verify. The official roster responses were captured
+  successfully, including season-specific endpoint resolution. This
+  establishes a timing race between an observer poll and the successful
+  existing daily acquisition, not an endpoint, identity, normalization, or
+  transaction failure. The exact database row state at 14:30:10Z is unknown.
+  Later immutable Points and Saves FINAL_PREGAME captures exist.
+- Confirmed incident B, slate 2026-10-17, games
+  `2026020121`–`2026020134`: the 14:30:08Z and 18:08:23Z daily attempts failed
+  in prior-day learning on
+  `IMMUTABLE_POINTS_FINAL_PREGAME_RUN_CARDINALITY:0`; the roster stage was
+  `NOT_STARTED`. At four in-window Saves polls (15:47–16:32Z), the
+  roster-backed query had zero qualifying `roster_status` rows, identities,
+  and goalie-history joins. The first retained official roster observation
+  arrived at 18:36:36Z after first puck (17:00Z), with complete 28/28 team
+  coverage, 687 player rows, 64 goalie identities, and no conflicts or
+  exclusions. Later daily receipts record committed roster writes, but no
+  pre-puck roster response or write exists in the retained evidence. Saves
+  FINAL_PREGAME was missed; later captures were correctly ineligible. This
+  was a prior-day certification block followed by late acquisition, not a
+  demonstrated provider or normalization failure. Earlier correction
+  `142b2619` attempted to protect this timing window by moving roster work
+  ahead of reconciliation; that ordering was correctly reversed by
+  `79ef060c` because it violates the governing integrity contract.
+- Confirmed incident C, slate 2026-10-18, games `2026020135` and
+  `2026020136`: the 14:30:07Z parent failed the governed prior-day
+  authority/roster child with
+  `IMMUTABLE_SAVES_FINAL_PREGAME_RUN_CARDINALITY:0`. The child summary reports
+  zero external requests, database requests, and database writes; schedule
+  import was its only completed child stage. No current-slate roster package
+  or transaction was attempted. Points/Saves observer polls first reported
+  empty feature exports before their later polls began failing the prior-day
+  reconciliation certificate gate. The empty exports therefore do not prove
+  an October 18 official roster response failure. Immutable same-day
+  FINAL_PREGAME predictions were not produced in the retained evidence.
+- Also on October 18, the 14:54:54Z mainline observer invoked
+  `run_nhl_postgame_reconciliation --authority-roster-acquisition 2026-10-17`
+  and received exit 5 before schedule export or phase selection. The parent
+  retained only `CalledProcessError` and the exit code; the precise
+  `IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:0` predicate is
+  reconstructed from the invocation and retained source state, not captured
+  child output. This is a separate prior-day source-handoff failure, not an
+  October 18 roster acquisition attempt. It shares the broader prerequisite
+  theme but is distinct from the daily run's missing-Saves-card predicate.
+- Common cause determination: `*_FEATURE_EXPORT_EMPTY` was a symptom, not a
+  unique root cause. September 30 verifies an observer poll before successful
+  acquisition; October 17 verifies prior-day learning prevented timely
+  acquisition; October 18 verifies certification stopped acquisition
+  altogether. Current evidence does not prove every empty export from
+  September 22–October 18 had one of these exact mechanisms. Later successful
+  packages do not establish what was available at earlier polls. No confirmed
+  incident demonstrates an official endpoint outage, schedule/game mismatch,
+  player normalization conflict, or roster transaction failure.
+- Source contract: `/v1/roster/{team}/current` (or its recorded season path)
+  gives an observed team-roster membership snapshot. It does not guarantee
+  who is dressed, an active lineup, or the starting goalie. Those require
+  their own provenance and qualification. The acquisition child journals
+  source responses, writes immutable package evidence before roster DML,
+  normalizes the batch before mutation, and commits player/roster rows
+  transactionally; ordinary retries remain configured. Full scheduled-team
+  and game coverage plus package integrity remain required.
+- Permanent repair proposal: retain the one existing acquisition after
+  prior-day certification and canonical schedule validation; keep Points,
+  Saves, and mainline observers gated on the date-bound certificate and a
+  complete valid same-slate roster package before feature export. An observer
+  that starts earlier must expose the unmet prerequisite, not present an empty
+  feature query as a provider diagnosis. If certification fails, investigate
+  and repair the actual prior-day evidence or contract; never move roster
+  acquisition ahead of certification. If later receipts show certification
+  succeeded but roster completion lagged observers, correct sequencing within
+  the existing daily graph without a second provider acquisition or retry
+  policy change.
+- Natural-run acceptance: over at least three consecutive ordinary NHL
+  slates, including one with first puck before 10:00 PT, confirm (1) a valid
+  prior-day certificate precedes schedule and roster work, (2) exactly one
+  governed current-slate roster child runs after schedule validation, (3) its
+  source response package, manifest, DB commit/rollback, and parent receipt
+  agree, (4) observers before readiness report the exact missing
+  certificate/package and do not reach feature export, and (5) once the
+  package is complete and prestart, qualified game-level predictions can be
+  retained. Also verify a blocked certificate prevents roster and
+  history-dependent work. Keep partial roster coverage in P2.13 until
+  independently designed and explicitly authorized.
+- Remaining evidence: no retained official request journal for the October
+  17 pre-acquisition window; no database snapshot at the exact September 30
+  observer timestamp; and no full stage-by-stage source/transaction evidence
+  for every historical empty-export date. Classify those cases from natural
+  run receipts rather than inferring from final feature counts.
 
 ### P2.3 Close documented historical source-integrity gaps
 
