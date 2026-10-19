@@ -41,7 +41,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P1.2 Determine applied status of the 32 verified historical PP-TOI rows
 
-- Status: **VERIFIED OUTSTANDING 2026-10-19 — not applied**. A read-only
+- Status: **VERIFIED COMPLETE 2026-10-19 — applied**. The operator ran the
+  SQL-editor block at 16:09–16:10 UTC; receipts show 32 original → 32
+  corrected, and an independent research-login check confirmed corrected 32
+  and no remaining correction-role members. Evidence:
+  `backend/nhl/research/POINTS_PP_TOI_32_CORRECTION_EXECUTION_2026-10-19.md`.
+- Prior status: **VERIFIED OUTSTANDING 2026-10-19 — not applied**. A read-only
   check as `proppadia_nhl_research_login` found all 32 proposal keys in
   `nhl.skater_game_logs_raw`, each still holding its original
   `previous_accepted_minutes` value (32 original, 0 corrected, 0 other).
@@ -1542,6 +1547,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   semantics.
 
 ## Verified Complete — Do Not Reopen
+
+- **VERIFIED COMPLETE:** the 32 verified 2023–25 PP-TOI corrections
+  (`DUPLICATE_SHIFT_INTERVAL`), applied 2026-10-19 through the guarded
+  SQL-editor block, with before/after receipts and an independent restricted
+  read-only check (`backend/nhl/research/POINTS_PP_TOI_32_CORRECTION_EXECUTION_2026-10-19.md`).
 
 - **VERIFIED COMPLETE:** 46,379 2023–24 shot-attempt corrections;
   34,108 2025 shot-attempt corrections; and 3,204 2026 shot-attempt
