@@ -1372,6 +1372,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `artifacts/operational/nhl/slates/2026-09-24` in daily lane containment,
   plus postgame staging sync and 2025 historical market recovery fixtures.
   The suite only means something on the operator machine.
+- Also: `test_nhl_sep24_player_identity_acquisition_v1.py` makes its temp
+  directory under the repository root, and each suite run leaves a
+  `nhl_identity_acq_*/postgame_reconciliation/request_runs/...` tree behind.
 - Completion: for each test, commit a small fixture, build it in `tmp_path`,
   or skip with a reason when it needs retained operational evidence.
 
