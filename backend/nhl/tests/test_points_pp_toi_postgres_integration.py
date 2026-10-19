@@ -154,6 +154,9 @@ class PpToiPostgresWritePathTests(unittest.TestCase):
         self.assertIsNone(remaining, "rollback-only integration schema was not removed")
 
     def _create_fixture_tables(self):
+        # pp_toi_minutes matches production: numeric(6,2) in the stage and
+        # numeric(5,2) in the raw table. The shift-overlap fill writes
+        # unrounded minutes and relies on that column scale to store them.
         qschema = f'"{self.schema}"'
         self.conn.execute(f"CREATE TABLE {qschema}.games(game_id bigint PRIMARY KEY, game_date date, home_team_id bigint, away_team_id bigint)")
         self.conn.execute(f"CREATE TABLE {qschema}.team_external_ids(team_id bigint, provider text, provider_team_id text)")
@@ -164,7 +167,7 @@ class PpToiPostgresWritePathTests(unittest.TestCase):
         self.conn.execute(f"""CREATE TABLE {qschema}.import_skater_logs_stage(
             player_id bigint, game_id bigint, game_date date, team_id bigint,
             shots_on_goal integer, shot_attempts integer, toi_minutes numeric,
-            pp_toi_minutes numeric, blocks integer, hits integer, fenwick_for numeric,
+            pp_toi_minutes numeric(6,2), blocks integer, hits integer, fenwick_for numeric,
             missed_shots integer, blocked_shots_taken integer, rebounds_for integer,
             takeaways integer, giveaways integer, penalties_drawn integer,
             penalties_taken integer, ev_shot_attempts numeric, pp_shot_attempts numeric,
@@ -173,7 +176,7 @@ class PpToiPostgresWritePathTests(unittest.TestCase):
         self.conn.execute(f"""CREATE TABLE {qschema}.skater_game_logs_raw(
             player_id bigint, game_id bigint, team_id bigint, opponent_id bigint,
             is_home boolean, game_date date, shots_on_goal integer, shot_attempts integer,
-            toi_minutes numeric, pp_toi_minutes numeric, blocks integer, hits integer,
+            toi_minutes numeric, pp_toi_minutes numeric(5,2), blocks integer, hits integer,
             fenwick_for numeric, missed_shots integer, blocked_shots_taken integer,
             rebounds_for integer, takeaways integer, giveaways integer,
             penalties_drawn integer, penalties_taken integer, ev_shot_attempts numeric,
