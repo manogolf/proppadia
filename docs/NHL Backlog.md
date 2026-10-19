@@ -47,10 +47,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `previous_accepted_minutes` value (32 original, 0 corrected, 0 other).
   The proposal is
   `artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/pp_toi_recovery_compatibility_differences_20261016.csv`
-  (SHA-256 matches below). No guarded correction script exists yet; the
-  report specifies an operator session with `SET ROLE
-  proppadia_nhl_source_correction`, exact original-value assertions, and a
-  retained receipt. Applying it needs separate authorization.
+  (SHA-256 matches below). Prepared, not executed:
+  `backend/nhl/sql/repairs/repair_nhl_pp_toi_32_duplicate_shift_intervals.sql`
+  (SHA-256 `b48ccee4d4c7e2e274aa3e7f41fce5bfe171a59c0a15ec9892bcac14d22537c6`) and its rollback (SHA-256 `17a1732578eaa274eee4919507966a31f963f1b33a7c0ba400d4ed61844aad05`) are single UPDATEs that
+  pass the governed executor's validator. They pin each row's legacy
+  `team_id` (verified by abbreviation against the receipt-bound official
+  team) and refuse the whole statement unless all 32 keys hold the exact
+  expected value. `verify_nhl_pp_toi_32_duplicate_shift_intervals.sql` is
+  the read-only receipt (before: original 32, corrected 0, run 2026-10-19).
+  `backend/nhl/tests/test_pp_toi_32_correction_sql.py` exercises all three
+  in a rollback-only test schema. Execution needs owner authorization and
+  the executor's Keychain admin item, which was unprovisioned as of
+  2026-10-16.
 - Earlier record: the retained October 16 report says the independently
   verified 32-row proposal was not applied then and all target keys still
   held their expected original values at that check.
