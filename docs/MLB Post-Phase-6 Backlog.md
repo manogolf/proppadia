@@ -444,8 +444,10 @@ writer validation does not authorize a hosted cutover or a different writer.
 - 2026-10-19 hosted API (isolation plan step 8): the Render API still used
   the owner login for its MLB reads and its `mlb.player_props` INSERT (POST
   `/api/props/add`). The rotation broke `/api/mlb/ping-db`.
-  - Prepared, not applied: a dedicated `proppadia_api_login` route
-    (`PROPPADIA_API_DATABASE_URL`) and its grant SQL. Inventory and Render
+  - Done 2026-10-19: the grant SQL was applied and the Render API now runs on
+    `proppadia_api_login` (`/api/health` `db_route=API_LOGIN`). `DATABASE_URL`
+    and `SUPABASE_DB_URL` were removed from Render. The route is
+    `PROPPADIA_API_DATABASE_URL`, with its grant SQL. Inventory and Render
     cutover: `docs/operations/hosted_api_database_access_inventory_2026-10-19.md`.
   - Render must not set `MLB_USE_RESTRICTED_INGEST` or
     `MLB_RESEARCH_DATABASE_URL`.

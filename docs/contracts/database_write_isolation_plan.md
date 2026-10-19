@@ -669,7 +669,35 @@ EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
 - Both receipts record `database_credential_check.owner_login_guard`
   (`ENFORCED` or `OFF_UNTIL_STEP_4`).
 
-### Step 8 status (2026-10-19): code and SQL prepared; not applied or deployed
+### Step 8 status (2026-10-19): done
+
+- Cutover completed 2026-10-19:
+  - The operator applied `20261019_hosted_api_login.sql` and set the login
+    password in an unsaved query.
+  - The operator saved `PROPPADIA_API_DATABASE_URL` on Render, in
+    transaction-pooler form, and confirmed `MLB_USE_RESTRICTED_INGEST` and
+    `MLB_RESEARCH_DATABASE_URL` were unset.
+  - Main was pushed (`81d6ebee..c83a8479`, one rebuild). The operator then
+    removed `DATABASE_URL` and `SUPABASE_DB_URL` from Render; there were no
+    `DB` or `PG*` settings.
+  - Removing `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_SECRET_KEY` was
+    recommended, because the API does not use them. Whether they were
+    removed is not recorded.
+- Verified, read-only:
+  - A catalog check through the MLB and NHL research logins passed every
+    expected allow and deny for `proppadia_api`.
+  - After both rebuilds, `/api/health` reported `db_route=API_LOGIN`, and both
+    ping-db endpoints returned ok.
+  - Eleven read endpoints returned 200 with data. They span the MLB and NHL
+    reads, `nhl/players` (whose DDL is skipped on this login), props history,
+    metrics, and model status.
+  - The prop write endpoints were not exercised. Only the grants cover them.
+- With `DATABASE_URL` gone, the retired prod12 trigger
+  (`/api/ops/mlb/prod12/trigger`) can no longer do database work on Render.
+  The operator confirmed it is unused.
+
+Original preparation notes:
+
 
 - Steps 1–7 covered local jobs only. The hosted API kept the owner login in
   Render's `DATABASE_URL`/`SUPABASE_DB_URL`. When the step 6 rotation
@@ -697,8 +725,10 @@ EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
 - Tests: `backend/tests/test_api_database_route.py` and
   `backend/tests/test_hosted_api_login_migration_contract.py`.
 - Not yet verified: the RLS state and serial defaults of the target tables
-  (the migration discovers them when it runs). No live probe of the new login
-  has been made.
+  (the migration discovers them when it runs). (Superseded: the 2026-10-19
+  catalog check found RLS on `mlb.player_ids`, `mlb.model_training_props`, and
+  `mlb.player_derived_stats`, and no sequences or triggers on the two write
+  targets.)
 
 ### Operator decisions
 
