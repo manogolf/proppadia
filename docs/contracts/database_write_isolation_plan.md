@@ -1,6 +1,7 @@
 # Database Write Isolation Plan
 
 **Status: NHL restricted connections active and daily-verified (2026-10-16); MLB research source-read permissions deployed and approved daily readers process-scoped (2026-10-18).**
+**2026-10-19:** the production owner login is again in `backend/.env`; the owner-credential isolation plan below tracks its removal.
 The deployment record below describes the NHL cutover. MLB writer isolation and natural-run verification remain open under P2.2.
 
 This plan pairs the Official Source Verification and Data Authority policy in
@@ -264,7 +265,9 @@ and running the ordinary daily command. The following actions were completed:
   group remains `NOLOGIN` with no application login membership.
 - Set `NHL_DB_ACCESS_MODE=restricted` in the ignored local `backend/.env`;
   the file is mode `0600`. Its shared aliases resolve to the research login.
-  No owner DSN is in the active application environment. The owner rollback
+  No owner DSN is in the active application environment. (Superseded the
+  same afternoon: by 13:20 PDT the owner login was back in
+  `SUPABASE_DB_URL`/`DATABASE_URL`; see "Owner-credential isolation plan".) The owner rollback
   configuration is retained outside the repository with restrictive file and
   directory permissions; it was not rotated.
 - The local morning-orchestration and cross-market-shadow LaunchAgents load
@@ -346,6 +349,14 @@ This supersedes the earlier statement in this section that `postgres` could
 already assume the group. The documented operator path is therefore not yet
 usable without a separately authorized, temporary membership grant.
 
+2026-10-19: the operator declined Keychain storage. The 32-row PP-TOI
+correction ran instead as an operator-pasted Supabase SQL-editor transaction
+(`backend/nhl/sql/repairs/operator_sql_editor_pp_toi_32_correction.sql`). It
+granted the group, verified `SET ROLE` and `current_user`, ran the reviewed
+guarded UPDATE, reset and revoked, and verified the revoke. A later check
+found no group members. This is the current owner channel for authorized
+source corrections. The executor below remains available but is not required.
+
 The reusable execution entry point is
 `backend/nhl/scripts/execute_nhl_source_correction.py`. It retrieves the
 approved TLS PostgreSQL URL from the macOS Keychain item with service
@@ -414,6 +425,77 @@ use an application login or the routine local research connection. SQL
 assertions cover the static permission contract; the execution command checks
 the runtime role switch and revocation without requiring a separate
 administrative operation.
+
+## Owner-credential isolation plan (2026-10-19)
+
+Goal: no application process, scheduled job, or stored file can use or expose
+the production owner login. Owner access remains available to the operator
+through the Supabase dashboard and SQL editor, which store no credential
+locally (the 2026-10-19 PP-TOI correction used this channel). The operator
+declined Keychain storage on 2026-10-19; this plan does not use it.
+
+### Current state (verified 2026-10-19; names and login roles only)
+
+- `backend/.env` (mode 600, last changed 2026-10-17) holds the production
+  owner login in both `SUPABASE_DB_URL` and `DATABASE_URL`, despite the
+  2026-10-16 activation record. The backups show the change: the 13:15 PDT
+  pre-restore copy had no owner login, and the 13:20 `known_good_mlb` and later
+  copies do. The owner aliases were most likely restored for MLB.
+- Owner login copies on disk: `backend/.env`, four 2026-10-16 backups
+  (`.env.known_good_both_sports_*`, `.env.known_good_mlb_*`,
+  `.env.known_good_mlb_verified_*`, `.env.pre_nhl_connection_restore_*`), and
+  `.env.train` (mode 644, `DATABASE_URL`). `NHL_PP_TOI_TEST_DSN` is the owner
+  login of the separate test project, not production.
+- `NHL_DB_ACCESS_MODE=restricted`: the central NHL resolver uses the NHL
+  research, ingestion, and operations logins. But
+  `run_nhl_morning_orchestration.py` resolves `SUPABASE_DB_URL`/`DATABASE_URL`
+  and exports that value to every child under both names. Eighteen NHL
+  scripts read those aliases directly without the resolver, so today they
+  receive owner access when run: `assess_nhl_season_2025_saves_market_listed_goalie_actual_starter_concordance.py`,
+  `assess_nhl_season_2026_goalie_source_integration_readiness.py`,
+  `build_nhl_moneyline_strict_prior_control_v2_and_sog_conditional_test.py`,
+  `build_nhl_moneyline_team_goalie_feature_spine.py`,
+  `build_nhl_season_2025_frozen_moneyline_replay_and_sog_novelty_v1.py`,
+  `build_nhl_season_2025_player_prop_market_archive_canonical_index.py`,
+  `build_nhl_sog_cold_start_platform_v1.py`, `calibrate_sog_segmented_recency.py`,
+  `certify_nhl_full_game_moneyline_population.py`,
+  `certify_nhl_sog_outcome_denominator.py`, `check_nhl_database_connection.py`,
+  `create_safe_promotion_schema_backup.py`, `export_sog_candidate_book_upload.py`,
+  `export_sog_denali_book_upload.py`, `rehearse_nhl_three_lane_preseason_operator_v1.py`,
+  `run_nhl_morning_orchestration.py`,
+  `run_nhl_september19_independent_lane_predictions.py`,
+  `run_sog_candidate_arm_bakeoff.py`.
+- MLB: about 45 MLB scripts read the owner aliases. The approved daily
+  writers already route to the restricted ingest login. The four daily
+  `mlb.today_*` materialized-view refreshes are owner-only, and research and
+  report readers still resolve the owner aliases (MLB backlog P2.2).
+- The owner password has not been rotated since these copies were made.
+
+### Steps
+
+| # | Step | Done when | Owner |
+| --- | --- | --- | --- |
+| 1 | Route the 18 NHL scripts through `backend/nhl/database_access` (or retire unused ones). Make morning orchestration pass only the restricted URLs to children and stop exporting the owner aliases. | No NHL process reads `SUPABASE_DB_URL`/`DATABASE_URL`; tests cover the orchestration child environment. | Claude (code) |
+| 2 | Guard NHL entry points: remove owner aliases from the environment they hand to children, and refuse to start if a selected NHL URL resolves to an owner login. Report owner-login presence in `backend/.env` (names only) in the daily preflight. | An owner login can no longer reach an NHL child process; the daily receipt records the check. | Claude (code) |
+| 3 | Finish MLB routing in its own MLB session: move research and report readers to the MLB research login, and choose an owner-free route for the four materialized-view refreshes. | No ordinary MLB job needs the owner aliases. | Claude (code), MLB scope; the refresh route is the operator's decision |
+| 4 | Remove the owner login from `backend/.env`: drop or repoint `SUPABASE_DB_URL`/`DATABASE_URL` to restricted logins. Owner work moves to the Supabase SQL editor. | `backend/.env` contains no production owner login; daily NHL and MLB runs complete. | Operator edits the file; Claude verifies |
+| 5 | Remove owner copies: the four 2026-10-16 backups and `.env.train` (mode 644). Tracked-history findings remain under NHL backlog P1.4. | No local file other than the operator's chosen offline record holds the owner login. | Operator (deletion) |
+| 6 | Rotate the owner database password in Supabase after steps 4–5, then rotate the Supabase, Odds API, and Ops keys noted above. | The old owner password no longer authenticates; consumers verified. | Operator (provider account) |
+| 7 | Keep it from returning: a test or preflight check fails if `backend/.env` assigns an owner login to an application alias. | The check runs in the daily preflight and the test suite. | Claude (code) |
+
+### Operator decisions
+
+- Whether the owner aliases stay in `backend/.env` during the transition
+  (steps 1–3), and when to remove them (step 4).
+- The owner-free route for the MLB materialized-view refreshes: a reviewed
+  fixed `SECURITY DEFINER` function for the ingest role, or a manual SQL-editor
+  run.
+- Whether to delete or keep (offline, outside the repository) the backup
+  copies (step 5).
+- Timing of rotation (step 6). Rotation and provider-side changes are
+  operator actions only.
+- The owner channel itself: the Supabase dashboard and SQL editor. No
+  Keychain or other stored owner credential is required.
 
 ## Remaining implementation notes
 - **Standalone script limitation:** older scripts launched outside the central

@@ -403,6 +403,11 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P2.2 Inventory owner-level database aliases and plan gradual replacement
 
+- 2026-10-19 cross-reference: this item is step 3 of the owner-credential
+  isolation plan in `docs/contracts/database_write_isolation_plan.md` (NHL
+  backlog P1.5). Removing the owner login from `backend/.env` waits on the
+  MLB readers and the materialized-view refresh route recorded here.
+
 - Status: **SOURCE READ PERMISSIONS DEPLOYED — APPROVED DAILY READER ROUTING ACTIVE; natural-run checks remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as
   `session_user=current_user=postgres`. The restricted alias connected as

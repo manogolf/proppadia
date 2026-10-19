@@ -124,6 +124,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Not changed: `backend/nhl/scripts/run_nhl_september19_independent_lane_predictions.py`
   (one-off, dated) still passes its DSN on argv.
 
+### P1.5 Keep the production owner login out of application environments
+
+- Status: **OPEN — plan written 2026-10-19**. The owner login returned to
+  `backend/.env` (`SUPABASE_DB_URL`, `DATABASE_URL`) on 2026-10-16 around
+  13:20 PDT, most likely for MLB. It also sits in four 2026-10-16 backups and
+  `.env.train` (mode 644). Morning orchestration exports it to every child,
+  and 18 NHL scripts read it directly, so they run with owner access today.
+- Plan, owners, and operator decisions:
+  `docs/contracts/database_write_isolation_plan.md`, "Owner-credential
+  isolation plan (2026-10-19)". Code steps 1, 2, and 7 are NHL work; step 3 is
+  MLB (MLB backlog P2.2). Removing the login, deleting copies, and rotating
+  the password are operator steps.
+- Completion: no NHL or MLB process or stored file can use the production
+  owner login; owner work goes through the Supabase SQL editor; the password
+  is rotated; a preflight check stops it returning.
+
 ## Priority 2: Operational Verification and Historical Integrity
 
 ### P2.1 Diagnose the October 17 SOG integrity exit status 2
