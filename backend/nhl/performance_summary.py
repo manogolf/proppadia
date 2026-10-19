@@ -180,9 +180,12 @@ def _prop_counts(frame: pd.DataFrame, mask: pd.Series, *, lane: str,
     return {
         "settled": settled, "wins": w, "losses": l, "pushes": p,
         "pushes_applicable": applicability,
+        # Confirmed non-participants (absent from a complete official lineup)
+        # are not gradeable, not unresolved, as Saves non-starters already are.
         "unresolved": _count_rows(frame, selected & ~status.isin(
-            ["WIN", "LOSS", "PUSH"] if lane == "sog" else ["SETTLED", "PUSH",
-                "DID_NOT_START_NOT_GRADEABLE_CONDITIONAL", "NONSTARTER_EXCLUDED_FROM_CONDITIONAL_EVALUATION"])),
+            ["WIN", "LOSS", "PUSH", "NO_APPEARANCE_UNGRADED"] if lane == "sog" else ["SETTLED", "PUSH",
+                "DID_NOT_START_NOT_GRADEABLE_CONDITIONAL", "NONSTARTER_EXCLUDED_FROM_CONDITIONAL_EVALUATION",
+                "NONPARTICIPANT_UNGRADED"])),
         "win_rate": w / decided if decided else None,
     }
 
@@ -201,6 +204,8 @@ def _grouped_props(frame: pd.DataFrame, *, lane: str) -> dict[str, Any]:
     elif lane == "points":
         overall["not_gradeable"] = int(status.isin([
             "NONPARTICIPANT_UNGRADED", "PARTICIPATION_STATUS_UNRESOLVED"]).sum())
+    elif lane == "sog":
+        overall["not_gradeable"] = int(status.eq("NO_APPEARANCE_UNGRADED").sum())
     side_stats = {}
     for side_name in ("OVER", "UNDER"):
         side_stats[side_name] = _prop_counts(

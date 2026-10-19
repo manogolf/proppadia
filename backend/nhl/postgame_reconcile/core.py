@@ -1295,6 +1295,49 @@ def _settle_ladder(frame: pd.DataFrame, *, outcome_column: str) -> pd.DataFrame:
     return result
 
 
+OFFICIAL_LINEUP_ABSENCE = "NOT_IN_OFFICIAL_LINEUP"
+
+
+def _official_lineup_absences(predictions: pd.DataFrame, skaters: pd.DataFrame) -> pd.DataFrame:
+    """Return predicted skaters missing from a complete official box score.
+
+    A final game whose official box score lists dressed skaters for both teams
+    has a complete lineup, so a predicted skater absent from it did not play.
+    Games without that evidence are left for the caller to keep unresolved.
+    """
+    if not {"game_id", "player_id", "team_id", "official_final"}.issubset(skaters.columns):
+        return pd.DataFrame(columns=["game_id", "player_id"], dtype="int64")
+    final = skaters.loc[skaters.official_final.astype(str).str.strip().str.lower().isin({"true", "1"})]
+    teams_per_game = final.groupby(final.game_id.astype("int64")).team_id.nunique()
+    complete_games = set(teams_per_game[teams_per_game >= 2].index)
+    keys = predictions[["game_id", "player_id"]].drop_duplicates().astype("int64")
+    present = set(map(tuple, skaters[["game_id", "player_id"]].astype("int64").to_numpy()))
+    absent = keys.game_id.isin(complete_games) & ~keys.apply(tuple, axis=1).isin(present)
+    return keys.loc[absent].reset_index(drop=True)
+
+
+def _sog_outcomes(skaters: pd.DataFrame, predictions: pd.DataFrame) -> pd.DataFrame:
+    """Official SOG outcomes, including predicted skaters who did not dress."""
+    columns = ["canonical_season", "slate_date", "game_id", "player_id", "official_final",
+               "official_sog", "participation_status", "outcome_source",
+               "outcome_source_timestamp_utc"]
+    outcome = skaters.rename(columns={"participation_state": "participation_status"})[columns].copy()
+    # grade_predictions grades APPEARED; NO_APPEARANCE is a non-participant.
+    outcome["participation_status"] = outcome.participation_status.replace({"PARTICIPATED": "APPEARED"})
+    absent = _official_lineup_absences(predictions, skaters)
+    if absent.empty:
+        return outcome
+    game_source = (outcome.assign(game_id=outcome.game_id.astype("int64"))
+                   .drop_duplicates("game_id").set_index("game_id")[
+                       ["canonical_season", "slate_date", "outcome_source",
+                        "outcome_source_timestamp_utc"]])
+    absences = absent.join(game_source, on="game_id")
+    absences["official_final"] = True
+    absences["official_sog"] = float("nan")
+    absences["participation_status"] = "NO_APPEARANCE"
+    return pd.concat([outcome, absences[columns]], ignore_index=True)
+
+
 def _grade_points(run: Path | None, schedule: pd.DataFrame,
                   skaters: pd.DataFrame, *, predictions: pd.DataFrame | None = None
                   ) -> dict[str, pd.DataFrame]:
@@ -1305,6 +1348,12 @@ def _grade_points(run: Path | None, schedule: pd.DataFrame,
         raise RuntimeError("POINTS_OUTCOME_IDENTITY_DUPLICATE")
     outcomes["official_points"] = (outcomes.official_goals.astype(int)
                                     + outcomes.official_assists.astype(int))
+    absent = _official_lineup_absences(predictions, skaters)
+    if not absent.empty:
+        # Did not dress per the complete official box score: a non-participant.
+        outcomes = pd.concat([outcomes, absent.assign(
+            official_points=float("nan"), participation_state=OFFICIAL_LINEUP_ABSENCE)],
+            ignore_index=True)
     joined = predictions.merge(
         outcomes[["game_id", "player_id", "official_points", "participation_state"]],
         on=["game_id", "player_id"], how="left", validate="many_to_one")
@@ -2173,13 +2222,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                     "grading_status", "evaluation_population", "reason",
                 ])
                 continue
-            outcome = skaters.rename(columns={"participation_state": "participation_status"})[[
-                "canonical_season", "slate_date", "game_id", "player_id", "official_final",
-                "official_sog", "participation_status", "outcome_source", "outcome_source_timestamp_utc",
-            ]]
-            # grade_predictions grades APPEARED, as the immutable-card path maps it.
-            outcome["participation_status"] = outcome.participation_status.replace(
-                {"PARTICIPATED": "APPEARED"})
+            outcome = _sog_outcomes(skaters, frame)
             sog_grade = grade_predictions(frame, outcome, grading_timestamp_utc=datetime.now(timezone.utc).isoformat())
             arm = sog_grade.contract_arm.astype(str)
             if not arm.str.startswith(("A_", "B_", "C_", "D_", "F_", "G_")).all():
@@ -2302,11 +2345,7 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
     else:
         sog_run = Path(source_binding["sog"]["run"])
         predictions = pd.read_csv(sog_run / "immutable_predictions.csv")
-        outcome = skaters.rename(columns={"participation_state": "participation_status"})[[
-            "canonical_season", "slate_date", "game_id", "player_id", "official_final",
-            "official_sog", "participation_status", "outcome_source", "outcome_source_timestamp_utc",
-        ]]
-        outcome["participation_status"] = outcome.participation_status.replace({"PARTICIPATED": "APPEARED"})
+        outcome = _sog_outcomes(skaters, predictions)
         graded_sog = grade_predictions(predictions, outcome, grading_timestamp_utc=observed_at)
         arm = graded_sog.contract_arm.astype(str)
         allowed = arm.str.startswith(("A_", "B_", "C_", "D_", "F_", "G_"))
