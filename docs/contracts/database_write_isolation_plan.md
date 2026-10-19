@@ -610,22 +610,53 @@ EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
   `backend/mlb/tests/test_mlb_daily_restricted_writer_routing.py`, and
   `backend/mlb/tests/test_player_stats_game_completeness.py`.
 
-### Step 7 status (2026-10-19): built, off until step 4
+### Step 4 status (2026-10-19): done
+
+- On 2026-10-19 the operator removed the production owner login from
+  `backend/.env`. That meant `SUPABASE_DB_URL`, `DATABASE_URL` (a reference to
+  it), and a second full copy held in the libpq settings `PGHOST`, `PGPORT`,
+  `PGUSER`, `PGPASSWORD`, and `PGDATABASE`. The operator also added
+  `NHL_OWNER_LOGIN_GUARD=enforce`. No aliases were repointed. Nothing in the
+  repository reads the `PG*` settings implicitly; only the two one-time owner
+  ACL backup tools name them.
+- Before the removal, the day's natural runs were clean on the restricted
+  logins. NHL daily `nhldaily_20261019T191312742128Z_c99cb6f8` was `READY`
+  with all 41 children exiting 0 and `child_owner_logins=STRIPPED`. MLB
+  refresh run 96 exited 0 on the newly installed wrapper. No owner-alias,
+  permission, or connection errors appeared, and every rerouted reader and
+  PA refresh completed. The recovery targets did not need to run. Workspace
+  staging skips while no MLB model is qualified; it was covered by the
+  rolled-back probe.
+- After the removal: `backend/.env` is mode 600, and its only owner-role
+  value is the test project's `NHL_PP_TOI_TEST_DSN`. The guard reports zero
+  owner application aliases. The NHL morning connection check passed. NHL
+  ingestion and operations, MLB research, and MLB ingest (through `SET ROLE`)
+  each connected as their restricted role, none with superuser or
+  `BYPASSRLS`. The launchd environment, LaunchAgent plists, and shell
+  profiles hold no owner login. The retired, unscheduled
+  `~/bin/proppadia_mlb_bvp_prewarm.sh` still names `SUPABASE_DB_URL`.
+- First runs without the owner login: tomorrow's NHL morning orchestration,
+  daily run, and MLB refresh. If one fails, repair its restricted route; do
+  not restore the owner login.
+
+### Step 7 status (2026-10-19): enforced
 
 - `owner_login_guard` / `require_no_owner_application_alias` in
   `backend/nhl/database_access.py` look in `backend/.env` for an owner-role
   login in an application alias: `SUPABASE_DB_URL`, `DATABASE_URL`, `DB`, or
   an `NHL_*_DATABASE_URL` route. `$NAME` references are followed. Other
   variables, such as the test project's `NHL_PP_TOI_TEST_DSN`, are not
-  aliases. The guard reports names only.
-- The guard is off until `backend/.env` sets `NHL_OWNER_LOGIN_GUARD=enforce`.
-  Turning it on today would block every run, because the owner aliases are
-  still present. Once enforced:
+  aliases. An owner `PGUSER` also counts: when it is set, the whole libpq set
+  (`PG*` except `PGAPPNAME`) is an owner login, because `psql` and libpq use
+  it without a URL. This case was added after step 4 found that copy. The
+  guard reports names only.
+- The guard turns on when `backend/.env` sets `NHL_OWNER_LOGIN_GUARD=enforce`.
+  The operator set it with step 4 on 2026-10-19. With it on:
   - morning orchestration fails before any child starts;
   - `cli daily` fails in `shared_prerequisites` with
     `NHL_OWNER_LOGIN_IN_APPLICATION_ALIAS:<names>`;
   - `test_enforced_guard_holds_for_the_local_backend_env` fails in the
-    suite. It skips while the guard is off.
+    suite. It skips while the guard is off, and runs and passes now.
 - Both receipts record `database_credential_check.owner_login_guard`
   (`ENFORCED` or `OFF_UNTIL_STEP_4`).
 

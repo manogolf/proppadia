@@ -434,11 +434,12 @@ writer validation does not authorize a hosted cutover or a different writer.
     `mlb.replace_today_workspace_staging()` (SECURITY DEFINER, EXECUTE only for
     the ingest group) from the tracked wrapper. Bounded no-write ingest checks
     passed for PA refresh and recovery; the staging function has not run yet.
-  - Open before step 4 of the isolation plan: install the tracked daily
-    wrapper after the current production run. The installed copy still runs
-    workspace staging on the owner alias and checks `SUPABASE_DB_URL`. Then
-    confirm one natural daily run, with each switched reader and writer
-    completing under its restricted login.
+  - Closed 2026-10-19: the tracked wrapper was installed after the production
+    run. MLB refresh run 96 exited 0 on it, with every rerouted reader and PA
+    refresh completing on its restricted login. The staging function passed a
+    rolled-back ingest probe; it skips while no MLB model is qualified. The
+    operator then removed the owner login from `backend/.env` (isolation
+    plan step 4). The first MLB refresh without it is the next scheduled run.
 
 - Status: **SOURCE READ PERMISSIONS DEPLOYED — APPROVED DAILY READER ROUTING ACTIVE; natural-run checks remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as

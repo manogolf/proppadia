@@ -317,6 +317,19 @@ class NHLDatabaseAccessTests(unittest.TestCase):
             path.write_text(f"NHL_OWNER_LOGIN_GUARD=enforce\nNHL_PP_TOI_TEST_DSN={owner}\n")
             require_no_owner_application_alias(path)
 
+    def test_owner_login_guard_catches_libpq_owner_settings(self):
+        import tempfile
+        from pathlib import Path
+        from backend.nhl.database_access import owner_login_guard
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / ".env"
+            path.write_text("NHL_OWNER_LOGIN_GUARD=enforce\nPGHOST=db.invalid\nPGUSER=postgres.ref\n"
+                            "PGPASSWORD=secret\nPGAPPNAME=nhl\n")
+            self.assertEqual(owner_login_guard(path)["owner_application_aliases"],
+                             ["PGHOST", "PGPASSWORD", "PGUSER"])
+            path.write_text("NHL_OWNER_LOGIN_GUARD=enforce\nPGUSER=proppadia_nhl_research_login\n")
+            self.assertEqual(owner_login_guard(path)["owner_application_aliases"], [])
+
     def test_enforced_guard_holds_for_the_local_backend_env(self):
         # Once the operator sets NHL_OWNER_LOGIN_GUARD=enforce (plan step 4),
         # the suite also fails if an owner login returns to an alias.

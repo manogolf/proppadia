@@ -126,7 +126,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P1.5 Keep the production owner login out of application environments
 
-- Status: **OPEN — steps 1–2 done 2026-10-19; step 7 built but off until step 4 (`NHL_OWNER_LOGIN_GUARD=enforce`); steps 3–6 remain**. The owner login
+- Status: **OPEN — steps 1–4 and 7 done 2026-10-19: the owner login is out of `backend/.env` and the guard is enforced; steps 5 (delete the backup copies and `.env.train`) and 6 (rotate the owner password) remain, both operator steps**. The owner login
   returned to `backend/.env` (`SUPABASE_DB_URL`, `DATABASE_URL`) on 2026-10-16
   around 13:20 PDT, most likely for MLB. It also sits in four 2026-10-16
   backups and `.env.train` (mode 644). Step 1: in restricted mode, morning

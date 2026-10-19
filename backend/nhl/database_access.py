@@ -29,7 +29,9 @@ OWNER_ROLES = frozenset({"postgres", "supabase_admin"})
 _FALLBACK_KEYS = frozenset({"SUPABASE_DB_URL", "DATABASE_URL", "DB"})
 # Variables that application processes connect with; an owner login in any of
 # them is what the step 7 guard refuses.
-APPLICATION_ALIASES = _FALLBACK_KEYS | frozenset(key for key, _ in _ACCESS.values())
+APPLICATION_ALIASES = (_FALLBACK_KEYS | frozenset(key for key, _ in _ACCESS.values())
+                       | frozenset({"PGUSER", "PGPASSWORD", "PGHOST", "PGPORT", "PGDATABASE",
+                                    "PGHOSTADDR", "PGSERVICE", "PGPASSFILE", "PGOPTIONS"}))
 _GUARD_KEY = "NHL_OWNER_LOGIN_GUARD"
 _REFERENCE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
 
@@ -64,6 +66,10 @@ def owner_login_guard(path: Path) -> dict[str, object]:
     """
     values = _dotenv_values(path)
     owners = set(owner_login_keys(values))
+    # libpq settings carry a login without a URL; an owner PGUSER makes the
+    # whole PG* set an owner login (psql and libpq clients use it implicitly).
+    if (values.get("PGUSER") or "").strip().split(".", 1)[0] in OWNER_ROLES:
+        owners |= {key for key in values if key.startswith("PG") and key != "PGAPPNAME"}
     return {
         "enforced": values.get(_GUARD_KEY, "").strip().lower() == "enforce",
         "owner_application_aliases": sorted(owners & APPLICATION_ALIASES),
