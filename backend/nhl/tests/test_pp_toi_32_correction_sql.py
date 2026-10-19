@@ -25,6 +25,8 @@ REPAIRS = ROOT / "backend/nhl/sql/repairs"
 REPAIR = REPAIRS / "repair_nhl_pp_toi_32_duplicate_shift_intervals.sql"
 ROLLBACK = REPAIRS / "rollback_nhl_pp_toi_32_duplicate_shift_intervals.sql"
 VERIFY = REPAIRS / "verify_nhl_pp_toi_32_duplicate_shift_intervals.sql"
+EDITOR = REPAIRS / "operator_sql_editor_pp_toi_32_correction.sql"
+CORRECTION_ROLE = "proppadia_nhl_source_correction"
 ROW = re.compile(r"\((\d+)(?:::bigint)?, (\d+)(?:::bigint)?, (\d+)(?:::bigint)?, "
                  r"([0-9.]+)(?:::numeric)?, ([0-9.]+)(?:::numeric)?\)")
 
@@ -40,6 +42,16 @@ class PreparedCorrectionShapeTests(unittest.TestCase):
         for path in (REPAIR, ROLLBACK):
             with self.subTest(path=path.name):
                 validate_correction_sql(path.read_text())
+
+    def test_sql_editor_block_runs_the_reviewed_update_verbatim(self):
+        repair = REPAIR.read_text()
+        statement = repair[repair.index("UPDATE nhl.skater_game_logs_raw"):].rstrip()
+        editor = EDITOR.read_text()
+        self.assertEqual(editor.count(statement), 1)
+        order = ["BEGIN;", f"GRANT {CORRECTION_ROLE} TO postgres;", f"SET LOCAL ROLE {CORRECTION_ROLE};",
+                 statement, "RESET ROLE;", f"REVOKE {CORRECTION_ROLE} FROM postgres;", "COMMIT;"]
+        positions = [editor.index(step) for step in order]
+        self.assertEqual(positions, sorted(positions))
 
     def test_scope_is_exactly_32_distinct_keys_in_29_games(self):
         rows = correction_rows()
@@ -97,6 +109,30 @@ class PreparedCorrectionDatabaseTests(unittest.TestCase):
             self.run_file(REPAIR)
         self.conn.execute("ROLLBACK TO SAVEPOINT guard")
         self.assertEqual(self.values(), before)
+
+    def test_sql_editor_block_grants_switches_corrects_and_revokes(self):
+        # Exercise the block's own transaction body under a stand-in correction
+        # role on the test project; the outer transaction rolls everything back.
+        exists = self.conn.execute(
+            "SELECT 1 FROM pg_roles WHERE rolname = %s", (CORRECTION_ROLE,)).fetchone()
+        if exists:
+            self.skipTest("test project already has the correction role")
+        self.conn.execute(f"CREATE ROLE {CORRECTION_ROLE} NOLOGIN")
+        self.conn.execute(f'GRANT USAGE ON SCHEMA "{self.schema}" TO {CORRECTION_ROLE}')
+        self.conn.execute(f'GRANT SELECT ON "{self.schema}".skater_game_logs_raw TO {CORRECTION_ROLE}')
+        self.conn.execute(
+            f'GRANT UPDATE (pp_toi_minutes) ON "{self.schema}".skater_game_logs_raw TO {CORRECTION_ROLE}')
+        session = self.conn.execute("SELECT session_user").fetchone()[0]
+        body = EDITOR.read_text().split("BEGIN;", 1)[1].split("COMMIT;", 1)[0]
+        body = body.replace("nhl.", f'"{self.schema}".').replace("TO postgres", f'TO "{session}"')
+        body = body.replace("FROM postgres", f'FROM "{session}"').replace("'postgres'", f"'{session}'")
+        self.conn.execute(body)
+        rows = correction_rows()
+        after = self.values()
+        self.assertTrue(all(after[(g, p)] == corrected for g, p, _, _, corrected in rows))
+        identity = self.conn.execute(
+            "SELECT current_user, pg_has_role(session_user, %s, 'MEMBER')", (CORRECTION_ROLE,)).fetchone()
+        self.assertEqual(identity, (session, False))
 
     def test_receipt_query_counts_both_states(self):
         query = VERIFY.read_text().replace("nhl.", f'"{self.schema}".')
