@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from backend.shared.db import pg_fetchall, pg_fetchone
+from backend.shared.db.pg import (
+    pg_fetchall_mlb_research_readonly as pg_fetchall,
+    pg_fetchone_mlb_research_readonly as pg_fetchone,
+)
 
 
 def fetch_today_workspace_rows(

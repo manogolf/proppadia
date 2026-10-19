@@ -390,13 +390,7 @@ def pg_fetchall(sql: str, params: Sequence[Any] = ()) -> List[Dict[str, Any]]:
         return list(cur.fetchall() or [])
 
 
-def pg_fetchall_mlb_research_readonly(
-    sql: str, params: Sequence[Any] = ()
-) -> List[Dict[str, Any]]:
-    """Use the process opt-in research route, retaining the legacy fallback."""
-    research_url = os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip()
-    if not research_url:
-        return pg_fetchall(sql, params)
+def _mlb_research_readonly_query(research_url: str, sql: str, params: Sequence[Any]):
     if psycopg is None:
         raise RuntimeError("psycopg is required for the MLB research connection")
     conn = psycopg.connect(
@@ -423,6 +417,27 @@ def pg_fetchall_mlb_research_readonly(
             return list(cur.fetchall() or [])
     finally:
         conn.close()
+
+
+def pg_fetchall_mlb_research_readonly(
+    sql: str, params: Sequence[Any] = ()
+) -> List[Dict[str, Any]]:
+    """Use the process opt-in research route, retaining the legacy fallback."""
+    research_url = os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip()
+    if not research_url:
+        return pg_fetchall(sql, params)
+    return _mlb_research_readonly_query(research_url, sql, params)
+
+
+def pg_fetchone_mlb_research_readonly(
+    sql: str, params: Sequence[Any] = ()
+) -> Optional[Dict[str, Any]]:
+    """Single-row form of the opt-in research route, retaining the legacy fallback."""
+    research_url = os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip()
+    if not research_url:
+        return pg_fetchone(sql, params)
+    rows = _mlb_research_readonly_query(research_url, sql, params)
+    return dict(rows[0]) if rows else None
 
 
 def pg_fetchone(sql: str, params: Sequence[Any] = ()) -> Optional[Dict[str, Any]]:

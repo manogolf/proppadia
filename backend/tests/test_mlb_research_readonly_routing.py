@@ -250,5 +250,54 @@ class MlbDailyReaderResearchRouteTests(unittest.TestCase):
         self.assertIn("    if not args.no_db:\n        _select_research_read_route()\n    result = build_research(build_args)", source)
 
 
+class MlbDailyCheckReaderOptInTests(unittest.TestCase):
+    """Nine daily readers wired to the research login, off until recipes opt in."""
+
+    READERS = {
+        "backend/mlb/scripts/check_mlb_finalized_training_data.py": "pg_fetchone_mlb_research_readonly as pg_fetchone",
+        "backend/mlb/scripts/check_mlb_rolling_integrity.py": "pg_fetchone_mlb_research_readonly as pg_fetchone",
+        "backend/mlb/scripts/validate_mlb_stat_derived_recent.py": "pg_fetchone_mlb_research_readonly as pg_fetchone",
+        "backend/mlb/scripts/check_mlb_pa_foundation_health.py": "pg_fetchall_mlb_research_readonly as pg_fetchall",
+        "backend/mlb/scripts/hydrate_mlb_pa_foundation_context.py": "pg_fetchall_mlb_research_readonly as pg_fetchall",
+        "backend/mlb/scripts/hydrate_expanded_o15_context.py": "pg_fetchall_mlb_research_readonly as pg_fetchall",
+        "backend/mlb/scripts/run_mlb_hits_o15_review_board.py": "pg_fetchall_mlb_research_readonly as pg_fetchall",
+        "backend/mlb/scripts/build_mlb_reconcile_rows.py": "pg_fetchall_mlb_research_readonly as pg_fetchall",
+        "backend/domains/mlb/repository/today_workspace_repository.py": "pg_fetchone_mlb_research_readonly as pg_fetchone",
+    }
+
+    def test_readers_import_only_the_research_opt_in_helpers(self) -> None:
+        for path, expected in self.READERS.items():
+            source = (ROOT / path).read_text(encoding="utf-8")
+            with self.subTest(reader=path):
+                self.assertIn(expected, source)
+                self.assertNotRegex(source, r"import (?:pg_fetchall|pg_fetchone)\n")
+                self.assertNotRegex(source, r"\b(?:INSERT\s+INTO|UPDATE\s+mlb\.|DELETE\s+FROM|TRUNCATE\s+TABLE)\b")
+
+    def test_fetchone_falls_back_without_opt_in_and_uses_research_with_it(self) -> None:
+        with patch.dict(os.environ, {}, clear=True), patch.object(pg, "pg_fetchone", return_value={"n": 1}) as legacy:
+            self.assertEqual(pg.pg_fetchone_mlb_research_readonly("SELECT 1 AS n"), {"n": 1})
+        legacy.assert_called_once_with("SELECT 1 AS n", ())
+        with patch.dict(os.environ, {"MLB_RESEARCH_DATABASE_URL": "postgresql://research"}, clear=True), \
+             patch.object(pg, "_mlb_research_readonly_query", return_value=[{"n": 2}]) as research:
+            self.assertEqual(pg.pg_fetchone_mlb_research_readonly("SELECT 2 AS n"), {"n": 2})
+        research.assert_called_once_with("postgresql://research", "SELECT 2 AS n", ())
+
+    def test_completeness_local_rows_uses_research_only_when_opted_in(self) -> None:
+        from backend.mlb.scripts import player_stats_game_completeness as psc
+
+        with patch.dict(os.environ, {}, clear=True), patch.object(psc, "pg_connect", return_value="legacy") as legacy:
+            self.assertEqual(psc._read_connection(), "legacy")
+        legacy.assert_called_once_with()
+        conn = MagicMock()
+        with patch.dict(os.environ, {"MLB_RESEARCH_DATABASE_URL": "postgresql://research"}, clear=True), \
+             patch("psycopg.connect", return_value=conn) as connect, \
+             patch.object(psc, "configure_mlb_research_dbapi_session") as configure, \
+             patch.object(psc, "pg_connect") as legacy:
+            self.assertIs(psc._read_connection(), conn)
+        self.assertEqual(connect.call_args.args[0], "postgresql://research")
+        configure.assert_called_once_with(conn)
+        legacy.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

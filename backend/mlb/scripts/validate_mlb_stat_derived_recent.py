@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 from typing import Optional, Sequence
 
-from backend.shared.db.pg import pg_fetchone
+from backend.shared.db.pg import pg_fetchone_mlb_research_readonly as pg_fetchone
 
 
 def _valid_date(s: Optional[str]) -> Optional[str]:

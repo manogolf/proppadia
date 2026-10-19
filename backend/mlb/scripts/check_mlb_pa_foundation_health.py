@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from backend.shared.db.pg import pg_fetchall
+from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "Makefile").exists())

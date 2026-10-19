@@ -7,7 +7,7 @@ import sys
 from datetime import date
 from typing import Any, Dict
 
-from backend.shared.db.pg import pg_fetchone
+from backend.shared.db.pg import pg_fetchone_mlb_research_readonly as pg_fetchone
 from backend.mlb.scripts.player_stats_game_completeness import inspect_date
 
 

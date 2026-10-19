@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """Exact official-participant completeness and bounded game repair for player_stats."""
 from __future__ import annotations
-import argparse,csv,hashlib,json,uuid
+import argparse,csv,hashlib,json,os,uuid
 from collections import Counter,defaultdict
 from datetime import datetime,timezone
 from pathlib import Path
 import requests
 from backend.shared.db.pg import pg_connect
+from backend.shared.db.mlb_research import MLB_RESEARCH_DATABASE_URL_ENV,configure_mlb_research_dbapi_session
 from backend.mlb.scripts.insert_mlb_stat_derived import _extract_player_stats_row,_upsert_game_info_min,_upsert_player_id_min
 from backend.mlb.scripts.cleanroom_v1.routine_market_lifecycle import role
 ROOT=Path(__file__).resolve().parents[3]
@@ -40,8 +41,14 @@ def participant_rows(feed):
    h=int(bat.get('hits') or 0);db=int(bat.get('doubles') or 0);tr=int(bat.get('triples') or 0);hr=int(bat.get('homeRuns') or 0);sing=h-db-tr-hr
    out.append({'game_pk':game,'player_mlb_id':pid,'player':p['person'].get('fullName',''),'team':team['abbreviation'],'opponent':opp['abbreviation'],'team_id':team['id'],'is_home':side=='home','position':(p.get('position') or {}).get('abbreviation'),'official_role':rr,'batting_order':pos,'plate_appearances':int(bat.get('plateAppearances') or 0),'at_bats':int(bat.get('atBats') or 0),'hits':h,'singles':sing,'doubles':db,'triples':tr,'home_runs':hr,'total_bases':sing+2*db+3*tr+4*hr,'walks':int(bat.get('baseOnBalls') or 0),'strikeouts_batting':int(bat.get('strikeOuts') or 0),'runs_scored':int(bat.get('runs') or 0),'rbis':int(bat.get('rbi') or 0),'stolen_bases':int(bat.get('stolenBases') or 0),'hit_by_pitch':int(bat.get('hitByPitch') or 0),'sacrifice_flies':int(bat.get('sacFlies') or 0),'sacrifice_hits':int(bat.get('sacBunts') or 0),'catcher_interference':int(bat.get('catchersInterference') or 0),'raw_stats':p.get('stats') or {}})
  return sorted(out,key=lambda x:x['player_mlb_id'])
+def _read_connection():
+ # Process opt-in MLB research login for read-only inspection; otherwise the current route.
+ url=os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV,'').strip()
+ if not url:return pg_connect()
+ import psycopg,psycopg.rows
+ conn=psycopg.connect(url,prepare_threshold=None,options='-c search_path=mlb,public');configure_mlb_research_dbapi_session(conn);conn.row_factory=psycopg.rows.dict_row;return conn
 def local_rows(game,conn=None):
- own=conn is None;conn=conn or pg_connect()
+ own=conn is None;conn=conn or _read_connection()
  try:
   with conn.cursor() as cur:cur.execute('SELECT player_id,game_id,game_date,team,opponent,is_home,position,is_starter,plate_appearances,at_bats,hits,singles,doubles,triples,home_runs,total_bases FROM mlb.player_stats WHERE game_id=%s',(game,));return [dict(x) for x in cur.fetchall()]
  finally:

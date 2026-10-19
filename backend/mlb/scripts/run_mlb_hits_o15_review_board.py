@@ -1163,7 +1163,7 @@ def _fetch_raw_hit_totals(rows: list[dict[str, Any]]) -> tuple[dict[tuple[str, s
     min_date = min(datetime.strptime(d, "%Y-%m-%d").date() for d in dates) - timedelta(days=15)
     max_date = max(datetime.strptime(d, "%Y-%m-%d").date() for d in dates)
     try:
-        from backend.shared.db.pg import pg_fetchall
+        from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
         db_rows = pg_fetchall(
             """

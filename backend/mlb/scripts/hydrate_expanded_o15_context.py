@@ -21,7 +21,7 @@ from backend.mlb.shared.team_name_map import getFullTeamAbbreviationFromID, norm
 from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
 
 try:
-    from backend.shared.db.pg import pg_fetchall
+    from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 except Exception:  # pragma: no cover - import can fail in docs-only envs
     pg_fetchall = None  # type: ignore[assignment]
 

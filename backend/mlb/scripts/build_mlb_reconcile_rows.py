@@ -29,7 +29,7 @@ from backend.app.services.mlb.market_odds_service import (
 from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
 from backend.mlb.shared.team_name_map import teamIdMap
 from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
-from backend.shared.db.pg import pg_fetchall
+from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
 _PLAYER_STATS_FALLBACK_PROPS = {
     "hits",
