@@ -110,3 +110,62 @@ def test_daily_reader_grant_matches_reader_columns_and_rollback():
         select = re.search(r"SELECT (.*?)\s+FROM mlb\.player_stats", source, flags=re.DOTALL).group(1)
         selected = {column.strip() for column in select.split(",")}
         assert selected <= granted, (name, selected - granted)
+
+
+DAILY_CHECK_FORWARD = MIGRATIONS / "20261019_mlb_research_daily_check_read.sql"
+DAILY_CHECK_ROLLBACK = MIGRATIONS / "20261019_mlb_research_daily_check_read_rollback.sql"
+
+# Columns the nine remaining daily readers select beyond the earlier grants.
+DAILY_CHECK_EXPECTED = {
+    "mlb.model_training_props": {"id", "prop_source", "prop_value", "line"},
+    "mlb.player_stats": {
+        "is_home", "singles", "doubles", "triples", "home_runs", "total_bases", "runs_scored",
+        "rbis", "walks", "strikeouts_batting", "stolen_bases", "pa_source", "pa_backfilled_at",
+        "hit_by_pitch", "sacrifice_flies", "sacrifice_hits", "catcher_interference",
+    },
+    "mlb.game_info": {"game_time", "home_team_id", "away_team_id"},
+    "mlb.player_ids": {"is_placeholder"},
+    "mlb.prop_features_precomputed": {"lineup_slot"},
+    "mlb.today_odds_book_rows": {"slate_date", "snapshot_ts"},
+    "mlb.today_market_snapshot": {"game_date", "last_snapshot_ts"},
+}
+
+
+def test_daily_check_grant_is_column_scoped_and_rollback_matches():
+    forward = DAILY_CHECK_FORWARD.read_text()
+    rollback = DAILY_CHECK_ROLLBACK.read_text()
+    grants = _grants(forward, "GRANT SELECT")
+    workspace = grants.pop("mlb.today_workspace_mlb")
+    assert grants == DAILY_CHECK_EXPECTED
+    assert len(workspace) == 39 and {"game_date", "player_name", "decision_reason"} <= workspace
+    revokes = _grants(rollback, "REVOKE SELECT")
+    assert revokes.pop("mlb.today_workspace_mlb") == workspace
+    assert revokes == DAILY_CHECK_EXPECTED
+    upper = forward.upper()
+    for forbidden in ("GRANT SELECT ON", "GRANT ALL", "CREATE POLICY", "ALTER ROLE", "CREATE ROLE", "GRANT INSERT", "GRANT UPDATE"):
+        assert forbidden not in upper
+    assert "NOT APPLIED" in forward
+
+
+def test_daily_check_grant_covers_reader_columns():
+    scripts = Path(__file__).resolve().parents[1] / "scripts"
+    granted: dict[str, set[str]] = {}
+    earlier_daily_reader = {
+        "mlb.game_info": {"game_id", "game_date", "home_team_abbr", "away_team_abbr"},
+        "mlb.player_stats": {"walks_allowed"},
+    }
+    for grant_set in (_expected_grants(), DAILY_CHECK_EXPECTED, earlier_daily_reader):
+        for relation, columns in grant_set.items():
+            granted.setdefault(relation, set()).update(columns)
+    reconcile = (scripts / "build_mlb_reconcile_rows.py").read_text()
+    for column in re.findall(r"COALESCE\((\w+), 0\)::float8 AS \1", reconcile):
+        assert column in granted["mlb.player_stats"], column
+    completeness = (scripts / "player_stats_game_completeness.py").read_text()
+    local = re.search(r"SELECT (player_id,game_id,[\w,]+) FROM mlb\.player_stats WHERE game_id", completeness).group(1)
+    assert set(local.split(",")) <= granted["mlb.player_stats"]
+    pa_health = (scripts / "check_mlb_pa_foundation_health.py").read_text()
+    direct = re.search(r"DIRECT_PA_FIELDS = \[(.*?)\]", pa_health, flags=re.DOTALL).group(1)
+    assert {c.strip().strip('"') for c in direct.split(",") if c.strip()} <= granted["mlb.player_stats"]
+    o15 = (scripts / "hydrate_expanded_o15_context.py").read_text()
+    game_info = re.search(r"SELECT (game_id, game_time, [^\n]+)\nFROM mlb\.game_info", o15).group(1)
+    assert {c.strip().split("::")[0] for c in game_info.split(",")} <= granted["mlb.game_info"]
