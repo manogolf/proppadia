@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta
 from pathlib import Path
 import unittest
@@ -156,10 +157,18 @@ class PointsPlayerHistoryContractTests(unittest.TestCase):
         self.assertIn("PARTITION BY b.player_id, b.game_id", self.player_query)
 
     def test_versioned_feature_contract_is_bound_to_scoring_receipts(self):
-        from backend.nhl.points_shadow.core import verify_feature_contract_identity
+        from backend.nhl.points_shadow.core import (
+            APPROVED_SHADOW_FEATURE_CONTRACT_PATH, verify_feature_contract_identity,
+        )
 
-        contract = verify_feature_contract_identity()
-        self.assertEqual(contract["version"], "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2")
+        # The frozen identity predates the corrected attempt-missingness SQL
+        # and must fail closed; the versioned shadow identity binds that SQL.
+        with self.assertRaisesRegex(RuntimeError, "POINTS_FEATURE_CONSTRUCTION_HASH_DRIFT"):
+            verify_feature_contract_identity()
+        identity = json.loads(APPROVED_SHADOW_FEATURE_CONTRACT_PATH.read_text())
+        contract = verify_feature_contract_identity(identity)
+        self.assertEqual(
+            contract["version"], "POINTS_PLAYER_HISTORY_CROSS_SEASON_V2_ATTEMPT_MISSINGNESS_V1")
         self.assertEqual(len(contract["sha256"]), 64)
         wrapper = (SQL_PATH.parents[1] / "scripts" / "score_nhl_points_with_lineage.py").read_text()
         self.assertIn('"feature_contract_version": feature_contract["version"]', wrapper)
