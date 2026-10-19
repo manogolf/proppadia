@@ -2177,6 +2177,9 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                 "canonical_season", "slate_date", "game_id", "player_id", "official_final",
                 "official_sog", "participation_status", "outcome_source", "outcome_source_timestamp_utc",
             ]]
+            # grade_predictions grades APPEARED, as the immutable-card path maps it.
+            outcome["participation_status"] = outcome.participation_status.replace(
+                {"PARTICIPATED": "APPEARED"})
             sog_grade = grade_predictions(frame, outcome, grading_timestamp_utc=datetime.now(timezone.utc).isoformat())
             arm = sog_grade.contract_arm.astype(str)
             if not arm.str.startswith(("A_", "B_", "C_", "D_", "F_", "G_")).all():
