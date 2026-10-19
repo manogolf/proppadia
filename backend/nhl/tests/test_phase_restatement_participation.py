@@ -38,6 +38,27 @@ class SogRestatementGateTests(unittest.TestCase):
             _restate_sog_participation(frame, skaters)
 
 
+class EmptyMoneylineRestatementTests(unittest.TestCase):
+    def test_slate_without_moneyline_or_puck_line_cards_restates(self):
+        # As on 2026-09-26: a preseason slate whose Moneyline and puck line
+        # grade files hold only a header, with no game_type_code column.
+        with tempfile.TemporaryDirectory(prefix="nhl_empty_ml_") as raw:
+            root = Path(raw)
+            package = root / "2026-09-26" / "reconciliation=fixture"
+            package.mkdir(parents=True)
+            pd.DataFrame({"game_id": [2026010099], "game_type_code": [1]}).to_csv(
+                package / "canonical_game_outcomes.csv", index=False)
+            header = "canonical_season,slate_date,game_id,grading_status,official_full_game_winner\n"
+            for name in ("graded_moneyline.csv", "graded_puck_line.csv"):
+                (package / name).write_text(header)
+            (package / "SHA256SUMS").write_text("")
+            destination = _write_phase_restatement(package, root)
+            for name in ("graded_moneyline.csv", "graded_puck_line.csv"):
+                self.assertTrue(pd.read_csv(destination / name).empty)
+                self.assertEqual(
+                    list(pd.read_csv(destination / name).columns), header.strip().split(","))
+
+
 @unittest.skipUnless(PACKAGE.is_dir(), "retained 2026-10-18 reconciliation package is a local artifact")
 class October18ParticipationRestatementTests(unittest.TestCase):
     @classmethod

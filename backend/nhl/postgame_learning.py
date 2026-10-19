@@ -158,6 +158,10 @@ def _write_phase_restatement(package: Path, root: Path) -> Path:
     grades = {}
     for lane, source in (("moneyline", source_ml), ("puck_line", source_pl)):
         frame = pd.read_csv(source)
+        if frame.empty:
+            # No card for this lane (e.g. a preseason slate): nothing to relabel.
+            grades[lane] = frame
+            continue
         frame["canonical_phase"] = frame.game_type_code.map(phase_for_game_type)
         eligible = frame.game_type_code.map(regular_season_evaluation_eligible)
         frame["grading_status"] = "PRESEASON_NON_EVALUATION"
