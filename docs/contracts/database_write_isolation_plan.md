@@ -642,8 +642,10 @@ EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
 - Step 5 inventory (2026-10-19, names only): of the copies listed above, only
   `backend/.env.known_good_both_sports_20261016T204129Z` remained (untracked,
   mode 600, all seven owner keys). The other three backups and `.env.train`
-  were no longer on disk or in the Trash. Deleting the remaining file is the
-  operator's step.
+  are no longer at their original paths. Whether they are in the macOS Trash
+  is unverified: the agent shell cannot read `~/.Trash`. Deleting the
+  remaining file and emptying the Trash are operator steps; rotation
+  (step 6) invalidates any copy that remains.
 
 ### Step 7 status (2026-10-19): enforced
 
