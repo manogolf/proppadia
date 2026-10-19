@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pandas as pd
 
-from backend.nhl.daily_capture import canonical_game_set_hash, sha256_file
+from backend.nhl.daily_capture import CanonicalGame, canonical_game_set_hash, sha256_file
 from backend.nhl.performance_summary import discover_daily_market_coverage, summarize_frames
 from backend.nhl.sog_attachment_integrity import (
     audit_sog_attachment, retain_sog_attachment_package,
@@ -20,6 +20,11 @@ from backend.nhl import cli as nhl_cli
 
 SLATE = "2026-10-03"
 RUN_ID = "nhldaily_fixture"
+# The builder and verifier load the retained operational slate for SLATE when
+# it exists locally; bind them to the fixture game instead.
+FIXTURE_SLATE = [CanonicalGame(
+    game_id=2026020022, start_time_utc="2026-10-03T23:00:00Z",
+    home_team="Home", away_team="Away")]
 ODDS_SHA = "a" * 64
 
 
@@ -116,7 +121,8 @@ class SogMarketCoverageIntegrityTests(unittest.TestCase):
                     patch.object(nhl_cli, "export_names_csv", return_value=names), \
                     patch.object(nhl_cli, "run", side_effect=fake_run), \
                     patch.object(nhl_cli, "validate_odds_observation",
-                                  return_value=odds_lineage):
+                                  return_value=odds_lineage), \
+                    patch.object(nhl_cli, "load_canonical_slate", return_value=FIXTURE_SLATE):
                 nhl_cli.build_sog(
                     SLATE, odds_json=odds / "raw_response.json",
                     events_json=odds / "events_response.json", pred_path=pred,
@@ -126,8 +132,10 @@ class SogMarketCoverageIntegrityTests(unittest.TestCase):
                 )
 
             package = retained / "season=2026" / f"slate_date={SLATE}" / f"run_id={RUN_ID}"
-            report, _ = verify_sog_integrity_package(
-                package / "sog_attachment_integrity.json", SLATE)
+            with patch("backend.nhl.daily_capture.load_canonical_slate",
+                       return_value=FIXTURE_SLATE):
+                report, _ = verify_sog_integrity_package(
+                    package / "sog_attachment_integrity.json", SLATE)
             self.assertEqual(report["parent_daily_run_id"], RUN_ID)
             self.assertEqual(report["prediction_artifact_sha256"], sha256_file(pred))
             self.assertEqual(report["odds_observation_manifest_sha256"], manifest_sha)
