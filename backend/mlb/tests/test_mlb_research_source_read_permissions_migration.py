@@ -72,14 +72,17 @@ def test_existing_moneyline_and_bvp_research_routes_remain_process_scoped():
     assert "SELECT prop_type,player_id,game_id,game_date,features,feature_set_tag,model_tag,computed_at" in bvp_verifier
 
 
-GAME_INFO_FORWARD = MIGRATIONS / "20261019_mlb_research_game_info_read.sql"
-GAME_INFO_ROLLBACK = MIGRATIONS / "20261019_mlb_research_game_info_read_rollback.sql"
+DAILY_READER_FORWARD = MIGRATIONS / "20261019_mlb_research_daily_reader_read.sql"
+DAILY_READER_ROLLBACK = MIGRATIONS / "20261019_mlb_research_daily_reader_read_rollback.sql"
 
 
-def test_game_info_read_grant_matches_daily_reader_columns_and_rollback():
-    forward = GAME_INFO_FORWARD.read_text()
-    rollback = GAME_INFO_ROLLBACK.read_text()
-    expected = {"mlb.game_info": {"game_id", "game_date", "home_team_abbr", "away_team_abbr"}}
+def test_daily_reader_grant_matches_reader_columns_and_rollback():
+    forward = DAILY_READER_FORWARD.read_text()
+    rollback = DAILY_READER_ROLLBACK.read_text()
+    expected = {
+        "mlb.game_info": {"game_id", "game_date", "home_team_abbr", "away_team_abbr"},
+        "mlb.player_stats": {"walks_allowed"},
+    }
 
     assert _grants(forward, "GRANT SELECT") == expected
     assert _grants(rollback, "REVOKE SELECT") == expected
@@ -98,3 +101,12 @@ def test_game_info_read_grant_matches_daily_reader_columns_and_rollback():
         # game_type is selected only if present; production game_info has none.
         selected = set(re.findall(r"(\w+)::\w+ AS \w+", fetch)) - {"game_type", "NULL"}
         assert selected <= expected["mlb.game_info"], (name, selected)
+
+    # Starter skill/workload reads player_stats columns: walks_allowed plus
+    # columns granted by 20261017_mlb_research_source_read.sql.
+    granted = _expected_grants()["mlb.player_stats"] | expected["mlb.player_stats"]
+    for name in ("update_mlb_starter_skill_workload_observation.py", "build_mlb_starter_skill_workload_research.py"):
+        source = (scripts / name).read_text()
+        select = re.search(r"SELECT (.*?)\s+FROM mlb\.player_stats", source, flags=re.DOTALL).group(1)
+        selected = {column.strip() for column in select.split(",")}
+        assert selected <= granted, (name, selected - granted)

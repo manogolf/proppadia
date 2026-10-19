@@ -20,6 +20,8 @@ RESEARCH_READERS = (
     "report_mlb_hits_interaction_failure.py",
     "audit_mlb_hits_feature_parity.py",
     "assemble_mlb_hits05_2026_season_to_date_evidence_v1.py",
+    "update_mlb_starter_skill_workload_observation.py",
+    "build_mlb_starter_skill_workload_research.py",
 )
 
 
@@ -101,12 +103,16 @@ class MlbResearchReadRoutingTests(unittest.TestCase):
         self.assertEqual(rows, [{"n": 3}])
         legacy_connect.assert_called_once_with()
 
-    def test_eight_named_consumers_use_only_reader_connection_paths(self) -> None:
+    def test_named_consumers_use_only_reader_connection_paths(self) -> None:
         script_dir = ROOT / "backend" / "mlb" / "scripts"
         for filename in RESEARCH_READERS:
             source = (script_dir / filename).read_text(encoding="utf-8")
             with self.subTest(consumer=filename):
-                if filename == "report_mlb_hits_environment.py":
+                if filename in {
+                    "report_mlb_hits_environment.py",
+                    "update_mlb_starter_skill_workload_observation.py",
+                    "build_mlb_starter_skill_workload_research.py",
+                }:
                     self.assertIn("pg_fetchall_mlb_research_readonly", source)
                 elif filename == "assemble_mlb_hits05_2026_season_to_date_evidence_v1.py":
                     self.assertIn("mlb_research_readonly_connection", source)

@@ -18,7 +18,7 @@ from typing import Any
 
 import pandas as pd
 
-from backend.shared.db.pg import pg_fetchall
+from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
 
 DEFAULT_OUTPUT_ROOT = Path(

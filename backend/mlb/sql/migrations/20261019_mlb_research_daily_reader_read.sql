@@ -1,7 +1,9 @@
 -- Prepared 2026-10-19; NOT APPLIED. Operator runs it in the Supabase SQL editor.
--- Adds the mlb.game_info columns that the daily slate-output and book-upload
--- readers select, so their Make recipes can move to the MLB research login.
--- mlb.game_info has RLS disabled, so no policy is needed. No write privileges.
+-- Adds the columns that ordinary MLB readers select but the research group
+-- cannot read yet: four mlb.game_info columns (daily slate output and book
+-- upload) and mlb.player_stats.walks_allowed (starter skill/workload
+-- LaunchAgent). mlb.game_info has RLS disabled; mlb.player_stats already has
+-- the research SELECT policy. No write privileges, policies, or role changes.
 BEGIN;
 
 DO $preflight$
@@ -41,6 +43,18 @@ BEGIN
         RAISE EXCEPTION 'research group already has table-wide or write-capable ACLs on mlb.game_info';
     END IF;
 
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_policies p
+         WHERE p.schemaname = 'mlb' AND p.tablename = 'player_stats'
+           AND p.policyname = 'proppadia_mlb_research_select' AND p.cmd = 'SELECT'
+    ) OR NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_attribute a
+         WHERE a.attrelid = 'mlb.player_stats'::regclass AND a.attname = 'walks_allowed'
+           AND a.attnum > 0 AND NOT a.attisdropped
+    ) THEN
+        RAISE EXCEPTION 'mlb.player_stats research policy or walks_allowed column is missing';
+    END IF;
+
     FOREACH v_column IN ARRAY ARRAY['game_id','game_date','home_team_abbr','away_team_abbr'] LOOP
         IF NOT EXISTS (
             SELECT 1 FROM pg_catalog.pg_attribute a
@@ -55,10 +69,13 @@ $preflight$;
 
 GRANT SELECT (game_id, game_date, home_team_abbr, away_team_abbr)
     ON mlb.game_info TO proppadia_mlb_research_ro;
+GRANT SELECT (walks_allowed)
+    ON mlb.player_stats TO proppadia_mlb_research_ro;
 
 COMMIT;
 
--- Verification (run after COMMIT; expects four rows, all true):
+-- Verification (run after COMMIT; expects four rows, all true, then true):
 -- SELECT attname, has_column_privilege('proppadia_mlb_research_ro', 'mlb.game_info'::regclass, attname, 'SELECT')
 --   FROM pg_attribute WHERE attrelid = 'mlb.game_info'::regclass AND attnum > 0 AND NOT attisdropped
 --    AND attname IN ('game_id','game_date','home_team_abbr','away_team_abbr');
+-- SELECT has_column_privilege('proppadia_mlb_research_ro', 'mlb.player_stats'::regclass, 'walks_allowed', 'SELECT');
