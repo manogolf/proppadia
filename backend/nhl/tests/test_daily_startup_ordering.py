@@ -323,6 +323,15 @@ class DailyStartupOrderingTests(unittest.TestCase):
         _validate_production_sog_game_set(receipt, output,
                                           pd.DataFrame({"game_id": [12, 13]}))
 
+    def test_production_sog_grades_predicted_games_when_an_eligible_game_has_none(self):
+        canonical = [10, 11, 12, 13]
+        receipt = {"canonical_game_ids": canonical,
+                   "canonical_game_set_hash": canonical_game_set_hash(canonical),
+                   "eligible_pregame_game_ids": [12, 13]}
+        output = {"canonical_game_set_hash": receipt["canonical_game_set_hash"]}
+        self.assertEqual(_validate_production_sog_game_set(
+            receipt, output, pd.DataFrame({"game_id": [13]})), [12])
+
     def test_production_sog_rejects_a_real_canonical_mismatch(self):
         canonical = [10, 11, 12, 13]
         receipt = {"canonical_game_ids": canonical,

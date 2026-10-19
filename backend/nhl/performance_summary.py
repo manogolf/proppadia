@@ -385,17 +385,22 @@ def _verify_daily_receipt(receipt_path: Path, slate_date: str) -> tuple[dict[str
 
 def _validate_production_sog_game_set(
     receipt: dict[str, Any], output_identity: dict[str, Any], predictions: pd.DataFrame,
-) -> None:
-    """Bind predictions to the frozen slate and its run-time eligible subset."""
+) -> list[int]:
+    """Bind predictions to the frozen slate and its run-time eligible subset.
+
+    An eligible game without predictions is graded as missing, not as a
+    failure of the slate; it is returned so the summary can name it.
+    """
     canonical_ids = sorted(map(int, receipt.get("canonical_game_ids", [])))
     game_hash = canonical_game_set_hash(canonical_ids)
     eligible_ids = sorted(map(int, receipt.get("eligible_pregame_game_ids") or canonical_ids))
     prediction_ids = sorted(map(int, predictions.game_id.unique()))
     if (game_hash != receipt.get("canonical_game_set_hash")
             or not set(eligible_ids).issubset(set(canonical_ids))
-            or prediction_ids != eligible_ids
+            or not set(prediction_ids).issubset(set(eligible_ids))
             or output_identity.get("canonical_game_set_hash") != game_hash):
         raise ValueError("PRODUCTION_SOG_CANONICAL_GAME_SET_MISMATCH")
+    return sorted(set(eligible_ids) - set(prediction_ids))
 
 
 def build_production_sog_reference(
@@ -480,7 +485,8 @@ def build_production_sog_reference(
     canonical_ids = sorted(map(int, receipt.get("canonical_game_ids", [])))
     game_hash = canonical_game_set_hash(canonical_ids)
     eligible_ids = sorted(map(int, receipt.get("eligible_pregame_game_ids") or canonical_ids))
-    _validate_production_sog_game_set(receipt, output_identity, predictions)
+    unpredicted_game_ids = _validate_production_sog_game_set(
+        receipt, output_identity, predictions)
     if len(predictions) != int(output_identity.get("natural_identity_count", len(predictions))):
         raise ValueError("PRODUCTION_SOG_PREDICTION_ROW_COUNT_MISMATCH")
 
@@ -582,6 +588,7 @@ def build_production_sog_reference(
     unscored_union = missing_prediction_keys | eligible_source_exclusion_keys
     display["unscored"] = {
         "missing_prediction_identities": len(missing_prediction_keys),
+        "eligible_games_without_predictions": unpredicted_game_ids,
         "source_exclusions": len(eligible_source_exclusion_keys),
         "unscored_identities": len(unscored_union),
         "predictions_without_official_outcome_identities": len(prediction_without_outcome_keys),
