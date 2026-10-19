@@ -1385,7 +1385,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.20 Keep captured games when one game misses its inputs or starts early
 
-- Status: **PARTLY RESOLVED 2026-10-18**. Operator rule: use what was
+- Status: **RESOLVED 2026-10-18 for Points/Saves**. Operator rule: use what was
   captured for the rest of the slate; never fail a slate because one game
   started or one game is missing.
 - Resolved (`da857c21`): reconciliation compared SOG and cross-market
@@ -1400,14 +1400,23 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `WHOLE_SLATE_PRESTART_GATE_FAILED_PARTIAL_SLATE_FORBIDDEN`, the 10-16
   failure), Points/Saves reconciliation cards, daily-lane started-game
   skipping, SOG observer and cross-market capture.
-- Open: daily-run Phoenix Points and Saves scoring call
-  `prepare_scoring_input` without `allow_partial_slate`, so one pregame game
-  with no feature rows raises `SCORING_INPUT_PARTIAL_SLATE` and fails that
-  lane for every game. Prediction-only observers already exclude such a game
-  alone (`NO_QUALIFIED_*_FEATURE_INPUTS`).
-- Completion: daily Points/Saves score the games that have inputs, record
-  the missing game as excluded, and attachments, receipts, and grading carry
-  the partial set.
+- Resolved (`1742d5b4`): daily Phoenix Points and Saves input preparation
+  raised `SCORING_INPUT_PARTIAL_SLATE` when one pregame game had no feature
+  rows. HGB production Points failed the capture partition and
+  `HGB_PRODUCTION_ELIGIBLE_GAME_COVERAGE_MISMATCH`. Each such game is now
+  excluded as `NO_SCORING_INPUT_ROWS` in `input_excluded_games`, with
+  `scored_game_ids`, in the lane inputs, the HGB capture receipt, and the
+  production artifact. `eligible_pregame_game_ids` still means not started.
+  The production artifact fails if its gap is not the capture's recorded
+  exclusion (`HGB_PRODUCTION_CAPTURE_INPUT_EXCLUSION_MISMATCH`). Attachments
+  and next-day HGB grading already work from the predictions present.
+- Also fixed (`39111c2c`): the Phoenix-pinned lane tests from P2.18 let the
+  HGB shadow lane resolve the research DSN and open a read-only snapshot.
+  No operational artifacts were written by them.
+- Open: the legacy SOG production reference grader
+  (`performance_summary._validate_production_sog_game_set`) still requires
+  predicted games to equal the receipt's eligible games, so a missing SOG game
+  fails that summary. SOG was outside this change.
 
 ## Verified Complete — Do Not Reopen
 
