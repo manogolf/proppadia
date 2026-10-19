@@ -67,6 +67,21 @@ class ColdStartTest(unittest.TestCase):
             self.assertEqual(payload["prior_day_reconciliation_certificate"],{"status":"FIXTURE_CERTIFIED_FINAL"})
             self.assertEqual(payload["invocation_classification"],"VALIDATION_TEST")
             self.assertEqual(payload["market_requests"],0)
+    def test_missing_current_roster_package_is_retryable_not_a_failure(self):
+        from backend.nhl.reconciliation_certificate import RosterObservationNotReady
+        with tempfile.TemporaryDirectory(prefix="sog_observer_roster_") as raw:
+            with patch.object(observer,"require_slate_history_certificate",return_value={"status":"FIXTURE_CERTIFIED_FINAL"}), \
+                 patch.object(observer,"require_slate_roster_observation",side_effect=RosterObservationNotReady("CURRENT_SLATE_ROSTER_OBSERVATION_MISSING")), \
+                 patch.object(observer,"export_features") as export, \
+                 patch.dict(os.environ,{"PROPPADIA_INVOCATION_ORIGIN":"VALIDATION_TEST","PROPPADIA_VALIDATION_ID":"sog_roster_fixture"}):
+                status=observer.observe(slate="2026-09-20",requested="AUTO",dsn="fixture",root=Path(raw),now=datetime(2026,9,20,18,0,tzinfo=timezone.utc))
+            payload=json.loads(status.read_text())
+        export.assert_not_called()
+        self.assertEqual(payload["status"],"ROSTER_NOT_READY")
+        self.assertEqual(payload["readiness_reason"],"CURRENT_SLATE_ROSTER_OBSERVATION_MISSING")
+        self.assertTrue(payload["retry_eligible_on_later_poll"])
+        self.assertFalse(payload["prediction_attempt_created"])
+        self.assertNotIn("failure",payload)
     def test_prediction_only_no_zero_fill_and_three_line_ladder(self):
         p,i,e=build_predictions(features(),slate_date="2026-09-20",phase="MIDDAY",prediction_timestamp_utc="2026-09-20T18:01:00Z",input_cutoff_utc="2026-09-20T18:01:00Z")
         self.assertEqual(i.player_id.nunique(),2);self.assertEqual(len(p),len(i)*3);self.assertEqual(len(e),1)
