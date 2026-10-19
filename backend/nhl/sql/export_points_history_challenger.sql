@@ -24,7 +24,7 @@ COPY (
     FROM base b
     JOIN LATERAL (
       SELECT l.game_id AS history_game_id,g2.game_date,g2.start_time_utc,
-        COALESCE(l.shots_on_goal,0)::float AS shots_on_goal,COALESCE(l.shot_attempts,0)::float AS shot_attempts,NULLIF(l.toi_minutes,0)::float AS toi_minutes
+        COALESCE(l.shots_on_goal,0)::float AS shots_on_goal,l.shot_attempts::float AS shot_attempts,NULLIF(l.toi_minutes,0)::float AS toi_minutes
       FROM nhl.skater_game_logs_raw l JOIN nhl.games g2 ON g2.game_id=l.game_id
       WHERE l.player_id=b.player_id
         AND substring(g2.game_id::text,5,2)='02'
@@ -38,11 +38,13 @@ COPY (
     SELECT player_id,target_game_id,
       AVG(CASE WHEN rn_desc<=5 AND toi_minutes>0 THEN shots_on_goal*60.0/toi_minutes END)::float AS d5_sog_per60,
       AVG(CASE WHEN rn_desc<=10 AND toi_minutes>0 THEN shots_on_goal*60.0/toi_minutes END)::float AS d10_sog_per60,
-      AVG(CASE WHEN rn_desc<=10 AND toi_minutes>0 THEN shot_attempts*60.0/toi_minutes END)::float AS attempts_d10_per60,
+      -- Unknown attempt counts are not zeros: the average and sums below use
+      -- only observed rows, and the zero default applies to a whole feature.
+      AVG(CASE WHEN rn_desc<=10 AND toi_minutes>0 AND shot_attempts IS NOT NULL THEN shot_attempts*60.0/toi_minutes END)::float AS attempts_d10_per60,
       SUM(CASE WHEN rn_desc<=5 THEN shots_on_goal ELSE 0 END)::float AS num_shotwasongoal_last5,
       SUM(CASE WHEN rn_desc<=10 THEN shots_on_goal ELSE 0 END)::float AS num_shotwasongoal_last10,
-      SUM(CASE WHEN rn_desc<=5 THEN shot_attempts ELSE 0 END)::float AS num_event_shot_last5,
-      SUM(CASE WHEN rn_desc<=10 THEN shot_attempts ELSE 0 END)::float AS num_event_shot_last10,
+      SUM(CASE WHEN rn_desc<=5 THEN shot_attempts END)::float AS num_event_shot_last5,
+      SUM(CASE WHEN rn_desc<=10 THEN shot_attempts END)::float AS num_event_shot_last10,
       CASE WHEN SUM(CASE WHEN rn_desc<=5 THEN shots_on_goal ELSE 0 END)>=15 THEN 1 ELSE 0 END AS hot_last5_flag
     FROM player_window_rows GROUP BY player_id,target_game_id
   ),
@@ -51,14 +53,14 @@ COPY (
       COALESCE(s.num_shotwasongoal_season_to_date,0)::float AS num_shotwasongoal_season_to_date,
       COALESCE(s.num_event_shot_season_to_date,0)::float AS num_event_shot_season_to_date
     FROM base b LEFT JOIN LATERAL (
-      SELECT SUM(COALESCE(l.shots_on_goal,0)) AS num_shotwasongoal_season_to_date,SUM(COALESCE(l.shot_attempts,0)) AS num_event_shot_season_to_date
+      SELECT SUM(COALESCE(l.shots_on_goal,0)) AS num_shotwasongoal_season_to_date,SUM(l.shot_attempts) AS num_event_shot_season_to_date
       FROM nhl.skater_game_logs_raw l JOIN nhl.games gh ON gh.game_id=l.game_id
       WHERE l.player_id=b.player_id AND gh.season::int=b.canonical_season
         AND substring(gh.game_id::text,5,2)='02' AND gh.game_date<b.game_date
     ) s ON TRUE
   ),
   team_logs AS (
-    SELECT l.team_id,l.game_id,g.game_date,SUM(COALESCE(l.shots_on_goal,0))::float AS team_sog,SUM(COALESCE(l.shot_attempts,0))::float AS team_attempts
+    SELECT l.team_id,l.game_id,g.game_date,SUM(COALESCE(l.shots_on_goal,0))::float AS team_sog,SUM(l.shot_attempts)::float AS team_attempts
     FROM nhl.skater_game_logs_raw l JOIN nhl.games g ON g.game_id=l.game_id
     WHERE substring(g.game_id::text,5,2)='02' AND l.team_id IN(SELECT team_id FROM slate_teams)
       AND g.game_date<DATE :'slate_date' AND g.game_date>=DATE :'slate_date'-INTERVAL '120 days'

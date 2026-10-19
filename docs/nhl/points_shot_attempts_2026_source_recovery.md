@@ -57,7 +57,7 @@ The production Phoenix train/score export `backend/nhl/sql/export_points.sql` re
 
 The live read-only feature-path check for the Oct. 15 slate evaluated 550 target player-games. It found 2,249 recovered source rows in strict-prior windows, including 211 genuine zeros, 2,038 positive values, and 393 unknown rows (HGB's 120-day window). Both SQL/Python feature definitions returned the same result when their windows coincided. The aggregate showed 70 HGB/Phoenix feature differences because HGB applies its 120-day history bound while Phoenix uses its latest ten regular-season games without that bound. This reflects their distinct frozen feature contracts. No prediction artifacts were regenerated or modified.
 
-The separate read-only research exporter `backend/nhl/sql/export_points_history_challenger.sql` still uses `COALESCE(l.shot_attempts, 0)` in its raw history window. That is not the Phoenix production export, but it remains a NULL/zero conflation to address separately before relying on that research arm.
+The separate read-only research exporter `backend/nhl/sql/export_points_history_challenger.sql` used `COALESCE(l.shot_attempts, 0)` in its raw history window. Since 2026-10-18 it follows the production rule: unknown attempts stay NULL per row, window averages and sums use only observed rows, and the zero default applies only to a wholly unavailable feature (`backend/nhl/tests/test_points_attempt_missingness_sql.py`). Challenger outputs produced before that date retain the old conflation.
 
 ## Next daily run
 
