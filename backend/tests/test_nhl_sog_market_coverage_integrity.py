@@ -349,7 +349,11 @@ class SogMarketCoverageIntegrityTests(unittest.TestCase):
                 package_path=package, integrity=report, attachment_path=attached,
                 unmatched_path=unmatched, names_path=names,
             )
-            grades = {"sog": pd.DataFrame({"prediction_correct": [True, False]})}
+            # Graded prop frames carry their line since push applicability
+            # became part of the summary contract.
+            grades = {"sog": pd.DataFrame({
+                "prediction_correct": [True, False], "line": [2.5, 2.5],
+                "grading_state": ["WIN", "LOSS"]})}
             coverage = discover_daily_market_coverage(
                 slate_date=SLATE, grades=grades,
                 daily_run_root=root / "artifacts/operational/nhl/daily_runs",
