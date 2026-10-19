@@ -230,6 +230,8 @@ class DailyRunRecorder:
         self.odds_observation: dict[str, Any] | None = None
         self.moneyline_authority: dict[str, Any] | None = None
         self.prior_learning: dict[str, Any] | None = None
+        # Names only; never credential values.
+        self.database_credential_check: dict[str, Any] | None = None
         self.children: list[dict[str, Any]] = []
         self.failure: dict[str, Any] | None = None
         # Runtime-only continuation state. It is intentionally excluded from
@@ -460,6 +462,7 @@ class DailyRunRecorder:
             "odds_observation": self.odds_observation,
             "moneyline_authority": self.moneyline_authority,
             "prior_day_learning": self.prior_learning,
+            "database_credential_check": self.database_credential_check,
             "child_summaries": self.children,
             "database_write_status": self.database_write_status(),
             "database_write_children": [

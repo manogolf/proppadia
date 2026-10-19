@@ -8,6 +8,7 @@ operations-result DSNs and never falls back to a legacy variable.
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Mapping, Sequence
 from urllib.parse import quote, unquote, urlsplit, urlunsplit
@@ -20,6 +21,67 @@ _ACCESS = {
     # Operational results are writable, but this login has no raw-source DML.
     "operations": ("NHL_OPERATIONS_DATABASE_URL", "proppadia_nhl_operations_login"),
 }
+
+
+# Login roles with owner-level reach on the Supabase project.
+OWNER_ROLES = frozenset({"postgres", "supabase_admin"})
+# Legacy aliases and libpq routes a child could fall back to.
+_FALLBACK_KEYS = frozenset({"SUPABASE_DB_URL", "DATABASE_URL", "DB"})
+_REFERENCE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
+
+
+def _login_role(value: object) -> str | None:
+    text = str(value or "").strip()
+    if not text.startswith(("postgres://", "postgresql://")):
+        return None
+    try:
+        username = unquote(urlsplit(text).username or "")
+    except ValueError:
+        return None
+    # Supabase pooler usernames may append a project reference after a dot.
+    return username.split(".", 1)[0] or None
+
+
+def owner_login_keys(environ: Mapping[str, str]) -> list[str]:
+    """Names (never values) of variables that hold an owner-role login URL."""
+    return sorted(key for key, value in environ.items() if _login_role(value) in OWNER_ROLES)
+
+
+def owner_login_keys_in_file(path: Path) -> list[str]:
+    """Names of dotenv assignments in ``path`` that hold an owner-role login URL."""
+    values: dict[str, str] = {}
+    path = Path(path)
+    if path.is_file():
+        for raw in path.read_text().splitlines():
+            line = raw.strip()
+            if line.startswith("export "):
+                line = line[len("export "):].lstrip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            value = value.strip().strip("'\"")
+            # Follow a whole-value $NAME / ${NAME} reference to an earlier line.
+            reference = _REFERENCE.fullmatch(value)
+            values[key.strip()] = values.get(reference.group(1), "") if reference else value
+    return owner_login_keys(values)
+
+
+def owner_free_child_environment(environ: Mapping[str, str] | None = None) -> dict[str, str]:
+    """Copy of an environment that a restricted NHL child may inherit.
+
+    In restricted mode, drop the legacy aliases, libpq routes (``PG*`` except
+    ``PGAPPNAME``), and any other variable holding an owner-role login. The
+    restricted ``NHL_*`` routes stay. Legacy mode returns an unchanged copy.
+    """
+    env = dict(os.environ if environ is None else environ)
+    if not restricted_mode(env):
+        return env
+    owners = set(owner_login_keys(env))
+    return {
+        key: value for key, value in env.items()
+        if key not in _FALLBACK_KEYS and key not in owners
+        and not (key.startswith("PG") and key != "PGAPPNAME")
+    }
 
 
 def psql_dsn_without_password(url: str) -> tuple[str, str | None]:
@@ -84,11 +146,7 @@ def database_url(
         value = (env.get(key) or "").strip()
         if not value:
             raise RuntimeError(f"NHL_RESTRICTED_DATABASE_URL_REQUIRED:{key}")
-        parsed = urlsplit(value)
-        username = unquote(parsed.username or "")
-        # Supabase pooler usernames may append a project reference after a dot.
-        role_part = username.split(".", 1)[0]
-        if parsed.scheme not in {"postgres", "postgresql"} or role_part != required_role:
+        if _login_role(value) != required_role:
             raise RuntimeError(f"NHL_RESTRICTED_DATABASE_ROLE_MISMATCH:{access}")
         return value
 

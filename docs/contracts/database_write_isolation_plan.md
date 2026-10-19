@@ -524,6 +524,33 @@ declined Keychain storage on 2026-10-19; this plan does not use it.
   `backend/nhl/tests/test_nhl_research_database_route.py` (reader sources,
   the reader connection, and the preflight refusal).
 
+### Step 2 status (2026-10-19): done
+
+- `backend/nhl/database_access.py` adds `owner_free_child_environment`. In
+  restricted mode it drops the legacy aliases, `DB`, libpq `PG*` routes
+  (except `PGAPPNAME`), and any variable whose URL logs in as an owner role
+  (`postgres`, `supabase_admin`, with or without the pooler project suffix).
+  The daily CLI, morning orchestration, and the cross-market LaunchAgent's
+  prior-day reconciliation children now build child environments with it.
+  Before this, the cross-market script handed its whole environment, owner
+  aliases included, to those children.
+- A selected NHL URL that logs in as the wrong role was already refused by
+  name (`NHL_RESTRICTED_DATABASE_ROLE_MISMATCH`). The morning connection
+  check now also refuses a research login with owner reach after connecting:
+  superuser, `BYPASSRLS`, or membership in `postgres`, `supabase_admin`, or
+  `service_role` (`NHL_DATABASE_LOGIN_HAS_OWNER_REACH`). The live check
+  passed.
+- Receipts record names only, never values. `morning_health.json` and the
+  daily `parent_receipt.json` carry `database_credential_check`, which holds
+  the access mode and `owner_login_keys_in_env_file`, the `backend/.env`
+  names that hold an owner login (`$NAME` references are followed). The
+  morning check also records `child_environment_owner_free` and the daily
+  check records `child_owner_logins`. On 2026-10-19 those names were
+  `DATABASE_URL`, `SUPABASE_DB_URL`, and `NHL_PP_TOI_TEST_DSN` (the separate
+  test project's owner). This is a record, not a gate: the owner aliases stay
+  until step 4.
+- Legacy mode is unchanged.
+
 ### Operator decisions
 
 - Whether the owner aliases stay in `backend/.env` during the transition

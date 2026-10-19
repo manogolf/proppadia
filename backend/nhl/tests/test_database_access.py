@@ -250,6 +250,53 @@ class NHLDatabaseAccessTests(unittest.TestCase):
             "operations",
         )
 
+    def test_owner_free_child_environment_drops_owner_and_libpq_routes(self):
+        from backend.nhl.database_access import owner_free_child_environment
+        research = "postgresql://proppadia_nhl_research_login.ref:secret@db.invalid/postgres"
+        env = {
+            "NHL_DB_ACCESS_MODE": "restricted",
+            "NHL_RESEARCH_DATABASE_URL": research,
+            "SUPABASE_DB_URL": "postgresql://postgres.ref:secret@db.invalid/postgres",
+            "DATABASE_URL": "postgresql://postgres.ref:secret@db.invalid/postgres",
+            "OTHER_DSN": "postgresql://supabase_admin:secret@db.invalid/postgres",
+            "PGPASSWORD": "secret", "PGAPPNAME": "nhl", "KEEP": "yes",
+        }
+        child = owner_free_child_environment(env)
+        self.assertEqual(sorted(child), ["KEEP", "NHL_DB_ACCESS_MODE", "NHL_RESEARCH_DATABASE_URL", "PGAPPNAME"])
+        legacy = dict(env, NHL_DB_ACCESS_MODE="legacy")
+        self.assertEqual(owner_free_child_environment(legacy), legacy)
+
+    def test_owner_login_keys_in_file_reports_names_and_follows_references(self):
+        import tempfile
+        from pathlib import Path
+        from backend.nhl.database_access import owner_login_keys_in_file
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / ".env"
+            path.write_text(
+                "SUPABASE_DB_URL='postgresql://postgres.ref:secret@db.invalid/postgres'\n"
+                "DATABASE_URL=${SUPABASE_DB_URL}\n"
+                "export NHL_RESEARCH_DATABASE_URL=postgresql://proppadia_nhl_research_login:s@db.invalid/postgres\n"
+                "# OLD=postgresql://postgres:secret@db.invalid/postgres\n")
+            self.assertEqual(owner_login_keys_in_file(path), ["DATABASE_URL", "SUPABASE_DB_URL"])
+            self.assertEqual(owner_login_keys_in_file(Path(raw) / "missing.env"), [])
+
+    def test_daily_cli_child_never_receives_an_owner_login(self):
+        from backend.nhl import cli
+
+        ingest = "postgresql://proppadia_nhl_daily_login:secret@db.invalid/postgres"
+        env = {
+            "NHL_DB_ACCESS_MODE": "restricted",
+            "NHL_INGEST_DATABASE_URL": ingest,
+            "NHL_PP_TOI_TEST_DSN": "postgresql://postgres.testref:secret@db.invalid/postgres",
+            "SUPABASE_DB_URL": "postgresql://postgres:secret@db.invalid/postgres",
+        }
+        result = SimpleNamespace(returncode=0, stdout="", stderr="")
+        with patch.dict(os.environ, env, clear=True), patch.object(cli.sp, "run", return_value=result) as runner:
+            cli.run(["./bin/python", "seed_skater_logs_for_date.py"], database_write_capable=True)
+        child_env = runner.call_args.kwargs["env"]
+        self.assertNotIn("NHL_PP_TOI_TEST_DSN", child_env)
+        self.assertEqual(child_env["SUPABASE_DB_URL"], ingest)
+
 
 if __name__ == "__main__":
     unittest.main()

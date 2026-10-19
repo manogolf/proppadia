@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import psycopg
-from backend.nhl.database_access import database_url
+from backend.nhl.database_access import database_url, owner_free_child_environment
 
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
 from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canonical_slate
@@ -62,7 +62,7 @@ def _run_prior_day_child(stage: str, command: list[str]) -> subprocess.Completed
     try:
         result = subprocess.run(
             command, cwd=str(ROOT), check=False, text=True, capture_output=True,
-            env=os.environ.copy(),
+            env=owner_free_child_environment(),
         )
     except Exception as error:
         raise PriorDayChildFailure(

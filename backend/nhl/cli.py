@@ -29,6 +29,8 @@ from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
 from backend.nhl.odds_markets import NHL_COMPREHENSIVE_PROP_MARKETS_CSV
 from backend.nhl.database_access import (
     database_url as nhl_database_url,
+    owner_free_child_environment as nhl_owner_free_child_environment,
+    owner_login_keys_in_file as nhl_owner_login_keys_in_file,
     psql_command_without_password as nhl_psql_command_without_password,
     psql_dsn_without_password as nhl_psql_dsn_without_password,
     restricted_mode as nhl_restricted_mode,
@@ -647,17 +649,13 @@ def run(
     if nhl_restricted_mode(e):
         access = database_access or _command_database_access(cmd, write_capable=write_capable)
         db_env = nhl_routed_database_environment(access, environ=e)
-        # Strip every alternate libpq/legacy route before adding the selected
-        # role alias; a standalone child must not inherit an owner fallback.
-        for key in tuple(e):
-            if (key in {
-                    "NHL_RESEARCH_DATABASE_URL", "NHL_INGEST_DATABASE_URL",
-                    "NHL_OPERATIONS_DATABASE_URL", "SUPABASE_DB_URL",
-                    "DATABASE_URL", "DB", "PGSERVICE", "PGSERVICEFILE",
-                    "PGPASSFILE", "PGPASSWORD", "PGUSER", "PGHOST",
-                    "PGHOSTADDR", "PGPORT", "PGDATABASE", "PGOPTIONS",
-                } or key.startswith("PG") and key != "PGAPPNAME"):
-                e.pop(key, None)
+        # Strip every alternate libpq/legacy route, any owner login, and the
+        # unselected role DSNs before adding the selected role alias; a
+        # standalone child must not inherit an owner fallback.
+        e = nhl_owner_free_child_environment(e)
+        for key in ("NHL_RESEARCH_DATABASE_URL", "NHL_INGEST_DATABASE_URL",
+                    "NHL_OPERATIONS_DATABASE_URL"):
+            e.pop(key, None)
         e.update(db_env)
         if cmd and Path(cmd[0]).name == "psql":
             replaced_dsn = False
@@ -762,6 +760,17 @@ def _redact_token_for_log(token: str) -> str:
 
 def _format_cmd_for_log(cmd: Sequence[object]) -> str:
     return " ".join(_redact_token_for_log(str(c)) for c in cmd)
+
+def _database_credential_check() -> dict[str, Any]:
+    """Names-only record of owner logins in backend/.env and child routing."""
+    restricted = nhl_restricted_mode()
+    return {
+        "access_mode": "restricted" if restricted else "legacy",
+        "owner_login_keys_in_env_file": nhl_owner_login_keys_in_file(ROOT / "backend/.env"),
+        # In restricted mode run() hands each child only its role's login.
+        "child_owner_logins": "STRIPPED" if restricted else "NOT_STRIPPED_LEGACY_MODE",
+    }
+
 
 def require_db_url(access: str = "ingestion") -> str:
     try:
@@ -3514,6 +3523,7 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
         run_id=daily_run_id, command=command, phase=odds_phase, started_at=started)
     _ACTIVE_DAILY_RECORDER = recorder
     _ACTIVE_DAILY_LANE = "shared_prerequisites"
+    recorder.database_credential_check = _database_credential_check()
     pending_error: BaseException | None = None
     receipt_path: Path | None = None
     try:

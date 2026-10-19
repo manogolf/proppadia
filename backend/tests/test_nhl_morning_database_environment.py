@@ -116,3 +116,21 @@ def test_restricted_mode_without_research_route_fails_before_child():
     source = {"NHL_DB_ACCESS_MODE": "restricted", "SUPABASE_DB_URL": OWNER, "DATABASE_URL": OWNER}
     with pytest.raises(RuntimeError, match="NHL_DATABASE_CREDENTIAL_NHL_RESTRICTED_DATABASE_URL_REQUIRED"):
         MODULE.resolved_database_environment(source)
+
+
+def test_morning_health_records_owner_login_names_only(tmp_path, monkeypatch, capsys):
+    env_file = tmp_path / "restricted.env"
+    env_file.write_text(f"NHL_DB_ACCESS_MODE=restricted\nSUPABASE_DB_URL={OWNER}\n"
+                        f"DATABASE_URL=${{SUPABASE_DB_URL}}\nNHL_RESEARCH_DATABASE_URL={RESEARCH}\n")
+    output = tmp_path / "morning"
+    monkeypatch.setattr(sys, "argv", [
+        str(PATH), "--slate-date", "2026-09-20", "--env-file", str(env_file),
+        "--output-root", str(output), "--fixture-scenario", "valid_empty",
+    ])
+    assert MODULE.main() == 0
+    capsys.readouterr()
+    (health,) = output.rglob("morning_health.json")
+    check = json.loads(health.read_text())["database_credential_check"]
+    assert check == {"access_mode": "restricted", "child_environment_owner_free": True,
+                     "owner_login_keys_in_env_file": ["DATABASE_URL", "SUPABASE_DB_URL"]}
+    assert "owner-secret" not in health.read_text()

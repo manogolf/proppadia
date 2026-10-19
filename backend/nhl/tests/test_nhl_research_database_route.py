@@ -56,9 +56,10 @@ class PreflightRouteTests(unittest.TestCase):
     def setUp(self):
         self.module = load("check_nhl_database_connection")
 
-    def run_check(self, env):
+    def run_check(self, env, owner_reach=False):
         connection = MagicMock()
-        connection.__enter__.return_value.cursor.return_value.__enter__.return_value.fetchone.return_value = ("postgres",)
+        cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
+        cursor.fetchone.side_effect = [("postgres",), (owner_reach,)]
         with patch.dict("os.environ", env, clear=True), \
                 patch.object(self.module.psycopg, "connect", return_value=connection) as connect:
             return self.module.main(), connect
@@ -69,6 +70,11 @@ class PreflightRouteTests(unittest.TestCase):
         self.assertEqual(code, 0)
         connect.assert_called_once_with(RESEARCH)
 
+    def test_research_login_with_owner_reach_is_refused(self):
+        env = dict(RESTRICTED, SUPABASE_DB_URL=RESEARCH, DATABASE_URL=RESEARCH)
+        with self.assertRaisesRegex(SystemExit, "NHL_DATABASE_LOGIN_HAS_OWNER_REACH"):
+            self.run_check(env, owner_reach=True)
+
     def test_owner_aliases_are_refused_in_restricted_mode(self):
         with self.assertRaisesRegex(SystemExit, "NHL_DATABASE_CREDENTIAL_NOT_RESEARCH_ROUTE"):
             self.run_check(RESTRICTED)
@@ -77,6 +83,21 @@ class PreflightRouteTests(unittest.TestCase):
         env = {"NHL_DB_ACCESS_MODE": "restricted", "SUPABASE_DB_URL": OWNER, "DATABASE_URL": OWNER}
         with self.assertRaisesRegex(SystemExit, "NHL_DATABASE_CREDENTIAL_ENVIRONMENT_INVALID"):
             self.run_check(env)
+
+
+class CrossMarketPriorDayChildTests(unittest.TestCase):
+    def test_prior_day_children_inherit_no_owner_login(self):
+        module = load("run_nhl_mainline_cross_market_capture_warn_only")
+        env = dict(RESTRICTED, PGPASSWORD="p", KEEP="yes")
+        result = MagicMock(returncode=0)
+        with patch.dict("os.environ", env, clear=True), \
+                patch.object(module.subprocess, "run", return_value=result) as runner:
+            module._run_prior_day_child("stage", ["true"])
+        child = runner.call_args.kwargs["env"]
+        self.assertEqual(child["NHL_RESEARCH_DATABASE_URL"], RESEARCH)
+        self.assertEqual(child["KEEP"], "yes")
+        for key in ("SUPABASE_DB_URL", "DATABASE_URL", "PGPASSWORD"):
+            self.assertNotIn(key, child)
 
 
 if __name__ == "__main__":

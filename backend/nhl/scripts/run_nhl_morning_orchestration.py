@@ -8,7 +8,8 @@ from zoneinfo import ZoneInfo
 
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT))
-from backend.nhl.database_access import database_url, restricted_mode
+from backend.nhl.database_access import (
+ database_url, owner_free_child_environment, owner_login_keys, owner_login_keys_in_file, restricted_mode)
 PY=ROOT/".venv/bin/python"
 OPS=ROOT/"artifacts/operational/nhl/morning"
 SLATE_HEALTH=ROOT/"artifacts/operational/nhl/slates"
@@ -29,11 +30,13 @@ def resolved_database_environment(source):
 
  In restricted mode both aliases carry the NHL research login, so no child
  inherits the legacy (owner) value; the NHL_* routes stay for the daily CLI.
+ libpq routes and any other owner-login variable are dropped as well.
  """
  env=dict(source)
  if restricted_mode(env):
   try:research=database_url("research",environ=env)
   except RuntimeError as error:raise RuntimeError(f"NHL_DATABASE_CREDENTIAL_{error}") from None
+  env=owner_free_child_environment(env)
   env["SUPABASE_DB_URL"]=research
   env["DATABASE_URL"]=research
   return env
@@ -67,9 +70,13 @@ def main():
  healthpath=run/"morning_health.json";atomic_json(healthpath,status)
  env={"HOME":os.environ.get("HOME",str(Path.home())),"PATH":"/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin","PYTHONUNBUFFERED":"1"}
  if a.env_file.exists():load_env(a.env_file,env)
+ # Names only: which env-file variables still hold an owner login (plan step 2).
+ status["database_credential_check"]={"access_mode":(env.get("NHL_DB_ACCESS_MODE") or "legacy").strip().lower(),"owner_login_keys_in_env_file":owner_login_keys_in_file(a.env_file),"child_environment_owner_free":None}
  try:env=resolved_database_environment(env)
  except RuntimeError as error:
   status.update(overall_status="FAILED_BLOCKING",end_timestamp_utc=utc(),blocking_failure=str(error));atomic_json(healthpath,status);print(healthpath);return 1
+ status["database_credential_check"]["child_environment_owner_free"]=not owner_login_keys(env)
+ atomic_json(healthpath,status)
  env.update({"SLATE_DATE":slate,"YDAY":(date.fromisoformat(slate)-timedelta(days=1)).isoformat(),"HONOR_ENV_DATES":"1"})
  def stage(sid,command,depends=(),fixture_result=None):
   if any(next(x for x in status["stages"] if x["stage_id"]==d)["state"] not in {"PASS","PASS_WITH_BOUNDED_LIMITS"} for d in depends):raise RuntimeError(f"dependency gate blocked {sid}")
