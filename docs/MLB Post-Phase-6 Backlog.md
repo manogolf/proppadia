@@ -423,17 +423,22 @@ writer validation does not authorize a hosted cutover or a different writer.
     function route was deployed and installed on 2026-10-17 (see the item
     above). It has not run on a natural slate yet. The inventory compares it
     with a manual SQL-editor run; keeping the function is recommended.
-  - Nine remaining daily readers: exact columns listed in the inventory;
-    wired to the research opt-in but off; grant prepared, not applied
-    (`backend/mlb/sql/migrations/20261019_mlb_research_daily_check_read.sql`).
-    Bounded research reads confirmed which need it.
-  - Four daily writer paths still use the owner alias (PA refresh, workspace
-    staging, the two completed-slate recovery targets). Routes are written up
-    in the inventory. PA refresh and `mlb-stat-derived-backfill` need only
-    the ingest opt-in. Recovery also needs its raw insert replaced by the
-    deployed safe functions. Workspace staging needs the prepared, unapplied
-    function `backend/mlb/sql/migrations/20261019_mlb_today_workspace_staging_replace.sql`.
-    None is switched yet.
+  - Nine remaining daily readers: the operator applied
+    `backend/mlb/sql/migrations/20261019_mlb_research_daily_check_read.sql`;
+    all 69 research column grants were confirmed read-only. Their recipes now
+    scope the research URL, and bounded research reads succeeded for each.
+  - Writers: PA refresh, `mlb-stat-derived-backfill`, and
+    `mlb-player-stats-recover-date` now run on the ingest login. Recovery
+    inserts through `safe_upsert_player_stats` then `safe_fill_player_stats_pa`
+    instead of a raw insert. Workspace staging uses the applied function
+    `mlb.replace_today_workspace_staging()` (SECURITY DEFINER, EXECUTE only for
+    the ingest group) from the tracked wrapper. Bounded no-write ingest checks
+    passed for PA refresh and recovery; the staging function has not run yet.
+  - Open before step 4 of the isolation plan: install the tracked daily
+    wrapper after the current production run. The installed copy still runs
+    workspace staging on the owner alias and checks `SUPABASE_DB_URL`. Then
+    confirm one natural daily run, with each switched reader and writer
+    completing under its restricted login.
 
 - Status: **SOURCE READ PERMISSIONS DEPLOYED — APPROVED DAILY READER ROUTING ACTIVE; natural-run checks remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as

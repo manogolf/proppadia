@@ -552,43 +552,53 @@ declined Keychain storage on 2026-10-19; this plan does not use it.
   until step 4.
 - Legacy mode is unchanged.
 
-### Step 3 status (2026-10-19): in progress
+### Step 3 status (2026-10-19): code complete; installation and natural runs pending
 
 Inventory and evidence:
-`docs/operations/mlb_owner_alias_inventory_2026-10-19.md`.
+`docs/operations/mlb_owner_alias_inventory_2026-10-19.md`. The operator
+applied all three prepared SQL files in the SQL editor on 2026-10-19:
+`20261019_mlb_research_daily_reader_read.sql`,
+`20261019_mlb_research_daily_check_read.sql`, and
+`20261019_mlb_today_workspace_staging_replace.sql` (all under
+`backend/mlb/sql/migrations/`). Read-only catalog checks afterward confirmed
+all 69 research column grants with no write privileges. They also confirmed
+that `mlb.replace_today_workspace_staging(date, jsonb, jsonb, jsonb)` is
+`SECURITY DEFINER`, owned by `postgres`, with a fixed search path, and has
+EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
+`SET ROLE`.
 
-- Readers: predictions-wide, slate output, book upload (both
-  `mlb-book-upload` recipes), and the starter skill/workload LaunchAgent now
-  read through the MLB research login. The operator applied
-  `backend/mlb/sql/migrations/20261019_mlb_research_daily_reader_read.sql` in
-  the SQL editor on 2026-10-19; a read-only catalog check through the research
-  login confirmed SELECT on exactly `mlb.game_info (game_id, game_date,
-  home_team_abbr, away_team_abbr)` and `mlb.player_stats.walks_allowed`, with
-  no write privileges. The starter runner sets the research URL itself before
-  its database reads and has no owner fallback.
-  The nine remaining daily readers (reconcile rows, finalized-data and rolling
-  checks, PA health and propagation, O1.5 hydration, review board,
-  stat-derived validation, ops-brief workspace reads) are wired to the same
-  opt-in but off: no recipe sets it. Their exact columns are listed in the
-  inventory, and the grant is prepared, not applied:
-  `backend/mlb/sql/migrations/20261019_mlb_research_daily_check_read.sql`.
-- Materialized views: the statement that the refreshes are owner-only was
-  stale. The reviewed fixed `SECURITY DEFINER` function
-  `mlb.refresh_today_workspace_views()` was deployed on 2026-10-17, and the
-  daily wrapper calls it through the ingest login. No natural run has reached
-  it yet (no qualified slate). The inventory compares it with a manual
-  SQL-editor run.
-- Still on the owner alias, and not readers: the PA refresh
-  (`backfill_mlb_player_pa.py`), workspace staging
-  (`build_mlb_today_workspace.py`), and the conditional completed-slate
-  recovery (`mlb-player-stats-recover-date`, `mlb-stat-derived-backfill`).
-  Routes are written up in the inventory: three need only the ingest opt-in
-  (and, for recovery, the deployed safe player-stats functions); workspace
-  staging needs a fixed `SECURITY DEFINER` function, prepared, not applied:
-  `backend/mlb/sql/migrations/20261019_mlb_today_workspace_staging_replace.sql`.
-  None is switched yet. Step 4 must wait for these.
-- Tests: `backend/tests/test_mlb_research_readonly_routing.py` and
-  `backend/mlb/tests/test_mlb_research_source_read_permissions_migration.py`.
+- Readers on the research login (recipe-scoped `MLB_RESEARCH_DATABASE_URL`,
+  read-only, identity-checked): predictions-wide, slate output, book upload,
+  the starter skill/workload LaunchAgent, and nine more daily readers. Those
+  nine are reconcile rows, the finalized-data and rolling checks, PA health and
+  propagation, O1.5 hydration, the review board, stat-derived validation, and
+  the ops-brief workspace reads. Bounded live reads through the research login
+  succeeded for all nine.
+- Writers on the ingest login (`MLB_USE_RESTRICTED_INGEST=1`): PA refresh,
+  `mlb-stat-derived-backfill`, and `mlb-player-stats-recover-date`. Recovery
+  now inserts a missing participant through `safe_upsert_player_stats` then
+  `safe_fill_player_stats_pa`, after proving the row absent in the same
+  transaction; the raw `player_stats` insert is gone. A concurrent writer
+  could fill that row between the check and the upsert; the shared MLB
+  pipeline lock is what excludes that. Bounded no-write checks on the ingest
+  login passed: a PA refresh dry run and a recovery inspection.
+- Workspace staging: in restricted mode `build_mlb_today_workspace.py` skips
+  its DDL and replaces the slate date through the new function, checking the
+  returned row counts. The tracked daily wrapper opts it in. Its check summary
+  now requires `MLB_INGEST_DATABASE_URL` and `MLB_MONEYLINE_AUDIT_DATABASE_URL`
+  instead of `SUPABASE_DB_URL`. The function itself has not been called yet.
+- Materialized views: the deployed `mlb.refresh_today_workspace_views()`
+  function route is unchanged.
+- Not done: the installed wrapper (`~/bin/proppadia_mlb_refresh_daily.sh`)
+  still runs the workspace build on the owner alias. It still checks
+  `SUPABASE_DB_URL` too, because installing the tracked wrapper waits for the
+  current production run. No natural daily run has exercised the new routes.
+- Tests: `backend/tests/test_mlb_research_readonly_routing.py`,
+  `backend/mlb/tests/test_mlb_research_source_read_permissions_migration.py`,
+  `backend/mlb/tests/test_mlb_owner_alias_writer_routes.py`,
+  `backend/mlb/tests/test_today_workspace_staging_replace_migration_contract.py`,
+  `backend/mlb/tests/test_mlb_daily_restricted_writer_routing.py`, and
+  `backend/mlb/tests/test_player_stats_game_completeness.py`.
 
 ### Operator decisions
 
@@ -597,8 +607,8 @@ Inventory and evidence:
 - The owner-free route for the MLB materialized-view refreshes: keep the
   deployed fixed `SECURITY DEFINER` function (recommended), or switch to a
   manual SQL-editor run.
-- Whether to apply the prepared research grant for the nine remaining
-  readers and the workspace staging function (both in the SQL editor).
+- When to install the tracked daily wrapper (after the current production
+  run) and to fast-forward local main.
 - Whether to delete or keep (offline, outside the repository) the backup
   copies (step 5).
 - Timing of rotation (step 6). Rotation and provider-side changes are

@@ -28,13 +28,11 @@ database write, grant, or schedule change was made.
 | BvP inline hook | Restricted ingest (wrapper opt-in). |
 | Stat-derived refresh (`mlb-stat-derived-refresh`) | Restricted ingest (recipe opt-in on `mlb-insert-stat-derived`). |
 | Four `mlb.today_*` view refreshes | Restricted ingest: `SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();` (function deployed 2026-10-17). See "Materialized-view refresh". |
-| PA refresh (`mlb-refresh-player-pa` → `backfill_mlb_player_pa.py`) | **Owner alias.** Route prepared below (recipe opt-in only). |
-| Workspace staging (`build_mlb_today_workspace.py`) | **Owner alias.** Route prepared below (fixed function, not applied). Runs only with a qualified slate; it currently exits 3 (`NO_QUALIFIED_MLB_MODEL`). |
-| Completed-slate recovery (`mlb-player-stats-recover-date`, `mlb-stat-derived-backfill`) | **Owner alias.** Conditional path. Routes prepared below. |
+| PA refresh (`mlb-refresh-player-pa` → `backfill_mlb_player_pa.py`) | Restricted ingest (recipe opt-in, 2026-10-19). |
+| Workspace staging (`build_mlb_today_workspace.py`) | Restricted ingest through `mlb.replace_today_workspace_staging()` (applied 2026-10-19), in the **tracked** wrapper. The installed wrapper still uses the owner alias until it is installed. Runs only with a qualified slate. |
+| Completed-slate recovery (`mlb-player-stats-recover-date`, `mlb-stat-derived-backfill`) | Restricted ingest (recipe opt-ins, 2026-10-19); recovery writes through the safe functions. |
 
-None of these four routes is switched on yet. Step 4 waits for them.
-
-## Restricted routes for the four owner-alias writers (prepared 2026-10-19)
+## Restricted routes for the four former owner-alias writers (applied 2026-10-19)
 
 Privileges below were checked read-only on 2026-10-19 for the
 `proppadia_mlb_ingest` group (the role the ingest login assumes with
@@ -46,13 +44,15 @@ functions or existing column grants.
 | Writer | Writes today (owner) | Narrowest route | New SQL |
 | --- | --- | --- | --- |
 | PA refresh, `backfill_mlb_player_pa.py` | `mlb.safe_fill_player_stats_pa(...)` per row, then one `UPDATE mlb.player_derived_stats SET d7/d15/d30_plate_appearances, updated_at`. | Prefix the recipe's Python command with `MLB_USE_RESTRICTED_INGEST=1`; `pg_connect()` then uses the ingest login and verifies the role. Ingest already has EXECUTE on the function, SELECT on every `player_stats`/`player_derived_stats` column the script reads, and UPDATE on the four `player_derived_stats` columns (with the ingest UPDATE policy). | None. |
-| Workspace staging, `build_mlb_today_workspace.py` | `CREATE TABLE/INDEX IF NOT EXISTS`, then per slate date `DELETE` and `INSERT` on `mlb.today_slate_rows`, `today_wide_rows`, `today_odds_book_rows`. Ingest has no privileges on these tables and no schema `CREATE`. | Fixed `SECURITY DEFINER` function `mlb.replace_today_workspace_staging(date, jsonb, jsonb, jsonb)`: deletes and reinserts one slate date's rows in one transaction, rejects any row for another date, takes no table or column names; EXECUTE only for ingest. In restricted mode the script would skip its DDL (the tables already exist; schema changes stay owner work) and pass the three row sets as JSON arrays. | `backend/mlb/sql/migrations/20261019_mlb_today_workspace_staging_replace.sql` and rollback. Not applied; not executed anywhere. |
+| Workspace staging, `build_mlb_today_workspace.py` | `CREATE TABLE/INDEX IF NOT EXISTS`, then per slate date `DELETE` and `INSERT` on `mlb.today_slate_rows`, `today_wide_rows`, `today_odds_book_rows`. Ingest has no privileges on these tables and no schema `CREATE`. | Fixed `SECURITY DEFINER` function `mlb.replace_today_workspace_staging(date, jsonb, jsonb, jsonb)`: deletes and reinserts one slate date's rows in one transaction, rejects any row for another date, takes no table or column names; EXECUTE only for ingest. In restricted mode the script would skip its DDL (the tables already exist; schema changes stay owner work) and pass the three row sets as JSON arrays. | `backend/mlb/sql/migrations/20261019_mlb_today_workspace_staging_replace.sql` and rollback. Applied 2026-10-19. |
 | Recovery, `mlb-player-stats-recover-date` → `player_stats_game_completeness.py --mode recover-date` | Reads through `local_rows`; writes `game_info` and `player_ids` through `safe_upsert_game_info`/`safe_insert_player_id_if_absent` (already ingest-executable); inserts missing participants with a raw `INSERT INTO mlb.player_stats` (all PA columns included). | In restricted mode, replace the raw insert with the deployed `safe_upsert_player_stats(jsonb)` (core columns) followed by `safe_fill_player_stats_pa(...)` (PA components, `pa_source`, `pa_backfilled_at`), and keep the existing one-row write check on the function results. Then add `MLB_USE_RESTRICTED_INGEST=1` to the recipe. Repair inserts only participants the dry run proved absent, so the upsert inserts and never fills. | None. |
 | Recovery, `mlb-stat-derived-backfill` → `mlb-insert-stat-derived` | Same writer as the daily `mlb-stat-derived-refresh`, but its submake lacks the opt-in. | Add `MLB_USE_RESTRICTED_INGEST=1` to the `$(MAKE) mlb-insert-stat-derived` line in `mlb-stat-derived-backfill`, exactly as `mlb-stat-derived-refresh` does. The follow-on `mlb-check-stat-derived` stays a reader. | None. |
 
-The code and recipe changes are not made yet. Make them in the same change
-that is verified on a bounded date. For workspace staging, do that only after
-the operator applies the function.
+All four changes are made. Bounded no-write checks on the ingest login passed
+for PA refresh (dry run) and recovery (inspection). The workspace function has
+not been called yet. Recovery checks that the row is absent before the fixed
+upsert. The shared MLB pipeline lock, not the database, excludes a concurrent
+writer between that check and the upsert.
 
 ## Daily and LaunchAgent readers
 
@@ -65,11 +65,10 @@ Routed to the research login (identity-checked, read-only):
 | `build_mlb_slate_output.py`, `export_mlb_book_upload.py` | **Active 2026-10-19** after the grant below (`mlb-slate-output`, `mlb-book-upload`, `mlb-book-upload-policy`). Book upload reads the database only without `--use-slate-output`; the daily recipe passes it. |
 | Starter skill/workload (`update_mlb_starter_skill_workload_observation.py`, `build_mlb_starter_skill_workload_research.py`) | **Active 2026-10-19.** The runner sets `MLB_RESEARCH_DATABASE_URL` from the existing research URL before its reads and fails without one. |
 
-Wired to the research login but **off**: they honor `MLB_RESEARCH_DATABASE_URL`
-and keep the current route when it is unset. No recipe sets it yet. Most
-need the prepared grant
-`backend/mlb/sql/migrations/20261019_mlb_research_daily_check_read.sql` (not
-applied). The research-login columns each needs, beyond earlier grants:
+**Active 2026-10-19** on the research login (recipe-scoped
+`MLB_RESEARCH_DATABASE_URL`) after the operator applied
+`backend/mlb/sql/migrations/20261019_mlb_research_daily_check_read.sql`. The
+columns each needed, beyond earlier grants:
 
 | Reader (Make target) | New columns needed |
 | --- | --- |
@@ -83,13 +82,10 @@ applied). The research-login columns each needs, beyond earlier grants:
 | `hydrate_expanded_o15_context.py` (`mlb-expanded-o15-universe`) | `game_info`: `game_time`, `home_team_id`, `away_team_id`. `player_ids`: `is_placeholder`. `player_stats`: `runs_scored`, `total_bases`, `rbis`. `prop_features_precomputed`: `lineup_slot`. |
 | Ops-brief workspace probe, `today_workspace_repository` (`mlb-daily-ops-brief`) | `today_market_snapshot`: `game_date`, `last_snapshot_ts`. `today_odds_book_rows`: `slate_date`, `snapshot_ts`. `today_workspace_mlb`: all 39 columns (the query reads `w.*`). |
 
-Bounded research reads on 2026-10-19 matched this: the two no-grant readers
-and the finalized-data counts succeeded; rolling-integrity training coverage,
-`local_rows`, reconcile actuals, and the workspace timestamp were denied. After
-the operator applies the grant, add the recipe-scoped
-`MLB_RESEARCH_DATABASE_URL="$${MLB_RESEARCH_DATABASE_URL:-$${MLB_MONEYLINE_AUDIT_DATABASE_URL:?…}}"`
-to each reader's Python command (not to writer commands in the same recipe),
-and run each reader on a bounded date. `today_workspace_repository` is also
+Before the grant, bounded research reads were denied where this table
+predicts. After it, all nine readers' bounded reads succeeded. The prefix is on
+each reader's Python command only, never on writer commands in the same
+recipe. `today_workspace_repository` is also
 used by the hosted API; it switches only when that process sets the variable.
 
 `build_mlb_reconcile_rows.py` imports `prop_workflow` only for
