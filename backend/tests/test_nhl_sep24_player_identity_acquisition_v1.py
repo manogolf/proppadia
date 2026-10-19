@@ -34,6 +34,12 @@ class _Response:
 
 class Sep24PlayerIdentityAcquisitionTest(unittest.TestCase):
     def setUp(self):
+        # The acquisition sets request-journal and response-cache variables
+        # pointing into this temp tree; restore the environment afterwards so
+        # later tests neither write there nor recreate it after cleanup.
+        environment = patch.dict(os.environ)
+        environment.start()
+        self.addCleanup(environment.stop)
         self.temp = tempfile.TemporaryDirectory(prefix="nhl_identity_acq_", dir=ROOT)
         self.output_root = Path(self.temp.name) / "postgame_reconciliation"
         self.source_binding = {"game_ids": SEP24_PLAYER_IDENTITY_GAME_IDS.copy()}
