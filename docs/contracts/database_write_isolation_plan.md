@@ -466,10 +466,11 @@ declined Keychain storage on 2026-10-19; this plan does not use it.
   `run_nhl_morning_orchestration.py`,
   `run_nhl_september19_independent_lane_predictions.py`,
   `run_sog_candidate_arm_bakeoff.py`.
-- MLB: about 45 MLB scripts read the owner aliases. The approved daily
-  writers already route to the restricted ingest login. The four daily
-  `mlb.today_*` materialized-view refreshes are owner-only, and research and
-  report readers still resolve the owner aliases (MLB backlog P2.2).
+- MLB: many MLB scripts read the owner aliases. The approved daily writers
+  already route to the restricted ingest login, and so do the four daily
+  `mlb.today_*` materialized-view refreshes (fixed function deployed
+  2026-10-17). Several daily readers and four daily writers still resolve the
+  owner aliases (MLB backlog P2.2; see "Step 3 status").
 - The owner password has not been rotated since these copies were made.
 
 ### Steps
@@ -551,13 +552,44 @@ declined Keychain storage on 2026-10-19; this plan does not use it.
   until step 4.
 - Legacy mode is unchanged.
 
+### Step 3 status (2026-10-19): in progress
+
+Inventory and evidence:
+`docs/operations/mlb_owner_alias_inventory_2026-10-19.md`.
+
+- Readers: `build_mlb_predictions_wide.py` now reads through the MLB research
+  login (scoped in `mlb-predictions-wide`; its columns were already granted).
+  Slate output, book upload, and the starter skill/workload LaunchAgent
+  readers honor the same opt-in but need columns the research group lacks.
+  The grant is prepared, not applied:
+  `backend/mlb/sql/migrations/20261019_mlb_research_daily_reader_read.sql`.
+  Nine more daily readers (reconcile rows, finalized-data and rolling checks,
+  PA and O1.5 hydration, review board, stat-derived validation, ops-brief
+  workspace reads) still use the generic route and need a column inventory
+  and grant first.
+- Materialized views: the statement that the refreshes are owner-only was
+  stale. The reviewed fixed `SECURITY DEFINER` function
+  `mlb.refresh_today_workspace_views()` was deployed on 2026-10-17, and the
+  daily wrapper calls it through the ingest login. No natural run has reached
+  it yet (no qualified slate). The inventory compares it with a manual
+  SQL-editor run.
+- Still on the owner alias, and not readers: the PA refresh
+  (`backfill_mlb_player_pa.py`), workspace staging
+  (`build_mlb_today_workspace.py`), and the conditional completed-slate
+  recovery (`mlb-player-stats-recover-date`, `mlb-stat-derived-backfill`).
+  Step 4 must wait for these.
+- Tests: `backend/tests/test_mlb_research_readonly_routing.py` and
+  `backend/mlb/tests/test_mlb_research_source_read_permissions_migration.py`.
+
 ### Operator decisions
 
 - Whether the owner aliases stay in `backend/.env` during the transition
   (steps 1–3), and when to remove them (step 4).
-- The owner-free route for the MLB materialized-view refreshes: a reviewed
-  fixed `SECURITY DEFINER` function for the ingest role, or a manual SQL-editor
-  run.
+- The owner-free route for the MLB materialized-view refreshes: keep the
+  deployed fixed `SECURITY DEFINER` function (recommended), or switch to a
+  manual SQL-editor run.
+- Whether to apply the prepared MLB research read grant
+  (`20261019_mlb_research_daily_reader_read.sql`) in the SQL editor.
 - Whether to delete or keep (offline, outside the repository) the backup
   copies (step 5).
 - Timing of rotation (step 6). Rotation and provider-side changes are

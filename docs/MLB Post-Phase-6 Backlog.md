@@ -407,6 +407,24 @@ writer validation does not authorize a hosted cutover or a different writer.
   isolation plan in `docs/contracts/database_write_isolation_plan.md` (NHL
   backlog P1.5). Removing the owner login from `backend/.env` waits on the
   MLB readers and the materialized-view refresh route recorded here.
+- 2026-10-19 step 3 progress (inventory:
+  `docs/operations/mlb_owner_alias_inventory_2026-10-19.md`):
+  - Routed: `build_mlb_predictions_wide.py` reads through the research login,
+    scoped in `mlb-predictions-wide`. A bounded read through that login
+    returned 4,949 player rows and starter counts.
+  - Routed in code but not activated: slate output, book upload, and the
+    starter skill/workload LaunchAgent readers. They need
+    `mlb.game_info (game_id, game_date, home_team_abbr, away_team_abbr)` and
+    `mlb.player_stats.walks_allowed`. The grant and rollback are prepared, not
+    applied: `backend/mlb/sql/migrations/20261019_mlb_research_daily_reader_read.sql`.
+    Activate the recipes and LaunchAgent only after deployment.
+  - The today-view refresh row in the table below is stale. The fixed
+    function route was deployed and installed on 2026-10-17 (see the item
+    above). It has not run on a natural slate yet. The inventory compares it
+    with a manual SQL-editor run; keeping the function is recommended.
+  - Open: nine daily readers on the generic route need a column inventory and
+    grant. Four daily writer paths still use the owner alias: PA refresh,
+    workspace staging, and the two completed-slate recovery targets.
 
 - Status: **SOURCE READ PERMISSIONS DEPLOYED — APPROVED DAILY READER ROUTING ACTIVE; natural-run checks remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as

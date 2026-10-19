@@ -35,7 +35,8 @@ If the question is “what is the active runtime path right now?”:
 - `docs/PROJECT_DOCTRINE.md`: permanent engineering doctrine for durable features, backfills, daily sustainability, visibility, and regression monitoring.
 - `docs/CANONICAL_IDENTITY_DOCTRINE.md`: official numeric identity, namespace mapping, and auditable resolution rules.
 - `docs/contracts/missingness_and_zero_semantics.md`: authoritative cross-sport contract for source missingness, verified zeros, aggregation denominators, and model-layer imputation.
-- `docs/contracts/database_write_isolation_plan.md`: read-only permission findings and proposed staged separation of research, ingestion, and correction access; no production grants have been applied.
+- `docs/contracts/database_write_isolation_plan.md`: database role separation, the NHL activation record, operator-only source corrections, and the owner-credential isolation plan and step status.
+- `docs/operations/mlb_owner_alias_inventory_2026-10-19.md`: MLB jobs that still resolve the owner aliases, reader routing status, the prepared research read grant, and the materialized-view refresh options.
 - `docs/FEATURE_COMPLETION_CHECKLIST.md`: copyable checklist for marking any feature complete.
 - `docs/model_development/champion_challenger_experiment_specification.md`: cross-sport governance spec for freezing champion baselines, proposing challengers, evaluating results, and classifying promotion decisions.
 - `docs/Architecture Reset Plan.md`: reset goals, phases, progress snapshot.
