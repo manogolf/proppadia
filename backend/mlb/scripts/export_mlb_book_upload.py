@@ -347,10 +347,20 @@ def _fetch_remote_prod12_artifact(
 def _get_db_conn():
     import psycopg2  # type: ignore
 
-    db_url = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+    from backend.shared.db.mlb_research import (
+        MLB_RESEARCH_DATABASE_URL_ENV,
+        configure_mlb_research_dbapi_session,
+    )
+
+    # The process opt-in MLB research login wins; otherwise keep the current route.
+    research_url = os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip()
+    db_url = research_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
     if not db_url:
         raise RuntimeError("missing SUPABASE_DB_URL or DATABASE_URL")
-    return psycopg2.connect(db_url)
+    conn = psycopg2.connect(db_url)
+    if research_url:
+        configure_mlb_research_dbapi_session(conn)
+    return conn
 
 
 def _fetch_games(conn, game_ids: List[int]) -> pd.DataFrame:

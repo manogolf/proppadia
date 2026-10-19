@@ -40,6 +40,34 @@ def _assert_research_identity(connection) -> None:
         raise RuntimeError("MLB research connection identity or inherited role mismatch")
 
 
+def configure_mlb_research_dbapi_session(conn) -> None:
+    """Make an opted-in DB-API session read-only and verify its research identity.
+
+    Works with psycopg2 and psycopg default tuple rows. Closes the connection
+    before raising so callers never keep an unverified session.
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY")
+            cur.execute(
+                "SELECT session_user::text, current_user::text, "
+                "pg_has_role(current_user, %s, 'USAGE')",
+                (MLB_RESEARCH_ROLE,),
+            )
+            session_user, current_user, role_inherited = cur.fetchone()
+        conn.commit()
+    except Exception:
+        conn.close()
+        raise
+    if (
+        session_user != MLB_RESEARCH_LOGIN
+        or current_user != MLB_RESEARCH_LOGIN
+        or not role_inherited
+    ):
+        conn.close()
+        raise RuntimeError("MLB research connection identity or inherited role mismatch")
+
+
 def create_mlb_research_readonly_engine(fallback_url: str | None = None, **kwargs):
     """Create an engine whose opted-in transactions are read-only and identity checked."""
     research_url = os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip()

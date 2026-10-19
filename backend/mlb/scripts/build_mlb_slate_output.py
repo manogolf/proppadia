@@ -28,6 +28,10 @@ from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 import pandas as pd
 
 from backend.mlb.shared.market_audit_context import MARKET_AUDIT_CONTEXT_COLUMNS, add_market_audit_context
+from backend.shared.db.mlb_research import (
+    MLB_RESEARCH_DATABASE_URL_ENV,
+    configure_mlb_research_dbapi_session,
+)
 from backend.mlb.shared.hits05_production_replacement import (
     PROVENANCE_COLUMNS as HITS05_PROVENANCE_COLUMNS,
     apply_hits05_replacement,
@@ -390,7 +394,9 @@ def _env_flag(name: str, default: bool = False) -> bool:
 
 
 def _get_db_conn():
-    db_url = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+    # The process opt-in MLB research login wins; otherwise keep the current route.
+    research_url = os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip()
+    db_url = research_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
     if not db_url:
         raise RuntimeError("missing SUPABASE_DB_URL or DATABASE_URL")
 
@@ -398,14 +404,17 @@ def _get_db_conn():
     try:
         import psycopg2  # type: ignore
 
-        return psycopg2.connect(db_url)
+        conn = psycopg2.connect(db_url)
     except Exception:
         try:
             import psycopg  # type: ignore
 
-            return psycopg.connect(db_url)
+            conn = psycopg.connect(db_url)
         except Exception as exc:
             raise RuntimeError(f"database driver unavailable (need psycopg2 or psycopg): {exc}") from exc
+    if research_url:
+        configure_mlb_research_dbapi_session(conn)
+    return conn
 
 
 def _table_columns(conn, *, schema: str, table: str) -> set[str]:

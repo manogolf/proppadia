@@ -67,6 +67,7 @@ from backend.mlb.shared.name_normalization import normalize_player_name_key
 from backend.mlb.shared.time_utils_backend import get_time_of_day_bucket_et
 from backend.mlb.shared import prospective_lineage as lineage
 from backend.mlb.shared.current_slate_source_provenance_v1 import retain_bytes, write_receipt
+from backend.shared.db.mlb_research import MLB_RESEARCH_DATABASE_URL_ENV, mlb_research_readonly_connection
 from backend.shared.db.pg import pg_connect
 
 
@@ -407,13 +408,20 @@ class ResolvedOffer:
     binding: BindingReceipt
 
 
+def _read_connection():
+    """Use the process opt-in MLB research login when set; otherwise the current route."""
+    if os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip():
+        return mlb_research_readonly_connection()
+    return pg_connect()
+
+
 def _load_player_rows(*, active_only: bool) -> tuple[Dict[int, PlayerRow], Dict[Tuple[str, str], List[PlayerRow]]]:
     # Active filter only if the column exists, otherwise the SELECT above returns NULLs and the
     # Python-side filter becomes a no-op.
     by_id: Dict[int, PlayerRow] = {}
     by_name_team: Dict[Tuple[str, str], List[PlayerRow]] = defaultdict(list)
 
-    with pg_connect() as conn, conn.cursor() as cur:
+    with _read_connection() as conn, conn.cursor() as cur:
         cur.execute(
             """
             SELECT column_name::text
@@ -980,7 +988,7 @@ def _fetch_pitcher_starter_games(
     GROUP BY ps.player_id
     """
     out: Dict[int, int] = {}
-    with pg_connect() as conn, conn.cursor() as cur:
+    with _read_connection() as conn, conn.cursor() as cur:
         cur.execute(sql, (list(player_ids), str(slate_date), int(min_outs_recorded)))
         rows = cur.fetchall() or []
     for r in rows:

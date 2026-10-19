@@ -140,6 +140,7 @@ class MlbResearchReadRoutingTests(unittest.TestCase):
             "mlb-hits-environment-report": "report_mlb_hits_environment.py",
             "mlb-refresh-overlap-role-profile-watch": "build_mlb_overlap_role_profile_watch.py",
             "mlb-daily-upload-prep": "run_mlb_hits_lane_selector_report",
+            "mlb-predictions-wide": "build_mlb_predictions_wide.py",
         }
         for target, reader in expected.items():
             with self.subTest(target=target):
@@ -148,10 +149,85 @@ class MlbResearchReadRoutingTests(unittest.TestCase):
                 self.assertIn("MLB_RESEARCH_DATABASE_URL=", body)
                 self.assertIn("MLB_MONEYLINE_AUDIT_DATABASE_URL", body)
 
+        # These readers need the prepared mlb.game_info column grant before
+        # their recipes may set the research URL.
+        for target in ("mlb-slate-output", "mlb-book-upload"):
+            with self.subTest(grant_pending_target=target):
+                self.assertNotIn("MLB_RESEARCH_DATABASE_URL=", target_body(target))
+
         writer_targets = ("mlb-roster-refresh-all", "mlb-stat-derived-refresh")
         for target in writer_targets:
             with self.subTest(writer_target=target):
                 self.assertNotIn("MLB_RESEARCH_DATABASE_URL=", target_body(target))
+
+
+class MlbDailyReaderResearchRouteTests(unittest.TestCase):
+    """Daily predictions-wide, slate-output, and book-upload database reads."""
+
+    def _dbapi_conn(self, identity):
+        conn = MagicMock()
+        cursor = conn.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = identity
+        return conn, cursor
+
+    def test_dbapi_session_is_read_only_and_identity_checked(self) -> None:
+        conn, cursor = self._dbapi_conn(
+            (mlb_research.MLB_RESEARCH_LOGIN, mlb_research.MLB_RESEARCH_LOGIN, True)
+        )
+        mlb_research.configure_mlb_research_dbapi_session(conn)
+        self.assertEqual(
+            cursor.execute.call_args_list[0].args[0],
+            "SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY",
+        )
+        self.assertEqual(cursor.execute.call_args_list[1].args[1], (mlb_research.MLB_RESEARCH_ROLE,))
+        conn.commit.assert_called_once()
+        conn.close.assert_not_called()
+
+    def test_dbapi_session_wrong_identity_closes_and_fails(self) -> None:
+        conn, _ = self._dbapi_conn(("postgres", "postgres", False))
+        with self.assertRaisesRegex(RuntimeError, "identity or inherited role mismatch"):
+            mlb_research.configure_mlb_research_dbapi_session(conn)
+        conn.close.assert_called_once()
+
+    def test_predictions_wide_reads_use_research_only_when_opted_in(self) -> None:
+        from backend.mlb.scripts import build_mlb_predictions_wide as wide
+
+        source = (ROOT / "backend/mlb/scripts/build_mlb_predictions_wide.py").read_text(encoding="utf-8")
+        self.assertNotIn("with pg_connect()", source)
+        self.assertEqual(source.count("with _read_connection() as conn"), 2)
+        with patch.object(wide, "pg_connect", return_value="legacy") as legacy, \
+             patch.object(wide, "mlb_research_readonly_connection", return_value="research") as research:
+            with patch.dict(os.environ, {}, clear=True):
+                self.assertEqual(wide._read_connection(), "legacy")
+            with patch.dict(os.environ, {"MLB_RESEARCH_DATABASE_URL": "postgresql://research"}, clear=True):
+                self.assertEqual(wide._read_connection(), "research")
+        legacy.assert_called_once_with()
+        research.assert_called_once_with()
+
+    def test_slate_output_and_book_upload_connections_prefer_opted_in_research(self) -> None:
+        import psycopg2
+
+        from backend.mlb.scripts import build_mlb_slate_output as slate
+        from backend.mlb.scripts import export_mlb_book_upload as book
+
+        for module in (slate, book):
+            with self.subTest(module=module.__name__):
+                with patch.object(psycopg2, "connect", return_value=MagicMock()) as connect, \
+                     patch("backend.shared.db.mlb_research.configure_mlb_research_dbapi_session") as configure_shared, \
+                     patch.object(slate, "configure_mlb_research_dbapi_session") as configure_slate:
+                    env = {"MLB_RESEARCH_DATABASE_URL": "postgresql://research", "SUPABASE_DB_URL": "postgresql://legacy"}
+                    with patch.dict(os.environ, env, clear=True):
+                        conn = module._get_db_conn()
+                    connect.assert_called_once_with("postgresql://research")
+                    configure = configure_slate if module is slate else configure_shared
+                    configure.assert_called_once_with(conn)
+
+                    connect.reset_mock()
+                    configure.reset_mock()
+                    with patch.dict(os.environ, {"SUPABASE_DB_URL": "postgresql://legacy"}, clear=True):
+                        module._get_db_conn()
+                    connect.assert_called_once_with("postgresql://legacy")
+                    configure.assert_not_called()
 
 
 if __name__ == "__main__":
