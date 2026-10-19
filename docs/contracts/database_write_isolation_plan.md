@@ -635,9 +635,15 @@ EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
   `BYPASSRLS`. The launchd environment, LaunchAgent plists, and shell
   profiles hold no owner login. The retired, unscheduled
   `~/bin/proppadia_mlb_bvp_prewarm.sh` still names `SUPABASE_DB_URL`.
-- First runs without the owner login: tomorrow's NHL morning orchestration,
-  daily run, and MLB refresh. If one fails, repair its restricted route; do
-  not restore the owner login.
+- First runs without the owner login: the 2026-10-19 16:30 PT MLB refresh and
+  the operator's NHL run after the first game starts (which also exercises the
+  per-game slate rules), then the next NHL morning orchestration. If one
+  fails, repair its restricted route; do not restore the owner login.
+- Step 5 inventory (2026-10-19, names only): of the copies listed above, only
+  `backend/.env.known_good_both_sports_20261016T204129Z` remained (untracked,
+  mode 600, all seven owner keys). The other three backups and `.env.train`
+  were no longer on disk or in the Trash. Deleting the remaining file is the
+  operator's step.
 
 ### Step 7 status (2026-10-19): enforced
 
