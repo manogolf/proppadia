@@ -398,14 +398,17 @@ winner, and identity checks before the authority is consulted.
 Responses:
 - Feature flag `MLB_PUBLIC_GAME_PREDICTIONS_ENABLED` off: `200` with
   `enabled: false`, `rows: []`, `count: 0`.
-- Normal: `200` with the model status fields, `rows`, and `count`.
+- Normal: `200` with the model status fields, `rows`, `count`, and, when rows
+  exist, `phase_authority_verification`. The value is
+  `COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY`: the authority checks the committed
+  snapshot hash chain but not the git-ignored raw schedule sources. See
+  `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`.
 - Phase authority evidence unavailable: `200` with `rows: []`, `count: 0`,
   `unavailable_status: "PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE"`, and
   `unavailable_code` set to the authority's typed error code (for example
-  `GAME_PHASE_EVIDENCE_MISSING`). The authority re-hashes its retained raw
-  StatsAPI schedule sources when it loads. Those sources are git-ignored, so a
-  host without them (Render) cannot verify any row. No row is published and
-  there is no fallback. Evidence paths are not included in the response.
+  `SNAPSHOT_PROPOSAL_HASH_MISMATCH`). The committed snapshot failed
+  verification, so no row is published and there is no fallback. Evidence
+  paths are not included in the response.
 - Certification or per-row phase failures (for example model hash mismatch,
   duplicate identity, wrong date scope, stale or conflicting phase): `503`
   with `detail`.

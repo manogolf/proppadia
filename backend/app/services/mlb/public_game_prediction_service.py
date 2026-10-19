@@ -6,7 +6,7 @@ from typing import Any
 from backend.mlb.public_game_predictions.durable_store_v1 import fetch_prediction_rows
 from backend.mlb.public_game_predictions.phase_gating_v1 import (
     classify_moneyline_row,
-    verified_moneyline_phase_authority,
+    snapshot_verified_moneyline_phase_authority,
 )
 from backend.mlb.public_game_predictions.pythagorean_log5_v1 import (
     DISCLOSURE,
@@ -81,10 +81,12 @@ def _certified_rows(
 
 def _phase_joined_rows(
     certified: list[tuple[dict[str, Any], dict[str, Any]]],
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], str | None]:
     if not certified:
-        return []
-    authority = verified_moneyline_phase_authority()
+        return [], None
+    # Hosts lack the git-ignored raw schedule sources, so the projection reads
+    # the committed hash-chained snapshot. Row admission was fully verified.
+    authority = snapshot_verified_moneyline_phase_authority()
     joined = []
     for source, public in certified:
         phase = classify_moneyline_row(source, authority=authority)
@@ -96,7 +98,7 @@ def _phase_joined_rows(
             "normalized_phase": phase.normalized_phase,
             "postseason_round": phase.postseason_round,
         })
-    return joined
+    return joined, authority.source_verification
 
 
 def get_public_game_prediction_status() -> dict[str, Any]:
@@ -120,11 +122,10 @@ def get_public_game_predictions(game_date: str) -> dict[str, Any]:
     # pregame lifecycle. Requests never synthesize retrospective predictions.
     certified = _certified_rows(fetch_prediction_rows(game_date), game_date)
     try:
-        rows = _phase_joined_rows(certified)
+        rows, verification = _phase_joined_rows(certified)
     except GamePhaseAuthorityError as exc:
-        # The authority re-verifies its git-ignored raw schedule sources at
-        # load time. Where they are absent (e.g. a stateless host) no row can
-        # be phase-joined, so publish nothing and report a typed reason.
+        # Committed snapshot evidence failed verification; no row can be
+        # phase-joined, so publish nothing and report a typed reason.
         return {
             **status,
             "rows": [],
@@ -132,4 +133,7 @@ def get_public_game_predictions(game_date: str) -> dict[str, Any]:
             "unavailable_status": PHASE_AUTHORITY_UNAVAILABLE,
             "unavailable_code": exc.code,
         }
-    return {**status, "rows": rows, "count": len(rows)}
+    payload = {**status, "rows": rows, "count": len(rows)}
+    if verification is not None:
+        payload["phase_authority_verification"] = verification
+    return payload

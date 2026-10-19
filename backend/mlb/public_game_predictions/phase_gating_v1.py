@@ -88,6 +88,18 @@ def verified_moneyline_phase_authority() -> HashedProposalAuthority:
     return HashedProposalAuthority()
 
 
+@lru_cache(maxsize=1)
+def snapshot_verified_moneyline_phase_authority() -> HashedProposalAuthority:
+    """Load the active authority from committed snapshot evidence only.
+
+    Reserved for the public read-only prediction projection. Rows reaching it
+    were already admitted by the fully verified pregame lifecycle; grading,
+    evaluation, and training keep ``verified_moneyline_phase_authority``.
+    """
+
+    return HashedProposalAuthority(verify_source_bytes=False)
+
+
 def _game_pk(row: Mapping[str, Any]) -> int:
     values = []
     for field in ("game_id", "game_pk", "gamePk"):

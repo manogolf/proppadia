@@ -36,6 +36,7 @@ If the question is “what is the active runtime path right now?”:
 - `docs/CANONICAL_IDENTITY_DOCTRINE.md`: official numeric identity, namespace mapping, and auditable resolution rules.
 - `docs/contracts/missingness_and_zero_semantics.md`: authoritative cross-sport contract for source missingness, verified zeros, aggregation denominators, and model-layer imputation.
 - `docs/contracts/database_write_isolation_plan.md`: database role separation, the NHL activation record, operator-only source corrections, and the owner-credential isolation plan and step status.
+- `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`: the public MLB game-predictions API reads the phase authority from the committed snapshot without the git-ignored raw schedule sources; every other consumer keeps full verification.
 - `docs/operations/mlb_owner_alias_inventory_2026-10-19.md`: MLB jobs that still resolve the owner aliases, reader routing status and column needs, the applied research read grants, the restricted routes for the former owner-alias writers, and the materialized-view refresh options.
 - `docs/operations/hosted_api_database_access_inventory_2026-10-19.md`: every database access the hosted Render API makes, its dedicated `proppadia_api_login` route (`PROPPADIA_API_DATABASE_URL`), the prepared grant SQL, and the Render variable cutover.
 - `docs/FEATURE_COMPLETION_CHECKLIST.md`: copyable checklist for marking any feature complete.

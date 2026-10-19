@@ -238,11 +238,14 @@ class MoneylinePhaseGatingV1Tests(unittest.TestCase):
             "prediction_timestamp_utc": "2026-09-22T20:00:00Z",
         })
         authority = StubAuthority({1: record(1, "D", "POSTSEASON", "DIVISION_SERIES")})
+        authority.source_verification = "COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY"
         with patch(
-            "backend.app.services.mlb.public_game_prediction_service.verified_moneyline_phase_authority",
+            "backend.app.services.mlb.public_game_prediction_service.snapshot_verified_moneyline_phase_authority",
             return_value=authority,
         ):
-            projected = _phase_joined_rows(_certified_rows([source], "2026-09-22"))[0]
+            joined, verification = _phase_joined_rows(_certified_rows([source], "2026-09-22"))
+        projected = joined[0]
+        self.assertEqual(verification, "COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY")
         self.assertEqual(projected["normalized_phase"], "POSTSEASON")
         self.assertEqual(projected["postseason_round"], "DIVISION_SERIES")
         self.assertEqual(projected["home_win_probability"], source["home_win_probability"])

@@ -1082,16 +1082,16 @@ were never deployed. The endpoint first consulted the authority in `4fe80cef`
 (2026-09-22). Since then, every enabled request for a date with durable rows
 has failed on Render. The evidence has never been deployable.
 
-The endpoint now returns `200` with no rows and
-`unavailable_status: PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE`. See `docs/MLB API
-Contracts.md`. Open items:
+Resolved in two steps. First, a missing-evidence load returns `200` with no
+rows and `unavailable_status: PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE`. Second,
+by owner decision on 2026-10-19, the endpoint reads the authority in
+snapshot-only mode. It checks the committed hash chain but not the raw bytes.
+See `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`. All other
+consumers keep full verification. Open items:
 
-- **Serving rows on Render needs a decision.** Options: (a) a load mode that
-  trusts the committed, hash-chained proposal and source manifest without the
-  raw bytes, which changes the authority's "verifies source bytes" contract in
-  `docs/contracts/mlb_2026_versioned_file_phase_authority_v1/`; or (b) ship
-  the about 30 MB of raw sources to the host, which needs authorization to
-  commit or upload ignored artifacts.
+- **Confirm on Render after the next authorized push.** Request a date with
+  durable rows. Expect `200` with rows and
+  `phase_authority_verification: COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY`.
 - **Stale archived-baseline tests:**
   `test_public_game_prediction_baseline_v1::test_17_api_test_on_renders_rows`
   sends archived baseline rows to the certified adapter. The adapter rejects
