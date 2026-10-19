@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from backend.shared.db import pg_connect, pg_execute, pg_fetchall, pg_fetchone
+from backend.shared.db.pg import api_database_route_state
 
 
 class DuplicatePropError(Exception):
@@ -18,6 +19,11 @@ _user_props_ensured: bool = False
 def ensure_user_props_table() -> None:
     global _user_props_ensured, _user_props_columns_cache
     if _user_props_ensured:
+        return
+    if api_database_route_state() == "API_LOGIN":
+        # The table and indexes come from 20260228_create_nhl_user_props.sql;
+        # the API login has no schema CREATE or table ownership.
+        _user_props_ensured = True
         return
 
     statements = [

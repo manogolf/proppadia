@@ -143,6 +143,16 @@ class ApiDatabaseRouteTests(unittest.TestCase):
         self.assertFalse(ok)
         self.assertEqual(err, "Failure (SQLSTATE 28P01)")
 
+    def test_nhl_user_props_ddl_is_skipped_on_the_api_login(self) -> None:
+        from backend.domains.nhl.repository import prop_repository
+
+        with patch.dict(os.environ, {pg.API_DATABASE_URL_ENV: API_URL}, clear=True), \
+             patch.object(prop_repository, "_user_props_ensured", False), \
+             patch.object(prop_repository, "pg_connect", side_effect=AssertionError("DDL ran")):
+            pg.select_api_database_route()
+            prop_repository.ensure_user_props_table()
+            self.assertTrue(prop_repository._user_props_ensured)
+
 
 if __name__ == "__main__":
     unittest.main()
