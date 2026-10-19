@@ -41,9 +41,19 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P1.2 Determine applied status of the 32 verified historical PP-TOI rows
 
-- Status: **STATUS UNVERIFIED** — the retained October 16 report says the
-  independently verified 32-row proposal was not applied then and all target
-  keys still held their expected original values at that check.
+- Status: **VERIFIED OUTSTANDING 2026-10-19 — not applied**. A read-only
+  check as `proppadia_nhl_research_login` found all 32 proposal keys in
+  `nhl.skater_game_logs_raw`, each still holding its original
+  `previous_accepted_minutes` value (32 original, 0 corrected, 0 other).
+  The proposal is
+  `artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/pp_toi_recovery_compatibility_differences_20261016.csv`
+  (SHA-256 matches below). No guarded correction script exists yet; the
+  report specifies an operator session with `SET ROLE
+  proppadia_nhl_source_correction`, exact original-value assertions, and a
+  retained receipt. Applying it needs separate authorization.
+- Earlier record: the retained October 16 report says the independently
+  verified 32-row proposal was not applied then and all target keys still
+  held their expected original values at that check.
 - Reference: `backend/nhl/research/POINTS_PP_TOI_32_CORRECTION_AND_FEATURE_REPLAY_2026-10-16.md`
   (proposal SHA-256 `4cb0e46bd9cbf1a85feab5873aa805badd74bc6df3152b27f362462fdc318631`).
 - Completion: reconcile all 32 keys against current canonical values and the
@@ -1492,7 +1502,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.22 Retain official responses when the daily shot-attempt check fails
 
-- Status: **OPEN — found 2026-10-19**. The 2026-10-19 daily run's
+- Status: **RESOLVED 2026-10-19 (`6c27c398`) — natural failure acceptance
+  pending**. A failing game's official box score and play-by-play are now
+  written beside the run's attempt diagnostic and listed with hashes and the
+  failure reason under `failed_source_responses`. Original finding: The 2026-10-19 daily run's
   `seed_skater_logs_for_date.py` failed play-by-play reconciliation for
   2026-10-18 game `2026020135` (`ATTEMPTS_PBP_PLAYER_SOG_RECONCILIATION_FAILED`).
   The overnight official responses retained by postgame acquisition reconcile
