@@ -56,9 +56,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   expected value. `verify_nhl_pp_toi_32_duplicate_shift_intervals.sql` is
   the read-only receipt (before: original 32, corrected 0, run 2026-10-19).
   `backend/nhl/tests/test_pp_toi_32_correction_sql.py` exercises all three
-  in a rollback-only test schema. Execution needs owner authorization and
-  the executor's Keychain admin item, which was unprovisioned as of
-  2026-10-16.
+  in a rollback-only test schema.
+- Execution path chosen 2026-10-19 (operator declined Keychain setup):
+  `backend/nhl/sql/repairs/operator_sql_editor_pp_toi_32_correction.sql`
+  (SHA-256 `a7ff4909cf059d0956b09d84aa79a96445801fc02673d8d0ea471121ac025608`), pasted into the Supabase SQL editor by the operator. One
+  transaction grants the correction role, `SET ROLE`s and verifies
+  `current_user`, runs the reviewed UPDATE verbatim, resets and revokes, and
+  verifies the revoke; any failure commits nothing. Its body was exercised
+  under a stand-in role on the separate test project (rolled back). Still
+  needs owner authorization; run the verify query before, keep the block's
+  receipt after.
 - Earlier record: the retained October 16 report says the independently
   verified 32-row proposal was not applied then and all target keys still
   held their expected original values at that check.
@@ -84,6 +91,14 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   preserved populated values, and retains the function summary and run receipt.
 
 ### P1.4 Retire plaintext database passwords left in local files and git history
+
+- 2026-10-19 check (names and login roles only, no values): `backend/.env`
+  still holds the production owner login (`postgres`) in both
+  `SUPABASE_DB_URL` and `DATABASE_URL`, and the separate test project's owner
+  login in `NHL_PP_TOI_TEST_DSN`. Restricted logins cover NHL research,
+  ingestion, and operations and MLB research and ingestion. Whether the
+  production owner entries are still needed (MLB callers may use them) is
+  the operator's decision.
 
 - Status: **OPEN — code path closed; cleanup and rotation confirmation are
   the operator's decision**. Commit `c4164d4b` moves any password in a `psql`
