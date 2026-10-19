@@ -625,8 +625,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.14 Correct the isolated PP-TOI PostgreSQL regression assertion
 
-- Status: **OPEN — determine whether fixture precision or fill semantics are
-  incorrect**. The previously sandbox-DNS-blocked exact test
+- Status: **RESOLVED 2026-10-18 — fixture defect, writer correct**. A
+  read-only catalog query confirmed production `pp_toi_minutes` is
+  `numeric(5,2)` in `nhl.skater_game_logs_raw` and `numeric(6,2)` in
+  `nhl.import_skater_logs_stage`. `fill_pp_toi_minutes_from_shift_overlap`
+  writes unrounded minutes and the column stores 310 s / 60 as `5.17`, the
+  recovered value. The fixture now declares the production scale, and the
+  test passes against the configured test DSN (the old fixture reproduces the
+  failure). The test reads `NHL_PP_TOI_TEST_DSN` at import, so run alone it
+  skips unless `backend/.env` is loaded first; in the full suite it runs.
+- Original finding: the previously sandbox-DNS-blocked exact test
   `backend/nhl/tests/test_points_pp_toi_postgres_integration.py::PpToiPostgresWritePathTests::test_daily_postgame_and_backfill_preserve_recovered_source_values`
   was rerun with elevated network access and its configured test DSN. It
   connected successfully, then failed functionally: expected a recovered
