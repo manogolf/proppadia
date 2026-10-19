@@ -1438,6 +1438,43 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   games must now be a subset; eligible games without predictions are graded
   as missing identities and listed in `eligible_games_without_predictions`.
 
+### P2.21 Grade predicted players who did not dress as non-participants
+
+- Status: **RESOLVED 2026-10-19 — applies to reconciliations from now on**.
+  On 2026-10-18 all 348 unresolved SOG rows (20 player-games) and all 87
+  unresolved Points rows were predicted skaters on active rosters,
+  `ACTIVE_ROSTER_UNCONFIRMED` at prediction time, who appear in neither
+  official box score. Both box scores list 18 dressed skaters per team, and a
+  name check found no identity mismatch. They did not dress.
+- `9517c1d5`: when a final game's official box score lists dressed skaters
+  for both teams, an absent predicted skater grades as `NO_APPEARANCE_UNGRADED`
+  (SOG) or `NONPARTICIPANT_UNGRADED` with `NOT_IN_OFFICIAL_LINEUP` (Points).
+  Games without that evidence stay unresolved. The performance summary keeps
+  confirmed non-participants out of `unresolved`, as it already did for Saves
+  non-starters.
+- `34d189d2`: the resilient SOG population had never graded a row. Its path
+  passed `PARTICIPATED` outcomes to a grader that grades only `APPEARED`, so
+  all 1,587 resilient SOG rows on 10-18 were unresolved. It now matches the
+  main card (972-267 on 10-18).
+- Retained packages are immutable and keep their original grades; the
+  10-18 package is the regression fixture
+  (`backend/nhl/tests/test_reconciliation_official_lineup_absence.py`).
+
+### P2.22 Retain official responses when the daily shot-attempt check fails
+
+- Status: **OPEN — found 2026-10-19**. The 2026-10-19 daily run's
+  `seed_skater_logs_for_date.py` failed play-by-play reconciliation for
+  2026-10-18 game `2026020135` (`ATTEMPTS_PBP_PLAYER_SOG_RECONCILIATION_FAILED`).
+  The overnight official responses retained by postgame acquisition reconcile
+  exactly (48 box-score SOG, 48 play-by-play on-goal events, every player
+  matching), and all 72 existing attempt values were preserved, so no data was
+  lost. The daily run opens no request journal, so the failing 13:23 UTC
+  responses were not retained and the cause (likely a stat revision or bad
+  response) cannot be shown.
+- Completion: retain the official box score and play-by-play responses the
+  daily seed used whenever reconciliation fails, without changing attempt
+  semantics.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** 46,379 2023–24 shot-attempt corrections;
