@@ -14,6 +14,9 @@ ROOT = Path(__file__).resolve().parents[3]
 TRACKED_WRAPPER = ROOT / "bin/proppadia_mlb_refresh_daily.sh"
 INSTALLED_WRAPPER = Path.home() / "bin/proppadia_mlb_refresh_daily.sh"
 OPERATIONS_RUNBOOK = ROOT / "docs/Prod12 Automation Runbook.md"
+WORKSPACE_BUILD_CALL = "MLB_USE_RESTRICTED_INGEST=1 .venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py"
+WORKSPACE_BUILD_CALL_PREVIOUS = ".venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py"
+WORKSPACE_BUILD_COMMENT = "# Staging writes go through mlb.replace_today_workspace_staging() on the ingest login.\n"
 
 
 class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
@@ -23,15 +26,19 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
         if INSTALLED_WRAPPER.read_bytes() == TRACKED_WRAPPER.read_bytes():
             return
 
-        # The prior installation contains the restricted refresh route, while
-        # the latest qualification-status handoff remains tracked only until a
-        # separately authorized installation.
+        # The installation keeps the restricted refresh route; the restricted
+        # workspace staging build stays tracked-only until a separately
+        # authorized installation.
         tracked = TRACKED_WRAPPER.read_text()
         installed = INSTALLED_WRAPPER.read_text()
         self.assertIn("SELECT mlb.refresh_today_workspace_views();", tracked)
         self.assertIn("SELECT mlb.refresh_today_workspace_views();", installed)
-        self.assertIn("--qualification-status-file", tracked)
-        self.assertNotIn("--qualification-status-file", installed)
+        self.assertIn(WORKSPACE_BUILD_CALL, tracked)
+        self.assertEqual(
+            tracked.replace(WORKSPACE_BUILD_CALL, WORKSPACE_BUILD_CALL_PREVIOUS)
+            .replace(WORKSPACE_BUILD_COMMENT, ""),
+            installed,
+        )
 
     def test_runbook_preserves_installed_wrapper_routing_recovery(self):
         runbook = OPERATIONS_RUNBOOK.read_text()
@@ -70,6 +77,8 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
         self.assertNotIn("MLB_USE_RESTRICTED_INGEST", stat_call)
         self.assertIn("SELECT mlb.refresh_today_workspace_views();", wrapper)
         self.assertNotIn("REFRESH MATERIALIZED VIEW mlb.today_", wrapper)
+        self.assertEqual(wrapper.count(WORKSPACE_BUILD_CALL_PREVIOUS), 1)
+        self.assertIn(WORKSPACE_BUILD_CALL, wrapper)
 
     def test_today_workspace_refresh_is_scoped_fixed_and_has_no_owner_fallback(self):
         wrapper = TRACKED_WRAPPER.read_text()
@@ -303,6 +312,8 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
             fake_python.chmod(0o755)
             env = os.environ.copy()
             env.pop("MLB_USE_RESTRICTED_INGEST", None)
+            # The validator reads through the research URL; the fake child never connects.
+            env["MLB_MONEYLINE_AUDIT_DATABASE_URL"] = "postgresql://research.invalid/placeholder"
             env["ROUTING_TEST_LOG"] = str(log)
             result = subprocess.run(
                 [

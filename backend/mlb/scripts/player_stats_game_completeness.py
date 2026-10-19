@@ -6,9 +6,9 @@ from collections import Counter,defaultdict
 from datetime import datetime,timezone
 from pathlib import Path
 import requests
-from backend.shared.db.pg import pg_connect
+from backend.shared.db.pg import pg_connect,scalar_int_result
 from backend.shared.db.mlb_research import MLB_RESEARCH_DATABASE_URL_ENV,configure_mlb_research_dbapi_session
-from backend.mlb.scripts.insert_mlb_stat_derived import _extract_player_stats_row,_upsert_game_info_min,_upsert_player_id_min
+from backend.mlb.scripts.insert_mlb_stat_derived import _extract_player_stats_row,_json_payload_default,_upsert_game_info_min,_upsert_player_id_min
 from backend.mlb.scripts.cleanroom_v1.routine_market_lifecycle import role
 ROOT=Path(__file__).resolve().parents[3]
 DEFAULT=ROOT/'artifacts/analysis/mlb/player_stats_completeness'
@@ -84,6 +84,17 @@ def dry_run(game,out):
  for x in official:
   n=by[x['player_mlb_id']];action='INSERT_MISSING_OFFICIAL_PARTICIPANT' if n==0 else 'NO_ACTION_ALREADY_PRESENT' if n==1 else 'HARD_REJECT_IDENTITY_CONFLICT';c=canonical_row(x,date);rows.append({**{k:v for k,v in x.items() if k!='raw_stats'},**{f'canonical_{k}':v for k,v in c.items()},'existing_local_row_count':n,'repair_action':action,'official_payload_path':summary['live_feed_path'],'official_payload_sha256':summary['live_feed_sha256'],'arithmetic_verified':x['total_bases']==x['singles']+2*x['doubles']+3*x['triples']+4*x['home_runs']})
  write(out/f'game_{game}_repair_dry_run.csv',rows);manifest={'game_pk':game,'created_at_utc':datetime.now(timezone.utc).isoformat(),'source_sha256':summary['live_feed_sha256'],'dry_run_sha256':sh(out/f'game_{game}_repair_dry_run.csv'),'clean':all(r['repair_action'] in ('INSERT_MISSING_OFFICIAL_PARTICIPANT','NO_ACTION_ALREADY_PRESENT') and r['arithmetic_verified'] for r in rows),'insert_candidates':sum(r['repair_action']=='INSERT_MISSING_OFFICIAL_PARTICIPANT' for r in rows),'conflicts':sum(r['repair_action'].startswith('HARD_REJECT') for r in rows)};(out/f'game_{game}_repair_dry_run_manifest.json').write_text(json.dumps(manifest,indent=2)+'\n');return manifest,rows,feed
+SAFE_PLAYER_STATS_KEYS=('player_id','game_id','game_date','team','opponent','is_home','position','plate_appearances','at_bats','hits','total_bases','rbis','runs_scored','strikeouts_batting','walks','singles','doubles','triples','home_runs','stolen_bases','strikeouts_pitching','walks_allowed','hits_allowed','outs_recorded','earned_runs','is_starter')
+def _insert_missing_participant(cur,c,player_mlb_id):
+ # Insert-only through the reviewed fixed writers, so the restricted ingest login can repair.
+ cur.execute('SELECT 1 FROM mlb.player_stats WHERE player_id=%s AND game_id=%s',(c['player_id'],c['game_id']))
+ if cur.fetchone() is not None:raise RuntimeError(f'CONCURRENT_OR_CONFLICTING_ROW player={player_mlb_id}')
+ payload={k:c[k] for k in SAFE_PLAYER_STATS_KEYS if k in c}
+ cur.execute('SELECT mlb.safe_upsert_player_stats(%s::jsonb) AS result_count',(json.dumps(payload,default=_json_payload_default,sort_keys=True),))
+ if scalar_int_result(cur.fetchone())!=1:raise RuntimeError(f'CONCURRENT_OR_CONFLICTING_ROW player={player_mlb_id}')
+ cur.execute('SELECT mlb.safe_fill_player_stats_pa(%s,%s,%s,%s,%s,%s,%s,%s) AS result_count',(c['player_id'],c['game_id'],c['plate_appearances'],c['hit_by_pitch'],c['sacrifice_flies'],c['sacrifice_hits'],c['catcher_interference'],c['pa_source']))
+ # 0 is expected only for rows the PA writer does not treat as batters (pitcher-only lines).
+ if scalar_int_result(cur.fetchone()) not in (0,1):raise RuntimeError(f'PA_FILL_RESULT_INVALID player={player_mlb_id}')
 def repair(game,out):
  existing_manifest=out/f'game_{game}_repair_write_manifest.csv'
  if existing_manifest.exists():
@@ -99,8 +110,7 @@ def repair(game,out):
    if x['repair_action']!='INSERT_MISSING_OFFICIAL_PARTICIPANT':continue
    c={k[10:]:v for k,v in x.items() if k.startswith('canonical_')};_upsert_player_id_min(conn,player_id=int(x['player_mlb_id']),player_name=x['player'],team_abbr=x['team'],team_id=int(x['team_id']),has_team_col=has_team,has_team_id_col=has_team_id,has_placeholder_col=has_placeholder)
    with conn.cursor() as cur:
-    cur.execute('''INSERT INTO mlb.player_stats (player_id,game_id,game_date,team,opponent,is_home,position,at_bats,hits,total_bases,rbis,runs_scored,strikeouts_batting,walks,singles,doubles,triples,home_runs,stolen_bases,strikeouts_pitching,walks_allowed,hits_allowed,outs_recorded,earned_runs,is_starter,plate_appearances,hit_by_pitch,sacrifice_flies,sacrifice_hits,catcher_interference,pa_source,pa_backfilled_at) VALUES (%(player_id)s,%(game_id)s,%(game_date)s,%(team)s,%(opponent)s,%(is_home)s,%(position)s,%(at_bats)s,%(hits)s,%(total_bases)s,%(rbis)s,%(runs_scored)s,%(strikeouts_batting)s,%(walks)s,%(singles)s,%(doubles)s,%(triples)s,%(home_runs)s,%(stolen_bases)s,%(strikeouts_pitching)s,%(walks_allowed)s,%(hits_allowed)s,%(outs_recorded)s,%(earned_runs)s,%(is_starter)s,%(plate_appearances)s,%(hit_by_pitch)s,%(sacrifice_flies)s,%(sacrifice_hits)s,%(catcher_interference)s,%(pa_source)s,%(pa_backfilled_at)s) ON CONFLICT (player_id,game_id) DO NOTHING''',c)
-    if cur.rowcount!=1:raise RuntimeError(f'CONCURRENT_OR_CONFLICTING_ROW player={x["player_mlb_id"]}')
+    _insert_missing_participant(cur,c,x['player_mlb_id'])
    inserted.append(int(x['player_mlb_id']))
   conn.commit()
  after_summary,official,after,verify,_=inspect_game(game,out);rollback=['BEGIN;']+[f'DELETE FROM mlb.player_stats WHERE game_id = {game} AND player_id = {pid};' for pid in inserted]

@@ -36,7 +36,11 @@ def test_parser_includes_zero_pa_substitute(monkeypatch):
 def test_parser_excludes_official_nonparticipant(monkeypatch):
  monkeypatch.setattr(c,'role',lambda p:('DID_NOT_APPEAR',''));feed={'gameData':{'game':{'pk':10},'teams':{'away':{'id':1,'abbreviation':'A'},'home':{'id':2,'abbreviation':'H'}}},'liveData':{'boxscore':{'teams':{'away':{'players':{'ID1':{'person':{'id':1},'stats':{'batting':{}}}}},'home':{'players':{}}}}}};assert c.participant_rows(feed)==[]
 def test_repair_sql_is_insert_only():
- import inspect;s=inspect.getsource(c.repair);assert 'ON CONFLICT (player_id,game_id) DO NOTHING' in s and 'DO UPDATE' not in s
+ # Repair writes only through the fixed writers, after proving the row absent in the same transaction.
+ import inspect;s=inspect.getsource(c.repair);w=inspect.getsource(c._insert_missing_participant)
+ assert 'INSERT INTO' not in s and 'DO UPDATE' not in s and '_insert_missing_participant(cur,c,' in s
+ assert w.index('SELECT 1 FROM mlb.player_stats')<w.index('safe_upsert_player_stats')<w.index('safe_fill_player_stats_pa')
+ assert "!=1:raise RuntimeError(f'CONCURRENT_OR_CONFLICTING_ROW" in w
 def test_repair_has_idempotent_no_action():
  import inspect;assert 'NO_ACTION_ALREADY_PRESENT' in inspect.getsource(c.dry_run)
 def test_rollback_deletes_exact_game_player():
