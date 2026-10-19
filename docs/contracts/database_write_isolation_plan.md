@@ -557,12 +557,15 @@ declined Keychain storage on 2026-10-19; this plan does not use it.
 Inventory and evidence:
 `docs/operations/mlb_owner_alias_inventory_2026-10-19.md`.
 
-- Readers: `build_mlb_predictions_wide.py` now reads through the MLB research
-  login (scoped in `mlb-predictions-wide`; its columns were already granted).
-  Slate output, book upload, and the starter skill/workload LaunchAgent
-  readers honor the same opt-in but need columns the research group lacks.
-  The grant is prepared, not applied:
-  `backend/mlb/sql/migrations/20261019_mlb_research_daily_reader_read.sql`.
+- Readers: predictions-wide, slate output, book upload (both
+  `mlb-book-upload` recipes), and the starter skill/workload LaunchAgent now
+  read through the MLB research login. The operator applied
+  `backend/mlb/sql/migrations/20261019_mlb_research_daily_reader_read.sql` in
+  the SQL editor on 2026-10-19; a read-only catalog check through the research
+  login confirmed SELECT on exactly `mlb.game_info (game_id, game_date,
+  home_team_abbr, away_team_abbr)` and `mlb.player_stats.walks_allowed`, with
+  no write privileges. The starter runner sets the research URL itself before
+  its database reads and has no owner fallback.
   Nine more daily readers (reconcile rows, finalized-data and rolling checks,
   PA and O1.5 hydration, review board, stat-derived validation, ops-brief
   workspace reads) still use the generic route and need a column inventory
@@ -588,8 +591,6 @@ Inventory and evidence:
 - The owner-free route for the MLB materialized-view refreshes: keep the
   deployed fixed `SECURITY DEFINER` function (recommended), or switch to a
   manual SQL-editor run.
-- Whether to apply the prepared MLB research read grant
-  (`20261019_mlb_research_daily_reader_read.sql`) in the SQL editor.
 - Whether to delete or keep (offline, outside the repository) the backup
   copies (step 5).
 - Timing of rotation (step 6). Rotation and provider-side changes are

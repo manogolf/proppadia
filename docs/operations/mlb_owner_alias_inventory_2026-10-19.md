@@ -43,8 +43,8 @@ Routed to the research login (identity-checked, read-only):
 | --- | --- |
 | Hits environment report, lane selector, overlap role-profile watch | Active since 2026-10-17 (recipe-scoped `MLB_RESEARCH_DATABASE_URL`). |
 | `build_mlb_predictions_wide.py` (`mlb-predictions-wide`) | **Active 2026-10-19.** Its `player_ids`/`player_stats` columns are already granted (`player_ids` has no `active` column). A bounded read through the research login returned 4,949 player rows and starter counts. |
-| `build_mlb_slate_output.py`, `export_mlb_book_upload.py` | Code honors the opt-in. **Not activated:** they read `mlb.game_info`, which the research group cannot read. Activate after the prepared grant (below). Book upload reads the database only without `--use-slate-output`; the daily recipe passes it. |
-| Starter skill/workload (`update_mlb_starter_skill_workload_observation.py`, `build_mlb_starter_skill_workload_research.py`) | Code honors the opt-in. **Not activated:** needs `player_stats.walks_allowed`, then `MLB_RESEARCH_DATABASE_URL` in the LaunchAgent process. |
+| `build_mlb_slate_output.py`, `export_mlb_book_upload.py` | **Active 2026-10-19** after the grant below (`mlb-slate-output`, `mlb-book-upload`, `mlb-book-upload-policy`). Book upload reads the database only without `--use-slate-output`; the daily recipe passes it. |
+| Starter skill/workload (`update_mlb_starter_skill_workload_observation.py`, `build_mlb_starter_skill_workload_research.py`) | **Active 2026-10-19.** The runner sets `MLB_RESEARCH_DATABASE_URL` from the existing research URL before its reads and fails without one. |
 
 Still on the generic route (`pg_fetchall`/`pg_fetchone`/`pg_connect`), SELECT
 only, not yet routed. Each needs a column inventory and grant before routing:
@@ -68,22 +68,17 @@ and historical repair, backfill, and activation scripts. They are operator
 tools, not ordinary jobs. About 130 MLB modules mention the aliases; the rest
 are ad hoc research scripts outside any schedule.
 
-## Prepared grant (not applied)
+## Research read grant (applied 2026-10-19)
 
 `backend/mlb/sql/migrations/20261019_mlb_research_daily_reader_read.sql` and
 its rollback grant the research group SELECT on `mlb.game_info (game_id,
 game_date, home_team_abbr, away_team_abbr)` and
 `mlb.player_stats (walks_allowed)`. `game_info` has RLS disabled; `player_stats`
 already has the research SELECT policy. The operator runs it in the Supabase
-SQL editor, then the verification queries at its end. After that:
-
-1. Add `MLB_RESEARCH_DATABASE_URL="$${MLB_RESEARCH_DATABASE_URL:-$${MLB_MONEYLINE_AUDIT_DATABASE_URL:?…}}"`
-   to the `build_mlb_slate_output.py` and `export_mlb_book_upload.py` commands
-   in `mlb-slate-output` and `mlb-book-upload`, and flip the
-   `grant_pending_target` assertion in
-   `backend/tests/test_mlb_research_readonly_routing.py`.
-2. Give the starter skill/workload LaunchAgent the research URL in its process
-   environment.
+SQL editor. It did so on 2026-10-19 ("Success. No rows returned"). A
+read-only catalog check through the research login then confirmed SELECT on
+exactly those five columns and no INSERT, UPDATE, DELETE, or TRUNCATE on
+either relation. The three readers above were then switched on.
 
 ## Materialized-view refresh
 

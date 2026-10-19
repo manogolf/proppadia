@@ -412,12 +412,13 @@ writer validation does not authorize a hosted cutover or a different writer.
   - Routed: `build_mlb_predictions_wide.py` reads through the research login,
     scoped in `mlb-predictions-wide`. A bounded read through that login
     returned 4,949 player rows and starter counts.
-  - Routed in code but not activated: slate output, book upload, and the
-    starter skill/workload LaunchAgent readers. They need
-    `mlb.game_info (game_id, game_date, home_team_abbr, away_team_abbr)` and
-    `mlb.player_stats.walks_allowed`. The grant and rollback are prepared, not
-    applied: `backend/mlb/sql/migrations/20261019_mlb_research_daily_reader_read.sql`.
-    Activate the recipes and LaunchAgent only after deployment.
+  - Routed and active after the grant: slate output, book upload (both
+    recipes), and the starter skill/workload LaunchAgent readers. The
+    operator applied `backend/mlb/sql/migrations/20261019_mlb_research_daily_reader_read.sql`
+    on 2026-10-19. A read-only check through the research login confirmed
+    SELECT on `mlb.game_info (game_id, game_date, home_team_abbr,
+    away_team_abbr)` and `mlb.player_stats.walks_allowed` and no write
+    privileges. A natural run has not yet exercised these readers.
   - The today-view refresh row in the table below is stale. The fixed
     function route was deployed and installed on 2026-10-17 (see the item
     above). It has not run on a natural slate yet. The inventory compares it
