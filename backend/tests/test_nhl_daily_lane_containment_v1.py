@@ -58,7 +58,12 @@ def phoenix_points_authority():
         "production_authority": cli.PHOENIX_AUTHORITY,
         "shadow_authorities": [cli.HGB_AUTHORITY],
     }
-    with patch.object(cli, "selected_production_authority", return_value=state):
+    # Under Phoenix the HGB shadow lane builds inputs from the research
+    # database; it is outside these fixtures and must never get a real DSN.
+    with patch.object(cli, "selected_production_authority", return_value=state), patch.object(
+            cli, "require_db_url", return_value="postgresql://offline.invalid/denied"), patch.object(
+            cli, "prepare_points_hgb_inputs",
+            side_effect=RuntimeError("HGB_SHADOW_OUTSIDE_FIXTURE")):
         yield
 
 
