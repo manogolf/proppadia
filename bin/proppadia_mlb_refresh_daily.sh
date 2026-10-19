@@ -883,7 +883,8 @@ phases = [
 env_checks = [
     {"name": "backend/.env", "present": Path("backend/.env").exists()},
     {"name": ".venv/bin/python", "present": Path(".venv/bin/python").exists()},
-    {"name": "SUPABASE_DB_URL", "present": bool(env("SUPABASE_DB_URL"))},
+    {"name": "MLB_INGEST_DATABASE_URL", "present": bool(env("MLB_INGEST_DATABASE_URL"))},
+    {"name": "MLB_MONEYLINE_AUDIT_DATABASE_URL", "present": bool(env("MLB_MONEYLINE_AUDIT_DATABASE_URL"))},
     {"name": "psql", "present": bool(env("MLB_PSQL_BIN"))},
 ]
 

@@ -17,6 +17,11 @@ OPERATIONS_RUNBOOK = ROOT / "docs/Prod12 Automation Runbook.md"
 WORKSPACE_BUILD_CALL = "MLB_USE_RESTRICTED_INGEST=1 .venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py"
 WORKSPACE_BUILD_CALL_PREVIOUS = ".venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py"
 WORKSPACE_BUILD_COMMENT = "# Staging writes go through mlb.replace_today_workspace_staging() on the ingest login.\n"
+ENV_CHECK_RESTRICTED = (
+    '    {"name": "MLB_INGEST_DATABASE_URL", "present": bool(env("MLB_INGEST_DATABASE_URL"))},\n'
+    '    {"name": "MLB_MONEYLINE_AUDIT_DATABASE_URL", "present": bool(env("MLB_MONEYLINE_AUDIT_DATABASE_URL"))},\n'
+)
+ENV_CHECK_PREVIOUS = '    {"name": "SUPABASE_DB_URL", "present": bool(env("SUPABASE_DB_URL"))},\n'
 
 
 class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
@@ -36,7 +41,8 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
         self.assertIn(WORKSPACE_BUILD_CALL, tracked)
         self.assertEqual(
             tracked.replace(WORKSPACE_BUILD_CALL, WORKSPACE_BUILD_CALL_PREVIOUS)
-            .replace(WORKSPACE_BUILD_COMMENT, ""),
+            .replace(WORKSPACE_BUILD_COMMENT, "")
+            .replace(ENV_CHECK_RESTRICTED, ENV_CHECK_PREVIOUS),
             installed,
         )
 
@@ -79,6 +85,9 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
         self.assertNotIn("REFRESH MATERIALIZED VIEW mlb.today_", wrapper)
         self.assertEqual(wrapper.count(WORKSPACE_BUILD_CALL_PREVIOUS), 1)
         self.assertIn(WORKSPACE_BUILD_CALL, wrapper)
+        # The check summary needs the restricted routes, not the owner alias.
+        self.assertIn(ENV_CHECK_RESTRICTED, wrapper)
+        self.assertNotIn('env("SUPABASE_DB_URL")', wrapper)
 
     def test_today_workspace_refresh_is_scoped_fixed_and_has_no_owner_fallback(self):
         wrapper = TRACKED_WRAPPER.read_text()
