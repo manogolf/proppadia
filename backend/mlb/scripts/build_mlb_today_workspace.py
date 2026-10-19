@@ -20,7 +20,7 @@ import json
 import re
 import sys
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -42,7 +42,7 @@ from backend.mlb.scripts.build_mlb_reconcile_rows import (
     _load_events,
     _norm_name,
 )
-from backend.shared.db.pg import pg_connect
+from backend.shared.db.pg import mlb_ingest_restricted_mode_enabled, pg_connect
 
 
 ET = ZoneInfo("America/New_York")
@@ -449,6 +449,9 @@ def _parse_snapshot_rows(
 
 
 def _ensure_stage_tables() -> None:
+    # Schema changes stay owner work; the restricted ingest login has no CREATE.
+    if mlb_ingest_restricted_mode_enabled():
+        return
     ddl = """
     CREATE SCHEMA IF NOT EXISTS mlb;
 
@@ -518,6 +521,107 @@ def _ensure_stage_tables() -> None:
         conn.commit()
 
 
+TODAY_SLATE_ROW_COLUMNS = (
+    "slate_date",
+    "game_date",
+    "game_id",
+    "player_id",
+    "player_name",
+    "player_name_norm",
+    "home_team_code",
+    "away_team_code",
+    "prop_type",
+    "market_key",
+    "line",
+    "prob_over",
+    "prob_under",
+)
+TODAY_WIDE_ROW_COLUMNS = (
+    "slate_date",
+    "game_date",
+    "game_id",
+    "player_id",
+    "player_name",
+    "player_name_norm",
+    "prop_type",
+    "team",
+    "opponent",
+    "is_home",
+)
+TODAY_ODDS_BOOK_ROW_COLUMNS = (
+    "slate_date",
+    "game_date",
+    "snapshot_ts",
+    "snapshot_file",
+    "event_id",
+    "game_id",
+    "player_id",
+    "player_name",
+    "player_name_norm",
+    "home_team_code",
+    "away_team_code",
+    "team",
+    "opponent",
+    "is_home",
+    "prop_type",
+    "market_key",
+    "line",
+    "bookmaker_key",
+    "price_over_american",
+    "price_under_american",
+)
+
+
+def _json_value(value: Any) -> Any:
+    if value is None or (not isinstance(value, (list, dict)) and pd.isna(value)):
+        return None
+    if isinstance(value, (pd.Timestamp, datetime, date)):
+        return value.isoformat()
+    if hasattr(value, "item") and not isinstance(value, str):
+        return value.item()
+    if value.__class__.__name__ == "Decimal":
+        return str(value)
+    return value
+
+
+def _staging_payload(frame: pd.DataFrame, columns: Tuple[str, ...]) -> str:
+    rows = [
+        {column: _json_value(record[column]) for column in columns}
+        for _, record in frame.iterrows()
+    ]
+    return json.dumps(rows, separators=(",", ":"))
+
+
+def _replace_date_rows_restricted(
+    *,
+    slate_date: str,
+    slate_rows: pd.DataFrame,
+    wide_rows: pd.DataFrame,
+    odds_rows: pd.DataFrame,
+) -> Dict[str, int]:
+    """Replace one slate date through the owner-reviewed fixed function on the ingest login."""
+    with pg_connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT * FROM mlb.replace_today_workspace_staging(%s::date, %s::jsonb, %s::jsonb, %s::jsonb)",
+            (
+                slate_date,
+                _staging_payload(slate_rows, TODAY_SLATE_ROW_COLUMNS),
+                _staging_payload(wide_rows, TODAY_WIDE_ROW_COLUMNS),
+                _staging_payload(odds_rows, TODAY_ODDS_BOOK_ROW_COLUMNS),
+            ),
+        )
+        row = cur.fetchone()
+        conn.commit()
+    if row is None:
+        raise RuntimeError("today workspace staging function returned no row")
+    values = [row[k] for k in ("slate_rows_written", "wide_rows_written", "odds_rows_written")] if isinstance(row, dict) else list(row)
+    inserted = dict(zip(("today_slate_rows", "today_wide_rows", "today_odds_book_rows"), (int(v) for v in values)))
+    expected = {"today_slate_rows": len(slate_rows), "today_wide_rows": len(wide_rows), "today_odds_book_rows": len(odds_rows)}
+    if inserted != expected:
+        raise RuntimeError(f"today workspace staging row counts mismatch: {inserted} != {expected}")
+    return inserted
+
+
 def _replace_date_rows(
     *,
     slate_date: str,
@@ -532,6 +636,14 @@ def _replace_date_rows(
             return value.to_pydatetime()
         return value
 
+    if mlb_ingest_restricted_mode_enabled():
+        return _replace_date_rows_restricted(
+            slate_date=slate_date,
+            slate_rows=slate_rows,
+            wide_rows=wide_rows,
+            odds_rows=odds_rows,
+        )
+
     with pg_connect() as conn, conn.cursor() as cur:
         cur.execute("DELETE FROM mlb.today_odds_book_rows WHERE slate_date = %s::date", (slate_date,))
         cur.execute("DELETE FROM mlb.today_slate_rows WHERE slate_date = %s::date", (slate_date,))
@@ -544,21 +656,7 @@ def _replace_date_rows(
         }
 
         if not slate_rows.empty:
-            cols = [
-                "slate_date",
-                "game_date",
-                "game_id",
-                "player_id",
-                "player_name",
-                "player_name_norm",
-                "home_team_code",
-                "away_team_code",
-                "prop_type",
-                "market_key",
-                "line",
-                "prob_over",
-                "prob_under",
-            ]
+            cols = list(TODAY_SLATE_ROW_COLUMNS)
             sql = f"""
             INSERT INTO mlb.today_slate_rows ({",".join(cols)})
             VALUES ({",".join(["%s"] * len(cols))})
@@ -567,18 +665,7 @@ def _replace_date_rows(
             inserted["today_slate_rows"] = len(slate_rows)
 
         if not wide_rows.empty:
-            cols = [
-                "slate_date",
-                "game_date",
-                "game_id",
-                "player_id",
-                "player_name",
-                "player_name_norm",
-                "prop_type",
-                "team",
-                "opponent",
-                "is_home",
-            ]
+            cols = list(TODAY_WIDE_ROW_COLUMNS)
             sql = f"""
             INSERT INTO mlb.today_wide_rows ({",".join(cols)})
             VALUES ({",".join(["%s"] * len(cols))})
@@ -587,28 +674,7 @@ def _replace_date_rows(
             inserted["today_wide_rows"] = len(wide_rows)
 
         if not odds_rows.empty:
-            cols = [
-                "slate_date",
-                "game_date",
-                "snapshot_ts",
-                "snapshot_file",
-                "event_id",
-                "game_id",
-                "player_id",
-                "player_name",
-                "player_name_norm",
-                "home_team_code",
-                "away_team_code",
-                "team",
-                "opponent",
-                "is_home",
-                "prop_type",
-                "market_key",
-                "line",
-                "bookmaker_key",
-                "price_over_american",
-                "price_under_american",
-            ]
+            cols = list(TODAY_ODDS_BOOK_ROW_COLUMNS)
             sql = f"""
             INSERT INTO mlb.today_odds_book_rows ({",".join(cols)})
             VALUES ({",".join(["%s"] * len(cols))})

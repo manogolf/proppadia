@@ -1522,7 +1522,8 @@ fi
 
 echo "[$(date -u +%FT%TZ)] START mlb-today workspace build (slate_date=${MLB_DATE_ET})"
 set +e
-.venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py \
+# Staging writes go through mlb.replace_today_workspace_staging() on the ingest login.
+MLB_USE_RESTRICTED_INGEST=1 .venv/bin/python backend/mlb/scripts/build_mlb_today_workspace.py \
   --slate-date "$MLB_DATE_ET" \
   --odds-root "backend/mlb/exports/odds_history" \
   --qualification-status-file "$MLB_SLATE_OUTPUT_GATE_STATUS_FILE"

@@ -33,13 +33,16 @@ def test_function_is_fixed_definer_with_ingest_only_execute():
 
 
 def test_function_inserts_exactly_the_columns_the_daily_build_writes():
+    from backend.mlb.scripts import build_mlb_today_workspace as workspace
+
     sql = FORWARD.read_text()
-    script = SCRIPT.read_text()
-    for table in ("today_slate_rows", "today_wide_rows", "today_odds_book_rows"):
-        start = script.index(f"INSERT INTO mlb.{table}")
-        cols_block = script[: start].rsplit("cols = [", 1)[1].split("]", 1)[0]
-        script_cols = [c.strip().strip('"') for c in cols_block.split(",") if c.strip()]
-        assert _insert_columns(sql, table) == script_cols, table
+    expected = {
+        "today_slate_rows": workspace.TODAY_SLATE_ROW_COLUMNS,
+        "today_wide_rows": workspace.TODAY_WIDE_ROW_COLUMNS,
+        "today_odds_book_rows": workspace.TODAY_ODDS_BOOK_ROW_COLUMNS,
+    }
+    for table, columns in expected.items():
+        assert _insert_columns(sql, table) == list(columns), table
 
 
 def test_rollback_removes_only_the_function():
