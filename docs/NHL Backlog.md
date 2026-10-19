@@ -1375,8 +1375,39 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Also: `test_nhl_sep24_player_identity_acquisition_v1.py` makes its temp
   directory under the repository root, and each suite run leaves a
   `nhl_identity_acq_*/postgame_reconciliation/request_runs/...` tree behind.
+- Fixed 2026-10-18 (`813c3a30`): `test_main_lock_failure_keeps_exit_zero`
+  ran the live Points/Saves prediction-only observers. When real readiness
+  evidence was present they read the database and wrote `VALIDATION_TEST`
+  status files into `artifacts/operational/nhl/{points,saves}_prediction_only/status/`.
+  Status-only no-ops remain from 2026-10-18 23:13 to 2026-10-19 00:05 UTC.
 - Completion: for each test, commit a small fixture, build it in `tmp_path`,
   or skip with a reason when it needs retained operational evidence.
+
+### P2.20 Keep captured games when one game misses its inputs or starts early
+
+- Status: **PARTLY RESOLVED 2026-10-18**. Operator rule: use what was
+  captured for the rest of the slate; never fail a slate because one game
+  started or one game is missing.
+- Resolved (`da857c21`): reconciliation compared SOG and cross-market
+  final-pregame cards to the slate's first puck, and rejected a cross-market
+  card that excluded a started game. On 2026-10-16 (two games, 01:00Z and
+  02:00Z) a capture at 01:00:58Z would have failed the whole slate. Cards are
+  now checked per game. A partial cross-market card must cover the canonical
+  slate minus its recorded started games. Grading stays bound to the full
+  slate. `backend/nhl/tests/test_reconciliation_mixed_start_capture.py`
+  reproduces 10-16. Retained cards for 10-09 through 10-17 still resolve.
+- Already per game: prediction-only Points/Saves capture (`c64c0466` removed
+  `WHOLE_SLATE_PRESTART_GATE_FAILED_PARTIAL_SLATE_FORBIDDEN`, the 10-16
+  failure), Points/Saves reconciliation cards, daily-lane started-game
+  skipping, SOG observer and cross-market capture.
+- Open: daily-run Phoenix Points and Saves scoring call
+  `prepare_scoring_input` without `allow_partial_slate`, so one pregame game
+  with no feature rows raises `SCORING_INPUT_PARTIAL_SLATE` and fails that
+  lane for every game. Prediction-only observers already exclude such a game
+  alone (`NO_QUALIFIED_*_FEATURE_INPUTS`).
+- Completion: daily Points/Saves score the games that have inputs, record
+  the missing game as excluded, and attachments, receipts, and grading carry
+  the partial set.
 
 ## Verified Complete — Do Not Reopen
 
