@@ -51,13 +51,20 @@ class ColdStartTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="sog_observer_gate_") as raw:
             root=Path(raw)
             schedule,fixture=__import__("backend.nhl.scripts.preflight_nhl_sog_prediction_only_v1",fromlist=["fixture"]).fixture("2026-09-20")
+            # Prior-day certification and current roster readiness read the
+            # operational artifact tree; this fixture covers the morning gate only.
             with patch.object(observer,"export_features",return_value=(schedule,fixture)), \
+                 patch.object(observer,"require_slate_history_certificate",return_value={"status":"FIXTURE_CERTIFIED_FINAL"}), \
+                 patch.object(observer,"require_slate_roster_observation",return_value={"status":"FIXTURE_ROSTER_READY"}), \
                  patch("socket.socket",side_effect=AssertionError("NETWORK_FORBIDDEN")), \
                  patch.dict(os.environ,{"PROPPADIA_INVOCATION_ORIGIN":"VALIDATION_TEST","PROPPADIA_VALIDATION_ID":"sog_gate_fixture"}):
                 status=observer.observe(slate="2026-09-20",requested="AUTO",dsn="fixture",root=root,now=datetime(2026,9,20,18,0,tzinfo=timezone.utc))
             payload=json.loads(status.read_text())
             self.assertEqual(payload["status"],"CAPTURED")
-            self.assertEqual(payload["morning_readiness_dependency"],"NONE_PREDICTION_ONLY")
+            # Since 79ef060c the only readiness dependency is prior-day
+            # certification, never the morning orchestration gate.
+            self.assertEqual(payload["morning_readiness_dependency"],"PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED")
+            self.assertEqual(payload["prior_day_reconciliation_certificate"],{"status":"FIXTURE_CERTIFIED_FINAL"})
             self.assertEqual(payload["invocation_classification"],"VALIDATION_TEST")
             self.assertEqual(payload["market_requests"],0)
     def test_prediction_only_no_zero_fill_and_three_line_ladder(self):
