@@ -1483,9 +1483,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Past performance summaries are not rebuilt: the operator's aim is accurate
   inputs for future research and learning. 2026-10-18 already has a V4
   summary (revision 2) from the 2026-10-19 10:30 ET daily run.
-- Open: 09-26 has never had a phase restatement (V3 and V4 both fail on that
-  package's Moneyline file, `game_type_code` missing), so its 4,971 SOG
-  absences stay unrestated and readers see the sealed package for that date.
+- 09-26 restated 2026-10-19 (`6ca4e7f4`): that 14-game preseason slate had no
+  Moneyline or puck line card, so those grade files were header-only and the
+  restatement failed on the missing `game_type_code`. Empty lane files now
+  pass through; the 09-26 V4 restatement re-grades its 4,971 SOG absences and
+  applies the standing Saves labels (741 rows) it never received. All 28
+  retained packages now have a V4 restatement.
 
 ### P2.22 Retain official responses when the daily shot-attempt check fails
 
