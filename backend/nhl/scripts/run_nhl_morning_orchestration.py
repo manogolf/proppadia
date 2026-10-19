@@ -9,7 +9,8 @@ from zoneinfo import ZoneInfo
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT))
 from backend.nhl.database_access import (
- database_url, owner_free_child_environment, owner_login_keys, owner_login_keys_in_file, restricted_mode)
+ database_url, owner_free_child_environment, owner_login_guard, owner_login_keys, owner_login_keys_in_file,
+ require_no_owner_application_alias, restricted_mode)
 PY=ROOT/".venv/bin/python"
 OPS=ROOT/"artifacts/operational/nhl/morning"
 SLATE_HEALTH=ROOT/"artifacts/operational/nhl/slates"
@@ -71,8 +72,10 @@ def main():
  env={"HOME":os.environ.get("HOME",str(Path.home())),"PATH":"/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin","PYTHONUNBUFFERED":"1"}
  if a.env_file.exists():load_env(a.env_file,env)
  # Names only: which env-file variables still hold an owner login (plan step 2).
- status["database_credential_check"]={"access_mode":(env.get("NHL_DB_ACCESS_MODE") or "legacy").strip().lower(),"owner_login_keys_in_env_file":owner_login_keys_in_file(a.env_file),"child_environment_owner_free":None}
- try:env=resolved_database_environment(env)
+ status["database_credential_check"]={"access_mode":(env.get("NHL_DB_ACCESS_MODE") or "legacy").strip().lower(),"owner_login_keys_in_env_file":owner_login_keys_in_file(a.env_file),"child_environment_owner_free":None,"owner_login_guard":"ENFORCED" if owner_login_guard(a.env_file)["enforced"] else "OFF_UNTIL_STEP_4"}
+ try:
+  require_no_owner_application_alias(a.env_file)
+  env=resolved_database_environment(env)
  except RuntimeError as error:
   status.update(overall_status="FAILED_BLOCKING",end_timestamp_utc=utc(),blocking_failure=str(error));atomic_json(healthpath,status);print(healthpath);return 1
  status["database_credential_check"]["child_environment_owner_free"]=not owner_login_keys(env)

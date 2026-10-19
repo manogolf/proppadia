@@ -480,7 +480,7 @@ declined Keychain storage on 2026-10-19; this plan does not use it.
 | 1 | Route the 18 NHL scripts through `backend/nhl/database_access` (or retire unused ones). Make morning orchestration pass only the restricted URLs to children and stop exporting the owner aliases. | No NHL process reads `SUPABASE_DB_URL`/`DATABASE_URL`; tests cover the orchestration child environment. | Claude (code) |
 | 2 | Guard NHL entry points: remove owner aliases from the environment they hand to children, and refuse to start if a selected NHL URL resolves to an owner login. Report owner-login presence in `backend/.env` (names only) in the daily preflight. | An owner login can no longer reach an NHL child process; the daily receipt records the check. | Claude (code) |
 | 3 | Finish MLB routing in its own MLB session: move research and report readers to the MLB research login, and choose an owner-free route for the four materialized-view refreshes. | No ordinary MLB job needs the owner aliases. | Claude (code), MLB scope; the refresh route is the operator's decision |
-| 4 | Remove the owner login from `backend/.env`: drop or repoint `SUPABASE_DB_URL`/`DATABASE_URL` to restricted logins. Owner work moves to the Supabase SQL editor. | `backend/.env` contains no production owner login; daily NHL and MLB runs complete. | Operator edits the file; Claude verifies |
+| 4 | Remove the owner login from `backend/.env`: drop or repoint `SUPABASE_DB_URL`/`DATABASE_URL` to restricted logins. Owner work moves to the Supabase SQL editor. In the same edit, add `NHL_OWNER_LOGIN_GUARD=enforce` to turn on the step 7 guard. | `backend/.env` contains no production owner login; daily NHL and MLB runs complete. | Operator edits the file; Claude verifies |
 | 5 | Remove owner copies: the four 2026-10-16 backups and `.env.train` (mode 644). Tracked-history findings remain under NHL backlog P1.4. | No local file other than the operator's chosen offline record holds the owner login. | Operator (deletion) |
 | 6 | Rotate the owner database password in Supabase after steps 4–5, then rotate the Supabase, Odds API, and Ops keys noted above. | The old owner password no longer authenticates; consumers verified. | Operator (provider account) |
 | 7 | Keep it from returning: a test or preflight check fails if `backend/.env` assigns an owner login to an application alias. | The check runs in the daily preflight and the test suite. | Claude (code) |
@@ -599,6 +599,25 @@ EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
   `backend/mlb/tests/test_today_workspace_staging_replace_migration_contract.py`,
   `backend/mlb/tests/test_mlb_daily_restricted_writer_routing.py`, and
   `backend/mlb/tests/test_player_stats_game_completeness.py`.
+
+### Step 7 status (2026-10-19): built, off until step 4
+
+- `owner_login_guard` / `require_no_owner_application_alias` in
+  `backend/nhl/database_access.py` look in `backend/.env` for an owner-role
+  login in an application alias: `SUPABASE_DB_URL`, `DATABASE_URL`, `DB`, or
+  an `NHL_*_DATABASE_URL` route. `$NAME` references are followed. Other
+  variables, such as the test project's `NHL_PP_TOI_TEST_DSN`, are not
+  aliases. The guard reports names only.
+- The guard is off until `backend/.env` sets `NHL_OWNER_LOGIN_GUARD=enforce`.
+  Turning it on today would block every run, because the owner aliases are
+  still present. Once enforced:
+  - morning orchestration fails before any child starts;
+  - `cli daily` fails in `shared_prerequisites` with
+    `NHL_OWNER_LOGIN_IN_APPLICATION_ALIAS:<names>`;
+  - `test_enforced_guard_holds_for_the_local_backend_env` fails in the
+    suite. It skips while the guard is off.
+- Both receipts record `database_credential_check.owner_login_guard`
+  (`ENFORCED` or `OFF_UNTIL_STEP_4`).
 
 ### Operator decisions
 

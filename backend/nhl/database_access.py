@@ -27,6 +27,10 @@ _ACCESS = {
 OWNER_ROLES = frozenset({"postgres", "supabase_admin"})
 # Legacy aliases and libpq routes a child could fall back to.
 _FALLBACK_KEYS = frozenset({"SUPABASE_DB_URL", "DATABASE_URL", "DB"})
+# Variables that application processes connect with; an owner login in any of
+# them is what the step 7 guard refuses.
+APPLICATION_ALIASES = _FALLBACK_KEYS | frozenset(key for key, _ in _ACCESS.values())
+_GUARD_KEY = "NHL_OWNER_LOGIN_GUARD"
 _REFERENCE = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
 
 
@@ -49,6 +53,32 @@ def owner_login_keys(environ: Mapping[str, str]) -> list[str]:
 
 def owner_login_keys_in_file(path: Path) -> list[str]:
     """Names of dotenv assignments in ``path`` that hold an owner-role login URL."""
+    return owner_login_keys(_dotenv_values(path))
+
+
+def owner_login_guard(path: Path) -> dict[str, object]:
+    """Names-only state of the owner-login guard for an env file (plan step 7).
+
+    The guard is off until the file sets ``NHL_OWNER_LOGIN_GUARD=enforce``,
+    which the operator adds when removing the owner login (plan step 4).
+    """
+    values = _dotenv_values(path)
+    owners = set(owner_login_keys(values))
+    return {
+        "enforced": values.get(_GUARD_KEY, "").strip().lower() == "enforce",
+        "owner_application_aliases": sorted(owners & APPLICATION_ALIASES),
+    }
+
+
+def require_no_owner_application_alias(path: Path) -> None:
+    """Refuse to start when the enforced guard finds an owner login in an alias."""
+    guard = owner_login_guard(path)
+    if guard["enforced"] and guard["owner_application_aliases"]:
+        raise RuntimeError(
+            "NHL_OWNER_LOGIN_IN_APPLICATION_ALIAS:" + ",".join(guard["owner_application_aliases"]))
+
+
+def _dotenv_values(path: Path) -> dict[str, str]:
     values: dict[str, str] = {}
     path = Path(path)
     if path.is_file():
@@ -63,7 +93,7 @@ def owner_login_keys_in_file(path: Path) -> list[str]:
             # Follow a whole-value $NAME / ${NAME} reference to an earlier line.
             reference = _REFERENCE.fullmatch(value)
             values[key.strip()] = values.get(reference.group(1), "") if reference else value
-    return owner_login_keys(values)
+    return values
 
 
 def owner_free_child_environment(environ: Mapping[str, str] | None = None) -> dict[str, str]:

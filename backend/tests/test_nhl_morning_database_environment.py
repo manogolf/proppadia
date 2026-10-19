@@ -132,5 +132,24 @@ def test_morning_health_records_owner_login_names_only(tmp_path, monkeypatch, ca
     (health,) = output.rglob("morning_health.json")
     check = json.loads(health.read_text())["database_credential_check"]
     assert check == {"access_mode": "restricted", "child_environment_owner_free": True,
+                     "owner_login_guard": "OFF_UNTIL_STEP_4",
                      "owner_login_keys_in_env_file": ["DATABASE_URL", "SUPABASE_DB_URL"]}
+    assert "owner-secret" not in health.read_text()
+
+
+def test_enforced_owner_login_guard_blocks_the_morning_run(tmp_path, monkeypatch, capsys):
+    env_file = tmp_path / "guarded.env"
+    env_file.write_text(f"NHL_OWNER_LOGIN_GUARD=enforce\nNHL_DB_ACCESS_MODE=restricted\n"
+                        f"SUPABASE_DB_URL={OWNER}\nNHL_RESEARCH_DATABASE_URL={RESEARCH}\n")
+    output = tmp_path / "morning"
+    monkeypatch.setattr(sys, "argv", [
+        str(PATH), "--slate-date", "2026-09-20", "--env-file", str(env_file),
+        "--output-root", str(output), "--fixture-scenario", "valid_empty",
+    ])
+    assert MODULE.main() == 1
+    capsys.readouterr()
+    (health,) = output.rglob("morning_health.json")
+    payload = json.loads(health.read_text())
+    assert payload["blocking_failure"] == "NHL_OWNER_LOGIN_IN_APPLICATION_ALIAS:SUPABASE_DB_URL"
+    assert payload["database_credential_check"]["owner_login_guard"] == "ENFORCED"
     assert "owner-secret" not in health.read_text()
