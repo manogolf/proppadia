@@ -17,6 +17,7 @@ EASTERN = ZoneInfo("America/New_York")
 POINTS_LINES = (0.5, 1.5, 2.5)
 SAVES_LINES = tuple(float(value) + 0.5 for value in range(18, 31))
 SOG_LINES = (1.5, 2.5, 3.5)
+INPUT_EXCLUSION_REASON = "NO_SCORING_INPUT_ROWS"
 SOG_WIDE_LINE_COLUMNS = {1.5: "p_over_1_5", 2.5: "p_over_2_5", 3.5: "p_over_3_5"}
 LINEAGE_COLUMNS = (
     "game_date",
@@ -206,6 +207,12 @@ def prepare_scoring_input(
         "canonical_game_set_hash": expected_game_set_hash,
         "eligible_pregame_game_ids": sorted(eligible),
         "started_excluded_game_ids": eligibility["started_excluded_game_ids"],
+        # A pregame game with no input rows is excluded on its own; the rest
+        # of the slate still scores. Only an opted-in caller reaches this.
+        "scored_game_ids": sorted(observed_games),
+        "input_excluded_games": [
+            {"game_id": game_id, "reason": INPUT_EXCLUSION_REASON}
+            for game_id in sorted(eligible - observed_games)],
         "parent_daily_run_id": parent_daily_run_id,
         "feature_input_cutoff_utc": feature_input_cutoff_utc,
     }

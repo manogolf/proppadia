@@ -242,6 +242,50 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
     assert repeated_grade["grade_path"] == grade_result["grade_path"]
 
 
+def test_capture_scores_pregame_games_with_inputs_and_records_the_rest(tmp_path):
+    # Canonical slate: 66 pregame with identities, 67 already started, 68
+    # pregame with no slate identities. 66 is scored; 68 is recorded.
+    logs = pd.DataFrame([{"game_id":2026020001,"player_id":11,"team_id":1,"is_home":True,
+        "home_team_id":1,"away_team_id":2,
+        "toi_minutes":20,"pp_toi_minutes":2,"shots_on_goal":4,"shot_attempts":8}])
+    outcomes = pd.DataFrame([{"canonical_season":2026,"game_date":"2026-10-08","game_id":2026020001,
+        "player_id":11,"team_id":1,"official_goals":1,"official_assists":0,"official_final":True,
+        "official_sog":4,"outcome_source_timestamp_utc":"2026-10-09T03:00:00Z"}])
+    slate = pd.DataFrame([{"game_id":2026020066,"player_id":11,"game_date":"2026-10-09",
+        "game_start_utc":"2026-10-10T01:00:00Z","is_home":True,"home_team_id":1,"away_team_id":2}])
+    paths = [tmp_path / name for name in ("logs.csv", "outcomes.csv", "slate.csv")]
+    for frame, path in zip((logs, outcomes, slate), paths):
+        frame.to_csv(path, index=False)
+    canonical_ids = [2026020066, 2026020067, 2026020068]
+    result = capture_from_files(logs_path=paths[0], outcomes_paths=[paths[1]], slate_path=paths[2],
+        phoenix_predictions_path=None, phoenix_prediction_sha256=None,
+        phoenix_model_identity_sha256=None, phoenix_feature_contract_sha256=None,
+        phoenix_feature_cutoff_utc=None, slate_date="2026-10-09", season=2026,
+        capture_phase="EARLY", parent_run_id="partial-input-test",
+        feature_cutoff_utc="2026-10-09T15:00:00Z", output_root=tmp_path / "captures",
+        canonical_game_ids=canonical_ids, excluded_started_game_ids=[2026020067])
+    capture = Path(result["capture_path"])
+    receipt = json.loads((capture / "receipt.json").read_text())
+    assert receipt["eligible_pregame_game_ids"] == [2026020066, 2026020068]
+    assert receipt["scored_game_ids"] == [2026020066]
+    assert receipt["input_excluded_games"] == [
+        {"game_id": 2026020068, "reason": "NO_SCORING_INPUT_ROWS"}]
+    games = [SimpleNamespace(game_id=2026020066, start_time_utc="2026-10-10T01:00:00Z",
+                             home_team_id=1, away_team_id=2),
+             SimpleNamespace(game_id=2026020067, start_time_utc="2026-10-09T14:00:00Z",
+                             home_team_id=3, away_team_id=4),
+             SimpleNamespace(game_id=2026020068, start_time_utc="2026-10-10T02:00:00Z",
+                             home_team_id=5, away_team_id=6)]
+    identity = build_production_prediction_artifact(
+        capture_path=capture, output_path=tmp_path / "points_predictions.csv",
+        canonical_games=games, slate_date="2026-10-09", parent_run_id="partial-input-test",
+        feature_cutoff_utc="2026-10-09T15:00:00Z",
+        canonical_game_set_sha256=receipt["canonical_game_set_hash"])
+    assert set(pd.read_csv(identity["path"]).game_id) == {2026020066}
+    assert identity["started_excluded_game_ids"] == [2026020067]
+    assert identity["input_excluded_games"] == receipt["input_excluded_games"]
+
+
 def test_capture_grading_validation_rejects_missing_or_rebound_immutable_evidence(tmp_path):
     # Build a small real capture through the frozen exporter/scorer path.
     logs = pd.DataFrame([{"game_id":2026020001,"player_id":11,"team_id":1,"is_home":True,

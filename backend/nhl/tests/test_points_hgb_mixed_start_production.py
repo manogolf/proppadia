@@ -23,7 +23,8 @@ EXCLUDED_IDS = CANONICAL_IDS[:1]
 
 
 def _capture(tmp_path: Path, game_ids: list[int], *, phoenix: bool = True,
-             started_ids: list[int] | None = None) -> Path:
+             started_ids: list[int] | None = None,
+             input_excluded_ids: list[int] | None = None) -> Path:
     capture = tmp_path / "capture"
     capture.mkdir()
     started_ids = EXCLUDED_IDS if started_ids is None else started_ids
@@ -65,8 +66,11 @@ def _capture(tmp_path: Path, game_ids: list[int], *, phoenix: bool = True,
         "prediction_sha256": prediction_hash,
         "canonical_game_ids": CANONICAL_IDS,
         "canonical_game_set_hash": canonical_game_set_hash(CANONICAL_IDS),
-        "eligible_pregame_game_ids": sorted(frame.game_id.unique().tolist()),
+        "eligible_pregame_game_ids": sorted(set(CANONICAL_IDS) - set(started_ids)),
         "started_excluded_game_ids": sorted(started_ids),
+        **({"input_excluded_games": [{"game_id": game_id, "reason": "NO_SCORING_INPUT_ROWS"}
+                                     for game_id in input_excluded_ids]}
+           if input_excluded_ids is not None else {}),
         "phoenix_control": ({"status": "BOUND", "parent_run_id": PARENT_RUN,
                              "prediction_sha256": phoenix_hash}
                             if phoenix else {"status": "UNAVAILABLE_PHOENIX_SHADOW_FAILED"}),
@@ -117,9 +121,23 @@ class HgbMixedStartProductionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "STARTED_GAME_PRESENT_IN_HGB_PRODUCTION_OUTPUT"):
             _build(capture, root / "points.csv")
 
-    def test_missing_eligible_game_population_is_rejected(self):
+    def test_pregame_game_without_inputs_is_excluded_and_rest_of_slate_scores(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        capture = _capture(root, ELIGIBLE_IDS[1:], input_excluded_ids=ELIGIBLE_IDS[:1])
+        identity = _build(capture, root / "points.csv")
+        output = pd.read_csv(identity["path"])
+        self.assertEqual(set(output.game_id.unique()), set(ELIGIBLE_IDS[1:]))
+        self.assertEqual(identity["eligible_pregame_game_ids"], ELIGIBLE_IDS)
+        self.assertEqual(identity["scored_game_ids"], ELIGIBLE_IDS[1:])
+        self.assertEqual(identity["input_excluded_games"],
+                         [{"game_id": ELIGIBLE_IDS[0], "reason": "NO_SCORING_INPUT_ROWS"}])
+        self.assertEqual(identity["started_excluded_game_ids"], EXCLUDED_IDS)
+
+    def test_unrecorded_missing_game_is_rejected(self):
         capture, root = self.make_capture(ELIGIBLE_IDS[1:])
-        with self.assertRaisesRegex(ValueError, "HGB_PRODUCTION_ELIGIBLE_GAME_COVERAGE_MISMATCH"):
+        with self.assertRaisesRegex(ValueError, "HGB_PRODUCTION_CAPTURE_INPUT_EXCLUSION_MISMATCH"):
             _build(capture, root / "points.csv")
 
     def test_all_pregame_behavior_is_unchanged_and_lineage_is_full_slate(self):

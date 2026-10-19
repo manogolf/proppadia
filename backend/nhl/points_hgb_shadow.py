@@ -19,6 +19,7 @@ import psycopg
 from sklearn.metrics import average_precision_score, brier_score_loss, log_loss, roc_auc_score
 
 from backend.nhl.daily_capture import canonical_game_set_hash
+from backend.nhl.prediction_lineage import INPUT_EXCLUSION_REASON
 from backend.nhl.scripts import export_nhl_points_hgb_features as exporter
 from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
 
@@ -315,13 +316,19 @@ def capture_from_files(
         game_hash = canonical_game_set_hash(features.game_id.unique())
         if game_hash != manifest.get("canonical_game_set_hash"):
             raise ValueError("HGB_CANONICAL_GAME_SET_MISMATCH")
-        eligible_game_ids = sorted(map(int, features.game_id.unique()))
+        scored_game_ids = sorted(map(int, features.game_id.unique()))
         excluded_ids = sorted(set(map(int, excluded_started_game_ids or [])))
         canonical_ids = sorted(set(map(int, canonical_game_ids or [])) or
-                               (set(eligible_game_ids) | set(excluded_ids)))
-        if (set(eligible_game_ids) & set(excluded_ids)
-                or set(eligible_game_ids) | set(excluded_ids) != set(canonical_ids)):
+                               (set(scored_game_ids) | set(excluded_ids)))
+        if (set(scored_game_ids) & set(excluded_ids)
+                or not (set(scored_game_ids) | set(excluded_ids)) <= set(canonical_ids)):
             raise ValueError("HGB_CANONICAL_ELIGIBILITY_PARTITION_INVALID")
+        # A pregame game with no slate identities is excluded on its own; the
+        # rest of the slate is scored rather than failing the capture.
+        eligible_game_ids = sorted(set(canonical_ids) - set(excluded_ids))
+        input_excluded_games = [
+            {"game_id": game_id, "reason": INPUT_EXCLUSION_REASON}
+            for game_id in sorted(set(eligible_game_ids) - set(scored_game_ids))]
         full_game_hash = canonical_game_set_hash(canonical_ids)
         fitted = joblib.load(MODEL)
         scaler_sha = joblib.hash(fitted["scaler"]) if isinstance(fitted, dict) and "scaler" in fitted else None
@@ -485,7 +492,10 @@ def capture_from_files(
             "canonical_game_ids": canonical_ids, "canonical_game_count": len(canonical_ids),
             "eligible_pregame_game_ids": eligible_game_ids,
             "eligible_pregame_game_count": len(eligible_game_ids),
-            "eligible_game_set_hash": game_hash,
+            "eligible_game_set_hash": canonical_game_set_hash(eligible_game_ids),
+            "scored_game_ids": scored_game_ids,
+            "scored_game_set_hash": game_hash,
+            "input_excluded_games": input_excluded_games,
             "started_excluded_game_ids": excluded_ids,
             "started_excluded_game_count": len(excluded_ids),
             "excluded_started_game_ids": excluded_ids,
@@ -566,8 +576,14 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
         raise ValueError("HGB_PRODUCTION_NONCANONICAL_GAME")
     if feature_game_ids & excluded_ids:
         raise ValueError("STARTED_GAME_PRESENT_IN_HGB_PRODUCTION_OUTPUT")
-    if feature_game_ids != eligible_ids:
+    if not feature_game_ids or not feature_game_ids <= eligible_ids:
         raise ValueError("HGB_PRODUCTION_ELIGIBLE_GAME_COVERAGE_MISMATCH")
+    # Pregame games without inputs must be the capture's recorded exclusions.
+    input_excluded_ids = eligible_ids - feature_game_ids
+    recorded_input_excluded = {int(row["game_id"])
+                               for row in capture_receipt.get("input_excluded_games") or []}
+    if recorded_input_excluded != input_excluded_ids:
+        raise ValueError("HGB_PRODUCTION_CAPTURE_INPUT_EXCLUSION_MISMATCH")
     if capture_receipt.get("parent_run_id") != parent_run_id:
         raise ValueError("HGB_PRODUCTION_CAPTURE_PARENT_MISMATCH")
     if capture_receipt.get("canonical_game_ids") is not None and sorted(map(
@@ -615,7 +631,7 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
             raise ValueError("STARTED_GAME_PRESENT_IN_PHOENIX_CONTROL_OUTPUT")
         phoenix_keys = set(map(tuple, phoenix[key].drop_duplicates().astype("int64").to_numpy()))
         hgb_keys = set(map(tuple, features[key].astype("int64").to_numpy()))
-        if phoenix_keys != hgb_keys or phoenix_game_ids != eligible_ids:
+        if phoenix_keys != hgb_keys or phoenix_game_ids != feature_game_ids:
             raise ValueError("HGB_PRODUCTION_PHOENIX_ELIGIBLE_IDENTITY_MISMATCH")
         line_counts = phoenix.groupby(key).line.agg(list)
         expected_lines = {0.5, 1.5, 2.5}
@@ -678,6 +694,9 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
         "started_excluded_game_count": len(excluded_ids),
         "started_excluded_game_ids": sorted(excluded_ids),
         "started_exclusion_reason": "GAME_ALREADY_STARTED" if excluded_ids else None,
+        "scored_game_ids": sorted(feature_game_ids),
+        "input_excluded_games": [{"game_id": game_id, "reason": INPUT_EXCLUSION_REASON}
+                                 for game_id in sorted(input_excluded_ids)],
         "line_count": 3,
         "parent_daily_run_id": parent_run_id,
         "feature_input_cutoff_utc": cutoff.isoformat().replace("+00:00", "Z"),

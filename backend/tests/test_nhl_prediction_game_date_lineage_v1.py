@@ -150,6 +150,16 @@ def test_partial_and_mixed_slate_inputs_are_rejected(tmp_path):
         prepare(tmp_path, full, canonical_games=mixed_games)
 
 
+def test_partial_input_records_pregame_game_without_rows(tmp_path):
+    partial = pd.DataFrame({"player_id": range(1, 11), "game_id": GAME_IDS[:-1]})
+    output, identity, _ = prepare(tmp_path, partial, allow_partial=True)
+    assert set(output.game_id) == set(GAME_IDS[:-1])
+    assert identity["eligible_pregame_game_ids"] == GAME_IDS
+    assert identity["scored_game_ids"] == GAME_IDS[:-1]
+    assert identity["input_excluded_games"] == [
+        {"game_id": GAME_IDS[-1], "reason": "NO_SCORING_INPUT_ROWS"}]
+
+
 @pytest.mark.parametrize("kind", ["player", "goalie"])
 def test_same_identity_in_multiple_canonical_games_is_not_collapsed(tmp_path, kind):
     canonical = games(GAME_IDS[:2])
@@ -532,6 +542,84 @@ def test_parent_orchestration_uses_only_validated_run_local_artifacts(tmp_path):
     assert recorded["parent_daily_run_id"] == RUN_ID
     assert recorded["canonical_game_set_hash"] == lineage_hash(GAME_IDS[:1])
     assert recorded["sha256"] == attachments["points"]["expected_pred_sha256"]
+
+
+@pytest.mark.usefixtures("phoenix_slate_day")
+def test_game_without_inputs_is_excluded_while_rest_of_slate_scores(tmp_path):
+    # Two pregame games; the exports carry rows for the first only, as when
+    # one game's roster or features are missing. Both lanes still score it.
+    canonical = games(GAME_IDS[:2])
+    value = _recorder(GAME_IDS[:2])
+    proc, exports, models, site = (
+        tmp_path / "proc", tmp_path / "exports", tmp_path / "models", tmp_path / "site")
+    exports.mkdir(); site.mkdir(); (models / "latest/goalie_saves").mkdir(parents=True)
+    pd.DataFrame({"player_id": [80], "game_id": GAME_IDS[:1], "x": [1.0]}).to_csv(
+        exports / "train_nhl_points_v2.csv", index=False)
+    pd.DataFrame({
+        "player_id": [90], "game_id": GAME_IDS[:1], "game_date": [SLATE],
+        "start_prob": [1.0], "x": [1.0],
+    }).to_csv(exports / "train_goalie_saves_v2.csv", index=False)
+    loaded = []
+
+    def fake_run(command, **_kwargs):
+        values = list(map(str, command))
+        script = values[1] if len(values) > 1 else ""
+        evidence = None
+        if "score_nhl_points_with_lineage.py" in script:
+            source = pd.read_csv(values[values.index("--features-csv") + 1])
+            out = Path(values[values.index("--out") + 1])
+            points_predictions(source).to_csv(out, index=False)
+            evidence = {"prediction_artifact_sha256": sha256_file(out),
+                        "fitted_model_identity_sha256": "a" * 64,
+                        "scoring_configuration": {"feature_contract_sha256": "b" * 64}}
+        elif "score_nhl_saves_with_lineage.py" in script:
+            source = pd.read_csv(values[values.index("--csv") + 1])
+            out = Path(values[values.index("--out") + 1])
+            saves_predictions(source).to_csv(out, index=False)
+            evidence = {"prediction_artifact_sha256": sha256_file(out),
+                        "fitted_model_identity_sha256": "c" * 64,
+                        "scoring_configuration": {"feature_contract_sha256": "d" * 64}}
+        elif "load_nhl_predictions_generic.py" in script:
+            loaded.append(values)
+        stdout = ("NHL_CHILD_SUMMARY_JSON=" + json.dumps({"fitted_model_evidence": evidence}) + "\n"
+                  if evidence else "")
+        return subprocess.CompletedProcess(values, 0, stdout, "")
+
+    def attachment(name):
+        def build(_slate, **_kwargs):
+            (site / f"{name}_with_market.csv").write_text("player_id,game_date\n1,2026-09-24\n")
+            (site / f"unmatched_{name}.csv").write_text("player_id\n")
+        return build
+
+    def cold_reference(recorder, _slate):
+        recorder.finish_lane("cold_start_sog_reference", status="NOT_AVAILABLE_EXTERNAL_OWNER")
+
+    with patch.multiple(
+        cli, PROC_DIR=proc, EXPORTS_DIR=exports, MODELS_DIR=models, SITE_DIR=site,
+        EXPORTS_ODDS_HISTORY_DIR=tmp_path / "archive",
+    ), patch.object(cli, "run", side_effect=fake_run), patch.object(
+        cli, "run_optional_odds_observation", return_value=None), patch.object(
+        cli, "build_points", side_effect=attachment("points")), patch.object(
+        cli, "build_saves", side_effect=attachment("saves")), patch.object(
+        cli, "_reference_cold_start_sog", side_effect=cold_reference), patch.object(
+        cli, "archive_site_artifacts"):
+        cli._run_independent_daily_lanes(
+            recorder=value, db="postgresql://offline.invalid/denied", slate=SLATE,
+            with_odds=False, odds_phase="EARLY", daily_run_id=RUN_ID,
+            canonical_games=canonical, saves_export_ready=True,
+            points_export_ready=True, legacy_sog_prediction=None)
+
+    for lane in ("points", "saves"):
+        assert value.lane(lane).status == "COMPLETE", (lane, value.lane(lane).reason)
+        scoring_input = next(item for item in value.lane(lane).inputs
+                             if "input_excluded_games" in item)
+        assert scoring_input["scored_game_ids"] == GAME_IDS[:1]
+        assert scoring_input["input_excluded_games"] == [
+            {"game_id": GAME_IDS[1], "reason": "NO_SCORING_INPUT_ROWS"}]
+        assert set(pd.read_csv(value.lane(lane).outputs[0]["path"]).game_id) == {GAME_IDS[0]}
+    assert len(loaded) == 2
+    receipt = json.loads((value.finalize(tmp_path / "receipts") / "parent_receipt.json").read_text())
+    assert receipt["lanes"]["saves"]["inputs"][-1]["input_excluded_games"][0]["game_id"] == GAME_IDS[1]
 
 
 @pytest.mark.usefixtures("phoenix_slate_day")

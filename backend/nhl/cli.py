@@ -1546,6 +1546,7 @@ def _score_phoenix_points_artifact(*, recorder, prediction_run_dir: Path,
         parent_daily_run_id=daily_run_id,
         feature_input_cutoff_utc=cutoff,
         expected_game_set_hash=recorder.canonical_game_set_hash,
+        allow_partial_slate=True,
     )
     points_input_identity.update(artifact_identity(points_input_csv))
     recorder.lane("points").inputs.append(points_input_identity)
@@ -1780,6 +1781,7 @@ def _run_independent_daily_lanes(
                 feature_input_cutoff_utc=saves_cutoff,
                 expected_game_set_hash=recorder.canonical_game_set_hash,
                 constant_feature_values={"start_prob": 1.0},
+                allow_partial_slate=True,
             )
             saves_input_identity.update(artifact_identity(saves_input_csv))
             recorder.lane("saves").inputs.append(saves_input_identity)
