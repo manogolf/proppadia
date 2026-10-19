@@ -566,10 +566,12 @@ Inventory and evidence:
   home_team_abbr, away_team_abbr)` and `mlb.player_stats.walks_allowed`, with
   no write privileges. The starter runner sets the research URL itself before
   its database reads and has no owner fallback.
-  Nine more daily readers (reconcile rows, finalized-data and rolling checks,
-  PA and O1.5 hydration, review board, stat-derived validation, ops-brief
-  workspace reads) still use the generic route and need a column inventory
-  and grant first.
+  The nine remaining daily readers (reconcile rows, finalized-data and rolling
+  checks, PA health and propagation, O1.5 hydration, review board,
+  stat-derived validation, ops-brief workspace reads) are wired to the same
+  opt-in but off: no recipe sets it. Their exact columns are listed in the
+  inventory, and the grant is prepared, not applied:
+  `backend/mlb/sql/migrations/20261019_mlb_research_daily_check_read.sql`.
 - Materialized views: the statement that the refreshes are owner-only was
   stale. The reviewed fixed `SECURITY DEFINER` function
   `mlb.refresh_today_workspace_views()` was deployed on 2026-10-17, and the
@@ -580,7 +582,11 @@ Inventory and evidence:
   (`backfill_mlb_player_pa.py`), workspace staging
   (`build_mlb_today_workspace.py`), and the conditional completed-slate
   recovery (`mlb-player-stats-recover-date`, `mlb-stat-derived-backfill`).
-  Step 4 must wait for these.
+  Routes are written up in the inventory: three need only the ingest opt-in
+  (and, for recovery, the deployed safe player-stats functions); workspace
+  staging needs a fixed `SECURITY DEFINER` function, prepared, not applied:
+  `backend/mlb/sql/migrations/20261019_mlb_today_workspace_staging_replace.sql`.
+  None is switched yet. Step 4 must wait for these.
 - Tests: `backend/tests/test_mlb_research_readonly_routing.py` and
   `backend/mlb/tests/test_mlb_research_source_read_permissions_migration.py`.
 
@@ -591,6 +597,8 @@ Inventory and evidence:
 - The owner-free route for the MLB materialized-view refreshes: keep the
   deployed fixed `SECURITY DEFINER` function (recommended), or switch to a
   manual SQL-editor run.
+- Whether to apply the prepared research grant for the nine remaining
+  readers and the workspace staging function (both in the SQL editor).
 - Whether to delete or keep (offline, outside the repository) the backup
   copies (step 5).
 - Timing of rotation (step 6). Rotation and provider-side changes are

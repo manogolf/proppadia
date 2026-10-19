@@ -423,9 +423,17 @@ writer validation does not authorize a hosted cutover or a different writer.
     function route was deployed and installed on 2026-10-17 (see the item
     above). It has not run on a natural slate yet. The inventory compares it
     with a manual SQL-editor run; keeping the function is recommended.
-  - Open: nine daily readers on the generic route need a column inventory and
-    grant. Four daily writer paths still use the owner alias: PA refresh,
-    workspace staging, and the two completed-slate recovery targets.
+  - Nine remaining daily readers: exact columns listed in the inventory;
+    wired to the research opt-in but off; grant prepared, not applied
+    (`backend/mlb/sql/migrations/20261019_mlb_research_daily_check_read.sql`).
+    Bounded research reads confirmed which need it.
+  - Four daily writer paths still use the owner alias (PA refresh, workspace
+    staging, the two completed-slate recovery targets). Routes are written up
+    in the inventory. PA refresh and `mlb-stat-derived-backfill` need only
+    the ingest opt-in. Recovery also needs its raw insert replaced by the
+    deployed safe functions. Workspace staging needs the prepared, unapplied
+    function `backend/mlb/sql/migrations/20261019_mlb_today_workspace_staging_replace.sql`.
+    None is switched yet.
 
 - Status: **SOURCE READ PERMISSIONS DEPLOYED — APPROVED DAILY READER ROUTING ACTIVE; natural-run checks remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as
