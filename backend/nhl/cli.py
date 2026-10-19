@@ -31,6 +31,8 @@ from backend.nhl.database_access import (
     database_url as nhl_database_url,
     owner_free_child_environment as nhl_owner_free_child_environment,
     owner_login_keys_in_file as nhl_owner_login_keys_in_file,
+    owner_login_guard as nhl_owner_login_guard,
+    require_no_owner_application_alias as nhl_require_no_owner_application_alias,
     psql_command_without_password as nhl_psql_command_without_password,
     psql_dsn_without_password as nhl_psql_dsn_without_password,
     restricted_mode as nhl_restricted_mode,
@@ -769,6 +771,9 @@ def _database_credential_check() -> dict[str, Any]:
         "owner_login_keys_in_env_file": nhl_owner_login_keys_in_file(ROOT / "backend/.env"),
         # In restricted mode run() hands each child only its role's login.
         "child_owner_logins": "STRIPPED" if restricted else "NOT_STRIPPED_LEGACY_MODE",
+        "owner_login_guard": (
+            "ENFORCED" if nhl_owner_login_guard(ROOT / "backend/.env")["enforced"]
+            else "OFF_UNTIL_STEP_4"),
     }
 
 
@@ -3527,6 +3532,7 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
     pending_error: BaseException | None = None
     receipt_path: Path | None = None
     try:
+        nhl_require_no_owner_application_alias(ROOT / "backend/.env")
         _cmd_daily_impl(
             with_odds=with_odds, morning_only=morning_only,
             odds_phase=odds_phase, daily_run_id=daily_run_id,

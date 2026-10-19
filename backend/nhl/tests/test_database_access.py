@@ -297,6 +297,37 @@ class NHLDatabaseAccessTests(unittest.TestCase):
         self.assertNotIn("NHL_PP_TOI_TEST_DSN", child_env)
         self.assertEqual(child_env["SUPABASE_DB_URL"], ingest)
 
+    def test_owner_login_guard_is_off_until_enforced_and_names_aliases_only(self):
+        import tempfile
+        from pathlib import Path
+        from backend.nhl.database_access import owner_login_guard, require_no_owner_application_alias
+        owner = "postgresql://postgres.ref:secret@db.invalid/postgres"
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / ".env"
+            # A test-project owner DSN is not an application alias.
+            path.write_text(f"SUPABASE_DB_URL={owner}\nDATABASE_URL=${{SUPABASE_DB_URL}}\n"
+                            f"NHL_PP_TOI_TEST_DSN={owner}\n")
+            self.assertEqual(owner_login_guard(path), {
+                "enforced": False, "owner_application_aliases": ["DATABASE_URL", "SUPABASE_DB_URL"]})
+            require_no_owner_application_alias(path)
+            path.write_text("NHL_OWNER_LOGIN_GUARD=enforce\n" + path.read_text())
+            with self.assertRaisesRegex(
+                    RuntimeError, "^NHL_OWNER_LOGIN_IN_APPLICATION_ALIAS:DATABASE_URL,SUPABASE_DB_URL$"):
+                require_no_owner_application_alias(path)
+            path.write_text(f"NHL_OWNER_LOGIN_GUARD=enforce\nNHL_PP_TOI_TEST_DSN={owner}\n")
+            require_no_owner_application_alias(path)
+
+    def test_enforced_guard_holds_for_the_local_backend_env(self):
+        # Once the operator sets NHL_OWNER_LOGIN_GUARD=enforce (plan step 4),
+        # the suite also fails if an owner login returns to an alias.
+        from pathlib import Path
+        from backend.nhl.database_access import owner_login_guard
+        path = Path(__file__).resolve().parents[3] / "backend/.env"
+        guard = owner_login_guard(path)
+        if not guard["enforced"]:
+            self.skipTest("owner-login guard not enforced in backend/.env yet")
+        self.assertEqual(guard["owner_application_aliases"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
