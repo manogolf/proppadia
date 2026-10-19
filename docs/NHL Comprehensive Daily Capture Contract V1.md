@@ -65,6 +65,57 @@ and strict per-game prestart observation and durable-write timestamps are the
 actual validity controls. Explicit phase requests currently bypass AUTO's
 window choice but not per-game chronology validation.
 
+## Per-game slate coverage and participation grading (2026-10-18/19)
+
+Operator rule: use what was captured for the rest of the slate. One started
+game or one game without inputs never fails the other games.
+
+- Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
+  capture, and the HGB production artifact score every pregame game that has
+  inputs. A pregame game with no feature rows or slate identities is recorded
+  in `input_excluded_games` (reason `NO_SCORING_INPUT_ROWS`) beside
+  `scored_game_ids`; started games remain `started_excluded_game_ids`.
+  `eligible_pregame_game_ids` keeps meaning "not yet started". The production
+  artifact still fails unless its gap equals the capture's recorded exclusion
+  (`HGB_PRODUCTION_CAPTURE_INPUT_EXCLUSION_MISMATCH`).
+- Reconciliation chronology. SOG and cross-market FINAL_PREGAME cards are
+  checked per game against each predicted game's own start, not the slate's
+  first puck (`IMMUTABLE_SOURCE_OBSERVED_AFTER_GAME_START`). A cross-market
+  card captured after an earlier game started carries only the later games;
+  it must equal the canonical slate minus its recorded
+  `started_excluded_game_ids`, each truly started before capture
+  (`IMMUTABLE_CROSS_MARKET_STARTED_EXCLUSION_INVALID`), and grading stays bound
+  to the full canonical slate. The SOG production reference summary grades
+  predicted games and lists eligible games without predictions.
+- Participation. Official skater outcomes list only dressed players. When a
+  final game's official box score lists dressed skaters for both teams, a
+  predicted skater absent from it did not play: SOG grades
+  `NO_APPEARANCE_UNGRADED`, Points `NONPARTICIPANT_UNGRADED` with
+  `NOT_IN_OFFICIAL_LINEUP`. Without that evidence the row stays unresolved.
+  Confirmed non-participants are not counted as unresolved in the
+  performance summary, as Saves non-starters already were. Resilient SOG maps
+  `PARTICIPATED` to `APPEARED` exactly as the FINAL_PREGAME path does.
+- Restatement V4. Sealed packages are never rewritten. Phase restatement
+  `NHL_PHASE_RESTATEMENT_V4` writes corrected grades beside each package under
+  `postgame_reconciliation/learning_restatements/<slate>/restatement=<id>/`.
+  It re-grades SOG and resilient SOG from the package's sealed prediction rows
+  and `canonical_skater_outcomes.csv`, and reclassifies Points absences. Only
+  previously ungraded rows may change; any other difference refuses the
+  restatement. `lineage.json` binds the source hashes (including the skater
+  outcomes) and per-lane `grade_changes`. Header-only Moneyline/puck line
+  files (slates without those cards) pass through unchanged. All 28 packages
+  retained through 2026-10-18 have a V4 restatement.
+- Readers. The daily prior-day counts and performance summary read the
+  restatement. Research and export code resolves package grade files through
+  `backend/nhl/reconciliation_grades.restated_grade_path`, which uses a
+  restatement only when its lineage binds that package's manifest and its own
+  manifest verifies. Frozen single-package reproductions keep their sealed
+  inputs (NHL Backlog P2.21).
+
+Roster coverage remains slate-wide: an incomplete roster package still blocks
+Points/Saves feature export for the slate (see "Roster observations" below and
+NHL Backlog P2.13).
+
 ## Resilient pregame evaluation population
 
 The separately identified `RESILIENT_PREGAME` population supplements the

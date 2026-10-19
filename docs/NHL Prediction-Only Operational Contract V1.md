@@ -47,7 +47,10 @@ corrupt, or non-final certificate produces an explicit failed observer status
 and no prediction. Missing, mismatched, incomplete, or post-start roster
 evidence likewise blocks publication. A verified empty official prior-date
 schedule is the only no-package exception; an empty current slate requires no
-roster package and produces no prediction.
+roster package and produces no prediction. A current roster package that has
+not been published yet is not a failure: Points, Saves, and SOG all report
+`ROSTER_NOT_READY` with `retry_eligible_on_later_poll`, no feature export, and
+no prediction attempt, and a later poll proceeds once a valid package exists.
 
 The installed 900-second observer continues to invoke these lane entry points
 before consulting the market-readiness gate. Each child enforces the
