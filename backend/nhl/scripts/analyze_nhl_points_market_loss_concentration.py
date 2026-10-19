@@ -9,6 +9,7 @@ import math
 from datetime import datetime
 from collections import defaultdict
 from pathlib import Path
+from backend.nhl.reconciliation_grades import restated_grade_path
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / "artifacts/analysis/nhl/points_market_loss_concentration/2026-10-14"
@@ -129,7 +130,7 @@ def main():
         run=integ.get("parent_daily_run_id") or (attachment[0].get("parent_daily_run_id") if attachment else "")
         prediction=ROOT/"backend/nhl/data/processed/daily_runs"/str(run)/"points_predictions.csv"
         recon_dirs=sorted((RECON/day).glob("reconciliation=*/graded_points.csv"))
-        grade_path=recon_dirs[-1] if recon_dirs else None
+        grade_path=restated_grade_path(recon_dirs[-1].parent,"graded_points.csv") if recon_dirs else None
         final_rows=read_csv(grade_path) if grade_path else []
         final_lookup={(r.get("game_id",""),r.get("player_id",""),str(num(r.get("line")))):r for r in final_rows
                       if r.get("grading_status")=="SETTLED" and r.get("participation_state")=="PARTICIPATED" and num(r.get("official_points")) is not None}

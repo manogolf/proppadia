@@ -17,6 +17,7 @@ from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
+from backend.nhl.reconciliation_grades import restated_grade_path
 
 
 PREDICTION_FIELDS = [
@@ -439,7 +440,7 @@ def load_candidates(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, An
     diagnostics: list[dict[str, Any]] = []
     for package in discover_latest_reconciliations(root):
         for name in ("graded_moneyline.csv", "graded_puck_line.csv", "graded_sog.csv", "graded_saves.csv"):
-            path = package / name
+            path = restated_grade_path(package, name)
             if not path.exists():
                 continue
             for source_row in _csv_rows(path):
@@ -594,7 +595,7 @@ def add_captured_sog_arms(rows: list[dict[str, Any]], operational_root: Path,
     outcomes: dict[tuple[str, str], dict[str, str]] = {}
     reconciliation_root = operational_root / "postgame_reconciliation" / slate_date
     for package in sorted(reconciliation_root.glob("reconciliation=*/")):
-        outcome_path = package / "graded_sog.csv"
+        outcome_path = restated_grade_path(package, "graded_sog.csv")
         if outcome_path.exists():
             for r in _csv_rows(outcome_path):
                 outcomes[(r.get("game_id", ""), r.get("player_id", ""))] = r

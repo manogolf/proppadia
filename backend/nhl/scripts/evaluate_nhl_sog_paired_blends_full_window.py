@@ -8,6 +8,7 @@ import math
 from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
+from backend.nhl.reconciliation_grades import restated_grade_path
 
 ROOT = Path(__file__).resolve().parents[3]
 EXPORT = ROOT / "artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-17"
@@ -277,7 +278,7 @@ def main() -> None:
         paths = sorted((ROOT / "artifacts/operational/nhl/postgame_reconciliation" / date).glob("reconciliation=*/graded_sog.csv"))
         if not paths:
             continue
-        p = paths[-1]
+        p = restated_grade_path(paths[-1].parent, "graded_sog.csv")
         outcome_sources[str(p)] = {"path": str(p.relative_to(ROOT)), "sha256": sha(p)}
         for x in read_csv(p):
             k = (date, x["game_id"], x["player_id"])

@@ -17,6 +17,7 @@ import numpy as np
 import pandas as pd
 
 from backend.nhl.postgame_reconcile.core import _grade_points, _grade_saves
+from backend.nhl.reconciliation_grades import restated_grade_path
 from backend.nhl.research.prediction_evidence import (
     CHRONOLOGY_UNVERIFIED, CORROBORATED_PREGAME, VERIFIED_PROSPECTIVE,
     canonical_group_id, classify_evidence, select_latest_groups, sha256_file,
@@ -602,7 +603,7 @@ def run_evaluation(output_root: Path = DEFAULT_OUT,
         if reconciliation:
             for lane, filename in [("SOG", "graded_sog.csv"), ("POINTS", "graded_points.csv"),
                                    ("SAVES", "graded_saves.csv")]:
-                path = reconciliation / filename
+                path = restated_grade_path(reconciliation, filename)
                 if path.is_file():
                     legacy_grade_paths[(slate, lane)] = path
                     legacy_hashes_before[str(path)] = sha256_file(path)
