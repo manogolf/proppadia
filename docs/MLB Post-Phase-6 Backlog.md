@@ -441,6 +441,18 @@ writer validation does not authorize a hosted cutover or a different writer.
     operator then removed the owner login from `backend/.env` (isolation
     plan step 4). The first MLB refresh without it is the next scheduled run.
 
+- 2026-10-19 hosted API (isolation plan step 8): the Render API still used
+  the owner login for its MLB reads and its `mlb.player_props` INSERT (POST
+  `/api/props/add`). The rotation broke `/api/mlb/ping-db`.
+  - Prepared, not applied: a dedicated `proppadia_api_login` route
+    (`PROPPADIA_API_DATABASE_URL`) and its grant SQL. Inventory and Render
+    cutover: `docs/operations/hosted_api_database_access_inventory_2026-10-19.md`.
+  - Render must not set `MLB_USE_RESTRICTED_INGEST` or
+    `MLB_RESEARCH_DATABASE_URL`.
+  - Deferred: `commit_tokens._secret()` falls back to
+    `SUPABASE_SERVICE_ROLE_KEY`, then to a hard-coded constant. Set
+    `PROPPADIA_COMMIT_TOKEN_SECRET` on Render.
+
 - Status: **SOURCE READ PERMISSIONS DEPLOYED — APPROVED DAILY READER ROUTING ACTIVE; natural-run checks remain open**.
 - Inspection date: 2026-10-17. The configured `SUPABASE_DB_URL` connected as
   `session_user=current_user=postgres`. The restricted alias connected as

@@ -428,8 +428,8 @@ administrative operation.
 
 ## Owner-credential isolation plan (2026-10-19)
 
-Goal: no application process, scheduled job, or stored file can use or expose
-the production owner login. Owner access remains available to the operator
+Goal: no application process, scheduled job, hosted service, or stored file
+can use or expose the production owner login. Owner access remains available to the operator
 through the Supabase dashboard and SQL editor, which store no credential
 locally (the 2026-10-19 PP-TOI correction used this channel). The operator
 declined Keychain storage on 2026-10-19; this plan does not use it.
@@ -484,6 +484,7 @@ declined Keychain storage on 2026-10-19; this plan does not use it.
 | 5 | Remove owner copies: the four 2026-10-16 backups and `.env.train` (mode 644). Tracked-history findings remain under NHL backlog P1.4. | No local file other than the operator's chosen offline record holds the owner login. | Operator (deletion) |
 | 6 | Rotate the owner database password in Supabase after steps 4–5, then rotate the Supabase, Odds API, and Ops keys noted above. | The old owner password no longer authenticates; consumers verified. | Operator (provider account) |
 | 7 | Keep it from returning: a test or preflight check fails if `backend/.env` assigns an owner login to an application alias. | The check runs in the daily preflight and the test suite. | Claude (code) |
+| 8 | Move the hosted API on Render off the owner login (missed by steps 1–7). Use a dedicated `proppadia_api_login` through `PROPPADIA_API_DATABASE_URL`; the cutover removes `DATABASE_URL`/`SUPABASE_DB_URL` from Render. | Render holds no owner login; `/api/health` reports `db_route=API_LOGIN`; ping-db and the reads and prop writes work. | Claude (code, SQL prepared); operator applies the SQL and changes Render |
 
 ### Step 1 status (2026-10-19): done
 
@@ -668,6 +669,37 @@ EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
 - Both receipts record `database_credential_check.owner_login_guard`
   (`ENFORCED` or `OFF_UNTIL_STEP_4`).
 
+### Step 8 status (2026-10-19): code and SQL prepared; not applied or deployed
+
+- Steps 1–7 covered local jobs only. The hosted API kept the owner login in
+  Render's `DATABASE_URL`/`SUPABASE_DB_URL`. When the step 6 rotation
+  happened, `/api/mlb/ping-db` and `/api/nhl/ping-db` failed authentication.
+  As a stopgap, the operator is putting the new owner password into Render.
+- Inventory, design, and the ordered Render cutover (names only):
+  `docs/operations/hosted_api_database_access_inventory_2026-10-19.md`.
+  - The API reads 19 MLB and NHL relations.
+  - It inserts into `mlb.player_props`.
+  - It inserts into, deletes from, and updates `status`, `outcome`, and
+    `updated_at` on `nhl.user_props`.
+  - It runs `CREATE ... IF NOT EXISTS` DDL on `nhl.user_props`. On the API
+    login that DDL is now skipped.
+  - No Supabase REST access is reachable.
+  - None of the existing restricted logins fits these needs.
+- Prepared, not applied: `backend/app/sql/migrations/20261019_hosted_api_login.sql`
+  and its rollback. They create `proppadia_api` (`NOLOGIN`) and
+  `proppadia_api_login` (`LOGIN INHERIT`, no password in the file), with the
+  grants above and RLS policies only where RLS is enabled.
+- Code: when `PROPPADIA_API_DATABASE_URL` is set, `api_server.py` routes every
+  shared-helper connection to it. Startup refuses a wrong login, a wrong
+  project, or a combination with the MLB ingest opt-in. The first connection
+  verifies the identity and the absence of owner reach. With the variable
+  unset, behavior is unchanged. `/api/health` reports `db_route`.
+- Tests: `backend/tests/test_api_database_route.py` and
+  `backend/tests/test_hosted_api_login_migration_contract.py`.
+- Not yet verified: the RLS state and serial defaults of the target tables
+  (the migration discovers them when it runs). No live probe of the new login
+  has been made.
+
 ### Operator decisions
 
 - Whether the owner aliases stay in `backend/.env` during the transition
@@ -681,6 +713,9 @@ EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
   copies (step 5).
 - Timing of rotation (step 6). Rotation and provider-side changes are
   operator actions only.
+- Step 8: when to apply the API login SQL, set the Render variables, and push
+  (each push is a paid Render rebuild). Also whether the prod12 trigger
+  pipeline still needs a database alias on Render.
 - The owner channel itself: the Supabase dashboard and SQL editor. No
   Keychain or other stored owner credential is required.
 

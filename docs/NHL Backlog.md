@@ -139,6 +139,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   owner login and libpq route in restricted mode; the morning check refuses a
   research login with owner reach; morning and daily receipts record the
   owner-login variable names in `backend/.env` (names only).
+- 2026-10-19 step 8 (hosted API, missed by steps 1–7): the owner rotation
+  broke `/api/nhl/ping-db` on Render, which still used the owner login. The
+  API's NHL writes are INSERT, DELETE, and UPDATE (`status`, `outcome`,
+  `updated_at`) on `nhl.user_props`, plus `CREATE ... IF NOT EXISTS` DDL. On
+  the new API login the DDL is skipped.
+  - A dedicated `proppadia_api_login` route (`PROPPADIA_API_DATABASE_URL`)
+    and its grant SQL are prepared but not applied:
+    `docs/operations/hosted_api_database_access_inventory_2026-10-19.md`.
+  - Open: the operator applies the SQL, changes Render, and pushes; then the
+    live checks.
+  - Deferred: `props/delete` deletes by `id` alone when no `user_id` is sent,
+    and GET `props/history?user_id=` writes grading results.
 - Plan, owners, and operator decisions:
   `docs/contracts/database_write_isolation_plan.md`, "Owner-credential
   isolation plan (2026-10-19)". Code steps 1, 2, and 7 are NHL work; step 3 is

@@ -37,6 +37,7 @@ If the question is “what is the active runtime path right now?”:
 - `docs/contracts/missingness_and_zero_semantics.md`: authoritative cross-sport contract for source missingness, verified zeros, aggregation denominators, and model-layer imputation.
 - `docs/contracts/database_write_isolation_plan.md`: database role separation, the NHL activation record, operator-only source corrections, and the owner-credential isolation plan and step status.
 - `docs/operations/mlb_owner_alias_inventory_2026-10-19.md`: MLB jobs that still resolve the owner aliases, reader routing status and column needs, the applied research read grants, the restricted routes for the former owner-alias writers, and the materialized-view refresh options.
+- `docs/operations/hosted_api_database_access_inventory_2026-10-19.md`: every database access the hosted Render API makes, its dedicated `proppadia_api_login` route (`PROPPADIA_API_DATABASE_URL`), the prepared grant SQL, and the Render variable cutover.
 - `docs/FEATURE_COMPLETION_CHECKLIST.md`: copyable checklist for marking any feature complete.
 - `docs/model_development/champion_challenger_experiment_specification.md`: cross-sport governance spec for freezing champion baselines, proposing challengers, evaluating results, and classifying promotion decisions.
 - `docs/Architecture Reset Plan.md`: reset goals, phases, progress snapshot.
