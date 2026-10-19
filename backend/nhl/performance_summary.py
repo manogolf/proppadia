@@ -1594,7 +1594,8 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
     grade_paths = {
         "moneyline": restatement / "graded_moneyline.csv",
         "puck_line": restatement / "graded_puck_line.csv",
-        "sog": package / "graded_sog.csv",
+        "sog": (restatement / "graded_sog.csv"
+                if (restatement / "graded_sog.csv").is_file() else package / "graded_sog.csv"),
         "points": restatement / "graded_points.csv",
         "saves": restatement / "graded_saves.csv",
     }

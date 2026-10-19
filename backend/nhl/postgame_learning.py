@@ -15,6 +15,10 @@ import pandas as pd
 
 from backend.nhl.cross_market_shadow.core import grade_capture, verify_manifest
 from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluation_eligible
+from backend.nhl.postgame_reconcile.core import (
+    OFFICIAL_LINEUP_ABSENCE, _official_lineup_absences, _sog_outcomes,
+)
+from backend.nhl.sog_cold_start.core import grade_predictions as grade_sog_predictions
 from backend.nhl.performance_summary import (
     build_production_sog_reference,
     discover_daily_market_coverage,
@@ -105,6 +109,47 @@ def _retained_schedule_game_count(slate_date: str) -> int | None:
     return count
 
 
+PHASE_RESTATEMENT_CONTRACT = "NHL_PHASE_RESTATEMENT_V4"
+_SOG_OUTCOME_COLUMNS = ("official_final", "official_sog", "participation_status", "outcome_source",
+                        "outcome_source_timestamp_utc", "grading_state", "grading_timestamp_utc")
+
+
+def _restate_sog_participation(frame: pd.DataFrame, skaters: pd.DataFrame) -> pd.DataFrame:
+    """Re-grade sealed SOG prediction rows against the package's official skater outcomes.
+
+    Only rows that were ungraded may change: predicted skaters who appeared now
+    settle, and those absent from a complete official lineup become
+    NO_APPEARANCE. Any other change means the inputs moved and is refused.
+    """
+    if frame.empty or "grading_state" not in frame:
+        return frame
+    timestamp = str(frame.grading_timestamp_utc.dropna().iloc[0])
+    predictions = frame.drop(columns=[c for c in _SOG_OUTCOME_COLUMNS if c in frame])
+    regraded = grade_sog_predictions(
+        predictions, _sog_outcomes(skaters, predictions), grading_timestamp_utc=timestamp)
+    regraded = regraded[frame.columns].reset_index(drop=True)
+    original = frame.reset_index(drop=True)
+    changed = regraded.grading_state.ne(original.grading_state)
+    if (changed & original.grading_state.ne("UNRESOLVED_UNGRADED")).any():
+        raise RuntimeError("SOG_RESTATEMENT_CHANGED_A_RESOLVED_GRADE")
+    return regraded
+
+
+def _restate_points_participation(frame: pd.DataFrame, skaters: pd.DataFrame) -> pd.DataFrame:
+    """Mark predicted skaters absent from a complete official lineup as non-participants."""
+    if frame.empty or "participation_state" not in frame:
+        return frame
+    frame = frame.copy()
+    absent = _official_lineup_absences(frame, skaters)
+    absent_keys = set(map(tuple, absent.to_numpy()))
+    keys = frame[["game_id", "player_id"]].astype("int64").apply(tuple, axis=1)
+    absent_rows = frame.participation_state.isna() & keys.isin(absent_keys)
+    frame.loc[absent_rows, "participation_state"] = OFFICIAL_LINEUP_ABSENCE
+    frame.loc[absent_rows, "grading_status"] = "NONPARTICIPANT_UNGRADED"
+    frame.loc[frame.participation_state.isna(), "grading_status"] = "PARTICIPATION_STATUS_UNRESOLVED"
+    return frame
+
+
 def _write_phase_restatement(package: Path, root: Path) -> Path:
     """Publish corrected evaluation labels beside, never over, the original package."""
     source_ml = package / "graded_moneyline.csv"
@@ -140,24 +185,42 @@ def _write_phase_restatement(package: Path, root: Path) -> Path:
                 })
                 frame["prediction_correct"] = frame.predicted_margin_class.eq(frame.actual_margin_class).where(eligible)
         grades[lane] = frame
-    for lane in ("points", "saves"):
+    # Participation is judged only against the package's official skater outcomes.
+    skater_path = package / "canonical_skater_outcomes.csv"
+    skaters = pd.read_csv(skater_path) if skater_path.is_file() else None
+    grade_changes: dict[str, int] = {}
+    for lane in ("points", "saves", "sog", "resilient_sog", "resilient_points"):
         source = package / f"graded_{lane}.csv"
-        if not source.is_file():
+        if not source.is_file() or source.stat().st_size == 0:
             continue
         frame = pd.read_csv(source)
-        if lane == "points" and "participation_state" in frame:
-            unknown = frame.participation_state.isna()
-            frame.loc[unknown, "grading_status"] = "PARTICIPATION_STATUS_UNRESOLVED"
+        original = frame.copy()
+        if lane in {"points", "resilient_points"} and "participation_state" in frame:
+            if skaters is not None:
+                frame = _restate_points_participation(frame, skaters)
+            else:
+                frame.loc[frame.participation_state.isna(), "grading_status"] = "PARTICIPATION_STATUS_UNRESOLVED"
+        elif lane in {"sog", "resilient_sog"}:
+            if skaters is None:
+                continue
+            frame = _restate_sog_participation(frame, skaters)
         elif lane == "saves" and "actual_start_flag" in frame:
             unknown = frame.actual_start_flag.isna()
             confirmed_relief = frame.actual_start_flag.eq(False)
             frame.loc[unknown, "grading_status"] = "STARTER_STATUS_UNRESOLVED"
             frame.loc[confirmed_relief, "grading_status"] = "DID_NOT_START_NOT_GRADEABLE_CONDITIONAL"
+        status = next((c for c in ("grading_status", "grading_state") if c in frame), None)
+        if status:
+            grade_changes[lane] = int(frame[status].reset_index(drop=True).ne(
+                original[status].reset_index(drop=True)).sum())
         grades[lane] = frame
-    source_names = ["SHA256SUMS", "canonical_game_outcomes.csv", "graded_moneyline.csv", "graded_puck_line.csv"]
-    source_names.extend(name for name in ("graded_points.csv", "graded_saves.csv") if (package / name).is_file())
+    source_names = ["SHA256SUMS", "canonical_game_outcomes.csv", "graded_moneyline.csv",
+                    "graded_puck_line.csv"]
+    if skaters is not None:
+        source_names.append("canonical_skater_outcomes.csv")
+    source_names.extend(f"graded_{lane}.csv" for lane in grades if lane not in {"moneyline", "puck_line"})
     source_hashes = {name: _sha(package / name) for name in source_names}
-    identity = hashlib.sha256(json.dumps({"contract": "NHL_PHASE_RESTATEMENT_V3",
+    identity = hashlib.sha256(json.dumps({"contract": PHASE_RESTATEMENT_CONTRACT,
         "source": str(package), "source_hashes": source_hashes}, sort_keys=True).encode()).hexdigest()
     destination = root / "learning_restatements" / package.parent.name / f"restatement={identity[:20]}"
     if destination.is_dir():
@@ -166,9 +229,14 @@ def _write_phase_restatement(package: Path, root: Path) -> Path:
     for lane, frame in grades.items():
         frame.to_csv(destination / f"graded_{lane}.csv", index=False)
     (destination / "lineage.json").write_text(json.dumps({
-        "contract_version": "NHL_PHASE_RESTATEMENT_V3", "source_package": str(package),
+        "contract_version": PHASE_RESTATEMENT_CONTRACT, "source_package": str(package),
         "source_hashes": source_hashes, "game_count": len(games),
         "phase_authority": "official canonical game_type_code; 1 preseason, 2 regular, 3 postseason",
+        "participation_authority": (
+            "official box score: a predicted skater absent from a final game whose box score "
+            "lists dressed skaters for both teams did not play; SOG and resilient SOG are "
+            "re-graded from the sealed prediction rows and canonical_skater_outcomes.csv"),
+        "grade_changes": {lane: int(changes) for lane, changes in grade_changes.items()},
     }, indent=2, sort_keys=True) + "\n")
     files = sorted(path for path in destination.iterdir() if path.is_file())
     (destination / "SHA256SUMS").write_text("".join(f"{_sha(path)}  {path.name}\n" for path in files))
