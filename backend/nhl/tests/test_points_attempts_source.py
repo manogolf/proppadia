@@ -125,6 +125,36 @@ class PointsAttemptsSourceTests(unittest.TestCase):
         self.assertEqual(null_fill["status"], "NULL_FILL_CANDIDATE")
         self.assertEqual(unknown["status"], "OFFICIAL_SOURCE_UNKNOWN")
 
+    def test_failed_check_retains_the_official_responses_it_used(self):
+        summary = {"schema_version": "NHL_SHOT_ATTEMPTS_SOURCE_SUMMARY_V1",
+                   "pbp_failure_reasons": {"ATTEMPTS_PBP_PLAYER_SOG_RECONCILIATION_FAILED": 1}}
+        boxscore = {"id": 2026020135, "playerByGameStats": {}}
+        play_by_play = {"id": 2026020135, "plays": [{"eventId": 1}]}
+        with tempfile.TemporaryDirectory() as temporary:
+            with patch.dict(os.environ, {"NHL_DAILY_RUN_ID": "nhldaily_test_run"}):
+                artifact = skater_importer._persist_attempt_diagnostic(
+                    summary, diagnostic_root=Path(temporary), failed_sources={
+                        2026020135: {"reason": "ATTEMPTS_PBP_PLAYER_SOG_RECONCILIATION_FAILED",
+                                     "boxscore": boxscore, "play_by_play": play_by_play,
+                                     "play_by_play_response_sha256": "b" * 64},
+                        2026020136: {"reason": "ATTEMPTS_PBP_RESPONSE_EMPTY",
+                                     "boxscore": boxscore, "play_by_play": None,
+                                     "play_by_play_response_sha256": None}})
+                folder = Path(artifact["path"]).parent
+                persisted = json.loads(Path(artifact["path"]).read_text())
+                retained = persisted["failed_source_responses"]
+                kept_box = json.loads((folder / retained["2026020135"]["boxscore"]["file"]).read_text())
+                kept_pbp = json.loads((folder / retained["2026020135"]["play_by_play"]["file"]).read_text())
+                kept_sha = __import__("hashlib").sha256(
+                    (folder / retained["2026020135"]["play_by_play"]["file"]).read_bytes()).hexdigest()
+        self.assertEqual(kept_box, boxscore)
+        self.assertEqual(kept_pbp, play_by_play)
+        self.assertEqual(retained["2026020135"]["play_by_play"]["sha256"], kept_sha)
+        self.assertEqual(retained["2026020135"]["play_by_play_response_sha256"], "b" * 64)
+        self.assertEqual(retained["2026020135"]["reason"], "ATTEMPTS_PBP_PLAYER_SOG_RECONCILIATION_FAILED")
+        self.assertIsNone(retained["2026020136"]["play_by_play"])
+        self.assertNotIn("failed_source_responses", summary)
+
     def test_conflict_diagnostic_is_durable_and_run_bound(self):
         conflict = compare_reconciled_attempts(
             game_id=2025020001, player_id=8473419,

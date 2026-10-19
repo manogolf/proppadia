@@ -112,6 +112,16 @@ game or one game without inputs never fails the other games.
   manifest verifies. Frozen single-package reproductions keep their sealed
   inputs (NHL Backlog P2.21).
 
+Prior-date shot-attempt check. During prior-date finalization,
+`seed_skater_logs_for_date.py` reconciles each completed game's official
+play-by-play against its box score (`derive_attempts_from_final_pbp`). A game
+that fails keeps its attempts unknown (never zero) and preserves populated
+values. The run diagnostic
+`shot_attempts_source_diagnostics/slate_date=<date>/run_id=<run>/attempt_source_diagnostic.json`
+lists failure reasons and, since 2026-10-19, retains the failing game's box
+score and play-by-play as `failed_source_<game_id>_<kind>.json` with hashes
+under `failed_source_responses`, so a failure can be diagnosed afterward.
+
 Roster coverage remains slate-wide: an incomplete roster package still blocks
 Points/Saves feature export for the slate (see "Roster observations" below and
 NHL Backlog P2.13).

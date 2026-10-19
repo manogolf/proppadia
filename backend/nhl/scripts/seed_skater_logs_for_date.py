@@ -785,6 +785,7 @@ def _read_existing_attempts(conn, game_id: int, player_ids: list[int]) -> dict[i
 
 def _persist_attempt_diagnostic(
     summary: dict[str, Any], *, diagnostic_root: Path | None = None,
+    failed_sources: dict[int, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     run_id = (os.environ.get("NHL_DAILY_RUN_ID")
               or os.environ.get("NHL_RECONCILIATION_RUN_ID")
@@ -798,6 +799,23 @@ def _persist_attempt_diagnostic(
     root = root / f"slate_date={SLATE_DATE}" / f"run_id={run_id}"
     root.mkdir(parents=True, exist_ok=False)
     path = root / "attempt_source_diagnostic.json"
+    # Keep the exact official responses a failed check used, so the failure
+    # can be diagnosed later instead of only counted.
+    retained: dict[str, dict[str, Any]] = {}
+    for game_id, source in sorted((failed_sources or {}).items()):
+        entry: dict[str, Any] = {"reason": source.get("reason")}
+        for kind in ("boxscore", "play_by_play"):
+            body = source.get(kind)
+            if body is None:
+                entry[kind] = None
+                continue
+            name = f"failed_source_{int(game_id)}_{kind}.json"
+            (root / name).write_text(json.dumps(body, indent=1) + "\n")
+            entry[kind] = {"file": name,
+                           "sha256": hashlib.sha256((root / name).read_bytes()).hexdigest()}
+        if source.get("play_by_play_response_sha256"):
+            entry["play_by_play_response_sha256"] = source["play_by_play_response_sha256"]
+        retained[str(int(game_id))] = entry
     payload = {
         "schema_version": "NHL_SHOT_ATTEMPTS_SOURCE_DIAGNOSTIC_V1",
         "parent_run_id": run_id,
@@ -805,6 +823,7 @@ def _persist_attempt_diagnostic(
         "source_summary": summary,
         "conflicts": summary.get("conflicts", []),
         "pbp_response_sha256_by_game": summary.get("pbp_response_sha256_by_game", {}),
+        "failed_source_responses": retained,
     }
     temporary = path.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
@@ -826,6 +845,9 @@ def main():
 
     inserted_total = 0
     skipped_no_map_total = 0
+    # Official responses for games that fail the attempts check; written to the
+    # run diagnostic only, never into the child summary.
+    failed_sources: dict[int, dict[str, Any]] = {}
     attempt_summary = {
         "schema_version": "NHL_SHOT_ATTEMPTS_SOURCE_SUMMARY_V1",
         "slate_date": SLATE_DATE,
@@ -875,7 +897,7 @@ def main():
                 roster_map = roster_name_map(conn, gpk)  # {norm_full_name -> (player_id, team_id)}
 
                 attempts_by_player = None
-                pbp_sha256 = None
+                pbp = pbp_sha256 = None
                 # Check every completed game's official PBP, even when the
                 # boxscore is populated, so an incorrect raw value cannot hide
                 # behind a non-NULL source field.
@@ -896,6 +918,9 @@ def main():
                     reason = str(error).split(":", 1)[0] or type(error).__name__
                     reasons = attempt_summary["pbp_failure_reasons"]
                     reasons[reason] = reasons.get(reason, 0) + 1
+                    failed_sources[int(gpk)] = {
+                        "reason": reason, "boxscore": box, "play_by_play": pbp,
+                        "play_by_play_response_sha256": pbp_sha256}
                 skaters = list(_iter_skaters_from_box(box, attempts_by_player))
                 source_counts = summarize_shot_attempt_sources(box, attempts_by_player)
                 for source_key, summary_key in (
@@ -1048,7 +1073,8 @@ def main():
         "Pre-promotion read-only counts; actual promotion results are separately "
         "reported by NHL_SHOT_ATTEMPTS_PROMOTION_SUMMARY_V1."
     )
-    attempt_summary["diagnostic_artifact"] = _persist_attempt_diagnostic(attempt_summary)
+    attempt_summary["diagnostic_artifact"] = _persist_attempt_diagnostic(
+        attempt_summary, failed_sources=failed_sources)
     print(f"Done. Upserted total {inserted_total} skater rows for {SLATE_DATE}; skipped_no_map={skipped_no_map_total}")
     print("NHL_CHILD_SUMMARY_JSON=" + json.dumps(attempt_summary, sort_keys=True))
 
