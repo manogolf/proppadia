@@ -384,6 +384,33 @@ Response:
 ]
 ```
 
+### `GET /api/mlb/game-predictions`
+
+Query:
+- `game_date` (optional, `YYYY-MM-DD`; defaults to today ET)
+
+Serves immutable Pythagorean/Log5 Moneyline rows from the durable pregame
+ledger. Each row is phase-joined at read time through the canonical game-phase
+authority (`docs/contracts/mlb_2026_moneyline_phase_gating_v1/`). Every row
+must pass model-version/hash, date-scope, admission, confidence, probability,
+winner, and identity checks before the authority is consulted.
+
+Responses:
+- Feature flag `MLB_PUBLIC_GAME_PREDICTIONS_ENABLED` off: `200` with
+  `enabled: false`, `rows: []`, `count: 0`.
+- Normal: `200` with the model status fields, `rows`, and `count`.
+- Phase authority evidence unavailable: `200` with `rows: []`, `count: 0`,
+  `unavailable_status: "PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE"`, and
+  `unavailable_code` set to the authority's typed error code (for example
+  `GAME_PHASE_EVIDENCE_MISSING`). The authority re-hashes its retained raw
+  StatsAPI schedule sources when it loads. Those sources are git-ignored, so a
+  host without them (Render) cannot verify any row. No row is published and
+  there is no fallback. Evidence paths are not included in the response.
+- Certification or per-row phase failures (for example model hash mismatch,
+  duplicate identity, wrong date scope, stale or conflicting phase): `503`
+  with `detail`.
+- Invalid `game_date`: `400`.
+
 ## Compatibility Endpoints
 
 Compatibility endpoints outside `/api/*` have been removed.

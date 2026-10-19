@@ -5,7 +5,10 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.app.services.mlb.public_game_prediction_service import _public_row
+from backend.app.services.mlb.public_game_prediction_service import (
+    _certified_rows,
+    _phase_joined_rows,
+)
 from backend.mlb.public_game_predictions.phase_gating_v1 import (
     MoneylinePhaseGateError,
     canonical_rows_sha256,
@@ -236,10 +239,10 @@ class MoneylinePhaseGatingV1Tests(unittest.TestCase):
         })
         authority = StubAuthority({1: record(1, "D", "POSTSEASON", "DIVISION_SERIES")})
         with patch(
-            "backend.mlb.public_game_predictions.phase_gating_v1.verified_moneyline_phase_authority",
+            "backend.app.services.mlb.public_game_prediction_service.verified_moneyline_phase_authority",
             return_value=authority,
         ):
-            projected = _public_row(source, "2026-09-22")
+            projected = _phase_joined_rows(_certified_rows([source], "2026-09-22"))[0]
         self.assertEqual(projected["normalized_phase"], "POSTSEASON")
         self.assertEqual(projected["postseason_round"], "DIVISION_SERIES")
         self.assertEqual(projected["home_win_probability"], source["home_win_probability"])
