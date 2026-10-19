@@ -32,8 +32,11 @@ class StarterSkillWorkloadDailyRunnerTests(unittest.TestCase):
             }
             with patch.object(runner, "_utc_now", return_value=generated), patch.object(
                 runner, "build_research", return_value=build_result
-            ) as build, patch.object(runner, "update_observation", return_value={"status": "PASS"}):
+            ) as build, patch.object(runner, "update_observation", return_value={"status": "PASS"}), patch.object(
+                runner, "_select_research_read_route"
+            ) as select_route:
                 result = runner.run(args)
+            select_route.assert_called_once_with()
 
             self.assertEqual(build.call_args.args[0].generated_at_utc, generated)
             self.assertEqual(result["generated_at_utc"], generated)

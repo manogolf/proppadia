@@ -41,6 +41,21 @@ def _load_env(path: Path = Path("backend/.env")) -> None:
         os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
 
 
+def _select_research_read_route() -> None:
+    """Scope this process's database reads to the MLB research login.
+
+    Mirrors the daily Make recipes: an explicit MLB_RESEARCH_DATABASE_URL
+    wins, otherwise the existing research URL is used. There is no fallback
+    to the generic owner aliases.
+    """
+    if os.environ.get("MLB_RESEARCH_DATABASE_URL", "").strip():
+        return
+    research_url = os.environ.get("MLB_MONEYLINE_AUDIT_DATABASE_URL", "").strip()
+    if not research_url:
+        raise RuntimeError("MLB research read URL is required")
+    os.environ["MLB_RESEARCH_DATABASE_URL"] = research_url
+
+
 def _resolve_slate_date(explicit: str) -> str:
     if explicit:
         return explicit
@@ -139,6 +154,8 @@ def run(args: argparse.Namespace) -> dict:
         strict_prior_only=args.strict_prior_only,
         generated_at_utc=generated_at,
     )
+    if not args.no_db:
+        _select_research_read_route()
     result = build_research(build_args)
     obs_args = argparse.Namespace(
         date=date_value,

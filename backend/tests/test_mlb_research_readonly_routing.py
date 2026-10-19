@@ -147,6 +147,9 @@ class MlbResearchReadRoutingTests(unittest.TestCase):
             "mlb-refresh-overlap-role-profile-watch": "build_mlb_overlap_role_profile_watch.py",
             "mlb-daily-upload-prep": "run_mlb_hits_lane_selector_report",
             "mlb-predictions-wide": "build_mlb_predictions_wide.py",
+            "mlb-slate-output": "build_mlb_slate_output.py",
+            "mlb-book-upload": "export_mlb_book_upload.py",
+            "mlb-book-upload-policy": "export_mlb_book_upload.py",
         }
         for target, reader in expected.items():
             with self.subTest(target=target):
@@ -154,12 +157,6 @@ class MlbResearchReadRoutingTests(unittest.TestCase):
                 self.assertIn(reader, body)
                 self.assertIn("MLB_RESEARCH_DATABASE_URL=", body)
                 self.assertIn("MLB_MONEYLINE_AUDIT_DATABASE_URL", body)
-
-        # These readers need the prepared mlb.game_info column grant before
-        # their recipes may set the research URL.
-        for target in ("mlb-slate-output", "mlb-book-upload"):
-            with self.subTest(grant_pending_target=target):
-                self.assertNotIn("MLB_RESEARCH_DATABASE_URL=", target_body(target))
 
         writer_targets = ("mlb-roster-refresh-all", "mlb-stat-derived-refresh")
         for target in writer_targets:
@@ -234,6 +231,23 @@ class MlbDailyReaderResearchRouteTests(unittest.TestCase):
                         module._get_db_conn()
                     connect.assert_called_once_with("postgresql://legacy")
                     configure.assert_not_called()
+
+
+    def test_starter_skill_runner_selects_research_route_without_owner_fallback(self) -> None:
+        from backend.mlb.scripts import run_mlb_starter_skill_workload_daily_research as runner
+
+        with patch.dict(os.environ, {"MLB_MONEYLINE_AUDIT_DATABASE_URL": "postgresql://research", "SUPABASE_DB_URL": "postgresql://legacy"}, clear=True):
+            runner._select_research_read_route()
+            self.assertEqual(os.environ["MLB_RESEARCH_DATABASE_URL"], "postgresql://research")
+        with patch.dict(os.environ, {"MLB_RESEARCH_DATABASE_URL": "postgresql://explicit", "MLB_MONEYLINE_AUDIT_DATABASE_URL": "postgresql://research"}, clear=True):
+            runner._select_research_read_route()
+            self.assertEqual(os.environ["MLB_RESEARCH_DATABASE_URL"], "postgresql://explicit")
+        with patch.dict(os.environ, {"SUPABASE_DB_URL": "postgresql://legacy"}, clear=True):
+            with self.assertRaisesRegex(RuntimeError, "research read URL is required"):
+                runner._select_research_read_route()
+            self.assertNotIn("MLB_RESEARCH_DATABASE_URL", os.environ)
+        source = (ROOT / "backend/mlb/scripts/run_mlb_starter_skill_workload_daily_research.py").read_text(encoding="utf-8")
+        self.assertIn("    if not args.no_db:\n        _select_research_read_route()\n    result = build_research(build_args)", source)
 
 
 if __name__ == "__main__":
