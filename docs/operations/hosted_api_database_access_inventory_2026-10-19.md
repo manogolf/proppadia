@@ -121,9 +121,26 @@ Code changes (tests: `backend/tests/test_api_database_route.py`):
 
 ## Render cutover (names only; operator steps)
 
+Progress, 2026-10-19:
+- Steps 1–3 are done. The operator applied the migration in the SQL editor.
+  The original `SET LOCAL ROLE` probes failed there, because the editor's
+  `postgres` login cannot assume the group; the file now uses privilege
+  functions instead. A read-only catalog check through the MLB and NHL
+  research logins passed every expected allow and deny:
+  - reads, including the three RLS read policies;
+  - `mlb.player_props` insert, and `nhl.user_props` insert/delete;
+  - update of only `status`, `outcome`, and `updated_at`;
+  - no source-table writes and no schema `CREATE`;
+  - membership in `proppadia_api` only, with no owner or service reach.
+- The operator set the login password and saved `PROPPADIA_API_DATABASE_URL`
+  on Render without a rebuild. Use the transaction-pooler form (user
+  `proppadia_api_login.<project ref>`, port 6543), not the dashboard's direct
+  `db.<ref>.supabase.co:5432` form. Supabase's direct connection is
+  IPv6-only by default, and Render connects through the pooler.
+
 1. In the Supabase SQL editor, run
-   `20261019_hosted_api_login.sql`. Then run the verification probes at the
-   end of the file.
+   `20261019_hosted_api_login.sql`. Then run the privilege checks at the end
+   of the file.
 2. Set the login's password in an unsaved SQL editor query:
    `ALTER ROLE proppadia_api_login PASSWORD '<new random value>'`. Do not keep
    the query, and do not store the value anywhere else. Build the URL from the

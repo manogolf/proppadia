@@ -189,14 +189,18 @@ $postcheck$;
 
 COMMIT;
 
--- Verification (run after COMMIT in the SQL editor; every probe is rolled back):
--- BEGIN; SET LOCAL ROLE proppadia_api;
---   SELECT count(*) FROM mlb.player_ids;            -- returns a count
---   SELECT count(*) FROM nhl.user_props;            -- returns a count
---   UPDATE mlb.player_ids SET active = active WHERE false;   -- expect 42501
--- ROLLBACK;
--- BEGIN; SET LOCAL ROLE proppadia_api;
---   UPDATE nhl.user_props SET prop_value = prop_value WHERE false; -- expect 42501
--- ROLLBACK;
+-- Verification (run after COMMIT in the SQL editor). The editor's postgres
+-- login cannot SET ROLE to proppadia_api, so check privileges directly.
+-- Expect: t, t, t, f, t, t, f, f, t, f.
+-- SELECT has_table_privilege('proppadia_api', 'mlb.player_ids', 'SELECT'),
+--        has_table_privilege('proppadia_api', 'nhl.user_props', 'SELECT'),
+--        has_table_privilege('proppadia_api', 'mlb.player_props', 'INSERT'),
+--        has_table_privilege('proppadia_api', 'mlb.player_ids', 'UPDATE'),
+--        has_table_privilege('proppadia_api', 'nhl.user_props', 'DELETE'),
+--        has_column_privilege('proppadia_api', 'nhl.user_props', 'status', 'UPDATE'),
+--        has_column_privilege('proppadia_api', 'nhl.user_props', 'prop_value', 'UPDATE'),
+--        has_schema_privilege('proppadia_api', 'mlb', 'CREATE'),
+--        pg_has_role('proppadia_api_login', 'proppadia_api', 'MEMBER'),
+--        pg_has_role('proppadia_api_login', 'postgres', 'MEMBER');
 -- SELECT rolname, rolcanlogin, rolinherit, rolsuper, rolbypassrls
 --   FROM pg_roles WHERE rolname IN ('proppadia_api', 'proppadia_api_login');
