@@ -30,6 +30,11 @@ from backend.nhl.scripts import fill_pp_toi_minutes_for_date as pp_fill
 
 ROOT = Path(__file__).resolve().parents[3]
 RECOVERY = ROOT / "artifacts/operational/nhl/pp_toi_recovery_execution/run_id=pp_toi_recovery_20261016T152648Z"
+# Read the configured test DSN from backend/.env, as the CLI loads it, so the
+# test runs alone the same way it does after another module imported the CLI.
+if (ROOT / "backend/.env").is_file():
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / "backend/.env", override=False)
 DSN = os.environ.get("NHL_PP_TOI_TEST_DSN")
 
 
