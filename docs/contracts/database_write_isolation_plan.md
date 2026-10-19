@@ -586,13 +586,23 @@ EXECUTE only for `proppadia_mlb_ingest`. The ingest login reaches it with
   its DDL and replaces the slate date through the new function, checking the
   returned row counts. The tracked daily wrapper opts it in. Its check summary
   now requires `MLB_INGEST_DATABASE_URL` and `MLB_MONEYLINE_AUDIT_DATABASE_URL`
-  instead of `SUPABASE_DB_URL`. The function itself has not been called yet.
+  instead of `SUPABASE_DB_URL`. No qualified MLB model exists, so every daily
+  run skips the build (`NO_QUALIFIED_PREDICTION_SLATE`, `reason=NO_QUALIFIED_MLB_MODEL`);
+  its first natural call may be months away. On 2026-10-19, with operator
+  approval, a rolled-back probe used the script's own restricted connection and
+  payload builder. The session user was `proppadia_mlb_ingest_login` and the
+  current user `proppadia_mlb_ingest`. One synthetic row per table for
+  2099-12-31 was written (1, 1, 1). A row for another date was refused
+  (`22023`). Direct `DELETE` on all three tables was refused (`42501`). The
+  transaction was rolled back, and a separate research read found 0 rows for
+  that date in `today_odds_book_rows`; research cannot read the other two
+  tables.
 - Materialized views: the deployed `mlb.refresh_today_workspace_views()`
   function route is unchanged.
-- Not done: the installed wrapper (`~/bin/proppadia_mlb_refresh_daily.sh`)
-  still runs the workspace build on the owner alias. It still checks
-  `SUPABASE_DB_URL` too, because installing the tracked wrapper waits for the
-  current production run. No natural daily run has exercised the new routes.
+- Installed 2026-10-19 after the production run ended (exit 0): the tracked
+  wrapper replaced `~/bin/proppadia_mlb_refresh_daily.sh`. The old copy matched
+  the pre-change tracked file, and the new one passes `zsh -n`. No natural daily
+  run has exercised the new routes yet; the 13:30 PT run is the first.
 - Tests: `backend/tests/test_mlb_research_readonly_routing.py`,
   `backend/mlb/tests/test_mlb_research_source_read_permissions_migration.py`,
   `backend/mlb/tests/test_mlb_owner_alias_writer_routes.py`,

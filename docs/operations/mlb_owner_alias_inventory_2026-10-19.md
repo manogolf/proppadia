@@ -29,7 +29,7 @@ database write, grant, or schedule change was made.
 | Stat-derived refresh (`mlb-stat-derived-refresh`) | Restricted ingest (recipe opt-in on `mlb-insert-stat-derived`). |
 | Four `mlb.today_*` view refreshes | Restricted ingest: `SET ROLE proppadia_mlb_ingest; SELECT mlb.refresh_today_workspace_views();` (function deployed 2026-10-17). See "Materialized-view refresh". |
 | PA refresh (`mlb-refresh-player-pa` → `backfill_mlb_player_pa.py`) | Restricted ingest (recipe opt-in, 2026-10-19). |
-| Workspace staging (`build_mlb_today_workspace.py`) | Restricted ingest through `mlb.replace_today_workspace_staging()` (applied 2026-10-19), in the **tracked** wrapper. The installed wrapper still uses the owner alias until it is installed. Runs only with a qualified slate. |
+| Workspace staging (`build_mlb_today_workspace.py`) | Restricted ingest through `mlb.replace_today_workspace_staging()` (applied 2026-10-19), in the **tracked** wrapper. The tracked wrapper was installed 2026-10-19. Runs only when a qualified MLB model exists; until then each run skips with `NO_QUALIFIED_MLB_MODEL`. A rolled-back probe on the ingest login passed on 2026-10-19 (see the plan's step 3 status). |
 | Completed-slate recovery (`mlb-player-stats-recover-date`, `mlb-stat-derived-backfill`) | Restricted ingest (recipe opt-ins, 2026-10-19); recovery writes through the safe functions. |
 
 ## Restricted routes for the four former owner-alias writers (applied 2026-10-19)
