@@ -194,6 +194,12 @@ class MainlineIntradayRefreshTest(unittest.TestCase):
                     patch.object(capture, "export_inputs", side_effect=export), \
                     patch.object(capture, "fetch_markets", side_effect=fetch), \
                     patch.object(capture, "run_capture", return_value=root / "new_snapshot"), \
+                    patch.object(capture, "ensure_prior_day_official_outcomes",
+                                 return_value={"status": "FIXTURE_PRIOR_DAY_READY"}), \
+                    patch.object(capture, "require_slate_history_certificate",
+                                 return_value={"status": "FIXTURE_CERTIFIED_FINAL"}), \
+                    patch.object(capture, "require_slate_roster_observation",
+                                 return_value={"status": "FIXTURE_ROSTER_READY"}), \
                     patch.dict("os.environ", {"ODDS_API_KEY": "test-key"}):
                 first = capture.observe(root, "2026-09-29", "REFRESH", False, "test-dsn")
                 second = capture.observe(root, "2026-09-29", "REFRESH", False, "test-dsn")
@@ -201,6 +207,7 @@ class MainlineIntradayRefreshTest(unittest.TestCase):
             first_status = json.loads(first.read_text())
             second_status = json.loads(second.read_text())
             self.assertEqual(first_status["status"], "FAILED_WARN_ONLY")
+            self.assertIn("synthetic transport failure", first_status["failure"])
             self.assertEqual(second_status["status"], "CAPTURED")
             self.assertEqual(second_status["live_credits_consumed"], 4)
             self.assertEqual(len(calls), 2)
