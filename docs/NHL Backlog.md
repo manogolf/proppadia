@@ -1459,6 +1459,21 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Retained packages are immutable and keep their original grades; the
   10-18 package is the regression fixture
   (`backend/nhl/tests/test_reconciliation_official_lineup_absence.py`).
+- Restated 2026-10-19 (`6974c1a0`, phase restatement V4): every retained
+  package's unresolved SOG and Points rows were predicted skaters absent from
+  complete official box scores (SOG 09-20 through 10-18, Points 10-01 onward).
+  V4 restatements now sit beside 27 of 28 packages in
+  `postgame_reconciliation/learning_restatements/<slate>/`. They re-grade SOG
+  and resilient SOG from the sealed rows and official skater outcomes and
+  reclassify Points absences. Changes versus the sealed packages: 39,954 SOG,
+  4,326 Points, and on 10-18 1,587 resilient SOG and 87 resilient Points rows.
+  No settled grade changed (the restatement refuses otherwise), all 28
+  package manifests were unchanged, and Saves, Moneyline, and puck line
+  match V3 wherever V3 exists.
+- Open: 09-26 has never had a phase restatement (V3 and V4 both fail on that
+  package's Moneyline file, `game_type_code` missing), so its 4,971 SOG
+  absences stay unrestated. Existing performance summaries still reference
+  their V3 restatements; regenerated summary revisions from V4 are not built.
 
 ### P2.22 Retain official responses when the daily shot-attempt check fails
 
