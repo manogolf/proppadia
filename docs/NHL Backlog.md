@@ -1319,14 +1319,61 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.18 Restore the failing NHL test baseline
 
-- Status: **OPEN — found 2026-10-18; failures predate commit `c4164d4b`**.
-  Running `backend/nhl/tests` plus `backend/tests/test_nhl_*.py` gives 25
-  failures on the unmodified tree, in daily lane containment, scheduler guard
-  repair, Points HGB shadow, game-date lineage, SOG market coverage, and
-  mainline intraday refresh. `test_historical_fitted_model_identity_reconstruction`
-  counts live receipts (47 vs 45), and the PP-TOI integration failure is P2.14.
-- Completion: classify each as stale expectation, environment-dependent, or
-  real regression; fix or delete so a failing suite means something.
+- Status: **RESOLVED 2026-10-18**. `./bin/python -m pytest -q backend/nhl/tests
+  backend/tests/test_nhl_*.py` now gives 1 failure (P2.14), 1119 passed, in the
+  main checkout. All 25 were test-side; no production code changed.
+- Stale expectations (the contract moved, the test did not):
+  - Daily lane containment, reuse preflight (1): `79ef060c` moved roster
+    reuse verification from `cmd_daily` into the roster lane after prior-date
+    certification. The test now proves a tampered reuse fails before the
+    roster child runs and the receipt is `FAILED_BLOCKING`.
+  - Scheduler guard repair (8) and mainline intraday refresh (1): `79ef060c`
+    and `e4cdee47` put prior-day certificate and current-roster gates ahead
+    of the paid-attempt claim, so every fixture failed at the gate. Tests hold
+    those gates satisfied. `test_unwritable_claim_fails_closed` had been
+    passing for the wrong reason (the gate, not the claim). The warn-only
+    tests now assert the failure they cause.
+  - Points HGB shadow (3): `c421f583` made official SOG, outcome timestamps,
+    and home/away team ids required history inputs, and `79ef060c` made the
+    reconciliation certificate require an admitted slate and official scores.
+  - Points scoring lineage and player-history contract (2): `99284ff0`
+    changed `export_points.sql`, so the frozen Phoenix identity correctly fails
+    closed with `POINTS_FEATURE_CONSTRUCTION_HASH_DRIFT`. Daily scoring passes
+    the approved `phoenix_shadow_attempt_missingness_v1.json` identity
+    (`14547ae9`). Tests use that identity and assert the frozen default fails.
+  - SOG cold-start observer (1): the observer now records
+    `PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED` and reads operational
+    certificate and roster evidence.
+  - SOG coverage summary (1): `4a7a98ca` requires a `line` on graded prop
+    frames for push applicability.
+- Environment- or data-dependent (made hermetic):
+  - Daily lane containment (4) and game-date lineage orchestration (2): read
+    the wall clock, so every 2026-09-24 fixture game had "already started";
+    read the live authority file, which selects HGB since 2026-10-10 (making
+    Points blocking); and ran the real Moneyline lane, which reads the research
+    database and writes the operational cross-market tree. Tests now pin the
+    slate clock and the reversible Phoenix authority and stub Moneyline as
+    shadow-only.
+  - SOG coverage builder (1): `build_sog` and the integrity verifier load the
+    retained 2026-10-03 slate when it exists locally, so the fixture game set
+    never matched. Tests bind the loader to the fixture game.
+  - Identity reconstruction (1): counted live receipts (two later 2026-10-08
+    runs landed in the window). Fixed counts come from the committed
+    2026-10-08 ledger; live receipts must contain it and still verify (skipped
+    when no local receipts exist).
+- Real regressions: none found.
+- Deferred: P2.19.
+
+### P2.19 Make NHL tests independent of local operational artifacts
+
+- Status: **OPEN — found 2026-10-18 while resolving P2.18**. In a fresh
+  worktree (no ignored `artifacts/**`, no `backend/.env`) the same command
+  gives 96 failures and 31 errors, for example `RETAINED_ROSTER` and
+  `artifacts/operational/nhl/slates/2026-09-24` in daily lane containment,
+  plus postgame staging sync and 2025 historical market recovery fixtures.
+  The suite only means something on the operator machine.
+- Completion: for each test, commit a small fixture, build it in `tmp_path`,
+  or skip with a reason when it needs retained operational evidence.
 
 ## Verified Complete — Do Not Reopen
 
