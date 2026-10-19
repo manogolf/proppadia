@@ -70,3 +70,31 @@ def test_existing_moneyline_and_bvp_research_routes_remain_process_scoped():
     assert 'AUDIT_DATABASE_URL_ENV = "MLB_MONEYLINE_AUDIT_DATABASE_URL"' in moneyline
     assert 'os.environ.get("MLB_MONEYLINE_AUDIT_DATABASE_URL", "").strip()' in bvp_verifier
     assert "SELECT prop_type,player_id,game_id,game_date,features,feature_set_tag,model_tag,computed_at" in bvp_verifier
+
+
+GAME_INFO_FORWARD = MIGRATIONS / "20261019_mlb_research_game_info_read.sql"
+GAME_INFO_ROLLBACK = MIGRATIONS / "20261019_mlb_research_game_info_read_rollback.sql"
+
+
+def test_game_info_read_grant_matches_daily_reader_columns_and_rollback():
+    forward = GAME_INFO_FORWARD.read_text()
+    rollback = GAME_INFO_ROLLBACK.read_text()
+    expected = {"mlb.game_info": {"game_id", "game_date", "home_team_abbr", "away_team_abbr"}}
+
+    assert _grants(forward, "GRANT SELECT") == expected
+    assert _grants(rollback, "REVOKE SELECT") == expected
+    upper = forward.upper()
+    for forbidden in ("GRANT SELECT ON", "GRANT ALL", "INSERT ON", "UPDATE ON", "CREATE POLICY", "ALTER ROLE", "CREATE ROLE"):
+        assert forbidden not in upper
+    assert "NOT C.RELROWSECURITY" in upper
+    assert "NOT APPLIED" in forward
+
+    # Every game_info column the two readers select must be granted.
+    scripts = Path(__file__).resolve().parents[1] / "scripts"
+    for name in ("build_mlb_slate_output.py", "export_mlb_book_upload.py"):
+        source = (scripts / name).read_text()
+        fetch = source[source.index("def _fetch_games"):]
+        fetch = fetch[: fetch.index("\ndef ", 1)]
+        # game_type is selected only if present; production game_info has none.
+        selected = set(re.findall(r"(\w+)::\w+ AS \w+", fetch)) - {"game_type", "NULL"}
+        assert selected <= expected["mlb.game_info"], (name, selected)
