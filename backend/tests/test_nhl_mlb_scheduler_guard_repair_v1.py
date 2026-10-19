@@ -241,11 +241,14 @@ class SchedulerGuardRepairTest(unittest.TestCase):
         self.assertIsNone(nhl.phase_for(schedule, datetime(2026, 10, 21, 2, 0, tzinfo=timezone.utc), "AUTO", False)[0])
 
     def test_main_lock_failure_keeps_exit_zero(self):
+        # The live Points/Saves observers read the database and write the
+        # operational status tree, so they are stubbed with the SOG observer.
         with patch("sys.argv", ["runner", "--env-file", str(self.root / "absent"),
                                 "--output-root", str(self.root / "main")]), \
              patch.dict(os.environ, {"PROPPADIA_INVOCATION_ORIGIN": "VALIDATION_TEST",
                                      "PROPPADIA_VALIDATION_ID": "scheduler_guard_fixture"}), \
              patch.object(nhl, "observe_sog_prediction_only", return_value=self.root / "prediction_status.json"), \
+             patch.object(nhl, "observe_prediction_only_lanes", return_value={}), \
              patch.object(nhl, "observe", side_effect=RuntimeError("BUSY")), \
              contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(nhl.main(), 0)
