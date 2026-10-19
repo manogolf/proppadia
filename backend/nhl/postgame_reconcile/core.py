@@ -120,6 +120,36 @@ def _one_run(pattern: Path, label: str) -> Path:
     return runs[0]
 
 
+def _bind_cross_market_game_set(card_schedule: pd.DataFrame, canonical_spine: pd.DataFrame, *,
+                                started_excluded_game_ids: list[int],
+                                observed: pd.Timestamp) -> None:
+    """Bind a cross-market card to the canonical games still pregame at capture.
+
+    A card captured after some games started carries only the later games and
+    records the started ones. Every canonical game must be either carried with
+    its exact identity or truthfully started before the capture.
+    """
+    fields = ["game_id", "scheduled_start_time_utc", "home_team_id", "away_team_id"]
+    card = card_schedule[fields].copy()
+    canonical = canonical_spine[fields].copy()
+    for frame in (card, canonical):
+        frame["game_id"] = frame.game_id.astype(int)
+        frame["scheduled_start_time_utc"] = pd.to_datetime(frame.scheduled_start_time_utc, utc=True)
+    excluded = {int(value) for value in started_excluded_game_ids}
+    canonical_ids = set(canonical.game_id)
+    card_ids = set(card.game_id)
+    carried = canonical.loc[canonical.game_id.isin(card_ids)]
+    if (not excluded <= canonical_ids or card_ids != canonical_ids - excluded
+            or not card.sort_values("game_id").reset_index(drop=True).equals(
+                carried.sort_values("game_id").reset_index(drop=True))):
+        raise RuntimeError("IMMUTABLE_SOURCE_CANONICAL_GAME_SET_CONFLICT")
+    starts = canonical.set_index("game_id").scheduled_start_time_utc
+    if any(starts[game_id] > observed for game_id in excluded):
+        raise RuntimeError("IMMUTABLE_CROSS_MARKET_STARTED_EXCLUSION_INVALID")
+    if any(starts[game_id] <= observed for game_id in card_ids):
+        raise RuntimeError("IMMUTABLE_SOURCE_OBSERVED_AFTER_GAME_START")
+
+
 def _select_cross_market_final_run(*, runs: list[Path], schedule: pd.DataFrame,
                                   activation: dict[str, Any],
                                   allow_missing_active_final: bool = False,
@@ -739,6 +769,7 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path,
         allow_missing_active_final_for_resilient=(allow_missing_final_for_resilient
                                                   and not allow_missing_active_final_for_prior_learning))
     cross_observed: pd.Timestamp | None = None
+    cross_started_excluded: list[int] = []
     retained_schedule_source: dict[str, str] | None = None
     if cross is None:
         # SOG's immutable, manifest-verified canonical spine supplies the slate
@@ -821,14 +852,25 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path,
             _verify_cross_market_identities(
                 moneyline, puck, moneyline_feature_provenance=moneyline_provenance)
         cross_observed = pd.to_datetime(status["run_timestamp_utc"], utc=True)
+        cross_started_excluded = sorted(
+            int(value) for value in status.get("started_excluded_game_ids") or [])
+        _bind_cross_market_game_set(
+            schedule, sog_spine, started_excluded_game_ids=cross_started_excluded,
+            observed=cross_observed)
+        if cross_started_excluded:
+            # The card carries only games still pregame at capture; grading and
+            # outcome identity remain bound to the full canonical slate.
+            retained_schedule_path = (operational_root / "slates" / slate_date
+                                      / "raw_schedule_response.json")
+            if not retained_schedule_path.is_file():
+                raise RuntimeError("IMMUTABLE_RETAINED_SCHEDULE_SOURCE_MISSING")
+            schedule, retained_schedule_hash = _attach_retained_schedule_codes(
+                sog_spine, path=retained_schedule_path, slate_date=slate_date)
+            retained_schedule_source = {
+                "path": str(retained_schedule_path), "sha256": retained_schedule_hash,
+            }
 
     ids = set(schedule.game_id.astype(int))
-    spine_fields = ["game_id", "scheduled_start_time_utc", "home_team_id", "away_team_id"]
-    left = schedule[spine_fields].copy(); right = sog_spine[spine_fields].copy()
-    for frame in (left, right):
-        frame["scheduled_start_time_utc"] = pd.to_datetime(frame.scheduled_start_time_utc, utc=True)
-    if not left.sort_values("game_id").reset_index(drop=True).equals(right.sort_values("game_id").reset_index(drop=True)):
-        raise RuntimeError("IMMUTABLE_SOURCE_CANONICAL_GAME_SET_CONFLICT")
     predictions = (pd.read_csv(sog / "immutable_predictions.csv") if sog is not None
                    else pd.DataFrame(columns=["canonical_season", "slate_date", "game_id",
                                               "player_id", "line", "phase", "prediction_timestamp_utc",
@@ -893,10 +935,14 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path,
 
     observed = (pd.to_datetime(sog_meta["prediction_timestamp_utc"], utc=True)
                 if sog is not None else None)
-    first_puck = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True).min()
-    if ((observed is not None and observed >= first_puck)
-            or (cross_observed is not None and cross_observed >= first_puck)):
-        raise RuntimeError("IMMUTABLE_SOURCE_OBSERVED_AFTER_FIRST_PUCK")
+    starts = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True).set_axis(
+        schedule.game_id.astype(int))
+    first_puck = starts.min()
+    # Each card is judged per game: a game that started before capture is
+    # excluded, and the captured balance of the slate still grades.
+    if observed is not None and any(
+            observed >= starts[int(game_id)] for game_id in predictions.game_id.unique()):
+        raise RuntimeError("IMMUTABLE_SOURCE_OBSERVED_AFTER_GAME_START")
     return {
         "contract_version": "NHL_POSTGAME_LOCAL_SOURCE_BINDING_V1", "slate_date": slate_date,
         "operational_root": str(operational_root),
@@ -915,6 +961,7 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path,
                          "manifest_sha256": _sha(cross / "SHA256SUMS") if cross is not None else None,
                          "files": cross_manifest,
                          "observed_at_utc": cross_observed.isoformat() if cross_observed is not None else None,
+                         "started_excluded_game_ids": cross_started_excluded,
                          "moneyline_rows": len(moneyline), "puck_line_rows": len(puck)},
         "sog": ({"run": str(sog), "manifest_sha256": _sha(sog / "SHA256SUMS"),
                  "files": sog_manifest, "observed_at_utc": observed.isoformat(),
