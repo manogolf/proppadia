@@ -95,3 +95,24 @@ def test_sog_cold_start_is_lane_local(tmp_path, monkeypatch):
     assert health["downstream"]["MAINLINE_MORNING_PREREQUISITES_READY"] is True
     assert health["downstream"]["POINTS_MORNING_PREREQUISITES_READY"] is True
     assert health["downstream"]["SAVES_MORNING_PREREQUISITES_READY"] is True
+
+
+OWNER = "postgresql://postgres.ownerref:owner-secret@db.invalid/postgres"
+RESEARCH = "postgresql://proppadia_nhl_research_login.ref:r@db.invalid/postgres"
+INGEST = "postgresql://proppadia_nhl_daily_login.ref:i@db.invalid/postgres"
+
+
+def test_restricted_mode_children_never_inherit_the_owner_aliases():
+    source = {"NHL_DB_ACCESS_MODE": "restricted", "SUPABASE_DB_URL": OWNER, "DATABASE_URL": OWNER,
+              "NHL_RESEARCH_DATABASE_URL": RESEARCH, "NHL_INGEST_DATABASE_URL": INGEST}
+    child = MODULE.resolved_database_environment(source)
+    assert child["SUPABASE_DB_URL"] == child["DATABASE_URL"] == RESEARCH
+    # The daily CLI still routes writers to their own logins.
+    assert child["NHL_INGEST_DATABASE_URL"] == INGEST
+    assert OWNER not in child.values()
+
+
+def test_restricted_mode_without_research_route_fails_before_child():
+    source = {"NHL_DB_ACCESS_MODE": "restricted", "SUPABASE_DB_URL": OWNER, "DATABASE_URL": OWNER}
+    with pytest.raises(RuntimeError, match="NHL_DATABASE_CREDENTIAL_NHL_RESTRICTED_DATABASE_URL_REQUIRED"):
+        MODULE.resolved_database_environment(source)

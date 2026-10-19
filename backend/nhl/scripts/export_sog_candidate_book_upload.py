@@ -19,12 +19,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 
+from backend.nhl.database_access import database_url
 from backend.nhl.eightrain_adapter import (
     UPLOAD_COLUMNS, fair_american, load_catalogs, normalize_player_name, resolve_catalog_dir,
     validate_upload,
@@ -34,10 +34,7 @@ from backend.nhl.eightrain_adapter import (
 def get_db_conn():
     import psycopg2  # type: ignore
 
-    db_url = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-    if not db_url:
-        raise RuntimeError("Missing SUPABASE_DB_URL (preferred) or DATABASE_URL in env.")
-    return psycopg2.connect(db_url)
+    return psycopg2.connect(database_url("research"))
 
 
 def fetch_games(conn, game_ids: list[int]) -> pd.DataFrame:

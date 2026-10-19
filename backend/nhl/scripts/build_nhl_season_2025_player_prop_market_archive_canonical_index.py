@@ -6,7 +6,6 @@ import argparse
 import csv
 import hashlib
 import json
-import os
 import shutil
 from collections import Counter
 from pathlib import Path
@@ -16,6 +15,7 @@ import pandas as pd
 import psycopg
 
 from backend.nhl.analysis_package_guard import begin_package, finalize_package, sha256_file, verify_manifest
+from backend.nhl.database_access import database_url
 from backend.nhl.market_archive_index.core import (
     IDENTITY_ACCEPTED, MARKET_TO_LANE, PROP_TO_LANE, american_decimal, american_implied,
     bind_event, bind_player, build_pairs, classify_duplicates, discover_sources,
@@ -324,9 +324,7 @@ def main() -> int:
             games, rosters, predictions = load_reference_snapshots(Path(args.reference_package))
             snapshot_source = "IMMUTABLE_REFERENCE_PACKAGE"
         else:
-            dsn = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-            if not dsn:
-                raise RuntimeError("DATABASE_URL_REQUIRED_FOR_INITIAL_SNAPSHOT")
+            dsn = database_url("research")
             games, rosters, predictions = database_snapshots(dsn)
             snapshot_source = "READ_ONLY_DATABASE_SNAPSHOT"
         games = prepare_games(games)

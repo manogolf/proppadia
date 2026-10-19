@@ -451,7 +451,8 @@ declined Keychain storage on 2026-10-19; this plan does not use it.
   `run_nhl_morning_orchestration.py` resolves `SUPABASE_DB_URL`/`DATABASE_URL`
   and exports that value to every child under both names. Eighteen NHL
   scripts read those aliases directly without the resolver, so today they
-  receive owner access when run: `assess_nhl_season_2025_saves_market_listed_goalie_actual_starter_concordance.py`,
+  receive owner access when run (step 1, done 2026-10-19, changed this; see
+  "Step 1 status"): `assess_nhl_season_2025_saves_market_listed_goalie_actual_starter_concordance.py`,
   `assess_nhl_season_2026_goalie_source_integration_readiness.py`,
   `build_nhl_moneyline_strict_prior_control_v2_and_sog_conditional_test.py`,
   `build_nhl_moneyline_team_goalie_feature_spine.py`,
@@ -482,6 +483,46 @@ declined Keychain storage on 2026-10-19; this plan does not use it.
 | 5 | Remove owner copies: the four 2026-10-16 backups and `.env.train` (mode 644). Tracked-history findings remain under NHL backlog P1.4. | No local file other than the operator's chosen offline record holds the owner login. | Operator (deletion) |
 | 6 | Rotate the owner database password in Supabase after steps 4–5, then rotate the Supabase, Odds API, and Ops keys noted above. | The old owner password no longer authenticates; consumers verified. | Operator (provider account) |
 | 7 | Keep it from returning: a test or preflight check fails if `backend/.env` assigns an owner login to an application alias. | The check runs in the daily preflight and the test suite. | Claude (code) |
+
+### Step 1 status (2026-10-19): done
+
+- Morning orchestration: in restricted mode, `resolved_database_environment`
+  sets both `SUPABASE_DB_URL` and `DATABASE_URL` in the child environment to
+  the NHL research login and keeps the `NHL_*` routes for the daily CLI. A
+  restricted run without a research route fails before any child starts
+  (`NHL_DATABASE_CREDENTIAL_NHL_RESTRICTED_DATABASE_URL_REQUIRED`). Legacy
+  mode is unchanged. Its children are the connection check and slate-spine
+  export (research), the daily CLI (routes each command to its own login),
+  and the shadow and sentinel scripts (no database).
+- `check_nhl_database_connection.py` refuses aliases that are not the research
+  route (`NHL_DATABASE_CREDENTIAL_NOT_RESEARCH_ROUTE`). The live check passed
+  on the research login, and the owner value was absent from the child
+  environment.
+- Twelve readers now call `database_url("research")`:
+  `assess_…_listed_goalie_actual_starter_concordance`,
+  `build_nhl_moneyline_strict_prior_control_v2_and_sog_conditional_test`,
+  `build_nhl_moneyline_team_goalie_feature_spine`,
+  `build_nhl_season_2025_frozen_moneyline_replay_and_sog_novelty_v1`,
+  `build_nhl_season_2025_player_prop_market_archive_canonical_index`,
+  `build_nhl_sog_cold_start_platform_v1` (an explicit `--dsn` still wins),
+  `calibrate_sog_segmented_recency`, `certify_nhl_full_game_moneyline_population`,
+  `certify_nhl_sog_outcome_denominator`, `export_sog_candidate_book_upload`,
+  `export_sog_denali_book_upload`, and
+  `run_nhl_september19_independent_lane_predictions`.
+- Left as they are: `assess_nhl_season_2026_goalie_source_integration_readiness`
+  and `rehearse_nhl_three_lane_preseason_operator_v1` only name the aliases
+  in text. `run_sog_candidate_arm_bakeoff` already strips them from its
+  child. `create_safe_promotion_schema_backup` is a one-time owner ACL dump
+  that stays owner-only; it is for the operator, not routine runs.
+- Children that the daily CLI launches (for example `ingest_shiftcharts_for_date`,
+  `load_nhl_predictions_generic`, and `build_sog_with_market`) still read the
+  aliases. In restricted mode the CLI sets the aliases to that command's
+  restricted login. Step 2 removes any remaining owner alias from the
+  environment handed to children.
+- Tests: `backend/tests/test_nhl_morning_database_environment.py`
+  (restricted child environment) and
+  `backend/nhl/tests/test_nhl_research_database_route.py` (reader sources,
+  the reader connection, and the preflight refusal).
 
 ### Operator decisions
 

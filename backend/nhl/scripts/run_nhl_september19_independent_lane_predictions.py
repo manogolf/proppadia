@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 import shutil
 import subprocess
 from datetime import datetime, timezone
@@ -15,6 +14,7 @@ import pandas as pd
 
 from backend.nhl.points_shadow.core import evaluate_ladder_coherence, score_frozen as score_points, verify_frozen_identity as verify_points
 from backend.nhl.saves_shadow.core import score_frozen as score_saves, verify_frozen_identity as verify_saves
+from backend.nhl.database_access import database_url
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -44,9 +44,7 @@ def main() -> int:
     parser.add_argument("--output-root", type=Path, required=True)
     parser.add_argument("--observation-timestamp-utc", required=True)
     args = parser.parse_args()
-    database = (os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL") or "").strip()
-    if not database:
-        raise SystemExit("DATABASE_CREDENTIAL_MISSING_FAIL_CLOSED")
+    database = database_url("research")
     root = args.output_root.resolve()
     staging = root.with_name(root.name + ".incomplete")
     if root.exists() or staging.exists():

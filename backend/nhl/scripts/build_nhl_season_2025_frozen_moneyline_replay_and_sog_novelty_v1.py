@@ -11,7 +11,6 @@ import csv
 import hashlib
 import json
 import math
-import os
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +22,7 @@ import psycopg
 from sklearn.metrics import accuracy_score, brier_score_loss, log_loss, roc_auc_score
 
 from backend.nhl.analysis_package_guard import begin_package, finalize_package, verify_manifest
+from backend.nhl.database_access import database_url
 from backend.nhl.mainline_shadow.core import (
     FEATURES,
     FROZEN_PARAMETER_SHA256,
@@ -750,9 +750,7 @@ def build(args: argparse.Namespace) -> None:
             "credentials_exposed": False, "credits_consumed": 0,
         }])
     else:
-        dsn = os.environ.get("SUPABASE_DB_URL")
-        if not dsn:
-            raise RuntimeError("SUPABASE_DB_URL_REQUIRED_FOR_AUTHORIZED_SOURCE_FETCH")
+        dsn = database_url("research")
         source, source_access = fetch_team_game_source(dsn, Path(args.boxscore_cache_dir) if args.boxscore_cache_dir else None)
     write_csv(source, staging / "season_2025_team_game_source.csv")
     write_csv(source_access, staging / "source_access_log.csv")

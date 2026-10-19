@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Build a bounded strict-prior NHL moneyline feature spine (seasons 2023/2024)."""
 from __future__ import annotations
-import argparse, hashlib, json, os
+import argparse, hashlib, json
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import psycopg2
+from backend.nhl.database_access import database_url
 
 STAMP="2026-07-13"; EXPECTED={2023:1400,2024:1398}
 def sha(p):
@@ -53,8 +54,7 @@ def main():
  out=Path(a.out_dir); out.mkdir(parents=True,exist_ok=True); parent=Path(a.parent_ledger)
  spine=pd.read_csv(parent,low_memory=False)
  if len(spine)!=2798 or spine.groupby("canonical_season").size().to_dict()!=EXPECTED or spine.game_id.duplicated().any(): raise RuntimeError("parent spine mismatch")
- url=os.environ.get("SUPABASE_DB_URL","");
- if not url: raise RuntimeError("SUPABASE_DB_URL required")
+ url=database_url("research")
  c=psycopg2.connect(url); c.set_session(readonly=True,autocommit=True)
  summ=q(c,"""SELECT 2023 canonical_season,game_id,teamcode,ishometeam,num_event_shot_for,num_event_miss_for,num_shotwasongoal_for FROM nhl.team_game_2023_summary UNION ALL SELECT 2024,game_id,teamcode,ishometeam,num_event_shot_for,num_event_miss_for,num_shotwasongoal_for FROM nhl.team_game_2024_summary""")
  goalies=q(c,"""WITH z AS (SELECT g.season canonical_season,l.game_id,l.team_id,l.player_id,l.toi_minutes,l.shots_faced,l.saves,l.goals_allowed,l.start_flag,l.game_date,l.created_at,ROW_NUMBER() OVER(PARTITION BY l.game_id,l.team_id ORDER BY l.toi_minutes DESC NULLS LAST,l.player_id) rn FROM nhl.goalie_game_logs_raw l JOIN nhl.games g USING(game_id) WHERE g.season IN (2023,2024)) SELECT * FROM z WHERE rn=1""")

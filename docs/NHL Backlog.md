@@ -126,11 +126,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P1.5 Keep the production owner login out of application environments
 
-- Status: **OPEN — plan written 2026-10-19**. The owner login returned to
-  `backend/.env` (`SUPABASE_DB_URL`, `DATABASE_URL`) on 2026-10-16 around
-  13:20 PDT, most likely for MLB. It also sits in four 2026-10-16 backups and
-  `.env.train` (mode 644). Morning orchestration exports it to every child,
-  and 18 NHL scripts read it directly, so they run with owner access today.
+- Status: **OPEN — step 1 done 2026-10-19; steps 2–7 remain**. The owner login
+  returned to `backend/.env` (`SUPABASE_DB_URL`, `DATABASE_URL`) on 2026-10-16
+  around 13:20 PDT, most likely for MLB. It also sits in four 2026-10-16
+  backups and `.env.train` (mode 644). Step 1: in restricted mode, morning
+  orchestration now hands its children the research login under both aliases,
+  and the 12 NHL readers resolve `database_url("research")`. The live
+  preflight passed on the research login. The other six of the 18 scripts
+  need no change; the plan's "Step 1 status" explains why. The owner login
+  is still in the files above until step 4.
 - Plan, owners, and operator decisions:
   `docs/contracts/database_write_isolation_plan.md`, "Owner-credential
   isolation plan (2026-10-19)". Code steps 1, 2, and 7 are NHL work; step 3 is

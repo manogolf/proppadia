@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import os
 import shutil
 from pathlib import Path
 from typing import Any
@@ -14,6 +13,7 @@ import pandas as pd
 import psycopg
 
 from backend.nhl.analysis_package_guard import begin_package, finalize_package, sha256_file, verify_manifest
+from backend.nhl.database_access import database_url
 
 TASK="NHL_SEASON_2025_SAVES_MARKET_LISTED_GOALIE_ACTUAL_STARTER_CONCORDANCE_V1"
 DATE="2026-09-08"
@@ -173,8 +173,7 @@ def main()->int:
             all_actual=pd.read_parquet(actual_parent/"postgame_goalie_outcome_snapshot.parquet")
             actual_source=f"IMMUTABLE_PACKAGE:{actual_parent}"
         else:
-            dsn=os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-            if not dsn: raise RuntimeError("DATABASE_URL_REQUIRED_FOR_READ_ONLY_ACTUAL_SNAPSHOT")
+            dsn=database_url("research")
             all_actual=actual_snapshot(dsn);actual_parent_manifest=None;actual_source="READ_ONLY_DATABASE_SNAPSHOT"
         starters=all_actual[all_actual.start_flag.eq(True)].copy()
         counts=starters.groupby(["game_id","team_code"]).size(); valid=set(counts[counts.eq(1)].index)

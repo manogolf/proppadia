@@ -7,6 +7,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 ROOT=Path(__file__).resolve().parents[3]
+sys.path.insert(0,str(ROOT))
+from backend.nhl.database_access import database_url, restricted_mode
 PY=ROOT/".venv/bin/python"
 OPS=ROOT/"artifacts/operational/nhl/morning"
 SLATE_HEALTH=ROOT/"artifacts/operational/nhl/slates"
@@ -23,8 +25,18 @@ def load_env(path,env):
   if not s or s.startswith("#") or "=" not in s:continue
   k,v=s.split("=",1);env.setdefault(k.strip(),v.strip().strip("'\""))
 def resolved_database_environment(source):
- """Return a child environment with one validated DB credential and its alias."""
+ """Return a child environment with one validated DB credential and its alias.
+
+ In restricted mode both aliases carry the NHL research login, so no child
+ inherits the legacy (owner) value; the NHL_* routes stay for the daily CLI.
+ """
  env=dict(source)
+ if restricted_mode(env):
+  try:research=database_url("research",environ=env)
+  except RuntimeError as error:raise RuntimeError(f"NHL_DATABASE_CREDENTIAL_{error}") from None
+  env["SUPABASE_DB_URL"]=research
+  env["DATABASE_URL"]=research
+  return env
  candidates=(env.get("SUPABASE_DB_URL",""),env.get("DATABASE_URL",""))
  resolved=next((str(value).strip() for value in candidates
                 if str(value).strip() and not _ENV_REFERENCE.fullmatch(str(value).strip())),None)

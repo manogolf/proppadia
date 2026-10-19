@@ -10,7 +10,6 @@ import argparse
 import csv
 import hashlib
 import json
-import os
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -19,6 +18,7 @@ from typing import Any
 import pandas as pd
 import psycopg
 from psycopg.rows import dict_row
+from backend.nhl.database_access import database_url
 
 
 LEDGER_COLUMNS = [
@@ -386,9 +386,7 @@ def main() -> int:
     args = ap.parse_args()
     if args.start_date > args.end_date:
         raise SystemExit("start date is after end date")
-    db_url = os.environ.get("SUPABASE_DB_URL")
-    if not db_url:
-        raise SystemExit("SUPABASE_DB_URL is required")
+    db_url = database_url("research")
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 

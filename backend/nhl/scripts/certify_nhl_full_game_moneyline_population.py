@@ -5,10 +5,11 @@ Read-only database access. No odds, models, ROI, schema, or production mutations
 """
 from __future__ import annotations
 
-import argparse, hashlib, json, os
+import argparse, hashlib, json
 from pathlib import Path
 import pandas as pd
 import psycopg2
+from backend.nhl.database_access import database_url
 
 STAMP = "2026-07-13"
 EXPECTED = {2023: 1400, 2024: 1398}
@@ -28,8 +29,7 @@ def query(conn, sql: str) -> pd.DataFrame:
 def main() -> int:
     ap=argparse.ArgumentParser(); ap.add_argument("--out-dir",required=True); args=ap.parse_args()
     out=Path(args.out_dir); out.mkdir(parents=True,exist_ok=True)
-    url=os.environ.get("SUPABASE_DB_URL","").strip()
-    if not url: raise RuntimeError("SUPABASE_DB_URL is required")
+    url=database_url("research")
     conn=psycopg2.connect(url); conn.set_session(readonly=True,autocommit=True)
     games=query(conn,"""SELECT season AS canonical_season,game_id,short_game_id,game_date,
       start_time_utc AS scheduled_start_time_utc,home_team_id,home_team_code AS home_team,

@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from dataclasses import dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -28,6 +27,7 @@ import pandas as pd
 from sklearn.isotonic import IsotonicRegression
 
 from backend.shared.db.pg import pg_fetchall, pg_fetchone
+from backend.nhl.database_access import database_url
 
 
 TRAIN_SQL = """
@@ -118,10 +118,7 @@ def _fit_iso(x: np.ndarray, y: np.ndarray, w: np.ndarray) -> Optional[IsotonicRe
 
 
 def _require_db() -> str:
-    db = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-    if not db:
-        raise RuntimeError("Missing SUPABASE_DB_URL (or DATABASE_URL).")
-    return db
+    return database_url("research")
 
 
 def _latest_truth_date() -> date:

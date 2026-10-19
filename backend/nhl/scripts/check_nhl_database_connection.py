@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import os
 import re
+import sys
+from pathlib import Path
 
 import psycopg
 from psycopg.conninfo import conninfo_to_dict
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+from backend.nhl.database_access import database_url  # noqa: E402
 
 
 REFERENCE = re.compile(r"^\s*\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)\s*$")
@@ -17,6 +22,13 @@ def main() -> int:
     alias = (os.environ.get("DATABASE_URL") or "").strip()
     if not value or REFERENCE.fullmatch(value) or not alias or REFERENCE.fullmatch(alias) or value != alias:
         raise SystemExit("NHL_DATABASE_CREDENTIAL_ENVIRONMENT_INVALID")
+    try:
+        # Restricted mode: the aliases must carry the research login, never a
+        # legacy owner value.
+        if value != database_url("research"):
+            raise SystemExit("NHL_DATABASE_CREDENTIAL_NOT_RESEARCH_ROUTE")
+    except RuntimeError:
+        raise SystemExit("NHL_DATABASE_CREDENTIAL_ENVIRONMENT_INVALID") from None
     try:
         expected_database = conninfo_to_dict(value).get("dbname")
         if not expected_database:

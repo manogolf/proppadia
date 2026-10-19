@@ -7,7 +7,6 @@ import csv
 import hashlib
 import json
 import math
-import os
 import shutil
 import urllib.request
 from datetime import datetime, timezone
@@ -24,6 +23,7 @@ from sklearn.preprocessing import StandardScaler
 
 from backend.nhl.analysis_package_guard import begin_package, finalize_package, verify_manifest
 from backend.nhl.scripts import build_nhl_season_2025_frozen_moneyline_replay_and_sog_novelty_v1 as bridge_test
+from backend.nhl.database_access import database_url
 
 
 TASK = "NHL_MONEYLINE_STRICT_PRIOR_CONTROL_V2_AND_SOG_CONDITIONAL_TEST"
@@ -542,9 +542,7 @@ def build(args: argparse.Namespace) -> None:
             "credentials_exposed": False, "credits_consumed": 0,
         }])
     else:
-        dsn = os.environ.get("SUPABASE_DB_URL")
-        if not dsn:
-            raise RuntimeError("SUPABASE_DB_URL_REQUIRED")
+        dsn = database_url("research")
         cache = Path(args.schedule_cache_dir) if args.schedule_cache_dir else None
         if cache:
             cache.mkdir(parents=True, exist_ok=True)

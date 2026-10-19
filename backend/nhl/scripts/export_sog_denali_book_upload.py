@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Iterable, List, Optional, Tuple
 
 import pandas as pd
+from backend.nhl.database_access import database_url
 
 
 # -----------------------------
@@ -43,15 +44,12 @@ OUT_CSV = Path(os.environ.get(
 # -----------------------------
 def get_db_conn():
     """
-    Returns a DB-API connection. Uses SUPABASE_DB_URL or DATABASE_URL.
+    Returns a DB-API connection on the restricted NHL research login.
     (Keeps your existing non-SQLAlchemy usage; warning is acceptable.)
     """
     import psycopg2  # type: ignore
 
-    db_url = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
-    if not db_url:
-        raise RuntimeError("Missing SUPABASE_DB_URL (preferred) or DATABASE_URL in env.")
-    return psycopg2.connect(db_url)
+    return psycopg2.connect(database_url("research"))
 
 
 def fetch_games(conn, game_ids: List[int]) -> pd.DataFrame:

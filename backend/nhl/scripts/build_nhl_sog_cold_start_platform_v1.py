@@ -6,7 +6,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 from pathlib import Path
 from typing import Any
 
@@ -15,6 +14,7 @@ import pandas as pd
 import psycopg
 from sklearn.metrics import roc_auc_score
 
+from backend.nhl.database_access import database_url
 from backend.nhl.sog_cold_start.core import CONTRACT_PATH, LINES, poisson_tail, sha256_file
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -305,10 +305,10 @@ def manifest(directory: Path) -> None:
 
 
 def main() -> int:
-    ap=argparse.ArgumentParser();ap.add_argument("--output",type=Path,default=DEFAULT_OUT);ap.add_argument("--refresh-snapshot",action="store_true");ap.add_argument("--dsn",default=os.environ.get("SUPABASE_DB_URL",""));args=ap.parse_args()
+    ap=argparse.ArgumentParser();ap.add_argument("--output",type=Path,default=DEFAULT_OUT);ap.add_argument("--refresh-snapshot",action="store_true");ap.add_argument("--dsn");args=ap.parse_args()
     out=args.output.resolve();out.mkdir(parents=True,exist_ok=True)
     lp=out/"retained_skater_history_snapshot.parquet";gp=out/"retained_game_schedule_snapshot.parquet"
-    if args.refresh_snapshot: logs,games=fetch_snapshot(args.dsn,out)
+    if args.refresh_snapshot: logs,games=fetch_snapshot(args.dsn or database_url("research"),out)
     else:
         if not lp.is_file() or not gp.is_file(): raise RuntimeError("SNAPSHOT_MISSING_USE_REFRESH_SNAPSHOT")
         logs=pd.read_parquet(lp);games=pd.read_parquet(gp)
