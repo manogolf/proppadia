@@ -10,7 +10,9 @@ class TestSharedHealthEndpoint(unittest.TestCase):
         client = TestClient(app)
         resp = client.get("/api/health")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {"ok": True})
+        body = resp.json()
+        self.assertIs(body["ok"], True)
+        self.assertIn(body["db_route"], {"API_LOGIN", "LEGACY_ALIASES"})
 
 
 if __name__ == "__main__":
