@@ -420,6 +420,31 @@ def _recorder(game_ids) -> DailyRunRecorder:
     return value
 
 
+class _CutoffDatetime(datetime):
+    """Hold the daily clock at the fixture slate's feature cutoff."""
+
+    @classmethod
+    def now(cls, tz=None):
+        moment = cls.fromisoformat(CUTOFF.replace("Z", "+00:00"))
+        return moment.astimezone(tz) if tz else moment.replace(tzinfo=None)
+
+
+@pytest.fixture
+def phoenix_slate_day():
+    # Lanes skip once every canonical game has started, and Points failures
+    # are nonblocking only under the reversible Phoenix authority. Pin both
+    # instead of reading the wall clock and the live authority file.
+    state = {
+        "schema_version": "NHL_POINTS_MODEL_AUTHORITY_V1", "authority_version": 1,
+        "production_authority": cli.PHOENIX_AUTHORITY,
+        "shadow_authorities": [cli.HGB_AUTHORITY],
+    }
+    with patch.object(cli, "datetime", _CutoffDatetime), patch.object(
+            cli, "selected_production_authority", return_value=state):
+        yield
+
+
+@pytest.mark.usefixtures("phoenix_slate_day")
 def test_parent_orchestration_uses_only_validated_run_local_artifacts(tmp_path):
     canonical = games(GAME_IDS[:1])
     value = _recorder(GAME_IDS[:1])
@@ -504,6 +529,7 @@ def test_parent_orchestration_uses_only_validated_run_local_artifacts(tmp_path):
     assert recorded["sha256"] == attachments["points"]["expected_pred_sha256"]
 
 
+@pytest.mark.usefixtures("phoenix_slate_day")
 def test_missing_game_date_blocks_lane_before_database_or_attachment(tmp_path):
     canonical = games(GAME_IDS[:1])
     value = _recorder(GAME_IDS[:1])
