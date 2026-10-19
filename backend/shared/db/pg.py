@@ -343,6 +343,100 @@ def mlb_ingest_identity_evidence(conn) -> Dict[str, Any]:
     }
 
 
+API_DATABASE_URL_ENV = "PROPPADIA_API_DATABASE_URL"
+API_LOGIN = "proppadia_api_login"
+API_ROLE = "proppadia_api"
+_OWNER_REACH_ROLES = ("postgres", "supabase_admin", "service_role")
+_api_route_selected = False
+_api_identity_verified = False
+
+
+def select_api_database_route() -> bool:
+    """Route this process's shared-helper connections to the hosted API login.
+
+    Only the hosted API calls this, at startup. Returns whether the API login
+    is configured; when it is not, connections keep the legacy aliases so the
+    code can deploy before the Render variable is set. A misconfigured API
+    variable (wrong login or project) raises here, so startup fails closed.
+    """
+    global _api_route_selected, _api_identity_verified
+    _api_route_selected = True
+    _api_identity_verified = False
+    return _api_route_url() is not None
+
+
+def _url_login(url: str) -> Optional[str]:
+    from urllib.parse import unquote, urlsplit
+
+    try:
+        user = urlsplit(url).username
+    except ValueError:
+        return None
+    # The Supabase pooler form is "<login>.<project ref>".
+    return unquote(user).split(".", 1)[0] if user else None
+
+
+def _api_route_url() -> Optional[str]:
+    if not _api_route_selected:
+        return None
+    url = os.environ.get(API_DATABASE_URL_ENV, "").strip()
+    if not url:
+        return None
+    if os.environ.get(MLB_INGEST_OPT_IN_ENV) is not None:
+        raise RuntimeError("API database route cannot run with the MLB ingest opt-in set")
+    if _url_login(url) != API_LOGIN:
+        raise RuntimeError(f"{API_DATABASE_URL_ENV} does not log in as {API_LOGIN}")
+    verify_mlb_ingest_production_target(url)
+    return url
+
+
+def api_database_route_state() -> str:
+    """Names-only route state for health output."""
+    if not _api_route_selected:
+        return "NOT_SELECTED"
+    return "API_LOGIN" if _api_route_url() is not None else "LEGACY_ALIASES"
+
+
+def _verify_api_identity(conn) -> None:
+    """Fail closed unless the connection is the API login with no owner reach."""
+    global _api_identity_verified
+    if _api_identity_verified:
+        return
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT session_user::text AS session_user,
+                       current_user::text AS current_user,
+                       pg_has_role(current_user, %s, 'USAGE') AS role_inherited,
+                       (SELECT NOT (rolsuper OR rolbypassrls OR rolcreaterole OR rolcreatedb)
+                          FROM pg_roles WHERE rolname = session_user) AS attributes_ok,
+                       NOT EXISTS (
+                           SELECT 1 FROM unnest(%s::text[]) AS owner(name)
+                           JOIN pg_roles r ON r.rolname = owner.name
+                           WHERE pg_has_role(session_user, r.oid, 'MEMBER')
+                       ) AS no_owner_reach
+                """,
+                (API_ROLE, list(_OWNER_REACH_ROLES)),
+            )
+            row = cur.fetchone()
+        conn.rollback()
+    except Exception as exc:
+        state = _sqlstate(exc)
+        suffix = f" (SQLSTATE {state})" if state else f" ({type(exc).__name__})"
+        raise RuntimeError(f"API database identity check failed{suffix}") from None
+    if (
+        not row
+        or row.get("session_user") != API_LOGIN
+        or row.get("current_user") != API_LOGIN
+        or not row.get("role_inherited")
+        or not row.get("attributes_ok")
+        or not row.get("no_owner_reach")
+    ):
+        raise RuntimeError("API database login identity or owner-reach assertion failed")
+    _api_identity_verified = True
+
+
 def _db_url() -> str:
     url = get_database_url()
     if not url:
@@ -353,6 +447,9 @@ def _db_url() -> str:
 def _connect(*, require_streak_read: bool = False):
     if psycopg is None:
         raise RuntimeError("psycopg not installed")
+    api_url = _api_route_url()
+    if api_url is not None:
+        return _connect_api(api_url)
     restricted_url = _restricted_connection_url()
     if restricted_url is not None:
         verify_mlb_ingest_production_target(restricted_url)
@@ -377,6 +474,26 @@ def _connect(*, require_streak_read: bool = False):
         except Exception:
             conn.close()
             raise
+    return conn
+
+
+def _connect_api(url: str):
+    try:
+        conn = psycopg.connect(
+            url,
+            row_factory=psycopg.rows.dict_row,
+            prepare_threshold=None,
+            options="-c search_path=mlb,public",
+        )
+    except Exception as exc:
+        state = _sqlstate(exc)
+        suffix = f" (SQLSTATE {state})" if state else f" ({type(exc).__name__})"
+        raise RuntimeError(f"API database connection failed{suffix}") from None
+    try:
+        _verify_api_identity(conn)
+    except Exception:
+        conn.close()
+        raise
     return conn
 
 

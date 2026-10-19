@@ -22,5 +22,10 @@ def pg_fetchone(sql: str, params: tuple = ()) -> Tuple[bool, Optional[Dict[str, 
     try:
         row = shared_pg_fetchone(sql, params)
         return True, row, None
+    except RuntimeError as e:
+        # Shared-helper RuntimeErrors are already credential-free.
+        return False, None, f"RuntimeError: {e}"
     except Exception as e:
-        return False, None, f"{type(e).__name__}: {e}"
+        # Driver messages can name the host or login; this is public output.
+        state = getattr(e, "sqlstate", None)
+        return False, None, f"{type(e).__name__}" + (f" (SQLSTATE {state})" if state else "")

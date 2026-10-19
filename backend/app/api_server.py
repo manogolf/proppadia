@@ -7,6 +7,12 @@ from pathlib import Path
 from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv(), override=False)  # load repo-root .env if present
 
+from backend.shared.db.pg import select_api_database_route
+
+# Shared DB helpers connect as the API login when PROPPADIA_API_DATABASE_URL is
+# set; until then they keep the legacy aliases (see database_write_isolation_plan).
+select_api_database_route()
+
 from .routers import health, mlb, nhl, ops
 
 app = FastAPI(title="Proppadia Backend", version="0.1.0")
