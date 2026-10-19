@@ -870,7 +870,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.16 Classify SOG roster-not-ready observer results
 
-- Status: **CONFIRMED OPERATIONAL VISIBILITY GAP — correction deferred**.
+- Status: **RESOLVED 2026-10-18 (`32c46e59`) — natural-poll acceptance
+  pending**. The SOG observer now reports `RosterObservationNotReady` as
+  `ROSTER_NOT_READY` with `retry_eligible_on_later_poll`, no feature export,
+  and no prediction attempt, as Points/Saves do. Certificate and
+  roster-integrity gates are unchanged. Covered by
+  `test_missing_current_roster_package_is_retryable_not_a_failure`.
 - Evidence: the 2026-10-18 18:27:11Z SOG child receipt contains a valid
   October 17 `CERTIFIED_FINAL` certificate, then fails on
   `RosterObservationNotReady:CURRENT_SLATE_ROSTER_OBSERVATION_MISSING`. It
@@ -1138,9 +1143,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.3 Close documented historical source-integrity gaps
 
-- Status: **OPEN** — the research-only
-  `backend/nhl/sql/export_points_history_challenger.sql` still coalesces NULL
-  shot attempts to zero. The 2026 recovery report separately records 648
+- Status: **RESOLVED 2026-10-18 (`56aef033`)**. The research-only
+  `backend/nhl/sql/export_points_history_challenger.sql` now keeps unknown
+  attempts NULL per row, as the production export does since `99284ff0`;
+  `backend/nhl/tests/test_points_attempt_missingness_sql.py` holds both
+  exporters to that rule. Challenger outputs made before this date keep the
+  old zero conflation. Previously it coalesced NULL shot attempts to zero. The 2026 recovery report separately records 648
   unreconciled observations that remain NULL; these are unresolved evidence,
   not confirmed incorrect values.
 - References: `docs/nhl/points_shot_attempts_2026_source_recovery.md`;
@@ -1380,9 +1388,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `artifacts/operational/nhl/slates/2026-09-24` in daily lane containment,
   plus postgame staging sync and 2025 historical market recovery fixtures.
   The suite only means something on the operator machine.
-- Also: `test_nhl_sep24_player_identity_acquisition_v1.py` makes its temp
-  directory under the repository root, and each suite run leaves a
-  `nhl_identity_acq_*/postgame_reconciliation/request_runs/...` tree behind.
+- Fixed 2026-10-18 (`36ba3f0d`): `test_nhl_sep24_player_identity_acquisition_v1.py`
+  leaked request-journal and response-cache environment variables pointing
+  into its temp tree; later tests wrote there and recreated
+  `nhl_identity_acq_*` in the repository root. The environment is now
+  restored after each test.
+- Fixed 2026-10-18 (`0228381e`): the PP-TOI integration test loads
+  `backend/.env` itself, so it no longer skips silently when run alone.
 - Fixed 2026-10-18 (`813c3a30`): `test_main_lock_failure_keeps_exit_zero`
   ran the live Points/Saves prediction-only observers. When real readiness
   evidence was present they read the database and wrote `VALIDATION_TEST`
@@ -1421,10 +1433,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Also fixed (`39111c2c`): the Phoenix-pinned lane tests from P2.18 let the
   HGB shadow lane resolve the research DSN and open a read-only snapshot.
   No operational artifacts were written by them.
-- Open: the legacy SOG production reference grader
-  (`performance_summary._validate_production_sog_game_set`) still requires
-  predicted games to equal the receipt's eligible games, so a missing SOG game
-  fails that summary. SOG was outside this change.
+- Resolved (`0ebd1bbd`): the legacy SOG production reference grader
+  required predicted games to equal the receipt's eligible games. Predicted
+  games must now be a subset; eligible games without predictions are graded
+  as missing identities and listed in `eligible_games_without_predictions`.
 
 ## Verified Complete — Do Not Reopen
 
