@@ -168,6 +168,39 @@ def verified_empty_schedule(
     }
 
 
+def certificate_identity(certificate: object) -> str | None:
+    """Return the stable hash that identifies a prior-day certificate.
+
+    A reconciled day is identified by its package manifest. A verified empty
+    (off) day has no package, so it is identified by the hash of its retained
+    official schedule response. Every certificate comparison uses this.
+    """
+    if not isinstance(certificate, dict):
+        return None
+    if certificate.get("package_manifest_sha256"):
+        return str(certificate["package_manifest_sha256"])
+    if (certificate.get("status") == "VERIFIED_EMPTY_SCHEDULE"
+            and certificate.get("schedule_sha256")):
+        return str(certificate["schedule_sha256"])
+    return None
+
+
+def verify_prior_day_certificate(
+    certificate: dict[str, object], prior_date: str, *,
+    slate_root: Path = DEFAULT_SLATE_ROOT, fallback_package: object = None,
+) -> dict[str, object]:
+    """Re-verify a recorded prior-day certificate from its retained evidence.
+
+    A ``VERIFIED_EMPTY_SCHEDULE`` certificate is checked against the retained
+    empty official schedule; any other against its reconciliation package.
+    The caller compares ``certificate_identity`` of the two.
+    """
+    if certificate.get("status") == "VERIFIED_EMPTY_SCHEDULE":
+        return verified_empty_schedule(prior_date, slate_root=slate_root)
+    package = certificate.get("package_path") or fallback_package or ""
+    return verify_reconciliation_certificate(Path(str(package)), prior_date)
+
+
 def require_prior_day_certificate(
     slate_date: str, *, reconciliation_root: Path = DEFAULT_RECONCILIATION_ROOT,
     slate_root: Path = DEFAULT_SLATE_ROOT,

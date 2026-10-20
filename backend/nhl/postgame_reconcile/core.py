@@ -50,6 +50,10 @@ SEPTEMBER_20_REQUIRED_FAILED_ANCESTORS = [
 ]
 
 
+# A prior day is certified by a FINAL package, or as a verified off day.
+PRIOR_CERTIFICATE_STATUSES = frozenset({"CERTIFIED_FINAL", "VERIFIED_EMPTY_SCHEDULE"})
+
+
 def validate_request_lineage(lineage: dict[str, Any], *, slate_date: str) -> None:
     """Validate typed response sources and all required failed ancestors."""
     version = lineage.get("contract_version")
@@ -1477,10 +1481,13 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
     the immutable source artifact, prior-day certificate, and roster manifest.
     It does not infer lineage from timestamps or directory names.
     """
-    from backend.nhl.reconciliation_certificate import verify_reconciliation_certificate
+    from backend.nhl.reconciliation_certificate import (
+        certificate_identity, verify_prior_day_certificate, verify_reconciliation_certificate)
     from backend.nhl.daily_orchestration import verify_roster_observation_reuse
 
     daily_root = operational_root / "daily_runs"
+    # An off-day prior certificate is verified against the retained schedule.
+    slate_root = operational_root / "slates"
     starts = {int(row.game_id): pd.Timestamp(row.scheduled_start_time_utc).isoformat()
               for row in schedule.itertuples(index=False)}
     game_ids = sorted(starts)
@@ -1530,27 +1537,29 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             prior_date = (datetime.fromisoformat(slate_date).date()
                           - __import__("datetime").timedelta(days=1)).isoformat()
             if certificate:
-                cert_path = Path(str(certificate.get("package_path") or ""))
-                expected_cert_manifest = certificate.get("package_manifest_sha256")
+                expected_cert_identity = certificate_identity(certificate)
                 certificate_status = certificate.get("status")
+                verified_cert = verify_prior_day_certificate(
+                    certificate, prior_date, slate_root=slate_root)
             else:
                 # Earlier receipts bind the exact reused package path and its
                 # successful FINAL reconciliation status instead of embedding
                 # the later certificate object. Verify that retained package
                 # directly; do not synthesize or infer a package path.
                 cert_path = Path(str(prior.get("reconciliation_package") or ""))
-                expected_cert_manifest = None
+                expected_cert_identity = None
                 certificate_status = (
                     "CERTIFIED_FINAL"
                     if prior.get("reconciliation_status") == "REUSED_VALID_PACKAGE"
                     and prior.get("official_outcomes_status") == "FINAL"
                     else None
                 )
-            verified_cert = verify_reconciliation_certificate(
-                cert_path, prior_date)
-            if (certificate_status != "CERTIFIED_FINAL"
-                    or (expected_cert_manifest is not None
-                        and expected_cert_manifest != verified_cert["package_manifest_sha256"])):
+                verified_cert = verify_reconciliation_certificate(
+                    cert_path, prior_date)
+            verified_cert_identity = certificate_identity(verified_cert)
+            if (certificate_status not in PRIOR_CERTIFICATE_STATUSES
+                    or (expected_cert_identity is not None
+                        and expected_cert_identity != verified_cert_identity)):
                 continue
             roster = parent.get("roster_observation") or {}
             roster_path = Path(str(roster.get("path") or ""))
@@ -1601,7 +1610,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         readiness = source_metadata.get("readiness_evidence") or {}
                         source_cert = readiness.get("prior_day_reconciliation_certificate") or {}
                         source_roster = readiness.get("current_slate_roster_observation") or {}
-                        if not source_cert.get("package_manifest_sha256") or not source_roster.get("package_manifest_sha256"):
+                        if not certificate_identity(source_cert) or not source_roster.get("package_manifest_sha256"):
                             proof_notes.append({
                                 "source_path": str(source_run),
                                 "observer_receipt_path": str(receipt_path),
@@ -1609,8 +1618,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                             })
                             continue
                         source_roster_hash = str(source_roster.get("package_manifest_sha256"))
-                        if (source_cert.get("package_manifest_sha256")
-                                != verified_cert["package_manifest_sha256"]
+                        if (certificate_identity(source_cert) != verified_cert_identity
                                 or source_roster_hash not in verified_slate_rosters):
                             raise RuntimeError("RESILIENT_SOG_SOURCE_READINESS_EVIDENCE_CONFLICT")
                         source_marker_path = source_run / "RUN_COMPLETE.json"
@@ -1800,7 +1808,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                             "eligible": True, "source_phase": phase,
                             "source_path": str(output_file), "source_manifest_sha256": _sha(source_run / "SHA256SUMS"),
                             "observer_receipt_path": str(receipt_path), "observer_receipt_sha256": parent_digest,
-                            "certificate_sha256": str(verified_cert["package_manifest_sha256"]),
+                            "certificate_sha256": str(verified_cert_identity),
                             "roster_source_sha256": source_roster_hash,
                             "model_identity": model_identity,
                             "feature_contract_identity": feature_identity,
@@ -1813,7 +1821,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         }
                         candidates[lane_key].append(item)
                         proof_notes.append({"source_path": str(source_run), "parent_receipt": str(receipt_path),
-                                        "certificate_sha256": verified_cert["package_manifest_sha256"],
+                                        "certificate_sha256": verified_cert_identity,
                                         "roster_source_sha256": source_roster_hash})
         except (OSError, ValueError, KeyError, json.JSONDecodeError, RuntimeError) as error:
             # A corrupt linked source fails closed. Unrelated daily receipts
@@ -1856,18 +1864,19 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             certificate = prior.get("certificate") or {}
             prior_date = (datetime.fromisoformat(slate_date).date()
                           - __import__("datetime").timedelta(days=1)).isoformat()
-            cert_path = Path(str(certificate.get("package_path")
-                                 or prior.get("reconciliation_package") or ""))
-            verified_cert = verify_reconciliation_certificate(cert_path, prior_date)
+            verified_cert = verify_prior_day_certificate(
+                certificate, prior_date, slate_root=slate_root,
+                fallback_package=prior.get("reconciliation_package"))
+            verified_cert_identity = certificate_identity(verified_cert)
             modern_status = certificate.get("status")
             legacy_status = ("CERTIFIED_FINAL"
                              if prior.get("reconciliation_status") == "REUSED_VALID_PACKAGE"
                              and prior.get("official_outcomes_status") == "FINAL" else None)
-            if modern_status != "CERTIFIED_FINAL" and legacy_status != "CERTIFIED_FINAL":
+            if (modern_status not in PRIOR_CERTIFICATE_STATUSES
+                    and legacy_status != "CERTIFIED_FINAL"):
                 continue
-            if (certificate.get("package_manifest_sha256")
-                    and certificate["package_manifest_sha256"]
-                    != verified_cert["package_manifest_sha256"]):
+            if (certificate_identity(certificate)
+                    and certificate_identity(certificate) != verified_cert_identity):
                 continue
             roster = parent.get("roster_observation") or {}
             roster_path = Path(str(roster.get("path") or ""))
@@ -1953,7 +1962,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         "source_manifest_sha256": _sha(source_run / "SHA256SUMS"),
                         "observer_receipt_path": str(receipt_path),
                         "observer_receipt_sha256": parent_hash,
-                        "certificate_sha256": str(verified_cert["package_manifest_sha256"]),
+                        "certificate_sha256": str(verified_cert_identity),
                         "roster_source_sha256": roster_hash,
                         "model_identity": puck_model_identity,
                         "feature_contract_identity": puck_feature_identity,
@@ -2010,10 +2019,11 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             cert = parent.get("prior_day_reconciliation_certificate") or {}
             prior_date = (datetime.fromisoformat(slate_date).date()
                           - __import__("datetime").timedelta(days=1)).isoformat()
-            verified_cert = verify_reconciliation_certificate(
-                Path(str(cert.get("package_path") or "")), prior_date)
-            if (cert.get("status") != "CERTIFIED_FINAL"
-                    or cert.get("package_manifest_sha256") != verified_cert["package_manifest_sha256"]):
+            verified_cert = verify_prior_day_certificate(
+                cert, prior_date, slate_root=slate_root)
+            verified_cert_identity = certificate_identity(verified_cert)
+            if (cert.get("status") not in PRIOR_CERTIFICATE_STATUSES
+                    or certificate_identity(cert) != verified_cert_identity):
                 continue
             roster = parent.get("current_slate_roster_observation") or {}
             roster_path = Path(str(roster.get("package_path") or ""))
@@ -2038,9 +2048,8 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                     continue
                 child_cert = child.get("prior_day_reconciliation_certificate") or {}
                 child_roster = child.get("current_slate_roster_observation") or {}
-                if ((child_cert.get("package_manifest_sha256")
-                     and child_cert.get("package_manifest_sha256")
-                     != verified_cert["package_manifest_sha256"])
+                if ((certificate_identity(child_cert)
+                     and certificate_identity(child_cert) != verified_cert_identity)
                         or (child_roster.get("package_manifest_sha256")
                             and child_roster.get("package_manifest_sha256") not in verified_slate_rosters)):
                     raise RuntimeError(f"RESILIENT_{lane}_CHILD_READINESS_EVIDENCE_CONFLICT")
@@ -2061,8 +2070,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                     source_roster = readiness.get("current_slate_roster_observation") or {}
                     # Any snapshot verified for this slate, not only the
                     # orchestration parent's (several snapshots per slate).
-                    if (source_cert.get("package_manifest_sha256")
-                            != verified_cert["package_manifest_sha256"]
+                    if (certificate_identity(source_cert) != verified_cert_identity
                             or source_roster.get("package_manifest_sha256") not in verified_slate_rosters):
                         raise RuntimeError(f"RESILIENT_{lane}_SOURCE_READINESS_CONFLICT")
                 expected_file = ("immutable_conditional_predictions.csv" if lane == "SAVES"
@@ -2117,7 +2125,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                             "observer_receipt_sha256": _sha(child_path),
                             "observer_parent_receipt_path": str(parent_path),
                             "observer_parent_receipt_sha256": _sha(parent_path),
-                            "certificate_sha256": str(verified_cert["package_manifest_sha256"]),
+                            "certificate_sha256": str(verified_cert_identity),
                             "roster_source_sha256": roster_hash,
                             "model_identity": model_identity,
                             "feature_contract_identity": feature_identity,

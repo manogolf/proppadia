@@ -198,6 +198,16 @@ Saves `MIDDAY` and `FINAL_PREGAME`. Moneyline V3 production and V2 shadow,
 Puck Line, SOG contract arms, Points model ladders, and Saves conditional
 distributions remain separate atomic populations.
 
+After a zero-game prior day (an off day, such as the Christmas break) the
+receipts and observers carry a `VERIFIED_EMPTY_SCHEDULE` certificate instead
+of a package. The adapter re-verifies it against the retained empty official
+schedule (`slates/<prior date>/`) and accepts it like `CERTIFIED_FINAL`. Every
+certificate comparison (receipt, observer readiness evidence, child status,
+recorded `certificate_sha256`) uses one identity,
+`reconciliation_certificate.certificate_identity`: the package manifest hash
+for a reconciled day, the retained schedule response hash for an off day. A
+recorded identity that differs from the re-verified one is not accepted.
+
 Current source-proof boundary: daily-parent-bound Moneyline/Puck Line outputs
 and observer-parent-bound Points/Saves/SOG sources are discoverable. A
 standalone mainline Moneyline/Puck Line observer receipt that lacks a distinct
