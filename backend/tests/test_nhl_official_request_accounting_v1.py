@@ -443,6 +443,10 @@ class OfficialRequestAccountingTest(unittest.TestCase):
         self.assertTrue(all(row["cross_run_reuse"] for row in rows))
         self.assertTrue(all(row["source_run_id"] == source_run for row in rows))
 
+    @unittest.skipUnless(
+        (Path(__file__).resolve().parents[2] / "artifacts/operational/nhl/postgame_reconciliation/"
+         "request_runs/2026-09-20/nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6").is_dir(),
+        "retained 2026-09-20 postgame request run is a local artifact")
     def test_original_september_20_authority_objects_reuse_without_network(self):
         repository = Path(__file__).resolve().parents[2]
         source_run = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"

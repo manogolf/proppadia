@@ -169,6 +169,10 @@ def test_same_identity_in_multiple_canonical_games_is_not_collapsed(tmp_path, ki
     assert identity["identity_count"] == 2
 
 
+@pytest.mark.skipif(
+    not all(Path(path).is_file() for path in (
+        "backend/nhl/exports/train_nhl_points_v2.csv", "backend/nhl/exports/train_goalie_saves_v2.csv")),
+    reason="retained 2026-09-24 Points and Saves training exports are local artifacts")
 def test_september24_fixture_points_and_saves_exact_populations(tmp_path):
     points_source = Path("backend/nhl/exports/train_nhl_points_v2.csv")
     saves_source = Path("backend/nhl/exports/train_goalie_saves_v2.csv")
