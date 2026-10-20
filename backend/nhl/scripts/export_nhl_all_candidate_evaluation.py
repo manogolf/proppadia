@@ -876,6 +876,8 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
         if not all(p.exists() for p in (summary_path, normalized_path, binding_path)):
             continue
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        if str(summary.get("phase", "")).upper() == "CLOSING":
+            continue  # per-game closing snapshots are read by closing-line analysis only
         observed = summary.get("observation_timestamp_utc", "")
         slate = obs_dir.parent.name.split("=", 1)[1]
         if slate not in candidate_dates:

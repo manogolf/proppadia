@@ -78,3 +78,32 @@ class ClosingPhaseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClosingReaderGuardTests(unittest.TestCase):
+    """Readers of a day's latest or pooled snapshots ignore CLOSING snapshots."""
+
+    def _obs(self, day, name, phase):
+        obs = day / f"observation={name}"
+        obs.mkdir(parents=True)
+        (obs / "observation_summary.json").write_text(json.dumps({"phase": phase}))
+        return obs
+
+    def test_helper_reads_the_recorded_phase(self):
+        from backend.nhl.daily_capture import is_closing_observation
+        with tempfile.TemporaryDirectory() as temp:
+            day = Path(temp)
+            self.assertTrue(is_closing_observation(self._obs(day, "b", "CLOSING")))
+            self.assertFalse(is_closing_observation(self._obs(day, "a", "EARLY")))
+            self.assertFalse(is_closing_observation(day / "missing"))
+
+    def test_8rain_latest_observation_skips_a_later_closing_snapshot(self):
+        from unittest.mock import patch
+        from backend.nhl.scripts import run_nhl_8rain_export as export
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            day = root / "season=2026/slate_date=2026-10-21"
+            early = self._obs(day, "20261021T190000.000000Z_aaaa", "EARLY")
+            self._obs(day, "20261021T224000.000000Z_bbbb", "CLOSING")
+            with patch.object(export, "OBSERVATION_ROOT", root):
+                self.assertEqual(export._latest_observation("2026-10-21"), early.resolve())

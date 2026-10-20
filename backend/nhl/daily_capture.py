@@ -65,6 +65,20 @@ SENSITIVE_KEY = re.compile(
 )
 
 
+def is_closing_observation(observation_dir: Path) -> bool:
+    """True for a scheduled per-game CLOSING snapshot.
+
+    Readers that pick a day's latest snapshot or pool every snapshot's quotes
+    skip these so their outputs keep their meaning; closing-line analysis
+    reads CLOSING snapshots explicitly.
+    """
+    summary = Path(observation_dir) / "observation_summary.json"
+    try:
+        return str(json.loads(summary.read_text()).get("phase", "")).upper() == CLOSING_PHASE
+    except (OSError, ValueError):
+        return False
+
+
 def utc_now() -> datetime:
     return datetime.now(UTC)
 

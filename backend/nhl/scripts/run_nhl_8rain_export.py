@@ -227,7 +227,9 @@ def _run(command: list[str], *, label: str, cwd: Path = ROOT) -> subprocess.Comp
 
 def _latest_observation(slate: str) -> Path:
     matches = sorted(OBSERVATION_ROOT.glob(f"season=*/slate_date={slate}/observation=*"))
-    matches = [path for path in matches if path.is_dir()]
+    # Per-game CLOSING snapshots are not the slate's daily capture.
+    from backend.nhl.daily_capture import is_closing_observation
+    matches = [path for path in matches if path.is_dir() and not is_closing_observation(path)]
     if not matches:
         raise ValueError(f"CURRENT_SLATE_ODDS_OBSERVATION_MISSING:{slate}")
     return matches[-1].resolve()

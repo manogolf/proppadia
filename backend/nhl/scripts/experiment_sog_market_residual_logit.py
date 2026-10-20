@@ -241,7 +241,7 @@ def _load_market_rows(
                                 }
                             )
     if observation_root is not None and Path(observation_root).is_dir():
-        from backend.nhl.daily_capture import verify_package
+        from backend.nhl.daily_capture import is_closing_observation, verify_package
 
         for slate_root in sorted(Path(observation_root).glob("season=*/slate_date=20??-??-??")):
             day = slate_root.name.split("=", 1)[1]
@@ -250,7 +250,8 @@ def _load_market_rows(
             for observation in sorted(slate_root.glob("observation=*")):
                 raw_path = observation / "raw_response.json"
                 complete_path = observation / "RUN_COMPLETE.json"
-                if not raw_path.is_file() or not complete_path.is_file():
+                if (not raw_path.is_file() or not complete_path.is_file()
+                        or is_closing_observation(observation)):
                     continue
                 try:
                     verify_package(observation)
