@@ -31,6 +31,45 @@ RETAINED_ROSTER = Path(
     "artifacts/operational/nhl/roster_observations/season=2026/"
     "slate_date=2026-09-24/observation=20260924T174037.492521Z_353e5992af746639"
 )
+TEAMS = ("EDM", "VAN", "CGY", "SEA", "ANA", "SJS", "BOS", "PHI", "BUF", "DET", "CHI",
+         "STL", "FLA", "TBL", "CAR", "NSH", "NJD", "NYR", "CBJ", "PIT", "UTA", "VGK")
+
+
+def write_roster_observation(directory: Path) -> Path:
+    """Write a small roster package with the retained package's reuse metadata."""
+    directory.mkdir(parents=True)
+    coverage = {str(game_id): list(TEAMS[2 * index:2 * index + 2])
+                for index, game_id in enumerate(GAME_IDS)}
+    summary = {
+        "canonical_game_ids": GAME_IDS, "canonical_game_set_hash": GAME_HASH,
+        "complete_per_game_coverage": True, "conflict_count": 0,
+        "missing_teams": [], "unexpected_teams": [],
+        "observation_timestamp_utc": "2026-09-24T17:40:37.492521Z",
+        "parent_daily_run_id": "nhldaily_fixture", "per_game_team_coverage": coverage,
+        "phase": "EARLY", "schema_version": "NHL_ROSTER_RESEARCH_OBSERVATION_V1",
+        "season": 2026, "slate_date": SLATE, "snapshot_row_count": len(TEAMS),
+        "strictly_prestart": True,
+    }
+    (directory / "observation_summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n")
+    (directory / "RUN_COMPLETE.json").write_text(json.dumps({
+        "schema_version": "NHL_ROSTER_RESEARCH_OBSERVATION_V1", "status": "COMPLETE"}) + "\n")
+    (directory / "roster_conflicts.json").write_text("[]\n")
+    (directory / "raw_roster_responses.jsonl").write_text(
+        "".join(json.dumps({"team": team}) + "\n" for team in TEAMS))
+    (directory / "roster_snapshot.jsonl").write_text("".join(
+        json.dumps({"game_id": int(game_id), "player_id": index, "team": team}) + "\n"
+        for index, (game_id, teams) in enumerate(coverage.items()) for team in teams))
+    files = sorted(path for path in directory.iterdir() if path.is_file())
+    (directory / "SHA256SUMS").write_text(
+        "".join(f"{sha256_file(path)}  {path.name}\n" for path in files))
+    return directory
+
+
+@pytest.fixture
+def roster_observation(tmp_path):
+    return write_roster_observation(
+        tmp_path / "roster_observations/slate_date=2026-09-24/observation=fixture")
 
 
 class _SlateDayDatetime(datetime):
@@ -77,6 +116,11 @@ def preseason_moneyline(tmp_path):
     (cross_run / "daily_execution_status.json").write_text(
         json.dumps({"mode": "SHADOW_RESEARCH_ONLY"}) + "\n")
     inputs = (tmp_path / "cross_schedule.csv", tmp_path / "cross_history.csv", None)
+    # The lane reads the retained raw schedule under ROOT; keep it in tmp_path.
+    root = tmp_path / "root"
+    schedule = root / "artifacts/operational/nhl/slates" / SLATE / "raw_schedule_response.json"
+    schedule.parent.mkdir(parents=True)
+    schedule.write_text("{}\n")
 
     def export_inputs(_dsn, _slate, directory, **_kwargs):
         Path(directory).mkdir(parents=True, exist_ok=True)
@@ -91,6 +135,7 @@ def preseason_moneyline(tmp_path):
             side_effect=export_inputs), patch(
             "backend.nhl.cross_market_shadow.core.run_capture", return_value=cross_run), patch(
             "backend.nhl.cross_market_shadow.core.verify_capture_package"), patch.object(
+            cli, "ROOT", root), patch.object(
             cli, "_cross_market_envelope_from_daily_observation",
             return_value={"capture_timestamp_utc": "2026-09-24T17:00:00Z"}):
         yield
@@ -290,6 +335,8 @@ def test_parent_receipt_finalizes_all_classifications(tmp_path, classification):
     assert verify_package(package)
 
 
+@pytest.mark.skipif(not RETAINED_ROSTER.is_dir(),
+                    reason="retained 2026-09-24 roster observation is a local artifact")
 def test_exact_retained_roster_fixture_is_reusable():
     reference = verify_roster_observation_reuse(
         RETAINED_ROSTER, season=2026, slate_date=SLATE, phase="EARLY",
@@ -299,22 +346,22 @@ def test_exact_retained_roster_fixture_is_reusable():
     assert reference["manifest_sha256"] == "400e5339cd13c16a8057426584416c5dd8eb71322a4646d23944016aac419303"
 
 
-def test_roster_reuse_validation_is_read_only_and_provider_free():
+def test_roster_reuse_validation_is_read_only_and_provider_free(roster_observation):
     before = {
-        path.relative_to(RETAINED_ROSTER).as_posix(): sha256_file(path)
-        for path in RETAINED_ROSTER.iterdir() if path.is_file()
+        path.relative_to(roster_observation).as_posix(): sha256_file(path)
+        for path in roster_observation.iterdir() if path.is_file()
     }
-    siblings_before = sorted(path.name for path in RETAINED_ROSTER.parent.iterdir())
+    siblings_before = sorted(path.name for path in roster_observation.parent.iterdir())
     with patch("requests.Session.request") as provider_request:
         verify_roster_observation_reuse(
-            RETAINED_ROSTER, season=2026, slate_date=SLATE, phase="EARLY",
+            roster_observation, season=2026, slate_date=SLATE, phase="EARLY",
             canonical_game_ids=GAME_IDS, canonical_game_set_hash=GAME_HASH)
     after = {
-        path.relative_to(RETAINED_ROSTER).as_posix(): sha256_file(path)
-        for path in RETAINED_ROSTER.iterdir() if path.is_file()
+        path.relative_to(roster_observation).as_posix(): sha256_file(path)
+        for path in roster_observation.iterdir() if path.is_file()
     }
     assert after == before
-    assert sorted(path.name for path in RETAINED_ROSTER.parent.iterdir()) == siblings_before
+    assert sorted(path.name for path in roster_observation.parent.iterdir()) == siblings_before
     provider_request.assert_not_called()
 
 
@@ -329,9 +376,9 @@ def test_roster_reuse_disables_all_comprehensive_roster_fetch_paths():
     ) == {"SLATE_DATE": "2026-09-23", "NHL_FETCH_DISABLE": "1"}
 
 
-def test_roster_reuse_tampered_manifest_fails(tmp_path):
+def test_roster_reuse_tampered_manifest_fails(tmp_path, roster_observation):
     target = tmp_path / "roster"
-    shutil.copytree(RETAINED_ROSTER, target)
+    shutil.copytree(roster_observation, target)
     (target / "roster_snapshot.jsonl").write_text("tampered\n")
     with pytest.raises(RuntimeError, match="MANIFEST_MISMATCH"):
         verify_roster_observation_reuse(
@@ -348,9 +395,9 @@ def test_roster_reuse_tampered_manifest_fails(tmp_path):
     ({"conflict_count": 1}, "zero_conflicts"),
     ({"strictly_prestart": False}, "strictly_prestart"),
 ])
-def test_roster_reuse_metadata_mismatch_fails_closed(tmp_path, override, expected):
+def test_roster_reuse_metadata_mismatch_fails_closed(tmp_path, override, expected, roster_observation):
     target = tmp_path / "roster"
-    shutil.copytree(RETAINED_ROSTER, target)
+    shutil.copytree(roster_observation, target)
     summary_path = target / "observation_summary.json"
     summary = json.loads(summary_path.read_text())
     summary.update(override)
@@ -364,11 +411,11 @@ def test_roster_reuse_metadata_mismatch_fails_closed(tmp_path, override, expecte
             canonical_game_ids=GAME_IDS, canonical_game_set_hash=GAME_HASH)
 
 
-def test_tampered_reuse_fails_in_roster_lane_before_roster_child(tmp_path, monkeypatch):
+def test_tampered_reuse_fails_in_roster_lane_before_roster_child(tmp_path, monkeypatch, roster_observation):
     # Reuse is verified inside the roster lane, after prior-date certification
     # and schedule validation, and before the roster child can run.
     bad = tmp_path / "bad"
-    shutil.copytree(RETAINED_ROSTER, bad)
+    shutil.copytree(roster_observation, bad)
     (bad / "roster_snapshot.jsonl").write_text("tampered\n")
     monkeypatch.setenv("NHL_DAILY_RECEIPT_ROOT", str(tmp_path / "receipts"))
 
