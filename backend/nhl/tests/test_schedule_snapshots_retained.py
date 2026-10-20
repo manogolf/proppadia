@@ -48,9 +48,10 @@ class ScheduleSnapshotTests(unittest.TestCase):
         current = json.loads((day / "slate_health.json").read_text())
         self.assertEqual(current["completion_status"], "READY")
         self.assertTrue(schedule_hash_matches(current["raw_source_hash"], day / "raw_schedule_response.json"))
-        snapshots = sorted(p.name for p in (day / "snapshots").iterdir())
+        snapshots = sorted(p.name for p in day.glob("slate_health.fetch=*.json"))
         self.assertEqual(len(snapshots), 2)
-        failed = json.loads((day / "snapshots" / snapshots[1] / "slate_health.json").read_text())
+        self.assertFalse((day / "snapshots").exists())  # no new directory
+        failed = json.loads((day / snapshots[1]).read_text())
         self.assertEqual(failed["completion_status"], "FAILED")
 
     def test_each_successful_fetch_is_a_snapshot_and_updates_the_current_schedule(self):
@@ -61,8 +62,8 @@ class ScheduleSnapshotTests(unittest.TestCase):
         day = self.root / "2026-10-19"
         current = json.loads((day / "raw_schedule_response.json").read_text())
         self.assertEqual(current["gameWeek"][0]["games"][0]["startTimeUTC"], "2026-10-19T23:30:00Z")
-        first = sorted((day / "snapshots").iterdir())[0]
-        kept = json.loads((first / "raw_schedule_response.json").read_text())
+        first = sorted(day.glob("raw_schedule_response.fetch=*.json"))[0]
+        kept = json.loads(first.read_text())
         self.assertEqual(kept["gameWeek"][0]["games"][0]["startTimeUTC"], "2026-10-19T23:00:00Z")
 
 

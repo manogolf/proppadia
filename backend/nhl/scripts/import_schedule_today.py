@@ -204,18 +204,22 @@ def _write_slate_health(date_str: str, games: list[dict], completion_status: str
     # changes are research evidence and are never overwritten.
     stamp = str(LAST_FETCH_EVIDENCE.get("fetch_timestamp_utc")
                 or dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"))
-    snapshot = dest / "snapshots" / f"fetch={stamp.replace(':', '')}"
-    snapshot.mkdir(parents=True, exist_ok=False)
+    # Snapshots sit beside the current files in the existing slate folder,
+    # named by fetch time; "x" mode refuses to overwrite an existing one.
+    tag = stamp.replace(":", "")
     if raw_text is not None:
-        (snapshot / "raw_schedule_response.json").write_text(raw_text)
-    (snapshot / "slate_health.json").write_text(health_text)
+        with (dest / f"raw_schedule_response.fetch={tag}.json").open("x") as handle:
+            handle.write(raw_text)
+    snapshot_health = dest / f"slate_health.fetch={tag}.json"
+    with snapshot_health.open("x") as handle:
+        handle.write(health_text)
     health_path = dest / "slate_health.json"
     # A failed or partial fetch never replaces a good current schedule; it is
     # retained in its snapshot and the caller still fails.
     if not downstream_ready and health_path.is_file():
         try:
             if json.loads(health_path.read_text()).get("downstream_ready") is True:
-                return snapshot / "slate_health.json"
+                return snapshot_health
         except (OSError, ValueError):
             pass
     if raw_text is not None:
