@@ -12,3 +12,13 @@ scikit-learn==1.6.1
 joblib>=1.3,<2
 orjson>=3.9,<4
 httpx>=0.27,<1
+
+# Batch/research script dependencies (local Mac jobs, not the hosted API, whose
+# list is backend/requirements.txt). Pinned to the versions installed and in
+# use on 2026-10-19; they were previously installed but undeclared.
+SQLAlchemy==2.0.46
+lightgbm==4.6.0
+statsmodels==0.14.5
+pyarrow==21.0.0
+matplotlib==3.10.8
+psycopg2-binary==2.9.10
