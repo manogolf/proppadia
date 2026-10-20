@@ -151,14 +151,39 @@ research login.
 Not readers, and still failing without the owner login:
 
 - The moneyline shadow lifecycle (`run_mlb_public_game_moneyline_daily_v1`)
-  appends to `mlb.public_game_official_finals`,
-  `public_game_team_state_snapshots`, `public_game_moneyline_predictions`, and
-  `public_game_moneyline_outcomes` through the generic route. Run 97 logged
-  `MLB moneyline shadow lifecycle failed ... exit_status=1`. It needs a
-  restricted writer route (ingest grants or fixed functions).
+  failed in run 97 (`exit_status=1`). The route is prepared below.
 - Other run-97 warnings were already failing before the owner was removed:
   the phase-authority staleness, the BetOnline validation, and the routine
   cohort's missing support file.
+
+## Moneyline shadow lifecycle writer route (prepared 2026-10-19)
+
+The lifecycle's only database code is `durable_store_v1`. Everything else in
+its import closure (18 modules) is file or HTTP work.
+
+| Relation | Lifecycle use | Ingest grant |
+| --- | --- | --- |
+| `mlb.public_game_official_finals` | `INSERT ... ON CONFLICT (game_pk) DO NOTHING RETURNING game_pk`; conflict read-back; cutoff read | SELECT 13 columns; INSERT 14 columns |
+| `mlb.public_game_official_final_corrections` | read through `LEFT JOIN LATERAL (SELECT * ...)` | SELECT all 10 columns; no INSERT |
+| `mlb.public_game_team_state_snapshots` | `INSERT ... ON CONFLICT DO NOTHING RETURNING state_hash`; read-back | SELECT 3; INSERT 7 |
+| `mlb.public_game_moneyline_predictions` | designated-snapshot check; `INSERT ... ON CONFLICT DO NOTHING`; read-back; ungraded read | SELECT 8; INSERT 22 |
+| `mlb.public_game_moneyline_outcomes` | ungraded anti-join; `INSERT ... ON CONFLICT DO NOTHING`; read-back | SELECT 5; INSERT 17 |
+
+Route: the existing ingest login. The hook
+`bin/mlb_public_game_moneyline_daily_hook.sh` sets `MLB_USE_RESTRICTED_INGEST=1`
+on the lifecycle process, so the shared `pg_connect()` connects as the
+ingest login, assumes `proppadia_mlb_ingest`, and runs the ingest contract
+check. Column grants fit better than fixed functions here. The lifecycle only
+appends with `ON CONFLICT DO NOTHING`, which needs no UPDATE privilege. All
+five tables are owner-owned with RLS off, use no sequence on the insert
+targets, and already reject UPDATE and DELETE through `reject_mutation`
+triggers. A function would duplicate that SQL without narrowing it.
+
+SQL, not applied: `backend/mlb/sql/migrations/20261019_mlb_moneyline_lifecycle_ingest_write.sql` and its rollback. Its verification block uses only
+`has_*_privilege`, because the SQL editor's `postgres` login cannot
+`SET ROLE` to the ingest group. The verification queries and the preflight
+conditions were run read-only through the research login. Before applying, the
+first query returns all false and the second returns zero rows.
 
 ## Materialized-view refresh
 

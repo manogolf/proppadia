@@ -738,9 +738,10 @@ inventory section "Run 97 silent fallbacks". The daily wrapper now exports
 `MLB_RESEARCH_DATABASE_URL` for the whole run. The remaining generic readers
 use the existing research opt-in. Their extra columns are in
 `backend/mlb/sql/migrations/20261019_mlb_research_daily_fallback_read.sql`, prepared, not applied; it includes `player_props.user_id`, flagged
-for review. Still open: the moneyline shadow lifecycle writes
-`mlb.public_game_*` through the generic route. It failed in run 97 and needs
-a restricted writer route.
+for review. The moneyline shadow lifecycle, which writes `mlb.public_game_*` and failed
+in run 97, now runs on the ingest login (hook opt-in). Its column
+SELECT/INSERT grants are prepared, not applied: `backend/mlb/sql/migrations/20261019_mlb_moneyline_lifecycle_ingest_write.sql`. Until both files are
+applied, those readers and the lifecycle still fail.
 
 ### Operator decisions
 
@@ -752,7 +753,7 @@ a restricted writer route.
 - When to install the tracked daily wrapper (after the current production
   run) and to fast-forward local main.
 - Whether to apply `backend/mlb/sql/migrations/20261019_mlb_research_daily_fallback_read.sql`, with or without `player_props.user_id`.
-- The restricted writer route for the moneyline shadow lifecycle.
+- Whether to apply `backend/mlb/sql/migrations/20261019_mlb_moneyline_lifecycle_ingest_write.sql` (moneyline lifecycle ingest grants).
 - Whether to delete or keep (offline, outside the repository) the backup
   copies (step 5).
 - Timing of rotation (step 6). Rotation and provider-side changes are

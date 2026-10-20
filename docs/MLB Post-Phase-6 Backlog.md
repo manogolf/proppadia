@@ -445,9 +445,10 @@ writer validation does not authorize a hosted cutover or a different writer.
     login, and the wrapper now exports `MLB_RESEARCH_DATABASE_URL` for the
     run. The extra columns are prepared, not applied, in `backend/mlb/sql/migrations/20261019_mlb_research_daily_fallback_read.sql`; review
     `player_props.user_id`. The details are in the inventory section "Run 97
-    silent fallbacks". Open: the moneyline shadow lifecycle writer failed in
-    run 97 and needs a restricted writer route; installing the tracked
-    wrapper.
+    silent fallbacks". The moneyline shadow lifecycle writer, which failed in
+    run 97, now runs on the ingest login through its hook. Its column grants
+    are prepared, not applied: `backend/mlb/sql/migrations/20261019_mlb_moneyline_lifecycle_ingest_write.sql`. Open: the operator applying both SQL
+    files, installing the tracked wrapper, and a natural run.
 
 - 2026-10-19 hosted API (isolation plan step 8): the Render API still used
   the owner login for its MLB reads and its `mlb.player_props` INSERT (POST
