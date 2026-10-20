@@ -402,17 +402,16 @@ Responses:
   exist, `phase_authority_verification`. The value is
   `COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY`: the authority checks the committed
   snapshot hash chain but not the git-ignored raw schedule sources. It is
-  `COMMITTED_SNAPSHOT_AND_SIGNED_DB_CHAIN` when verified games from the signed
-  DB chain were added. Rows also carry `phase_authority_extension.status`:
-  `DB_CHAIN_NOT_CONFIGURED`, `DB_CHAIN_KEY_UNAVAILABLE`,
-  `DB_CHAIN_KEY_ID_MISMATCH`, `DB_CHAIN_UNAVAILABLE`, or `DB_CHAIN_VERIFIED`
-  (with entry count, head hash and added game count). See
+  `COMMITTED_SNAPSHOT_AND_DB_HASH_CHAIN` when verified games from the DB
+  hash chain were added. Rows also carry `phase_authority_extension.status`:
+  `DB_CHAIN_UNAVAILABLE` or `DB_CHAIN_VERIFIED` (with entry count, head hash
+  and added game count). See
   `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`.
 - Phase authority evidence unavailable: `200` with `rows: []`, `count: 0`,
   `unavailable_status: "PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE"`, and
   `unavailable_code` set to the authority's typed error code (for example
-  `SNAPSHOT_PROPOSAL_HASH_MISMATCH`, or a `DB_CHAIN_*` code when the signed
-  DB chain fails verification). The evidence failed verification, so no row
+  `SNAPSHOT_PROPOSAL_HASH_MISMATCH`, or a `DB_CHAIN_*` code when the DB
+  hash chain fails verification). The evidence failed verification, so no row
   is published and there is no fallback. Evidence
   paths are not included in the response.
 - Game absent from the committed snapshot: the row is withheld and listed in

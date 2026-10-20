@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Operator CLI for the signed MLB phase-authority DB chain.
+"""Operator CLI for the MLB phase-authority DB chain.
 
---key-id     print the key id of MLB_PHASE_AUTHORITY_CHAIN_KEY (never the key).
 --verify     read the chain (restricted ingest login) and verify it fully.
 --publish    re-publish games from a retained selection receipt, for example
              after a failed daily publication.
@@ -12,41 +11,27 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
 
 import backend.supabase.supabase_utils  # noqa: F401 - loads backend/.env
 from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
 from backend.mlb.season_transition.phase_authority_db_chain_v1 import (
-    KEY_ENV,
     PhaseChainError,
     fetch_chain_rows,
     ingest_connect,
     load_config,
-    load_key,
     publish_runtime_records,
-    signing_key_id,
     verify_chain,
 )
 from backend.mlb.season_transition.phase_authority_snapshot_v1 import REPO_ROOT
 from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
 
 
-def _key_id() -> dict:
-    text = str(os.environ.get(KEY_ENV) or "").strip()
-    if len(text) != 64:
-        raise PhaseChainError("DB_CHAIN_KEY_UNAVAILABLE")
-    return {"signing_key_id": signing_key_id(bytes.fromhex(text))}
-
-
 def _verify() -> dict:
     config = load_config()
-    key = load_key(config)
-    if key is None:
-        raise PhaseChainError("DB_CHAIN_KEY_UNAVAILABLE")
     with ingest_connect() as conn:
         rows = fetch_chain_rows(conn, str(config["chain_id"]))
-    chain = verify_chain(rows, config=config, key=key, base=HashedProposalAuthority())
+    chain = verify_chain(rows, config=config, base=HashedProposalAuthority())
     return {"status": "DB_CHAIN_VERIFIED", "entry_count": chain.entry_count,
             "head_entry_sha256": chain.head_sha256, "game_pks": sorted(chain.game_pks),
             "extension_game_pks": sorted(chain.records)}
@@ -74,14 +59,12 @@ def _publish(receipt_path: Path, game_pks: list[int]) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     actions = parser.add_mutually_exclusive_group(required=True)
-    actions.add_argument("--key-id", action="store_true")
     actions.add_argument("--verify", action="store_true")
     actions.add_argument("--publish", type=Path, metavar="SELECTION_RECEIPT")
     parser.add_argument("--game-pk", type=int, action="append", default=[])
     args = parser.parse_args()
     try:
-        result = (_key_id() if args.key_id else _verify() if args.verify
-                  else _publish(args.publish, args.game_pk))
+        result = _verify() if args.verify else _publish(args.publish, args.game_pk)
     except Exception as exc:
         print(json.dumps({"status": "BLOCKED", "error": getattr(exc, "code", type(exc).__name__)}))
         return 2

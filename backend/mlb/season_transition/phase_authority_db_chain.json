@@ -5,6 +5,5 @@
   "chain_id": "MLB_2026_PHASE_AUTHORITY_DB_CHAIN_V1",
   "contract_name": "MLB_PHASE_AUTHORITY_DB_CHAIN_V1",
   "schema_version": 1,
-  "signing_key_id": null,
   "supported_season": 2026
 }

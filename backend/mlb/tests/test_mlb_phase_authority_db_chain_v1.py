@@ -1,4 +1,4 @@
-"""Signed DB phase-authority chain: writer, verifier, hosted read, SQL contract.
+"""Hash-chained DB phase-authority chain: writer, verifier, hosted read, SQL contract.
 
 Uses committed files and an in-memory connection only; no database or raw sources.
 """
@@ -24,16 +24,13 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     HashedProposalAuthority,
 )
 from backend.mlb.season_transition.phase_authority_db_chain_v1 import (
-    KEY_ENV,
     PhaseChainError,
     extend_public_authority,
     publish_runtime_records,
-    signing_key_id,
 )
 
-KEY = bytes(range(32))
-ENV = {KEY_ENV: KEY.hex()}
 MIGRATION = REPO_ROOT / "backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql"
+KEYLESS = REPO_ROOT / "backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain_keyless.sql"
 ROLLBACK = REPO_ROOT / "backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain_rollback.sql"
 SOURCE_SHA = "a" * 64
 
@@ -83,9 +80,10 @@ class FakeChainDatabase:
     def connect(self):
         return FakeConnection(self)
 
-    def append(self, chain_id, sequence, game_pk, prev, entry_sha, text, signature, key_id):
+    def append(self, chain_id, sequence, game_pk, prev, entry_sha, text):
         entry = json.loads(text)
         if (hashlib.sha256(text.encode()).hexdigest() != entry_sha or entry["sequence"] != sequence
+                or "signing_key_id" in entry
                 or entry["prev_entry_sha256"] != prev or entry["record"]["game_pk"] != game_pk
                 or entry["record"]["season_phase"] != "POSTSEASON"):
             raise RuntimeError("22023")
@@ -97,7 +95,6 @@ class FakeChainDatabase:
         self.rows.append({
             "chain_id": chain_id, "sequence": sequence, "game_pk": game_pk,
             "prev_entry_sha256": prev, "entry_sha256": entry_sha, "entry_text": text,
-            "signature_hmac_sha256": signature, "signing_key_id": key_id,
         })
         return 1
 
@@ -138,9 +135,7 @@ class DbChainTests(unittest.TestCase):
         directory = Path(tempfile.mkdtemp(prefix="db_chain_", dir=REPO_ROOT / "tmp"))
         self.addCleanup(shutil.rmtree, directory, True)
         self.config_path = directory / "phase_authority_db_chain.json"
-        config = json.loads(chain_module.CONFIG_PATH.read_text())
-        config["signing_key_id"] = signing_key_id(KEY)
-        self.config_path.write_text(json.dumps(config))
+        self.config_path.write_text(chain_module.CONFIG_PATH.read_text())
         self.base = HashedProposalAuthority(verify_source_bytes=False)
         self.db = FakeChainDatabase()
 
@@ -148,10 +143,10 @@ class DbChainTests(unittest.TestCase):
         runtime = FakeRuntime(FullyVerifiedBase(self.base), records)
         return publish_runtime_records(
             runtime, [record.game_pk for record in records], selection_receipt_sha256="b" * 64,
-            connect=self.db.connect, environ=ENV, config_path=self.config_path, **kwargs)
+            connect=self.db.connect, config_path=self.config_path, **kwargs)
 
     def extend(self, **kwargs):
-        options = {"connect": self.db.connect, "environ": ENV, "config_path": self.config_path}
+        options = {"connect": self.db.connect, "config_path": self.config_path}
         options.update(kwargs)
         return extend_public_authority(self.base, **options)
 
@@ -185,7 +180,7 @@ class DbChainTests(unittest.TestCase):
         runtime = FakeRuntime(FullyVerifiedBase(self.base), [])
         result = publish_runtime_records(
             runtime, [committed.game_pk], selection_receipt_sha256="b" * 64,
-            connect=self.db.connect, environ=ENV, config_path=self.config_path)
+            connect=self.db.connect, config_path=self.config_path)
         self.assertEqual(result["status"], "NOTHING_TO_PUBLISH")
 
     # Tamper detection -------------------------------------------------------
@@ -203,13 +198,13 @@ class DbChainTests(unittest.TestCase):
             rows[1]["entry_text"] = rows[1]["entry_text"].replace("World Series", "AL Championship Series")
         self.assert_tamper(mutate, "DB_CHAIN_ENTRY_HASH_MISMATCH")
 
-    def test_rehashed_edit_fails_signature(self) -> None:
+    def test_rehashed_middle_edit_breaks_next_link(self) -> None:
         def mutate(rows):
-            entry = json.loads(rows[2]["entry_text"])
+            entry = json.loads(rows[1]["entry_text"])
             entry["record"]["source_round"] = "Forged Series"
             text = chain_module.canonical_json_bytes(entry).decode()
-            rows[2].update(entry_text=text, entry_sha256=hashlib.sha256(text.encode()).hexdigest())
-        self.assert_tamper(mutate, "DB_CHAIN_SIGNATURE_INVALID")
+            rows[1].update(entry_text=text, entry_sha256=hashlib.sha256(text.encode()).hexdigest())
+        self.assert_tamper(mutate, "DB_CHAIN_LINK_INVALID")
 
     def test_deleted_middle_entry_breaks_links(self) -> None:
         self.assert_tamper(lambda rows: rows.pop(1), "DB_CHAIN_LINK_INVALID")
@@ -219,19 +214,18 @@ class DbChainTests(unittest.TestCase):
             rows[1], rows[2] = rows[2], rows[1]
         self.assert_tamper(mutate, "DB_CHAIN_LINK_INVALID")
 
-    def test_forged_entry_with_other_key_fails(self) -> None:
+    def test_entry_from_another_chain_fails(self) -> None:
         other = FakeChainDatabase()
         self.db, original = other, self.db
-        self.publish(world_series_record())
+        self.publish(world_series_record(849901))
         self.db = original
-        forged = dict(other.rows[0])
-        forged["signature_hmac_sha256"] = "0" * 64
-        self.db.rows.append(forged)
+        self.publish(world_series_record())
+        self.db.rows.append(dict(other.rows[0], sequence=2))
         with self.assertRaises(PhaseChainError) as caught:
             self.extend()
-        self.assertEqual(caught.exception.code, "DB_CHAIN_SIGNATURE_INVALID")
+        self.assertEqual(caught.exception.code, "DB_CHAIN_LINK_INVALID")
 
-    def test_signed_entry_conflicting_with_snapshot_fails(self) -> None:
+    def test_entry_conflicting_with_snapshot_fails(self) -> None:
         conflicting = world_series_record(849815)  # committed as ALCS
         with self.assertRaises(PhaseChainError):
             self.publish(conflicting)
@@ -239,7 +233,7 @@ class DbChainTests(unittest.TestCase):
         runtime = FakeRuntime(FullyVerifiedBase(self.base), [conflicting])
         runtime.base = FullyVerifiedBase(_AbsentBase(self.base))
         publish_runtime_records(runtime, [849815], selection_receipt_sha256="b" * 64,
-                                connect=self.db.connect, environ=ENV, config_path=self.config_path)
+                                connect=self.db.connect, config_path=self.config_path)
         with self.assertRaises(PhaseChainError) as caught:
             self.extend()
         self.assertEqual(caught.exception.code, "DB_CHAIN_BASE_CONFLICT")
@@ -260,36 +254,31 @@ class DbChainTests(unittest.TestCase):
             self.extend()
         self.assertEqual(caught.exception.code, "DB_CHAIN_ANCHOR_NOT_IN_ACTIVE_LINEAGE")
 
-    # Configuration gaps withhold only ---------------------------------------
-    def test_unconfigured_chain_never_touches_database(self) -> None:
-        def refuse():
-            raise AssertionError("database reached")
-        authority, status = self.extend(connect=refuse, config_path=chain_module.CONFIG_PATH)
-        self.assertIs(authority, self.base)
-        self.assertEqual(status, {"status": "DB_CHAIN_NOT_CONFIGURED"})
-
-    def test_missing_or_wrong_key_and_unreachable_table_withhold_only(self) -> None:
-        self.assertEqual(self.extend(environ={})[1]["status"], "DB_CHAIN_KEY_UNAVAILABLE")
-        self.assertEqual(self.extend(environ={KEY_ENV: "11" * 32})[1]["status"], "DB_CHAIN_KEY_ID_MISMATCH")
-
+    # An unreachable or missing table withholds only ----------------------------
+    def test_unreachable_table_withholds_only(self) -> None:
         def unreachable():
             raise ConnectionError("down")
         authority, status = self.extend(connect=unreachable)
         self.assertIs(authority, self.base)
         self.assertEqual(status["status"], "DB_CHAIN_UNAVAILABLE")
 
+    def test_empty_chain_serves_committed_snapshot(self) -> None:
+        authority, status = self.extend()
+        self.assertIs(authority, self.base)
+        self.assertEqual((status["status"], status["entry_count"]), ("DB_CHAIN_VERIFIED", 0))
+
     # Writer guards ------------------------------------------------------------
     def test_writer_requires_full_verification_and_restricted_ingest(self) -> None:
         runtime = FakeRuntime(self.base, [world_series_record()])
         with self.assertRaises(PhaseChainError) as caught:
             publish_runtime_records(runtime, [849900], selection_receipt_sha256="b" * 64,
-                                    connect=self.db.connect, environ=ENV, config_path=self.config_path)
+                                    connect=self.db.connect, config_path=self.config_path)
         self.assertEqual(caught.exception.code, "DB_CHAIN_WRITER_REQUIRES_FULL_VERIFICATION")
         runtime.base = FullyVerifiedBase(self.base)
         # Without the ingest URL the writer refuses; it never falls back to another login.
         with self.assertRaises(PhaseChainError) as caught:
             publish_runtime_records(runtime, [849900], selection_receipt_sha256="b" * 64,
-                                    environ=ENV, config_path=self.config_path)
+                                    environ={}, config_path=self.config_path)
         self.assertEqual(caught.exception.code, "DB_CHAIN_WRITER_REQUIRES_RESTRICTED_INGEST")
 
     def test_daily_hook_is_opt_in_and_non_fatal(self) -> None:
@@ -301,8 +290,8 @@ class DbChainTests(unittest.TestCase):
             self.assertEqual(daily._publish_phase_authority_chain(None, [], None, write_durable=True),
                              {"status": "DISABLED"})
             os.environ[daily.PHASE_AUTHORITY_CHAIN_PUBLISH_ENV] = "1"
+            os.environ.pop("MLB_INGEST_DATABASE_URL", None)
             runtime = FakeRuntime(FullyVerifiedBase(self.base), [world_series_record()])
-            os.environ.pop(KEY_ENV, None)
             result = daily._publish_phase_authority_chain(
                 runtime, [{"game_id": 849900}], {"sha256": "b" * 64}, write_durable=True)
         self.assertEqual(result["status"], "FAILED")
@@ -317,7 +306,7 @@ class DbChainTests(unittest.TestCase):
 
         self.publish(world_series_record())
         row = {**_scored_game(849900, "2026-10-24T00:08:00Z"), "game_date": "2026-10-23"}
-        extend = functools.partial(extend_public_authority, connect=self.db.connect, environ=ENV,
+        extend = functools.partial(extend_public_authority, connect=self.db.connect,
                                    config_path=self.config_path)
         with unittest.mock.patch.object(service, "extend_public_authority", extend), \
                 unittest.mock.patch.object(service, "fetch_prediction_rows", lambda _date: [row]), \
@@ -326,13 +315,13 @@ class DbChainTests(unittest.TestCase):
             payload = client.get("/api/mlb/game-predictions", params={"game_date": "2026-10-23"}).json()
             self.assertEqual(payload["count"], 1)
             self.assertEqual(payload["rows"][0]["postseason_round"], "WORLD_SERIES")
-            self.assertEqual(payload["phase_authority_verification"], "COMMITTED_SNAPSHOT_AND_SIGNED_DB_CHAIN")
+            self.assertEqual(payload["phase_authority_verification"], "COMMITTED_SNAPSHOT_AND_DB_HASH_CHAIN")
             self.assertEqual(payload["phase_authority_extension"]["status"], "DB_CHAIN_VERIFIED")
-            self.db.rows[0]["signature_hmac_sha256"] = "0" * 64
+            self.db.rows[0]["entry_text"] = self.db.rows[0]["entry_text"].replace("World Series", "Forged Series")
             payload = client.get("/api/mlb/game-predictions", params={"game_date": "2026-10-23"}).json()
         self.assertEqual(payload["count"], 0)
         self.assertEqual(payload["unavailable_status"], "PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE")
-        self.assertEqual(payload["unavailable_code"], "DB_CHAIN_SIGNATURE_INVALID")
+        self.assertEqual(payload["unavailable_code"], "DB_CHAIN_ENTRY_HASH_MISMATCH")
 
 
 class _AbsentBase:
@@ -389,6 +378,24 @@ class MigrationContractTests(unittest.TestCase):
         rollback = ROLLBACK.read_text()
         self.assertIn("kept without grants", rollback)
         self.assertIn("IF EXISTS (SELECT 1 FROM mlb.phase_authority_chain_entries)", rollback)
+
+
+class KeylessMigrationContractTests(unittest.TestCase):
+    def test_keyless_migration_drops_signatures_only_on_empty_table(self) -> None:
+        sql = KEYLESS.read_text()
+        code = "\n".join(line for line in sql.splitlines() if not line.lstrip().startswith("--"))
+        self.assertIn("phase authority chain already has entries", code)
+        self.assertIn("DROP COLUMN signature_hmac_sha256", code)
+        self.assertIn("DROP COLUMN signing_key_id", code)
+        self.assertIn("SECURITY DEFINER\nSET search_path = pg_catalog", code)
+        self.assertIn("GRANT EXECUTE ON FUNCTION mlb.append_phase_authority_chain_entry(text,bigint,bigint,text,text,text) TO proppadia_mlb_ingest", code)
+        self.assertNotRegex(code, r"GRANT\s+(INSERT|UPDATE|DELETE|TRUNCATE|ALL)")
+        files = sorted(KEYLESS.with_name(KEYLESS.stem + "_verify").glob("*.sql"))
+        self.assertEqual(len(files), 5)
+        for path in files:
+            body = "\n".join(line for line in path.read_text().splitlines() if not line.startswith("--"))
+            self.assertEqual(body.count(";"), 1, path.name)
+        self.assertIn("(text,bigint,bigint,text,text,text)", ROLLBACK.read_text())
 
 
 if __name__ == "__main__":

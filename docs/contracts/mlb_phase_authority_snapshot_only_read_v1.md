@@ -55,34 +55,35 @@ failure (conflict, special, stale, correction review) still fails the request.
 The row is served once a governed snapshot child adds the game and that child
 is activated, committed, and deployed.
 
-## Signed DB chain extension (table applied 2026-10-20; not active until the key id is committed)
+## DB hash-chain extension (table applied 2026-10-20; keyless follow-up prepared)
 
 New postseason games can reach the hosted read without a code push. The local
-daily run writes them to a signed, append-only chain in the database. The
-hosted read re-verifies that chain on every request.
+daily run writes them to an append-only, hash-chained table in the database.
+The hosted read re-verifies that chain on every request. There is no signing
+key.
 
-- **Table:** `mlb.phase_authority_chain_entries`. Prepared SQL:
-  `backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql`
-  (rollback `..._rollback.sql`; editor checks in `..._verify/` (one query per file) and
-  `..._rollback_verify.sql`).
+- **Table:** `mlb.phase_authority_chain_entries`.
+  - Created by `backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql`,
+    which is applied.
+  - `20261020_mlb_phase_authority_db_chain_keyless.sql` (prepared) drops the
+    two signature columns and the old 8-argument function. It runs only while
+    the table is empty.
+  - Rollback for both: `..._rollback.sql`. Editor checks are in the
+    `..._verify/` folders, one query per file.
   - Each row is one canonical-JSON entry: sequence, previous entry SHA-256,
-    anchor, signing key id, and the exact phase record.
-  - The entry SHA-256 is checked by a table constraint.
-  - Triggers refuse `UPDATE`, `DELETE` and `TRUNCATE` for every role.
+    anchor, and the exact phase record.
+  - A table constraint checks the entry SHA-256. Triggers refuse `UPDATE`,
+    `DELETE` and `TRUNCATE` for every role.
 - **Writer:** the local daily run uses `proppadia_mlb_ingest` and calls only
   `mlb.append_phase_authority_chain_entry`. That function is `SECURITY
   DEFINER` with `search_path=pg_catalog`. It accepts only the next sequence
-  linked to the current head and the same anchor and key id. It does not
-  verify the HMAC signature, because the key never enters the database.
+  linked to the current head, with the same anchor.
 - **Readers:** `proppadia_api` and `proppadia_mlb_ingest` get `SELECT` only.
   Row-level security is enabled, so other API roles see nothing.
-- **Anchor and key:** both are committed in
-  `backend/mlb/season_transition/phase_authority_db_chain.json`.
-  - The anchor is the V6 descriptor. Entry 1 must link to it, and it must be
-    in the active committed descriptor's lineage.
-  - `signing_key_id` is `null`, so the extension is off. The HMAC-SHA256 key
-    is `MLB_PHASE_AUTHORITY_CHAIN_KEY`, set locally in `backend/.env` and on
-    Render. A key whose id differs from the committed one is not used.
+- **Anchor:** committed in
+  `backend/mlb/season_transition/phase_authority_db_chain.json`. It is the V6
+  descriptor. Entry 1 must link to it, and it must be in the active committed
+  descriptor's lineage.
 - **What gets written:** only games the fully verified local runtime overlay
   accepted. The base must be `RAW_SOURCE_BYTES_VERIFIED`.
   - Only `POSTSEASON` records are accepted. Labels are re-derived from the
@@ -91,27 +92,31 @@ hosted read re-verifies that chain on every request.
     conflicting one fails.
   - `run_mlb_public_game_moneyline_daily_v1.py` publishes the admitted games
     after durable writes when `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1`. It opens
-    its own identity-checked connection from `MLB_INGEST_DATABASE_URL`; the
-    rest of the run keeps its connections. A publication failure is recorded
-    in the run result and never fails the run.
+    its own identity-checked connection from `MLB_INGEST_DATABASE_URL`, and
+    the rest of the run keeps its connections. A publication failure is
+    recorded in the run result and never fails the run.
   - `publish_mlb_phase_authority_chain_v1.py --publish RECEIPT` retries from a
     retained selection receipt; `--verify` checks the chain.
 - **Hosted read:** `extend_public_authority` loads the whole chain on each
   request and verifies every entry: canonical bytes, hash, link from the
-  anchor, sequence, key id, HMAC, contract classification, unique gamePk,
-  and agreement with the committed snapshot.
+  anchor, sequence, contract classification, unique gamePk, and agreement with
+  the committed snapshot.
   - **Verification passes:** the chain's games are added to the committed
     snapshot. `phase_authority_verification` is
-    `COMMITTED_SNAPSHOT_AND_SIGNED_DB_CHAIN`.
+    `COMMITTED_SNAPSHOT_AND_DB_HASH_CHAIN`.
   - **Any check fails:** the request publishes no rows
     (`PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE`, `DB_CHAIN_*` code).
-  - **Config off, key missing or table unreachable:** the committed snapshot
-    is used alone. Chain-only games are withheld as before, and
-    `phase_authority_extension.status` gives the reason.
-- **What the chain cannot detect:** an attacker who can write the table but
-  lacks the key cannot add or change an entry undetected. Deleting the newest
-  entries can only withhold games. A later committed child that absorbs chain
-  games stays compatible.
+  - **Table unreachable or missing:** the committed snapshot is used alone.
+    Chain-only games are withheld, and `phase_authority_extension.status` is
+    `DB_CHAIN_UNAVAILABLE`.
+- **What the chain cannot detect:** edits, deletions and reordering are
+  blocked by the triggers and detected by the hash links. A role with owner
+  access could disable the triggers and rewrite the whole chain consistently.
+  The read cannot detect that, just as a repository writer could rewrite the
+  committed files. It would still have to pass the classification checks and
+  agree with the committed snapshot. Deleting the newest entries can only
+  withhold games. A later committed child that absorbs chain games stays
+  compatible.
 
 Tests: `backend/mlb/tests/test_mlb_phase_authority_db_chain_v1.py`.
 

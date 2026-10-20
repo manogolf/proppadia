@@ -1,11 +1,10 @@
-"""Signed, append-only phase-authority entries in the database (DB chain V1).
+"""Append-only, hash-chained phase-authority entries in the database (DB chain V1).
 
 The committed snapshot stays the root of trust. The local daily run appends
 one entry per new postseason gamePk that its fully verified runtime overlay
 accepted. Each entry links to the previous one by SHA-256 hash, starting from
-the committed anchor descriptor. Each entry is HMAC-signed with a key the
-database never holds. The hosted API re-verifies every entry on each read and
-adds an entry's game only when the whole chain verifies.
+the committed anchor descriptor. The hosted API re-verifies every entry on
+each read and adds an entry's game only when the whole chain verifies.
 
 Contract: docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md.
 """
@@ -13,7 +12,6 @@ from __future__ import annotations
 
 import functools
 import hashlib
-import hmac
 import json
 import os
 import re
@@ -38,24 +36,21 @@ from backend.mlb.season_transition.phase_authority_snapshot_v1 import (
 CONFIG_PATH = Path(__file__).with_name("phase_authority_db_chain.json")
 CONFIG_CONTRACT = "MLB_PHASE_AUTHORITY_DB_CHAIN_V1"
 ENTRY_CONTRACT = "MLB_PHASE_AUTHORITY_DB_CHAIN_ENTRY_V1"
-KEY_ENV = "MLB_PHASE_AUTHORITY_CHAIN_KEY"
-KEY_ID_DOMAIN = b"MLB_PHASE_AUTHORITY_DB_CHAIN_KEY_ID_V1\n"
-SOURCE_VERIFICATION_DB_CHAIN = "COMMITTED_SNAPSHOT_AND_SIGNED_DB_CHAIN"
+SOURCE_VERIFICATION_DB_CHAIN = "COMMITTED_SNAPSHOT_AND_DB_HASH_CHAIN"
 CLASSIFICATION_FIELDS = (
     "source_season", "source_game_type", "season_phase", "postseason_round", "source_round",
 )
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 
 FETCH_SQL = """
-    SELECT chain_id, sequence, game_pk, prev_entry_sha256, entry_sha256, entry_text,
-           signature_hmac_sha256, signing_key_id
+    SELECT chain_id, sequence, game_pk, prev_entry_sha256, entry_sha256, entry_text
       FROM mlb.phase_authority_chain_entries
      WHERE chain_id = %s
      ORDER BY sequence
 """
 APPEND_SQL = """
     SELECT mlb.append_phase_authority_chain_entry(
-        %s, %s, %s, %s, %s, %s, %s, %s
+        %s, %s, %s, %s, %s, %s
     ) AS result_count
 """
 
@@ -72,31 +67,7 @@ def load_config(path: Path = CONFIG_PATH) -> dict[str, Any]:
             or not isinstance(config.get("supported_season"), int)
             or not config.get("admitted_phases")):
         raise PhaseChainError("DB_CHAIN_CONFIG_INVALID")
-    key_id = config.get("signing_key_id")
-    if key_id is not None and not _SHA256.fullmatch(str(key_id)):
-        raise PhaseChainError("DB_CHAIN_CONFIG_INVALID")
     return config
-
-
-def signing_key_id(key: bytes) -> str:
-    return hashlib.sha256(KEY_ID_DOMAIN + key).hexdigest()
-
-
-def load_key(config: Mapping[str, Any], environ: Mapping[str, str] = os.environ) -> bytes | None:
-    """Return the signing key, or None when it is absent. Never logs the key."""
-    text = str(environ.get(KEY_ENV) or "").strip()
-    if not text:
-        return None
-    if not re.fullmatch(r"[0-9a-f]{64}", text):
-        raise PhaseChainError("DB_CHAIN_KEY_MALFORMED")
-    key = bytes.fromhex(text)
-    if not config.get("signing_key_id") or signing_key_id(key) != config["signing_key_id"]:
-        raise PhaseChainError("DB_CHAIN_KEY_ID_MISMATCH")
-    return key
-
-
-def _signature(key: bytes, raw: bytes) -> str:
-    return hmac.new(key, raw, hashlib.sha256).hexdigest()
 
 
 def _descriptor_lineage(path_text: str, sha256: str, *, root: Path) -> set[str]:
@@ -194,7 +165,6 @@ def verify_chain(
     rows: Iterable[Mapping[str, Any]],
     *,
     config: Mapping[str, Any],
-    key: bytes,
     base: CanonicalGamePhaseAuthority,
     root: Path = REPO_ROOT,
 ) -> VerifiedChain:
@@ -204,7 +174,6 @@ def verify_chain(
     if anchor not in _descriptor_lineage(
             metadata.snapshot_descriptor_path, metadata.snapshot_descriptor_sha256, root=root):
         raise PhaseChainError("DB_CHAIN_ANCHOR_NOT_IN_ACTIVE_LINEAGE")
-    key_id = signing_key_id(key)
     previous = anchor
     seen: set[int] = set()
     added: dict[int, GamePhaseAuthorityRecord] = {}
@@ -228,9 +197,6 @@ def verify_chain(
                 or row.get("prev_entry_sha256") != previous
                 or int(row.get("game_pk") or 0) != record.get("game_pk")):
             raise PhaseChainError("DB_CHAIN_LINK_INVALID", detail=str(count))
-        if (row.get("signing_key_id") != key_id or entry.get("signing_key_id") != key_id
-                or not hmac.compare_digest(_signature(key, raw), str(row.get("signature_hmac_sha256") or ""))):
-            raise PhaseChainError("DB_CHAIN_SIGNATURE_INVALID", detail=str(count))
         validate_record(record, config)
         pk = int(record["game_pk"])
         if pk in seen:
@@ -276,7 +242,7 @@ class ChainExtendedAuthority(CanonicalGamePhaseAuthority):
             return record
 
     def is_runtime_exact(self, game_pk: int) -> bool:
-        # Exact sourced gamePks are fresh by their signed source hash, not by
+        # Exact sourced gamePks are fresh by their chained source hash, not by
         # the committed snapshot's date horizon.
         return int(game_pk) in self.chain.records
 
@@ -323,8 +289,7 @@ def fetch_chain_rows(conn, chain_id: str) -> list[dict[str, Any]]:
     with conn.cursor() as cur:
         cur.execute(FETCH_SQL, (chain_id,))
         rows = cur.fetchall() or []
-    names = ("chain_id", "sequence", "game_pk", "prev_entry_sha256", "entry_sha256",
-             "entry_text", "signature_hmac_sha256", "signing_key_id")
+    names = ("chain_id", "sequence", "game_pk", "prev_entry_sha256", "entry_sha256", "entry_text")
     return [dict(row) if isinstance(row, Mapping) else dict(zip(names, row)) for row in rows]
 
 
@@ -332,25 +297,16 @@ def extend_public_authority(
     base: CanonicalGamePhaseAuthority,
     *,
     connect: Callable[[], Any] = _default_connect,
-    environ: Mapping[str, str] = os.environ,
     config_path: Path = CONFIG_PATH,
     root: Path = REPO_ROOT,
 ) -> tuple[CanonicalGamePhaseAuthority, dict[str, Any]]:
     """Return the authority the hosted read uses and a public extension status.
 
-    Configuration gaps and an unreachable table leave the committed snapshot
-    alone, which only withholds rows. A chain that fails verification raises
+    An unreachable or missing table leaves the committed snapshot alone, which
+    only withholds rows. A chain that fails verification raises
     ``PhaseChainError`` so the request publishes nothing.
     """
     config = load_config(config_path)
-    if config.get("signing_key_id") is None:
-        return base, {"status": "DB_CHAIN_NOT_CONFIGURED"}
-    try:
-        key = load_key(config, environ)
-    except PhaseChainError as exc:
-        return base, {"status": exc.code}
-    if key is None:
-        return base, {"status": "DB_CHAIN_KEY_UNAVAILABLE"}
     try:
         with connect() as conn:
             rows = fetch_chain_rows(conn, str(config["chain_id"]))
@@ -358,7 +314,7 @@ def extend_public_authority(
         state = getattr(exc, "sqlstate", None)
         return base, {"status": "DB_CHAIN_UNAVAILABLE",
                       "error": type(exc).__name__ + (f" (SQLSTATE {state})" if state else "")}
-    chain = verify_chain(rows, config=config, key=key, base=base, root=root)
+    chain = verify_chain(rows, config=config, base=base, root=root)
     status = {"status": "DB_CHAIN_VERIFIED", "entry_count": chain.entry_count,
               "head_entry_sha256": chain.head_sha256, "extension_game_count": len(chain.records)}
     if not chain.records:
@@ -377,13 +333,8 @@ def publish_runtime_records(
     root: Path = REPO_ROOT,
     now: datetime | None = None,
 ) -> dict[str, Any]:
-    """Append signed entries for exact games the fully verified overlay accepted."""
+    """Append chained entries for exact games the fully verified overlay accepted."""
     config = load_config(config_path)
-    if config.get("signing_key_id") is None:
-        raise PhaseChainError("DB_CHAIN_NOT_CONFIGURED")
-    key = load_key(config, environ)
-    if key is None:
-        raise PhaseChainError("DB_CHAIN_KEY_UNAVAILABLE")
     base = runtime_authority.base
     if getattr(base, "source_verification", None) != SOURCE_VERIFICATION_RAW_BYTES:
         raise PhaseChainError("DB_CHAIN_WRITER_REQUIRES_FULL_VERIFICATION")
@@ -396,11 +347,10 @@ def publish_runtime_records(
         connect = functools.partial(ingest_connect, environ)
     stamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
     published_at = stamp.isoformat().replace("+00:00", "Z")
-    key_id = signing_key_id(key)
     appended: list[int] = []
     with connect() as conn:
         rows = fetch_chain_rows(conn, str(config["chain_id"]))
-        chain = verify_chain(rows, config=config, key=key, base=base, root=root)
+        chain = verify_chain(rows, config=config, base=base, root=root)
         by_pk = {int(row["game_pk"]): json.loads(row["entry_text"])["record"] for row in rows}
         previous, sequence = (chain.head_sha256, chain.entry_count)
         with conn.cursor() as cur:
@@ -435,13 +385,12 @@ def publish_runtime_records(
                     "record": record,
                     "schema_version": 1,
                     "sequence": sequence,
-                    "signing_key_id": key_id,
                 }
                 raw = canonical_json_bytes(entry)
                 entry_sha = hashlib.sha256(raw).hexdigest()
                 cur.execute(APPEND_SQL, (
                     config["chain_id"], sequence, pk, previous, entry_sha,
-                    raw.decode("utf-8"), _signature(key, raw), key_id,
+                    raw.decode("utf-8"),
                 ))
                 result = cur.fetchone()
                 count = result["result_count"] if isinstance(result, Mapping) else (result or [None])[0]

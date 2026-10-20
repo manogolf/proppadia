@@ -398,7 +398,7 @@ PHASE_AUTHORITY_CHAIN_PUBLISH_ENV = "MLB_PHASE_AUTHORITY_CHAIN_PUBLISH"
 
 
 def _publish_phase_authority_chain(runtime_authority, admitted, selection_receipt, *, write_durable: bool):
-    """Append admitted postseason games to the signed DB chain (opt-in, non-fatal).
+    """Append admitted postseason games to the DB hash chain (opt-in, non-fatal).
 
     Predictions are already durable; a publication failure only keeps the
     hosted API withholding these games and is reported in the run result.

@@ -1,4 +1,5 @@
--- Prepared 2026-10-20; NOT APPLIED. Rolls back 20261020_mlb_phase_authority_db_chain.sql.
+-- Prepared 2026-10-20; NOT APPLIED. Rolls back 20261020_mlb_phase_authority_db_chain.sql
+-- and, if applied, 20261020_mlb_phase_authority_db_chain_keyless.sql.
 -- Stops new appends and all reads at once. The hosted API then serves only the
 -- committed snapshot; games known only to the chain are withheld again.
 -- An empty table is dropped. A populated table is kept, with no grants, so the
@@ -10,6 +11,9 @@ BEGIN
     IF pg_catalog.to_regprocedure(
            'mlb.append_phase_authority_chain_entry(text,bigint,bigint,text,text,text,text,text)') IS NOT NULL THEN
         DROP FUNCTION mlb.append_phase_authority_chain_entry(text,bigint,bigint,text,text,text,text,text);
+    END IF;
+    IF pg_catalog.to_regprocedure('mlb.append_phase_authority_chain_entry(text,bigint,bigint,text,text,text)') IS NOT NULL THEN
+        DROP FUNCTION mlb.append_phase_authority_chain_entry(text,bigint,bigint,text,text,text);
     END IF;
     IF pg_catalog.to_regclass('mlb.phase_authority_chain_entries') IS NULL THEN
         RETURN;

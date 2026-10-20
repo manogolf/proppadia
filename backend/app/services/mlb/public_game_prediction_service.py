@@ -89,7 +89,7 @@ def _phase_joined_rows(
         return [], [], None, None
     # Hosts lack the git-ignored raw schedule sources, so the projection reads
     # the committed hash-chained snapshot. Row admission was fully verified.
-    # Games added since the last deploy come from the signed DB chain, which
+    # Games added since the last deploy come from the DB hash chain, which
     # is re-verified from the committed anchor on every request.
     authority, extension = extend_public_authority(snapshot_verified_moneyline_phase_authority())
     joined = []

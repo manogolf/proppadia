@@ -1119,11 +1119,11 @@ consumers keep full verification. Open items:
   `GOVERNED_CHILD_VALID_SUPERSEDED` instead of failing once V6 is selected.
   `test_25` now uses a synthetic absent gamePk, so it no longer depends on
   849815 being absent.
-- **Signed DB chain prepared, not active (2026-10-20, branch
-  `claude/mlb-phase-authority-db-chain`).** New postseason games reach the
-  hosted read after the morning run, with no code push. See "Signed DB chain
-  extension" in `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`.
-  **Open, operator:**
+- **DB hash chain (2026-10-20, branch `claude/mlb-phase-authority-db-chain`).**
+  New postseason games reach the hosted read after the morning run, with no
+  code push. See "DB hash-chain extension" in
+  `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`. HMAC signing
+  was dropped at the operator's direction, so there is no key to manage.
   1. Done 2026-10-20: the operator applied
      `backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql`
      in the SQL editor. All six checks in
@@ -1135,13 +1135,13 @@ consumers keep full verification. Open items:
        `search_path=pg_catalog`.
      - RLS is on and both triggers exist.
      - The table has 0 entries.
-  2. Generate a 32-byte key and set `MLB_PHASE_AUTHORITY_CHAIN_KEY` in
-     `backend/.env` and on Render.
-  3. Commit the key id from
-     `./bin/python -m backend.mlb.scripts.publish_mlb_phase_authority_chain_v1 --key-id`
-     into `phase_authority_db_chain.json`. This is one push.
-  4. Set `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1` for the Moneyline daily run.
-     It needs `MLB_INGEST_DATABASE_URL` in `backend/.env`.
+  2. **Open, operator:** apply
+     `20261020_mlb_phase_authority_db_chain_keyless.sql`, which drops the
+     signature columns while the table is empty. Then run the five checks in
+     `20261020_mlb_phase_authority_db_chain_keyless_verify/`.
+  3. **Open, operator:** merge and push the branch. Set
+     `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1` for the Moneyline daily run; it
+     needs `MLB_INGEST_DATABASE_URL` in `backend/.env`.
 
   Until then, the per-game-day committed child below remains the route.
 - **Fallback: one committed child per postseason game day.** Follow
