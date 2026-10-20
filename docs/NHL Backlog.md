@@ -1728,6 +1728,14 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
   The two prior-day game-set queries were fixed in P2.24 E. Not urgent
   until October 2027, but each would silently find nothing in a new season.
+- Convention (operator, 2026-10-20): an NHL season is named by its start
+  year. A game's season is the first four digits of its game ID (for
+  example `2026020141` is season 2026, type 02, game 0141). Games played
+  January–June 2027 keep `2026`. The schedule's `season` field is
+  `20262027`, and nhl.com shows "2026-2027". Where a game ID is available,
+  derive the season from it. Otherwise use the date rule (July onward is
+  that year's season). The hard-coded 2026 values are correct through June
+  2027.
 
 ## Verified Complete — Do Not Reopen
 
