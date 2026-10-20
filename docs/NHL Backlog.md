@@ -1760,8 +1760,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     0. The package records `NO_IMMUTABLE_CROSS_MARKET_SOURCE` because the
     older path wanted a full-slate final run. A late REFRESH package did
     capture 4 of the 14 games pregame, and current per-game grading selects
-    those 8 Moneyline and 4 Puck Line predictions. Recovering them needs a
-    restatement beside the sealed package; that is the operator's call.
+    those 8 Moneyline and 4 Puck Line predictions. **Recovered 2026-10-20**
+    (operator-approved): `learning_restatements/2026-10-17/restatement=4d2d3acac693ff25b176`
+    holds 4 production, 4 shadow and 4 Puck Line grades for games
+    2026020131–2026020134, all from the REFRESH package, all
+    `REGULAR_SEASON_GRADED`. The sealed package manifest is unchanged.
   - **Capture gaps that cannot be recovered.** Predictions cannot be made
     after the fact. The Points/Saves observers refused partial slates
     (`WHOLE_SLATE_PRESTART_GATE_FAILED_PARTIAL_SLATE`) until `c64c0466`

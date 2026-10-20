@@ -112,6 +112,17 @@ P2.24 G/H/I):
 - Points/Saves child and source roster checks accept any roster snapshot
   verified for the slate, not only the orchestration parent's.
 
+Resilient cross-market restatement (2026-10-20). Packages sealed before
+per-game resilient grading may hold no cross-market grades even though a
+pregame refresh captured some games. `backend/nhl/scripts/restate_nhl_resilient_cross_market.py
+--date <slate>` re-runs the resilient grader read-only. It writes only
+`graded_resilient_moneyline_production_champion.csv`,
+`graded_resilient_moneyline_shadow.csv` and `graded_resilient_puck_line.csv`
+to a create-only `learning_restatements/<slate>/restatement=<id>`
+(contract `NHL_RESILIENT_CROSS_MARKET_RESTATEMENT_V1`), bound to the package
+manifest. `reconciliation_grades.restated_grade_path` resolves those files.
+Applied to 2026-10-17: 4 games, Moneyline production, shadow and Puck Line.
+
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has
   inputs. A pregame game with no feature rows or slate identities is recorded
