@@ -91,12 +91,15 @@ class NHLPostgameLearningTest(unittest.TestCase):
             slate = "2026-10-01"
             schedule = root / "artifacts/operational/nhl/slates" / slate / "raw_schedule_response.json"
             schedule.parent.mkdir(parents=True)
-            schedule.write_text(json.dumps({"gameWeek": [{"date": slate, "games": []}]}))
+            payload = {"gameWeek": [{"date": slate, "games": []}]}
+            # As import_schedule_today writes it: indented file, compact hash.
+            schedule.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+            compact = json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n"
             (schedule.parent / "slate_health.json").write_text(json.dumps({
                 "slate_date": slate, "completion_status": "VALID_EMPTY_SLATE",
                 "downstream_ready": True,
                 "source": f"https://api-web.nhle.com/v1/schedule/{slate}",
-                "raw_source_hash": hashlib.sha256(schedule.read_bytes()).hexdigest(),
+                "raw_source_hash": hashlib.sha256(compact.encode()).hexdigest(),
                 "normalized_game_count": 0,
             }))
             with patch("backend.nhl.postgame_learning.ROOT", root), \

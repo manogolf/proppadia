@@ -298,5 +298,70 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
                 )
 
 
+class ResilientSogMultipleSnapshotTests(unittest.TestCase):
+    """A slate may have up to four daily snapshots, each with its own roster."""
+
+    def _run(self, package_roster: str | None):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "operational"
+            slate_date = "2026-10-19"
+            rosters = {}
+            for name in ("midday", "late"):
+                roster = root / f"roster/observation={name}"
+                roster.mkdir(parents=True)
+                (roster / "SHA256SUMS").write_text(f"{name} manifest\n")
+                (roster / "observation_summary.json").write_text(
+                    json.dumps({"season": 2026, "phase": "MIDDAY"}))
+                rosters[name] = roster
+            # The SOG package was built against the midday snapshot's roster.
+            package = root / "sog_prediction_only/run_id=sog-midday"
+            package.mkdir(parents=True)
+            (package / "run_metadata.json").write_text(json.dumps({
+                "slate_date": slate_date, "phase": "MIDDAY",
+                "readiness_evidence": {
+                    "prior_day_reconciliation_certificate": {"package_manifest_sha256": "cert-hash"},
+                    "current_slate_roster_observation": {
+                        "package_manifest_sha256": package_roster or sha(rosters["midday"] / "SHA256SUMS")},
+                },
+            }))
+            (package / "SHA256SUMS").write_text("".join(
+                f"{sha(path)}  {path.name}\n" for path in sorted(package.iterdir())))
+            certificate = {"status": "CERTIFIED_FINAL", "package_path": "/verified/cert",
+                           "package_manifest_sha256": "cert-hash"}
+            for name, outputs in (("midday", []), ("late", [{"path": str(package)}])):
+                receipt = root / f"daily_runs/run_id={name}/parent_receipt.json"
+                receipt.parent.mkdir(parents=True)
+                receipt.write_text(json.dumps({
+                    "slate_date": slate_date,
+                    "prior_day_learning": {"certificate": certificate},
+                    "roster_observation": {"path": str(rosters[name]),
+                                           "manifest_sha256": sha(rosters[name] / "SHA256SUMS")},
+                    "lanes": {"cold_start_sog_reference": {"outputs": outputs}},
+                }))
+            schedule = pd.DataFrame([{"game_id": 2026020139,
+                                      "scheduled_start_time_utc": "2026-10-19T23:00:00Z",
+                                      "game_type_code": 2}])
+            empty = pd.DataFrame()
+            with patch("backend.nhl.reconciliation_certificate.verify_reconciliation_certificate",
+                       return_value={"package_manifest_sha256": "cert-hash", "status": "CERTIFIED_FINAL"}), \
+                    patch("backend.nhl.daily_orchestration.verify_roster_observation_reuse",
+                          side_effect=lambda path, **_: {"manifest_sha256": sha(Path(path) / "SHA256SUMS")}):
+                return core._resilient_cross_market_grades(
+                    slate_date=slate_date, operational_root=root, schedule=schedule,
+                    games=empty, skaters=empty, goalies=empty)
+
+    def test_package_bound_to_an_earlier_verified_snapshot_is_accepted(self):
+        _, index = self._run(package_roster=None)
+        # It passes the readiness check and stops only at the (absent)
+        # completion marker; no conflict is raised.
+        self.assertTrue(any(
+            item.get("excluded_reason") == "RESILIENT_SOG_SOURCE_COMPLETION_MARKER_MISSING"
+            for item in index["proof_receipts"]))
+
+    def test_package_bound_to_an_unverified_roster_still_fails_closed(self):
+        with self.assertRaisesRegex(RuntimeError, "RESILIENT_SOG_SOURCE_READINESS_EVIDENCE_CONFLICT"):
+            self._run(package_roster="f" * 64)
+
+
 if __name__ == "__main__":
     unittest.main()

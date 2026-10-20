@@ -121,6 +121,20 @@ def verify_reconciliation_certificate(
     }
 
 
+def schedule_hash_matches(recorded: object, raw_path: Path) -> bool:
+    """True when a slate's recorded raw_source_hash matches its retained file.
+
+    import_schedule_today records the hash of the compact, key-sorted JSON it
+    fetched but writes the file indented, so accept that canonical form as
+    well as the exact bytes (the same rule as daily_capture.load_canonical_slate).
+    """
+    if recorded == _sha256(raw_path):
+        return True
+    canonical = json.dumps(json.loads(Path(raw_path).read_text()),
+                           sort_keys=True, separators=(",", ":")) + "\n"
+    return recorded == hashlib.sha256(canonical.encode()).hexdigest()
+
+
 def verified_empty_schedule(
     slate_date: str, *, slate_root: Path = DEFAULT_SLATE_ROOT,
 ) -> dict[str, object]:
@@ -137,7 +151,7 @@ def verified_empty_schedule(
             or health.get("completion_status") != "VALID_EMPTY_SLATE"
             or health.get("downstream_ready") is not True
             or health.get("source") != f"https://api-web.nhle.com/v1/schedule/{slate_date}"
-            or health.get("raw_source_hash") != _sha256(raw_path)):
+            or not schedule_hash_matches(health.get("raw_source_hash"), raw_path)):
         raise RuntimeError("PRIOR_DATE_EMPTY_SCHEDULE_CERTIFICATE_INVALID")
     weeks = payload.get("gameWeek")
     if not isinstance(weeks, list):

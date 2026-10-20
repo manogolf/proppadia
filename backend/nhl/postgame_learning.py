@@ -34,6 +34,7 @@ from backend.nhl.points_hgb_shadow import (
 )
 from backend.nhl.reconciliation_certificate import (
     verify_reconciliation_certificate,
+    schedule_hash_matches,
     verified_empty_schedule,
 )
 
@@ -90,11 +91,10 @@ def _retained_schedule_game_count(slate_date: str) -> int | None:
         return None
     payload = json.loads(path.read_text())
     health = json.loads(health_path.read_text())
-    digest = _sha(path)
     if (health.get("slate_date") != slate_date
             or health.get("downstream_ready") is not True
             or health.get("source") != f"https://api-web.nhle.com/v1/schedule/{slate_date}"
-            or health.get("raw_source_hash") != digest):
+            or not schedule_hash_matches(health.get("raw_source_hash"), path)):
         raise RuntimeError("PRIOR_DATE_SCHEDULE_CERTIFICATE_INVALID")
     weeks = payload.get("gameWeek")
     if not isinstance(weeks, list):

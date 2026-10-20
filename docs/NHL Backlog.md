@@ -1610,6 +1610,42 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   daily seed used whenever reconciliation fails, without changing attempt
   semantics.
 
+### P2.23 Reconcile slates that have several daily snapshots
+
+- Status: **FIXED LOCALLY 2026-10-20 — natural rerun pending**. The
+  2026-10-20 morning NHL daily run
+  (`nhldaily_20261020T135818903703Z_5b530bdc`) failed blocking with
+  `PRIOR_DATE_SCHEDULE_CERTIFICATE_INVALID`. No 2026-10-19 reconciliation
+  package existed, so it was the first run since 2026-10-18 (`79ef060c`) to
+  reach the prior-day schedule check. It also broke the operating rule that a
+  slate keeps up to four timestamped daily snapshots. There were two defects:
+  1. The schedule check (`postgame_learning._retained_schedule_game_count`,
+     and `reconciliation_certificate.verified_empty_schedule` for empty
+     days) hashed the file bytes. `import_schedule_today` records the hash
+     of the compact, key-sorted JSON but writes the file indented, so every
+     retained day from 10-12 to 10-19 mismatched. The checks now share
+     `schedule_hash_matches`, which accepts either form, the same rule as
+     `daily_capture.load_canonical_slate`.
+  2. 2026-10-19 had four daily runs with rosters `5fa1…`, `e3a8…`, `17e9…`
+     and `34c0…`. The MIDDAY SOG package (roster `e3a8…`) and the
+     FINAL_PREGAME package (`17e9…`) were listed by later runs whose rosters
+     differed. `_resilient_cross_market_grades` required equality and raised
+     `RESILIENT_SOG_SOURCE_READINESS_EVIDENCE_CONFLICT`. Every overnight
+     cross-market capture from 05:00 UTC failed with it (exit 5); the first
+     attempts were refused connections. The check now accepts any roster
+     capture verified for the slate and records the package's own roster.
+     A certificate mismatch or an unverified roster still fails closed.
+- Evidence: read-only discovery over the real 10-19 receipts raised the
+  conflict before the fix and passes after it. The 10-12, 10-18 and 10-19
+  schedules all verify. New tests are in
+  `test_resilient_cross_market_grading.py` (accepted snapshot; unverified
+  roster still fails) and `test_postgame_learning_missing_prior_final.py`
+  (importer form verifies; changed bytes still fail). The no-prior-games
+  fixture in `test_nhl_postgame_learning.py` now writes the importer's
+  form. NHL suite: 1,098 passed, 82 skipped in a fresh worktree.
+- Next: rerun the NHL daily. It should build the 2026-10-19 package and
+  continue to the 2026-10-20 slate.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** the 32 verified 2023–25 PP-TOI corrections

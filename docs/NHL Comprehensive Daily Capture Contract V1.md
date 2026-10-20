@@ -70,6 +70,15 @@ window choice but not per-game chronology validation.
 Operator rule: use what was captured for the rest of the slate. One started
 game or one game without inputs never fails the other games.
 
+Multiple daily snapshots (2026-10-20). A slate may have up to four daily
+runs, each a timestamped snapshot with its own roster capture, and every
+snapshot is kept. Reconciliation accepts a resilient SOG package bound to any
+roster capture verified for the slate, not only the listing run's, and records
+that package's own roster as its source. A package whose certificate differs,
+or whose roster matches no verified capture, still fails closed. The prior-day
+schedule check accepts the importer's recorded hash, which covers the compact,
+key-sorted JSON, as well as the exact file bytes.
+
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has
   inputs. A pregame game with no feature rows or slate identities is recorded

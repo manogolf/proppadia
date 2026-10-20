@@ -147,5 +147,36 @@ class PriorFinalCaptureGapTests(unittest.TestCase):
                     allow_missing_prediction=True)
 
 
+class RetainedScheduleCertificateTests(unittest.TestCase):
+    def _write(self, root: Path, slate_date: str, games: int, *, tamper: bool = False):
+        # Mirror import_schedule_today: the file is indented, and the recorded
+        # hash is of the compact, key-sorted JSON.
+        import hashlib
+        raw = {"gameWeek": [{"date": slate_date, "games": [{"id": i} for i in range(games)]}]}
+        day = root / "artifacts/operational/nhl/slates" / slate_date
+        day.mkdir(parents=True)
+        (day / "raw_schedule_response.json").write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n")
+        compact = (json.dumps(raw, sort_keys=True, separators=(",", ":")) + "\n").encode()
+        (day / "slate_health.json").write_text(json.dumps({
+            "slate_date": slate_date, "downstream_ready": True,
+            "source": f"https://api-web.nhle.com/v1/schedule/{slate_date}",
+            "raw_source_hash": ("0" * 64) if tamper else hashlib.sha256(compact).hexdigest(),
+            "normalized_game_count": games,
+        }))
+
+    def test_schedule_written_by_the_importer_verifies(self):
+        with tempfile.TemporaryDirectory() as temp:
+            self._write(Path(temp), "2026-10-19", 4)
+            with patch.object(postgame_learning, "ROOT", Path(temp)):
+                self.assertEqual(postgame_learning._retained_schedule_game_count("2026-10-19"), 4)
+
+    def test_changed_schedule_bytes_still_fail(self):
+        with tempfile.TemporaryDirectory() as temp:
+            self._write(Path(temp), "2026-10-19", 4, tamper=True)
+            with patch.object(postgame_learning, "ROOT", Path(temp)), \
+                    self.assertRaisesRegex(RuntimeError, "PRIOR_DATE_SCHEDULE_CERTIFICATE_INVALID"):
+                postgame_learning._retained_schedule_game_count("2026-10-19")
+
+
 if __name__ == "__main__":
     unittest.main()

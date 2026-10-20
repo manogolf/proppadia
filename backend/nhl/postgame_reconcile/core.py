@@ -1463,6 +1463,32 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
     }
     proof_notes: list[dict[str, Any]] = []
     verified_cross_packages: set[Path] = set()
+    # A slate may have several daily runs, each with its own verified roster
+    # capture. An SOG package binds the capture current when it was built and
+    # may be listed by a later run, so accept any capture verified for this
+    # slate rather than only the listing run's.
+    verified_slate_rosters: set[str] = set()
+    for receipt_path in sorted(daily_root.glob("run_id=*/parent_receipt.json")):
+        try:
+            parent = json.loads(receipt_path.read_text())
+            if str(parent.get("slate_date")) != slate_date:
+                continue
+            roster = parent.get("roster_observation") or {}
+            roster_path = Path(str(roster.get("path") or ""))
+            if not (roster_path / "SHA256SUMS").is_file():
+                continue
+            roster_hash = _sha(roster_path / "SHA256SUMS")
+            if roster.get("manifest_sha256") != roster_hash:
+                continue
+            roster_summary = json.loads((roster_path / "observation_summary.json").read_text())
+            verified_roster = verify_roster_observation_reuse(
+                roster_path, season=int(roster_summary["season"]), slate_date=slate_date,
+                phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
+                canonical_game_set_hash=canonical_game_set_hash(game_ids))
+            if verified_roster["manifest_sha256"] == roster_hash:
+                verified_slate_rosters.add(roster_hash)
+        except (OSError, ValueError, KeyError, json.JSONDecodeError, RuntimeError):
+            continue
     for receipt_path in sorted(daily_root.glob("run_id=*/parent_receipt.json")):
         linked_parent = False
         try:
@@ -1538,6 +1564,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                     if phase not in {"MIDDAY", "FINAL_PREGAME", "REFRESH"}:
                         continue
                     source_files_manifest = _verify_manifest(source_run)
+                    source_roster_hash = roster_hash
                     if is_sog_package:
                         source_metadata = json.loads((source_run / "run_metadata.json").read_text())
                         readiness = source_metadata.get("readiness_evidence") or {}
@@ -1550,9 +1577,10 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                                 "excluded_reason": "RESILIENT_SOG_SOURCE_READINESS_EVIDENCE_MISSING",
                             })
                             continue
+                        source_roster_hash = str(source_roster.get("package_manifest_sha256"))
                         if (source_cert.get("package_manifest_sha256")
                                 != verified_cert["package_manifest_sha256"]
-                                or source_roster.get("package_manifest_sha256") != roster_hash):
+                                or source_roster_hash not in verified_slate_rosters):
                             raise RuntimeError("RESILIENT_SOG_SOURCE_READINESS_EVIDENCE_CONFLICT")
                         source_marker_path = source_run / "RUN_COMPLETE.json"
                         if not source_marker_path.is_file():
@@ -1717,7 +1745,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                             "source_path": str(output_file), "source_manifest_sha256": _sha(source_run / "SHA256SUMS"),
                             "observer_receipt_path": str(receipt_path), "observer_receipt_sha256": parent_digest,
                             "certificate_sha256": str(verified_cert["package_manifest_sha256"]),
-                            "roster_source_sha256": roster_hash,
+                            "roster_source_sha256": source_roster_hash,
                             "model_identity": model_identity,
                             "feature_contract_identity": feature_identity,
                             "feature_cutoff_timestamp_utc": feature_cutoff,
@@ -1730,7 +1758,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         candidates[lane_key].append(item)
                         proof_notes.append({"source_path": str(source_run), "parent_receipt": str(receipt_path),
                                         "certificate_sha256": verified_cert["package_manifest_sha256"],
-                                        "roster_source_sha256": roster_hash})
+                                        "roster_source_sha256": source_roster_hash})
         except (OSError, ValueError, KeyError, json.JSONDecodeError, RuntimeError) as error:
             # A corrupt linked source fails closed. Unrelated daily receipts
             # without a link to an accepted output are ignored above.
