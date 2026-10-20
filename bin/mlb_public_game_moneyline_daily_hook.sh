@@ -13,7 +13,8 @@ started_at="$(date -u +%FT%TZ)"
 echo "[${started_at}] START MLB moneyline shadow lifecycle slate_date=${slate_date} run_identity=${run_identity} model_version=${model_version} model_hash=${model_hash}"
 
 set +e
-MLB_RUN_IDENTITY="${run_identity}" .venv/bin/python -m backend.mlb.scripts.run_mlb_public_game_moneyline_daily_v1 \
+# Durable ledger writes run on the restricted MLB ingest login (column INSERT/SELECT only).
+MLB_USE_RESTRICTED_INGEST=1 MLB_RUN_IDENTITY="${run_identity}" .venv/bin/python -m backend.mlb.scripts.run_mlb_public_game_moneyline_daily_v1 \
   --mlb-date "${slate_date}" \
   --run-identity "${run_identity}" \
   --prediction-cutoff-utc auto \
