@@ -19,7 +19,7 @@ from backend.mlb.scripts.report_mlb_hits_environment import (
     _fetch_team_bullpen_hits_allowed_form,
     _fetch_team_hits_form,
 )
-from backend.shared.db.pg import pg_fetchall
+from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
 
 ROOT = next(p for p in Path(__file__).resolve().parents if (p / "Makefile").exists())

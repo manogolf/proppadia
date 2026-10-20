@@ -21,6 +21,12 @@ ENV_CHECK_RESTRICTED = (
     '    {"name": "MLB_INGEST_DATABASE_URL", "present": bool(env("MLB_INGEST_DATABASE_URL"))},\n'
     '    {"name": "MLB_MONEYLINE_AUDIT_DATABASE_URL", "present": bool(env("MLB_MONEYLINE_AUDIT_DATABASE_URL"))},\n'
 )
+RESEARCH_EXPORT_BLOCK = (
+    "# Read-only MLB research route for every reader in this run. Readers opt in\n"
+    "# through MLB_RESEARCH_DATABASE_URL; writers keep their explicit ingest route.\n"
+    'export MLB_RESEARCH_DATABASE_URL="${MLB_RESEARCH_DATABASE_URL:-${MLB_MONEYLINE_AUDIT_DATABASE_URL:-}}"\n'
+    "\n"
+)
 ENV_CHECK_PREVIOUS = '    {"name": "SUPABASE_DB_URL", "present": bool(env("SUPABASE_DB_URL"))},\n'
 
 
@@ -39,12 +45,10 @@ class MlbDailyRestrictedWriterRoutingTests(unittest.TestCase):
         self.assertIn("SELECT mlb.refresh_today_workspace_views();", tracked)
         self.assertIn("SELECT mlb.refresh_today_workspace_views();", installed)
         self.assertIn(WORKSPACE_BUILD_CALL, tracked)
-        self.assertEqual(
-            tracked.replace(WORKSPACE_BUILD_CALL, WORKSPACE_BUILD_CALL_PREVIOUS)
-            .replace(WORKSPACE_BUILD_COMMENT, "")
-            .replace(ENV_CHECK_RESTRICTED, ENV_CHECK_PREVIOUS),
-            installed,
-        )
+        # The installed copy already has the restricted workspace and summary
+        # routes; only the run-wide research export is pending installation.
+        self.assertIn(WORKSPACE_BUILD_CALL, installed)
+        self.assertEqual(tracked.replace(RESEARCH_EXPORT_BLOCK, ""), installed)
 
     def test_runbook_preserves_installed_wrapper_routing_recovery(self):
         runbook = OPERATIONS_RUNBOOK.read_text()

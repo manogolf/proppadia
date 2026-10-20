@@ -115,7 +115,9 @@ def main() -> int:
     parser.add_argument("--wrapper-started-at-utc", required=True)
     parser.add_argument("--output-root", type=Path, default=OUTPUT_ROOT)
     args = parser.parse_args()
-    dsn = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
+    # The snapshot reader opens its own REPEATABLE READ READ ONLY transaction;
+    # the MLB research login is preferred when the process opts in.
+    dsn = os.getenv("MLB_RESEARCH_DATABASE_URL", "").strip() or os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
     if not dsn:
         print("EXACT_GAME_SHADOW_DATABASE_URL_MISSING", file=sys.stderr)
         return 78

@@ -17,7 +17,7 @@ from typing import Any, Callable
 
 import pandas as pd
 
-from backend.app.deps import pg_connect
+from backend.shared.db.mlb_research import mlb_research_or_current_connection
 from backend.mlb.markets import agreement_phase_gating_v1 as phase_gate
 from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 from backend.mlb.scripts import acquire_and_audit_mlb_oddsapi_historical_joint_strength_transfer_v1 as hardened
@@ -330,7 +330,7 @@ def load_prediction_snapshot(game_date: str, expected_rows: int) -> PredictionSn
       WHERE game_date=%s AND model_version=%s AND prediction_snapshot_class=%s
       ORDER BY game_id,model_version,prediction_snapshot_class
     """
-    with pg_connect() as source, source.cursor() as cursor:
+    with mlb_research_or_current_connection() as source, source.cursor() as cursor:
         cursor.execute(sql, (game_date, v1.MODEL, v1.SNAPSHOT))
         rows = tuple(cursor.fetchall())
     return prediction_snapshot_from_rows(game_date, expected_rows, rows)
@@ -782,7 +782,7 @@ def run_recovery(game_date: str, run_identity: str, **kwargs: Any) -> dict[str, 
             WHERE study_id=? AND game_date=? AND capture_mode='LIVE'""", (STUDY_ID, game_date)).fetchone()
     if not claim_row:
         raise RuntimeError("No frozen live request claim exists for the requested recovery date")
-    with pg_connect() as source, source.cursor() as cursor:
+    with mlb_research_or_current_connection() as source, source.cursor() as cursor:
         cursor.execute("""SELECT COUNT(*) FROM mlb.public_game_moneyline_predictions
             WHERE game_date=%s AND model_version=%s AND prediction_snapshot_class=%s""",
             (game_date, v1.MODEL, v1.SNAPSHOT))

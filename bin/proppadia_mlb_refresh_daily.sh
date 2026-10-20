@@ -47,6 +47,10 @@ set -a
 source backend/.env
 set +a
 
+# Read-only MLB research route for every reader in this run. Readers opt in
+# through MLB_RESEARCH_DATABASE_URL; writers keep their explicit ingest route.
+export MLB_RESEARCH_DATABASE_URL="${MLB_RESEARCH_DATABASE_URL:-${MLB_MONEYLINE_AUDIT_DATABASE_URL:-}}"
+
 MLB_WRAPPER_RUN_STARTED_AT_UTC="$(date -u +%FT%TZ)"
 MLB_LAUNCHAGENT_SUMMARY_JSON="artifacts/analysis/mlb/launchagent_daily_summary_latest.json"
 MLB_LAUNCHAGENT_ROLLOVER_LATEST_JSON="artifacts/analysis/mlb/launchagent_rollover_check_latest.json"

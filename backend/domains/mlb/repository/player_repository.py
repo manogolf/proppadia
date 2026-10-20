@@ -12,7 +12,7 @@ from backend.mlb.shared.team_name_map import (
     isValidMLBTeam,
     normalizeTeamAbbreviation,
 )
-from backend.shared.db import pg_fetchall
+from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
 LOGGER = logging.getLogger(__name__)
 

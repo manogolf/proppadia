@@ -106,7 +106,7 @@ def archived_game_dates() -> dict[int, set[str]]:
 
 
 def retained_authority(rows: Sequence[Mapping]) -> dict[int, set[str]]:
-    from backend.shared.db.pg import pg_fetchall
+    from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
     dates = {k: set(v) for k, v in archived_game_dates().items()}
     ids = sorted({int(r["game_id"]) for r in rows})
     if ids:

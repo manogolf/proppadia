@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
-from backend.app.deps import pg_connect
+from backend.shared.db.mlb_research import mlb_research_or_current_connection
 from backend.mlb.markets import agreement_phase_gating_v1 as phase_gate
 from backend.mlb.season_transition.game_phase_authority_v1 import CanonicalGamePhaseAuthority
 from backend.mlb.scripts import acquire_and_audit_mlb_oddsapi_historical_joint_strength_transfer_v1 as hardened
@@ -329,7 +329,7 @@ def ingest_predictions(output: Path, ledger: Path, through_date: str) -> dict[st
       WHERE model_version=%s AND prediction_snapshot_class=%s AND admission_status=%s
         AND game_date BETWEEN %s AND %s ORDER BY game_date,game_id
     """
-    with pg_connect() as source, source.cursor() as cursor:
+    with mlb_research_or_current_connection() as source, source.cursor() as cursor:
         cursor.execute(sql, (MODEL, SNAPSHOT, ADMISSION, PROSPECTIVE_START, through_date)); rows = cursor.fetchall()
     inserted = 0
     with sqlite3.connect(ledger) as conn:
@@ -639,9 +639,9 @@ def grade(
       FROM mlb.public_game_moneyline_outcomes WHERE model_version=%s AND prediction_snapshot_class=%s
         AND game_date BETWEEN %s AND %s ORDER BY game_date,game_id
     """
-    with pg_connect() as source, source.cursor() as cursor:
+    with mlb_research_or_current_connection() as source, source.cursor() as cursor:
         cursor.execute(sql, (MODEL, SNAPSHOT, PROSPECTIVE_START, through_date)); source_rows = cursor.fetchall()
-    # pg_connect() has a repository-wide dict_row contract.  Keep grading
+    # The shared read connection has a repository-wide dict_row contract.  Keep grading
     # keyed to named source fields so outcome-only runs do not depend on a
     # positional cursor representation.
     authority = {(str(r["game_date"]), int(r["game_id"])): r for r in source_rows}; inserted = 0

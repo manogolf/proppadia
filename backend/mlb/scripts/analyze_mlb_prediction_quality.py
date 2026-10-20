@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Sequence, Tuple
 
-from backend.shared.db.pg import pg_fetchall
+from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
 _ALLOWED_SOURCE_TABLES = {"player_props", "model_training_props", "reconcile_rows"}
 _DEFAULT_SOURCE_TABLE = "model_training_props"

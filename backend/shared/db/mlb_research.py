@@ -118,3 +118,30 @@ def mlb_research_readonly_connection(fallback_url: str | None = None) -> Iterato
         yield conn
     finally:
         conn.close()
+
+
+def mlb_research_or_current_connection():
+    """Context manager for read-only callers of the shared ``pg_connect()``.
+
+    The process opt-in MLB research login wins (dict rows, read-only,
+    identity checked); otherwise the caller's current shared route is used.
+    """
+    if os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip():
+        return mlb_research_readonly_connection()
+    from backend.shared.db.pg import pg_connect
+
+    return pg_connect()
+
+
+def connect_mlb_research_psycopg(row_factory=None, **kwargs):
+    """Open the opted-in research login with psycopg, read-only and identity checked."""
+    url = os.environ.get(MLB_RESEARCH_DATABASE_URL_ENV, "").strip()
+    if not url:
+        raise RuntimeError(f"{MLB_RESEARCH_DATABASE_URL_ENV} is not configured")
+    import psycopg
+
+    conn = psycopg.connect(url, **kwargs)
+    configure_mlb_research_dbapi_session(conn)
+    if row_factory is not None:
+        conn.row_factory = row_factory
+    return conn

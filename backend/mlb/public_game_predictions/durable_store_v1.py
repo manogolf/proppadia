@@ -7,6 +7,7 @@ from datetime import date, datetime
 from typing import Any, Iterable
 
 from backend.app.deps import pg_connect
+from backend.shared.db.mlb_research import mlb_research_or_current_connection
 
 from .phase_gating_v1 import (
     EVALUATION_PHASES,
@@ -183,7 +184,7 @@ def append_prediction_rows(
 
 
 def fetch_prediction_rows(game_date: str) -> list[dict[str, Any]]:
-    with pg_connect() as conn, conn.cursor() as cur:
+    with mlb_research_or_current_connection() as conn, conn.cursor() as cur:
         cur.execute("""
           SELECT p.prediction_payload,
                  CASE WHEN o.game_id IS NULL THEN 'UNGRADED' ELSE 'GRADED' END AS grading_status,

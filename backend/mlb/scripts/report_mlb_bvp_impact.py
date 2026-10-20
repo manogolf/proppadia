@@ -25,7 +25,7 @@ import joblib
 
 from backend.domains.mlb import prop_workflow
 from backend.mlb.prediction import make_prediction as prediction_runtime
-from backend.shared.db.pg import pg_fetchone
+from backend.shared.db.pg import pg_fetchone_mlb_research_readonly as pg_fetchone
 
 
 def _to_int(v: Any) -> Optional[int]:

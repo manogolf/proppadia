@@ -538,7 +538,7 @@ def _load_official_hits_sources(
     str,
 ]:
     try:
-        from backend.shared.db.pg import pg_fetchall
+        from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
         player_stats = pg_fetchall(
             """

@@ -39,7 +39,7 @@ from backend.mlb.shared.team_name_map import (
     getFullTeamAbbreviationFromID,
     normalizeTeamAbbreviation,
 )
-from backend.shared.db.pg import pg_fetchall
+from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
 
 ROOT = Path(__file__).resolve().parents[3]

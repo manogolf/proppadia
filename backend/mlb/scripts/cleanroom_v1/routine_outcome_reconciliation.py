@@ -6,7 +6,7 @@ from collections import Counter,defaultdict
 from datetime import datetime,timezone
 from pathlib import Path
 import requests
-from backend.shared.db.pg import pg_connect
+from backend.shared.db.mlb_research import mlb_research_or_current_connection
 from backend.mlb.scripts.cleanroom_v1.routine_market_lifecycle import role
 ROOT=Path(__file__).resolve().parents[4]
 ROUTINE=ROOT/'backend/mlb/exports/cleanroom_v1/bol_tb15/routine_cohorts'
@@ -21,7 +21,7 @@ def write(p,fields,rows):
  with p.open('w',newline='') as f:w=csv.DictWriter(f,fieldnames=fields,lineterminator='\n');w.writeheader();w.writerows(rows)
 def fields_for(rows):return list(dict.fromkeys(k for r in rows for k in r))
 def local_rows(game_ids):
- with pg_connect() as conn,conn.cursor() as cur:
+ with mlb_research_or_current_connection() as conn,conn.cursor() as cur:
   cur.execute('SELECT player_id,game_id,game_date,team,opponent,is_home,position,is_starter,plate_appearances,at_bats,hits,singles,doubles,triples,home_runs,total_bases,pa_source,pa_backfilled_at FROM mlb.player_stats WHERE game_id = ANY(%s)',([int(x) for x in game_ids],))
   return [{k:v for k,v in zip(LOCAL_FIELDS,row)} if not isinstance(row,dict) else dict(row) for row in cur.fetchall()]
 def aug2_population():

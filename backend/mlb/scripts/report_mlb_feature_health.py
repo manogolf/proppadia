@@ -8,7 +8,10 @@ import json
 import re
 from typing import Any, Dict, Sequence
 
-from backend.shared.db.pg import pg_fetchall, pg_fetchone
+from backend.shared.db.pg import (
+    pg_fetchall_mlb_research_readonly as pg_fetchall,
+    pg_fetchone_mlb_research_readonly as pg_fetchone,
+)
 
 _PROP_RE = re.compile(r"^[a-z0-9_]+$")
 _NUMERIC_RE = r"^-?[0-9]+(\.[0-9]+)?$"

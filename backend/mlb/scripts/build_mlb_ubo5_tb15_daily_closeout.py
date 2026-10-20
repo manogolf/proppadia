@@ -185,14 +185,22 @@ def load_outcomes(path: Path, date: str) -> dict:
 
 def load_certified_player_stats(date: str) -> tuple[dict, str]:
     """Read the canonical official-derived outcome table; fail open to reconciliation."""
-    dsn = os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
+    research_url = os.environ.get("MLB_RESEARCH_DATABASE_URL", "").strip()
+    dsn = research_url or os.environ.get("SUPABASE_DB_URL") or os.environ.get("DATABASE_URL")
     if not dsn:
         return {}, "DATABASE_URL_UNAVAILABLE"
     try:
         import psycopg
         from psycopg.rows import dict_row
 
-        with psycopg.connect(dsn, row_factory=dict_row) as conn:
+        if research_url:
+            # Read-only research login, identity checked before the query.
+            from backend.shared.db.mlb_research import connect_mlb_research_psycopg
+
+            connection = connect_mlb_research_psycopg(row_factory=dict_row)
+        else:
+            connection = psycopg.connect(dsn, row_factory=dict_row)
+        with connection as conn:
             rows = conn.execute(
                 """
                 SELECT game_id, player_id, plate_appearances, at_bats, hits,

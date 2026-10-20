@@ -147,7 +147,7 @@ class LiveCaptureV4Test(unittest.TestCase):
 
     def test_loader_accepts_actual_dictionary_row_contract_by_name(self):
         cursor = FakeCursor([prediction_row()])
-        with patch.object(capture, "pg_connect", return_value=FakeConnection(cursor)):
+        with patch.object(capture, "mlb_research_or_current_connection", return_value=FakeConnection(cursor)):
             loaded = capture.load_prediction_snapshot("2026-09-10", 1)
         self.assertEqual(loaded.expected_rows, 1)
         self.assertEqual(loaded.rows[0].game_id, 823088)
