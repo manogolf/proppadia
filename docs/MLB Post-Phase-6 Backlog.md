@@ -1109,7 +1109,7 @@ consumers keep full verification. Open items:
   admitted locally through the runtime overlay and is not in V5. V5 holds
   only 849816 and 849817, through 2026-10-18. Such rows are now withheld in
   `excluded_rows`, so the date returns `200` with no rows.
-- **V6 child prepared, not activated (2026-10-19).** V6 adds the 18 retained
+- **V6 child activated (2026-10-19, `6e7e3ff1`; live on Render after the next push).** V6 adds the 18 retained
   postseason gamePks missing from V5, including 849815: 4 ALCS, 4 NLCS,
   10 Division Series. It has 2,954 rows, 35 postseason, through 2026-10-20.
   See `docs/contracts/mlb_2026_postseason_authority_v6/`. `--validate` passes

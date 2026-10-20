@@ -49,9 +49,15 @@ chain, then reports the selector state: `GOVERNED_CHILD_VALID_INACTIVE` (V5
 selected), `_ACTIVE` (V6 selected), or `_SUPERSEDED` (a reviewed descendant is
 selected).
 
-## Selector swap (operator decision, not done)
+## Selector swap (activated 2026-10-19)
 
-The active selector is still V5
+On 2026-10-19 the operator approved the swap and `--activate` ran in the
+main checkout: decision `ACTIVATED`, prior selector `1690f8be…` (V5), new
+selector `4d01c5da…` (V6). Full raw-byte validation passed, and
+`activation_rollback.json` was written. Commit `6e7e3ff1`; it reaches Render
+with the next push. The record below is kept as written before activation.
+
+The active selector was V5
 (`1690f8be895918ca0dab962ed252f6df8b7e93cfccb84c870f8209be16d6e04a`). The
 reviewed replacement is `proposed_active_selection.json`
 (`4d01c5da1ceb90cf1029480f772ff580385d27a0db49e9cc0aafed44e6f7f266`), which
