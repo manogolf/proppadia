@@ -89,8 +89,9 @@ capture for a whole slate (`--reuse-roster-observation`, roster refresh) still
 requires a capture taken before the first puck.
 
 Schedule snapshots (2026-10-20, P2.24 F). Every schedule fetch is retained,
-create-only, under `slates/<date>/snapshots/fetch=<timestamp>/`
-(`raw_schedule_response.json`, `slate_health.json`). A successful fetch also
+create-only, beside the current files in the existing `slates/<date>/` folder
+as `raw_schedule_response.fetch=<timestamp>.json` and
+`slate_health.fetch=<timestamp>.json` (no new directory, per the operator). A successful fetch also
 updates the current `slates/<date>/` files. A failed or partial fetch is
 kept only in its snapshot, and the importer still exits with an error, so it
 never replaces a good current schedule that the next morning's prior-day
