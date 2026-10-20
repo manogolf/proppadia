@@ -185,6 +185,17 @@ SQL, not applied: `backend/mlb/sql/migrations/20261019_mlb_moneyline_lifecycle_i
 conditions were run read-only through the research login. Before applying, the
 first query returns all false and the second returns zero rows.
 
+### Applied state (2026-10-19)
+
+Applied 2026-10-19: the operator ran `backend/mlb/sql/migrations/20261019_mlb_research_daily_fallback_read.sql` (with `player_props.user_id`) and
+`backend/mlb/sql/migrations/20261019_mlb_moneyline_lifecycle_ingest_write.sql` in the SQL editor. Read-only checks afterward confirmed all 33 research
+columns, with no research write privilege. They also confirmed all 99 ingest
+column grants, the editor verification (all true, then zero rows), and no
+ingest INSERT on the correction ledger. Bounded reads then succeeded: the
+previously denied research readers and the lifecycle's ingest reads, which
+passed the ingest contract check. No lifecycle write has run yet; the next
+daily run exercises it.
+
 ## Materialized-view refresh
 
 Correction: the plan's statement that the four `mlb.today_*` refreshes are
