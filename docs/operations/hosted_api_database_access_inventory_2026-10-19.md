@@ -179,3 +179,13 @@ Rollback: restore the stopgap alias (step 6 reversed) and remove
   surface (NHL backlog).
 - `commit_tokens._secret()` falls back to a hard-coded constant when neither
   secret is set (MLB backlog).
+
+## Render dependency note (2026-10-19)
+
+Render installs no `sqlalchemy`. After the `3a421bb5` push, the build failed at
+import time: `durable_store_v1` imports `backend/shared/db/mlb_research.py`,
+which imported `sqlalchemy` at module level. Render kept serving `c83a8479`.
+That module now imports `sqlalchemy` only inside its two engine helpers, which
+batch scripts use. `backend/tests/test_api_imports_without_sqlalchemy.py`
+imports the API with `sqlalchemy` blocked, so this regression fails locally
+before a push.

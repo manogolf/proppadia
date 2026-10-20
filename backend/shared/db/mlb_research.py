@@ -6,7 +6,8 @@ import os
 from contextlib import contextmanager
 from typing import Iterator
 
-from sqlalchemy import create_engine, event, text
+# sqlalchemy is imported inside the engine helpers only: the hosted API reaches
+# this module through the psycopg path and does not install sqlalchemy.
 
 MLB_RESEARCH_DATABASE_URL_ENV = "MLB_RESEARCH_DATABASE_URL"
 MLB_RESEARCH_LOGIN = "proppadia_mlb_research_login"
@@ -24,6 +25,8 @@ def research_database_url(fallback_url: str | None = None) -> str:
 
 
 def _assert_research_identity(connection) -> None:
+    from sqlalchemy import text
+
     identity = connection.execute(
         text(
             """SELECT session_user::text AS session_user,
@@ -74,6 +77,8 @@ def create_mlb_research_readonly_engine(fallback_url: str | None = None, **kwarg
     url = research_url or fallback_url
     if not url:
         raise RuntimeError(f"{MLB_RESEARCH_DATABASE_URL_ENV} is not configured")
+    from sqlalchemy import create_engine, event
+
     engine = create_engine(url, **kwargs)
     if research_url:
         @event.listens_for(engine, "begin")
