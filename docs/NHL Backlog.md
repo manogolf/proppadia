@@ -1646,6 +1646,64 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Next: rerun the NHL daily. It should build the 2026-10-19 package and
   continue to the 2026-10-20 slate.
 
+### P2.24 Remove slate-wide and single-snapshot assumptions added 2026-10-18
+
+- Status: **OPEN — audit complete 2026-10-20; fixes in progress (A, B, F
+  first)**. Three read-only reviews checked the 2026-10-18 commits
+  (`e4cdee47`, `79ef060c`, `46f879a3`, `e6a9f976`, `f593daec`, `41b66d64`)
+  against the operating rules. Those rules are: up to four timestamped
+  snapshots per slate, all kept as research evidence; pregame judged per
+  game; reconciliation first at the morning run; fail closed only for
+  integrity problems. 79ef060c restored reconciliation-first (after
+  142b2619 moved roster capture ahead for about 72 minutes). It also added
+  gates that reuse the slate-wide `strictly_prestart` validator (7724f74d,
+  09-24) and assume full slates.
+- Findings, each with code location and evidence:
+  - **A. A post-first-puck roster capture fails the slate (live 10-17 and
+    10-19).**
+    - `reconciliation_certificate.require_slate_roster_observation` tries
+      only `observations[-1]`. `verify_roster_observation_reuse` requires
+      `strictly_prestart`, which means before the slate's first puck.
+    - On 10-19, the 23:22Z capture made all 19 later cross-market captures
+      and the SOG/Points/Saves observers fail. Reconciliation skipped that
+      run's receipt (two `strictly_prestart` exclusions in
+      `reconciliation=b42188dd…`), dropping the REFRESH package for 139/140.
+    - Fix: judge each capture per game against that game's start.
+  - **B. Partial-slate packages fail full-slate coverage checks.** Moneyline
+    production must cover all games (`RESILIENT_MONEYLINE_PRODUCTION_IDENTITY_INVALID`,
+    re-raised, so the whole reconciliation would abort). Puck Line is
+    silently skipped. Both are exposed once A is fixed. Fix: compare
+    against the games pregame at that run.
+  - **C. A zero-game prior day empties resilient grading for the next
+    slate.** The receipt's `VERIFIED_EMPTY_SCHEDULE` certificate has no
+    package path, so every receipt is skipped. First real case: the
+    Christmas break.
+  - **D. A postponed or suspended prior-day game blocks the morning run.**
+    `validate_final_slate` requires every admitted game to be FINAL, and the
+    admitted set comes from `nhl.games` without a status filter. The
+    morning run then stops on `PRIOR_DAY_RECONCILIATION_BLOCKING:NOT_FINAL`.
+    No PPD handling exists.
+  - **E. A postseason prior day.** The cross-market prior-day query selects
+    `game_type = 2` only. It then raises
+    `CROSS_MARKET_PRIOR_DAY_DATABASE_SCHEDULE_MISMATCH`.
+  - **F. A later failed schedule fetch overwrites the good schedule.**
+    `import_schedule_today` rewrites `slates/<date>/slate_health.json` as
+    FAILED, so the next morning stops. Schedule snapshots should be kept
+    per timestamp, like roster captures.
+  - **G. The SOG daily-receipt path never finds a CAPTURED observer
+    status.** Zero of 14 linked statuses from 10-15 to 10-19 were CAPTURED.
+    The listing run's `ended_at_utc` also overwrites the observer's durable
+    time, which applies the package-wide pregame test. The 10-18 MIDDAY SOG
+    package was lost.
+  - **H. Points/Saves orchestration path uses the same roster-equality rule
+    as the fixed SOG check.** It would abort the reconciliation. Latent.
+  - **I. One post-start row in a prop package aborts the slate.**
+    `POST_START_PREDICTION_PRESENTED_AS_PREGAME` is re-raised. It should
+    exclude that row only. Latent.
+- Done when every finding has a fix, plus a test built from real cases where
+  they exist. Then a walk-forward of slates from 10-13 confirms nothing
+  captured is dropped.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** the 32 verified 2023–25 PP-TOI corrections
