@@ -1660,9 +1660,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     row hashed differently by two discovery paths); it was fixed before
     commit.
   - Open: C (off-day certificate identity) and D (postponed, cancelled or
-    suspended prior-day games; whether a suspended game's predictions are
-    graded when it resumes is the operator's call). Neither has a real case
-    to replay yet. Three read-only reviews checked the 2026-10-18 commits
+    suspended prior-day games). Neither has a real case to replay yet.
+  - Operator decision for D (2026-10-20): predictions for postponed,
+    suspended or cancelled games are void and never graded, the way books
+    cancel wagers placed on them. The rescheduled game gets fresh
+    predictions on its new date. Reconciliation should leave such games out
+    of the admitted set with a recorded reason (from the official schedule's
+    `gameScheduleState`: PPD, SUSP, CNCL) and certify the played games. Three read-only reviews checked the 2026-10-18 commits
   (`e4cdee47`, `79ef060c`, `46f879a3`, `e6a9f976`, `f593daec`, `41b66d64`)
   against the operating rules. Those rules are: up to four timestamped
   snapshots per slate, all kept as research evidence; pregame judged per
