@@ -567,9 +567,10 @@ def canonical_slate(dsn: str, slate_date: str) -> pd.DataFrame:
                    home_team_code, away_team_code, game_type AS game_type_code,
                    upper(coalesce(status, 'SCHEDULED')) AS retained_game_state
             FROM nhl.games
-            WHERE season=2026 AND game_date=%s::date
+            WHERE season=%s AND game_date=%s::date
             ORDER BY start_time_utc, game_id
-        """, (slate_date,))
+        """, (int(slate_date[:4]) if int(slate_date[5:7]) >= 7 else int(slate_date[:4]) - 1,
+              slate_date))
         rows = cursor.fetchall()
         columns = [item.name for item in cursor.description]
         connection.rollback()

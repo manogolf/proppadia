@@ -227,16 +227,23 @@ def validate_history_score_source(
 
 
 def _prior_day_regular_season_game_ids(dsn: str, prior_slate: str) -> list[int]:
-    """Return canonical regular-season game IDs for one operational prior day."""
+    """Return the prior day's canonical game IDs, as reconciliation admits them.
+
+    Every game type (preseason, regular season, postseason) and the season of
+    the date, matching run_nhl_postgame_reconciliation.canonical_slate, so the
+    certified package's game set compares equal on playoff and new-season days.
+    """
+    year, month = int(prior_slate[:4]), int(prior_slate[5:7])
+    season = year if month >= 7 else year - 1
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
         cursor.execute(
             """
             SELECT game_id
             FROM nhl.games
-            WHERE season = 2026 AND game_type = 2 AND game_date = %s::date
+            WHERE season = %s AND game_date = %s::date
             ORDER BY game_id
             """,
-            (prior_slate,),
+            (season, prior_slate),
         )
         return [int(row[0]) for row in cursor.fetchall()]
 
