@@ -1149,7 +1149,15 @@ consumers keep full verification. Open items:
      `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1` alongside the existing
      restricted-ingest flag. `MLB_INGEST_DATABASE_URL` is already in
      `backend/.env`. Its log line reports `phase_chain_publication`.
-     **Open, operator:** push.
+     Pushed and live on Render 2026-10-19.
+     - `GET /api/mlb/game-predictions?game_date=2026-10-19` serves 849815
+       (Guardians @ Rays, `LEAGUE_CHAMPIONSHIP_SERIES`, no excluded rows).
+     - 2026-10-18 serves 849817.
+     - `phase_authority_extension.status` is `DB_CHAIN_VERIFIED` with 0
+       entries. The hosted login reads the table, and the chain head is the
+       V6 anchor.
+     - The first chain entry is expected from the next morning run that has
+       a postseason game newer than V6.
 
   Until then, the per-game-day committed child below remains the route.
 - **Fallback: one committed child per postseason game day.** Follow
