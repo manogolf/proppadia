@@ -1748,9 +1748,39 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - **I. One post-start row in a prop package aborts the slate.**
     `POST_START_PREDICTION_PRESENTED_AS_PREGAME` is re-raised. It should
     exclude that row only. Latent.
-- Done when every finding has a fix, plus a test built from real cases where
-  they exist. Then a walk-forward of slates from 10-13 confirms nothing
-  captured is dropped.
+- Walk-forward 2026-10-20 (10-13 to 10-19). Read-only replays of resilient
+  grading on current main against each retained package, plus captured
+  observer packages counted against graded rows:
+  - **Grading dropped nothing captured.** Every game with a capture was
+    graded. Graded rows are about half of captured rows where two snapshots
+    (MIDDAY and FINAL_PREGAME) predicted the same identities; the latest
+    pregame snapshot wins. Single-capture days match exactly (10-17 SOG
+    11,262; 10-18 Points 300, Saves 117). Replays show no aborts.
+  - **One recoverable gap.** On 2026-10-17, Moneyline and Puck Line graded
+    0. The package records `NO_IMMUTABLE_CROSS_MARKET_SOURCE` because the
+    older path wanted a full-slate final run. A late REFRESH package did
+    capture 4 of the 14 games pregame, and current per-game grading selects
+    those 8 Moneyline and 4 Puck Line predictions. Recovering them needs a
+    restatement beside the sealed package; that is the operator's call.
+  - **Capture gaps that cannot be recovered.** Predictions cannot be made
+    after the fact. The Points/Saves observers refused partial slates
+    (`WHOLE_SLATE_PRESTART_GATE_FAILED_PARTIAL_SLATE`) until `c64c0466`
+    (10-18 10:23):
+    - no Points on 10-16;
+    - no Points or Saves on 10-17 (19 refusals per lane);
+    - partial refusals on 10-13 and 10-15.
+
+    Daily runs also failed from 10-14 to 10-18, on governed authority/roster
+    acquisition and transient database connection errors. On 10-19 the late
+    snapshot's roster gate failed the observers (fixed by A).
+  - **Resilient grading before 10-18 has no readiness evidence.** That
+    certificate/roster binding was first written on 10-18
+    (`READINESS_EVIDENCE_MISSING`,
+    `PARENT_CERTIFICATE_ROSTER_LINKAGE_MISSING`). The legacy grades in those
+    packages cover the captured predictions, so this is not a loss.
+  - **Noise.** Failed observer captures with no roster record proof notes
+    such as `observation_summary.json` not found (56 on 10-19). These are
+    harmless.
 
 ### P2.25 Review NHL season rollover before the 2027-28 season
 
