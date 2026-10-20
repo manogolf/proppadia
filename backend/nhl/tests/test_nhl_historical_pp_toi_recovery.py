@@ -51,6 +51,7 @@ class HistoricalPpToiRecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "SHIFTCHARTS_EMPTY"):
             validate_game(game_id, pbp, box, {"data": []})
 
+    @unittest.skipUnless(CURRENT.is_file(), "retained 2026-10-16 raw foundation snapshot is a local artifact")
     def test_team_identity_is_canonical_by_abbreviation_not_numeric_namespace_guess(self):
         raw, _games, teams, _checkpoint = load_inventory(CURRENT, DEFAULT_CHECKPOINT)
         mismatches = 0
@@ -74,6 +75,7 @@ class HistoricalPpToiRecoveryTests(unittest.TestCase):
         self.assertEqual(id_namespace_differences, 54)
         self.assertEqual(side_mismatches, 0)
 
+    @unittest.skipUnless(CURRENT.is_file(), "retained 2026-10-16 raw foundation snapshot is a local artifact")
     def test_equal_team_allocation_reproduces_2023021169_signature(self):
         raw, _games, _teams, _checkpoint = load_inventory(CURRENT, DEFAULT_CHECKPOINT)
         gid = 2023021169

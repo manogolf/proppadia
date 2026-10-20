@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pandas as pd
 from backend.nhl.daily_capture import canonical_game_set_hash
 from backend.nhl.points_hgb_shadow import build_production_prediction_artifact
-from backend.nhl.points_hgb_promotion import assert_hgb_promotion_ready, selected_production_authority
+from backend.nhl.points_hgb_promotion import ROOT, assert_hgb_promotion_ready, selected_production_authority
 from backend.nhl.attachment_integrity import prediction_rows
 
 
@@ -184,6 +184,8 @@ class HgbMixedStartProductionTests(unittest.TestCase):
                     expected_game_set_hash=canonical_game_set_hash(CANONICAL_IDS),
                 )
 
+    @unittest.skipUnless((ROOT / "artifacts/operational/nhl/points_hgb_shadow").is_dir(),
+                         "retained HGB shadow captures for the promotion gates are local artifacts")
     def test_current_hgb_authority_and_all_promotion_gates_remain_ready(self):
         authority = selected_production_authority()
         self.assertEqual(authority["authority_version"], 2)

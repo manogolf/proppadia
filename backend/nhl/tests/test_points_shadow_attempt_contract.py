@@ -36,6 +36,9 @@ class PhoenixAttemptContractTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "POINTS_FEATURE_CONSTRUCTION_HASH_DRIFT"):
             verify_feature_contract_identity()
 
+    @unittest.skipUnless(
+        (Path(__file__).resolve().parents[3] / "backend/nhl/models/latest/points").is_dir(),
+        "frozen Phoenix Points model files are local artifacts")
     def test_explicit_shadow_contract_reuses_frozen_model_without_repinning_it(self):
         identity = json.loads(CONTRACT_PATH.read_text())
         identity["_identity_path"] = str(CONTRACT_PATH)

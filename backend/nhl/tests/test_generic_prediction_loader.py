@@ -83,6 +83,7 @@ class GenericPredictionLoaderTests(unittest.TestCase):
             loader.main()
         return connect
 
+    @unittest.skipUnless(PREDICTIONS.is_file(), "retained 2026-10-10 HGB prediction run is a local artifact")
     def test_retained_hgb_artifact_loads_and_binds_metadata_and_run(self):
         self.assertEqual(hashlib.sha256(PREDICTIONS.read_bytes()).hexdigest(), PREDICTION_SHA256)
         connection = FakeConnection()
@@ -104,12 +105,15 @@ class GenericPredictionLoaderTests(unittest.TestCase):
                       connection.test_cursor.statement)
 
     def test_expected_hash_mismatch_fails_before_database_connect(self):
-        with patch.object(sys, "argv", [
-            "loader", "--pred-csv", str(PREDICTIONS), "--project", "nhl",
-            "--prop", "player_points", "--expected-sha256", "0" * 64,
-        ]), patch.object(loader.psycopg, "connect") as connect:
-            with self.assertRaisesRegex(SystemExit, "Prediction artifact hash mismatch"):
-                loader.main()
+        with tempfile.TemporaryDirectory() as tmp:
+            predictions = Path(tmp) / "points_predictions.csv"
+            predictions.write_text("game_id,player_id,line\n1,2,0.5\n")
+            with patch.object(sys, "argv", [
+                "loader", "--pred-csv", str(predictions), "--project", "nhl",
+                "--prop", "player_points", "--expected-sha256", "0" * 64,
+            ]), patch.object(loader.psycopg, "connect") as connect:
+                with self.assertRaisesRegex(SystemExit, "Prediction artifact hash mismatch"):
+                    loader.main()
         connect.assert_not_called()
 
     def test_run_scope_is_retry_stable_and_distinct_between_same_day_runs(self):

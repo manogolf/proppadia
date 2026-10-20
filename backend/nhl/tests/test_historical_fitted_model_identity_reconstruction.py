@@ -36,6 +36,8 @@ class HistoricalIdentityReconstructionTests(unittest.TestCase):
         live = {(row["run_id"], row["lane"], row["prediction_sha256"]) for row in rows}
         self.assertLessEqual(recorded, live)
 
+    @unittest.skipUnless(reconstruction.RECEIPTS.is_dir(),
+                         "retained NHL daily receipts are local operational artifacts")
     def test_retrospective_package_is_create_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "identity-ledger"
