@@ -16,7 +16,9 @@ export default function MLBPublicGamePredictionsPanel({ gameDate }) {
         const response = await fetch(`${getBaseURL()}/api/mlb/game-predictions?${qs}`, { credentials: "include" });
         const payload = await response.json();
         if (!response.ok) throw new Error(payload?.detail || "Game predictions unavailable");
-        if (mounted) setState({ loading: false, enabled: Boolean(payload.enabled), rows: payload.rows || [], error: "" });
+        // A governed unavailable status means rows exist but cannot be phase-verified.
+        const unavailable = payload.unavailable_status ? "phase authority evidence is not available" : "";
+        if (mounted) setState({ loading: false, enabled: Boolean(payload.enabled), rows: payload.rows || [], error: unavailable });
       } catch (error) {
         if (mounted) setState({ loading: false, enabled: false, rows: [], error: error?.message || "Unavailable" });
       }

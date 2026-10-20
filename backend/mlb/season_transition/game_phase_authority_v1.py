@@ -76,6 +76,11 @@ DEFAULT_SOURCE_MANIFEST_PATH = REPO_ROOT / (
     "canonical_backfill_proposal/retained_source_manifest.jsonl"
 )
 PHASE_CONTRACT_PATH = REPO_ROOT / "backend/mlb/season_transition/contract_v1.py"
+# Full verification re-hashes every retained raw schedule source. Snapshot-only
+# verification checks the committed descriptor chain, proposal, and source
+# manifest but not the raw bytes, which are git-ignored and absent on hosts.
+SOURCE_VERIFICATION_RAW_BYTES = "RAW_SOURCE_BYTES_VERIFIED"
+SOURCE_VERIFICATION_SNAPSHOT_ONLY = "COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY"
 
 
 class GamePhaseAuthorityError(RuntimeError):
@@ -319,6 +324,7 @@ def _load_and_verify_source_manifest(
     root: Path,
     expected_sha256: str,
     expected_count: int,
+    verify_source_bytes: bool = True,
 ) -> tuple[dict[str, str], int]:
     actual_sha256 = _sha256(manifest_path)
     if actual_sha256 != expected_sha256:
@@ -360,6 +366,10 @@ def _load_and_verify_source_manifest(
                 "GAME_PHASE_SOURCE_MANIFEST_ROW_INVALID",
                 detail=source_path,
             )
+        if not verify_source_bytes:
+            by_path[source_path] = source_sha256
+            observation_count += schedule_rows
+            continue
         try:
             actual_bytes = resolved.stat().st_size
         except OSError as exc:
@@ -594,6 +604,7 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
         expected_descriptor_sha256: str | None = None,
         selection_path: Path = ACTIVE_SELECTION_PATH,
         allow_candidate: bool = False,
+        verify_source_bytes: bool = True,
     ) -> None:
         contract_sha256 = _sha256(PHASE_CONTRACT_PATH)
         if (
@@ -617,6 +628,12 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
         if descriptor_path is not None and legacy_override:
             raise GamePhaseAuthorityError(
                 "GAME_PHASE_DESCRIPTOR_AND_LEGACY_INPUT_CONFLICT"
+            )
+        if not verify_source_bytes and (descriptor_path is not None or legacy_override):
+            # Snapshot-only reads serve the governed active selection; building,
+            # validating, or pinning a snapshot always re-hashes raw sources.
+            raise GamePhaseAuthorityError(
+                "GAME_PHASE_SNAPSHOT_ONLY_REQUIRES_ACTIVE_SELECTION"
             )
 
         verified_descriptor = None
@@ -704,6 +721,7 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
             root=root,
             expected_sha256=expected_source_manifest_sha256,
             expected_count=expected_source_file_count,
+            verify_source_bytes=verify_source_bytes,
         )
         if observation_count != expected_source_observation_count:
             raise GamePhaseAuthorityError(
@@ -763,6 +781,11 @@ class HashedProposalAuthority(CanonicalGamePhaseAuthority):
                         "GAME_PHASE_V1_DESCRIPTOR_INVARIANT_MISMATCH"
                     )
         self._records = records
+        self.source_verification = (
+            SOURCE_VERIFICATION_RAW_BYTES
+            if verify_source_bytes
+            else SOURCE_VERIFICATION_SNAPSHOT_ONLY
+        )
         self._metadata = GamePhaseAuthorityMetadata(
             authority_interface=AUTHORITY_INTERFACE_NAME,
             backend=FILE_BACKEND_NAME,

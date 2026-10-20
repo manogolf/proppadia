@@ -1080,3 +1080,30 @@ readiness probe. Remaining items found while doing that work:
   `test_totals_daily_integration_v1::test_existing_identity_is_bypassed_before_context_reconstruction`
   (patches a removed `load_retained_schedule`).
 
+## Public game predictions on Render (2026-10-19)
+
+`GET /api/mlb/game-predictions` returned `503 GamePhaseAuthorityError:
+GAME_PHASE_EVIDENCE_MISSING` on Render. The active phase authority (V5)
+re-hashes 471 retained raw schedule files at load. 468 of them are under
+git-ignored paths (`artifacts/**`, `backend/mlb/exports/cleanroom_v1`), so they
+were never deployed. The endpoint first consulted the authority in `4fe80cef`
+(2026-09-22). Since then, every enabled request for a date with durable rows
+has failed on Render. The evidence has never been deployable.
+
+Resolved in two steps. First, a missing-evidence load returns `200` with no
+rows and `unavailable_status: PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE`. Second,
+by owner decision on 2026-10-19, the endpoint reads the authority in
+snapshot-only mode. It checks the committed hash chain but not the raw bytes.
+See `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`. All other
+consumers keep full verification. Open items:
+
+- **Confirm on Render after the next authorized push.** Request a date with
+  durable rows. Expect `200` with rows and
+  `phase_authority_verification: COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY`.
+- **Stale archived-baseline tests:**
+  `test_public_game_prediction_baseline_v1::test_17_api_test_on_renders_rows`
+  sends archived baseline rows to the certified adapter. The adapter rejects
+  them (`PUBLIC_PREDICTION_MODEL_VERSION_MISMATCH`), so the test gets `503`.
+  `test_20` expects `45.51%` to be absent from the panel. Both fail with or
+  without the evidence and are unrelated to the phase authority.
+

@@ -234,3 +234,44 @@ def test_21_status_preserves_certification_disclosure_and_authority(monkeypatch)
     assert payload["display_status"] == "MONEYLINE_PUBLIC_PREDICTION_READY"
     assert payload["required_disclosure"] == model.DISCLOSURE
     assert payload["betting_authority"] == "NO_QUALIFIED_MLB_BETTING_MODEL"
+
+
+def test_22_missing_phase_evidence_returns_governed_unavailable(monkeypatch):
+    from backend.mlb.season_transition.game_phase_authority_v1 import GamePhaseAuthorityError
+
+    def missing():
+        raise GamePhaseAuthorityError("GAME_PHASE_EVIDENCE_MISSING", detail="artifacts/raw/schedule.json")
+
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: score())
+    monkeypatch.setattr(service, "snapshot_verified_moneyline_phase_authority", missing)
+    response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["rows"] == [] and payload["count"] == 0
+    assert payload["unavailable_status"] == "PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE"
+    assert payload["unavailable_code"] == "GAME_PHASE_EVIDENCE_MISSING"
+    # Evidence paths stay out of the public payload.
+    assert "artifacts/" not in response.text
+
+
+def test_23_no_durable_rows_does_not_load_phase_authority(monkeypatch):
+    def unexpected():
+        raise AssertionError("authority loaded without rows")
+
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: [])
+    monkeypatch.setattr(service, "snapshot_verified_moneyline_phase_authority", unexpected)
+    payload = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"}).json()
+    assert payload["count"] == 0 and "unavailable_status" not in payload
+
+
+def test_24_certification_failures_still_fail_closed_with_503(monkeypatch):
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    bad = {**score()[0], "winner_model_hash": "0" * 64}
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: [bad])
+    # Certification runs before the phase join, so missing evidence cannot mask it.
+    monkeypatch.setattr(service, "snapshot_verified_moneyline_phase_authority", lambda: (_ for _ in ()).throw(
+        AssertionError("phase join reached before certification")))
+    response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"})
+    assert response.status_code == 503

@@ -4,7 +4,10 @@ from __future__ import annotations
 from typing import Any
 
 from backend.mlb.public_game_predictions.durable_store_v1 import fetch_prediction_rows
-from backend.mlb.public_game_predictions.phase_gating_v1 import classify_moneyline_row
+from backend.mlb.public_game_predictions.phase_gating_v1 import (
+    classify_moneyline_row,
+    snapshot_verified_moneyline_phase_authority,
+)
 from backend.mlb.public_game_predictions.pythagorean_log5_v1 import (
     DISCLOSURE,
     MODEL_NAME,
@@ -14,14 +17,16 @@ from backend.mlb.public_game_predictions.pythagorean_log5_v1 import (
     feature_enabled,
     load_candidate,
 )
+from backend.mlb.season_transition.game_phase_authority_v1 import GamePhaseAuthorityError
 
 CERTIFIED_MODEL_HASH = "804535afde26e09516571c7a105d8376c2607cb7abc572621e80d8a9a006acf6"
 CERTIFICATION_STATUS = "MONEYLINE_STANDALONE_PREDICTION_CERTIFIED"
 DISPLAY_STATUS = "MONEYLINE_PUBLIC_PREDICTION_READY"
+PHASE_AUTHORITY_UNAVAILABLE = "PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE"
 CONFIDENCE_LABELS = {"STRONG", "MODERATE", "LEAN", "NEAR_EVEN"}
 
 
-def _public_row(row: dict[str, Any], requested_date: str) -> dict[str, Any]:
+def _public_row(row: dict[str, Any], requested_date: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """Validate one immutable lifecycle payload and expose prediction-only fields."""
     if row.get("winner_model_version") != MODEL_VERSION:
         raise PublicGamePredictionError("PUBLIC_PREDICTION_MODEL_VERSION_MISMATCH")
@@ -45,8 +50,7 @@ def _public_row(row: dict[str, Any], requested_date: str) -> dict[str, Any]:
     ))
     if not all(identity.split("|")):
         raise PublicGamePredictionError("PUBLIC_PREDICTION_IDENTITY_INCOMPLETE")
-    phase = classify_moneyline_row(row)
-    return {
+    return row, {
         "immutable_prediction_identity": identity,
         "game_id": int(row["game_id"]),
         "game_date": row["game_date"],
@@ -62,20 +66,39 @@ def _public_row(row: dict[str, Any], requested_date: str) -> dict[str, Any]:
         "model_version": MODEL_VERSION,
         "model_hash": CERTIFIED_MODEL_HASH,
         "prediction_timestamp_utc": row["prediction_timestamp_utc"],
-        # These values are joined at read time and remain absent from the
-        # immutable Moneyline prediction ledger.
-        "authoritative_game_type": phase.source_game_type,
-        "normalized_phase": phase.normalized_phase,
-        "postseason_round": phase.postseason_round,
     }
 
 
-def _certified_rows(rows: list[dict[str, Any]], requested_date: str) -> list[dict[str, Any]]:
-    public = [_public_row(row, requested_date) for row in rows]
-    identities = [row["immutable_prediction_identity"] for row in public]
+def _certified_rows(
+    rows: list[dict[str, Any]], requested_date: str
+) -> list[tuple[dict[str, Any], dict[str, Any]]]:
+    certified = [_public_row(row, requested_date) for row in rows]
+    identities = [public["immutable_prediction_identity"] for _, public in certified]
     if len(identities) != len(set(identities)):
         raise PublicGamePredictionError("DUPLICATE_PUBLIC_PREDICTION_IDENTITY")
-    return public
+    return certified
+
+
+def _phase_joined_rows(
+    certified: list[tuple[dict[str, Any], dict[str, Any]]],
+) -> tuple[list[dict[str, Any]], str | None]:
+    if not certified:
+        return [], None
+    # Hosts lack the git-ignored raw schedule sources, so the projection reads
+    # the committed hash-chained snapshot. Row admission was fully verified.
+    authority = snapshot_verified_moneyline_phase_authority()
+    joined = []
+    for source, public in certified:
+        phase = classify_moneyline_row(source, authority=authority)
+        # These values are joined at read time and remain absent from the
+        # immutable Moneyline prediction ledger.
+        joined.append({
+            **public,
+            "authoritative_game_type": phase.source_game_type,
+            "normalized_phase": phase.normalized_phase,
+            "postseason_round": phase.postseason_round,
+        })
+    return joined, authority.source_verification
 
 
 def get_public_game_prediction_status() -> dict[str, Any]:
@@ -97,5 +120,20 @@ def get_public_game_predictions(game_date: str) -> dict[str, Any]:
         return {**status, "rows": [], "count": 0}
     # Production serves only immutable durable rows created by the designated
     # pregame lifecycle. Requests never synthesize retrospective predictions.
-    rows = _certified_rows(fetch_prediction_rows(game_date), game_date)
-    return {**status, "rows": rows, "count": len(rows)}
+    certified = _certified_rows(fetch_prediction_rows(game_date), game_date)
+    try:
+        rows, verification = _phase_joined_rows(certified)
+    except GamePhaseAuthorityError as exc:
+        # Committed snapshot evidence failed verification; no row can be
+        # phase-joined, so publish nothing and report a typed reason.
+        return {
+            **status,
+            "rows": [],
+            "count": 0,
+            "unavailable_status": PHASE_AUTHORITY_UNAVAILABLE,
+            "unavailable_code": exc.code,
+        }
+    payload = {**status, "rows": rows, "count": len(rows)}
+    if verification is not None:
+        payload["phase_authority_verification"] = verification
+    return payload
