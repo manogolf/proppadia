@@ -1666,8 +1666,11 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                                 "challenger_favored_team",
                             }
                             _require_columns(production, required_production, "RESILIENT_MONEYLINE_PRODUCTION")
+                            # A run after some puck drops covers only the
+                            # games still pregame; rows are judged per game.
                             if (production.game_id.duplicated().any()
-                                    or set(production.game_id.astype(int)) != set(game_ids)
+                                    or production.empty
+                                    or not set(production.game_id.astype(int)) <= set(game_ids)
                                     or set(production.model_version.astype(str)) !=
                                     {"NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3"}
                                     or set(production.operational_role.astype(str)) != {"PRODUCTION_CHAMPION"}
@@ -1841,7 +1844,8 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                     raise RuntimeError("RESILIENT_PUCK_LINE_SOURCE_IDENTITY_MISMATCH")
                 puck = _read_immutable_puck_predictions(puck_path)
                 if (puck.game_id.duplicated().any()
-                        or set(puck.game_id.astype(int)) != set(game_ids)
+                        or puck.empty
+                        or not set(puck.game_id.astype(int)) <= set(game_ids)
                         or ("slate_date" in puck
                             and not puck.slate_date.astype(str).eq(slate_date).all())):
                     raise RuntimeError("RESILIENT_PUCK_LINE_GAME_IDENTITY_INVALID")
