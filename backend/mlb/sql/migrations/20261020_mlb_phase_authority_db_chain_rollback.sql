@@ -28,9 +28,4 @@ $rollback$;
 
 COMMIT;
 
--- Verification (SQL editor). Expect: f, f, f (or NULL for the table checks if it was dropped).
--- SELECT to_regprocedure('mlb.append_phase_authority_chain_entry(text,bigint,bigint,text,text,text,text,text)') IS NOT NULL,
---        CASE WHEN to_regclass('mlb.phase_authority_chain_entries') IS NULL THEN NULL
---             ELSE has_table_privilege('proppadia_api', 'mlb.phase_authority_chain_entries', 'SELECT') END,
---        CASE WHEN to_regclass('mlb.phase_authority_chain_entries') IS NULL THEN NULL
---             ELSE has_table_privilege('proppadia_mlb_ingest', 'mlb.phase_authority_chain_entries', 'SELECT') END;
+-- Verification queries: 20261020_mlb_phase_authority_db_chain_rollback_verify.sql

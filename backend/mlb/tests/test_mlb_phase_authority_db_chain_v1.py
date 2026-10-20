@@ -374,7 +374,11 @@ class MigrationContractTests(unittest.TestCase):
         self.assertIn("p_prev_entry_sha256 IS DISTINCT FROM v_head.entry_sha256", self.code)
 
     def test_editor_verification_and_safe_rollback(self) -> None:
-        self.assertIn("has_table_privilege('proppadia_api', 'mlb.phase_authority_chain_entries', 'SELECT')", self.sql)
+        verify = MIGRATION.with_name(MIGRATION.stem + "_verify.sql").read_text()
+        self.assertIn("has_table_privilege('proppadia_api', 'mlb.phase_authority_chain_entries', 'SELECT')", verify)
+        self.assertTrue(verify.lstrip().startswith("--"))
+        self.assertNotRegex(verify, r"(?im)^\s*(INSERT|UPDATE|DELETE|GRANT|REVOKE|CREATE|DROP|ALTER)\b")
+        self.assertIn("has_table_privilege", ROLLBACK.with_name(ROLLBACK.stem + "_verify.sql").read_text())
         self.assertNotIn("SET ROLE", self.code)
         rollback = ROLLBACK.read_text()
         self.assertIn("kept without grants", rollback)

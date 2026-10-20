@@ -1125,7 +1125,7 @@ consumers keep full verification. Open items:
   extension" in `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`.
   **Open, operator:**
   1. Apply `backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql`
-     and run its verification block.
+     then run `20261020_mlb_phase_authority_db_chain_verify.sql` (same folder).
   2. Generate a 32-byte key and set `MLB_PHASE_AUTHORITY_CHAIN_KEY` in
      `backend/.env` and on Render.
   3. Commit the key id from

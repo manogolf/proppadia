@@ -63,7 +63,8 @@ hosted read re-verifies that chain on every request.
 
 - **Table:** `mlb.phase_authority_chain_entries`. Prepared SQL:
   `backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql`
-  (rollback `..._rollback.sql`).
+  (rollback `..._rollback.sql`; editor checks in `..._verify.sql` and
+  `..._rollback_verify.sql`).
   - Each row is one canonical-JSON entry: sequence, previous entry SHA-256,
     anchor, signing key id, and the exact phase record.
   - The entry SHA-256 is checked by a table constraint.
