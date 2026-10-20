@@ -127,6 +127,30 @@ games that the original `graded_moneyline.csv` or `graded_puck_line.csv`
 does not grade. Where both exist, the original grade is kept, so no game is
 counted twice.
 
+Scheduled per-game closing odds (2026-10-20). For closing-line value,
+`backend/nhl/scripts/run_nhl_closing_prop_odds.py`
+(LaunchAgent `com.proppadia.nhl.closing-prop-odds`, every 5 minutes;
+tracked in `backend/nhl/launchagents/`) captures player-prop odds once per
+game, 30-10 minutes before that game's own scheduled start:
+- The markets, alternate lines, regions and books are the same as the daily
+  run's (`daily_capture.capture_odds_observation`).
+- Snapshots use phase `CLOSING` in the existing
+  `odds_observations/season=<s>/slate_date=<ET date>/observation=*` layout.
+  Each game has its own claim (`phase=CLOSING.game=<id>.claim.json`), and no
+  compatibility files are written.
+- It never requests inside 10 minutes of a start or after it.
+- Unbound or failed attempts are retried in the window, up to 3 attempts
+  per game; discovery is free, and only a bound event is paid (21 credits).
+- Every decision is appended to `closing_capture_log.jsonl` in the day
+  folder. Binding failures also go to the LaunchAgent stderr log. A game
+  that leaves its window uncaptured is logged as
+  `MISSED_NO_CLOSING_CAPTURE`.
+- Readers that take a day's latest snapshot or pool all snapshots skip
+  CLOSING (`daily_capture.is_closing_observation`): the 8rain export, the
+  all-candidate research export, and the monthly SOG/BetOnline quote pool.
+- Verification: `report_nhl_closing_odds.py --date <d>` lists, per game, the
+  minutes between the closing snapshot and puck drop.
+
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has
   inputs. A pregame game with no feature rows or slate identities is recorded

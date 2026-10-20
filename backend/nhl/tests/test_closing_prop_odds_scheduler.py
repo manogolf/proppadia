@@ -93,3 +93,20 @@ class ClosingSchedulerTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ClosingReportTests(unittest.TestCase):
+    def test_report_gives_minutes_before_puck_per_game(self):
+        from backend.nhl.scripts import report_nhl_closing_odds as report
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with patch.object(scheduler, "load_canonical_slate", return_value=[NJD, BOS]), \
+                    patch.object(report, "load_canonical_slate", return_value=[NJD, BOS]):
+                scheduler.run(now=datetime(2026, 10, 21, 22, 40, tzinfo=UTC), observation_root=root / "odds_observations",
+                              slate_root=root / "slates", dry_run=False,
+                              provider=provider_for("New Jersey Devils", "New York Rangers", "e1"), authorized=True)
+                rows = report.report("2026-10-21", root)
+        njd = next(r for r in rows if r["game_id"] == 2026020300)
+        bos = next(r for r in rows if r["game_id"] == 2026020301)
+        self.assertEqual((njd["status"], njd["minutes_before_puck"], njd["prop_rows"]), ("CAPTURED", 20.0, 1))
+        self.assertEqual(bos["status"], "MISSING")

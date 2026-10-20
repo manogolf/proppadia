@@ -1805,6 +1805,21 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   that year's season). The hard-coded 2026 values are correct through June
   2027.
 
+### P2.26 Scheduled per-game closing player-prop odds for CLV
+
+- Status: **BUILT 2026-10-20 — first live day pending**. Before this, prop
+  odds came only from manual daily runs with `--with-odds`. The median last
+  pregame snapshot was about 3 hours before puck, and only 11 of 143 games
+  since 10-01 had one within 15 minutes.
+- The scheduler captures each game once, 30-10 minutes before its own start
+  (phase CLOSING). Details are in the capture contract.
+- Budget: 21 credits per bound game, about 150 a day on average and 336 at
+  most on a 16-game day. The key had 92,358 remaining on 2026-10-20; the
+  whole key burned 7,581 from 10-01 to 10-20.
+- Done when a live day shows every game with a CLOSING snapshot 10-30
+  minutes before puck (`report_nhl_closing_odds.py`) and no unexplained
+  `MISSED_NO_CLOSING_CAPTURE` or binding failure.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** the 32 verified 2023–25 PP-TOI corrections
