@@ -30,6 +30,8 @@ SOURCE_ROOT = (ROOT / "artifacts/operational/nhl/postgame_reconciliation/"
 JOURNAL_SHA = "2994ef2bd162c483eacc20b02cf83cd0938fb5f79fd76d208ce57981ed473cb7"
 TREE_SHA = "c6e6402b2eba12a8efb30a60df607324cf8684361d357fb5340cfc9051fa7110"
 GAME_IDS = list(range(2026010008, 2026010015))
+requires_retained_source = unittest.skipUnless(
+    SOURCE_ROOT.is_dir(), "retained 2026-09-20 postgame request run is a local artifact")
 
 
 def real_evidence():
@@ -136,8 +138,9 @@ class CaptureConnection:
 class NHLPostgameStagingSyncTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.authority = real_evidence()
+        cls.authority = real_evidence() if SOURCE_ROOT.is_dir() else None
 
+    @requires_retained_source
     def test_official_j_slavin_is_exact_8481004_not_roster_8476958(self):
         identities = set(self.authority["skater_identities"])
         self.assertIn((2026010010, 8481004), identities)
@@ -157,6 +160,7 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         self.assertNotIn(8476958, {player_id for game_id, player_id in identities
                                   if game_id == 2026010010})
 
+    @requires_retained_source
     def test_real_authority_shape_is_exact(self):
         self.assertEqual(len(self.authority["game_ids"]), 7)
         self.assertEqual(len(self.authority["skater_identities"]), 252)
@@ -211,6 +215,7 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
         self.assertEqual(duplicate["duplicate_natural_key_count"], 1)
         self.assertEqual(duplicate["duplicate_natural_keys"][0]["multiplicity"], 2)
 
+    @requires_retained_source
     def test_malformed_or_duplicate_official_identity_fails(self):
         binding = verify_preserved_response_run(
             SOURCE_ROOT, expected_run_id=SOURCE_RUN, slate_date=SLATE,
@@ -236,6 +241,7 @@ class NHLPostgameStagingSyncTest(unittest.TestCase):
                 sync.build_authoritative_staging_set(
                     broken, slate_date=SLATE, expected_game_ids=GAME_IDS)
 
+    @requires_retained_source
     def test_tampered_source_tree_fails_before_database(self):
         with tempfile.TemporaryDirectory(prefix="nhl_stage_source_") as tmp:
             repository = Path(tmp)
