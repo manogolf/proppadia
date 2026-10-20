@@ -53,6 +53,29 @@ PHASE_AUTHORITY_GAME_NOT_IN_COMMITTED_SNAPSHOT` and still serves the other
 rows. Its phase is never inferred from the date or the row. Every other phase
 failure (conflict, special, stale, correction review) still fails the request.
 The row is served once a governed snapshot child adds the game and that child
-is activated, committed, and deployed (see the V5 package for the pattern).
+is activated, committed, and deployed.
+
+## Keeping postseason authority current
+
+Each postseason gamePk must be in the active snapshot before the hosted API
+can serve it. The ordinary history schedule ends on the run date, so a game
+first appears in retained evidence on its own game day, usually in the 12:30Z
+run. A new child is therefore needed for each postseason game day through the
+World Series.
+
+Each child uses `backend/mlb/scripts/prepare_mlb_postseason_authority_child_v1.py`.
+The child adds a `ChildSpec` (parent descriptor and selector hashes, exact
+gamePks, type, round, start) and a package `source_set.json`. The source set
+pins that day's retained history schedule and its selection receipt. Then:
+
+1. `--prepare`, then `--validate` and the child's tests (full raw-byte checks).
+2. Operator review, then `--activate` (compare-and-swap from the exact parent
+   selector, create-only rollback record).
+3. Commit, push and deploy. Each push is one paid Render rebuild.
+
+Nothing in this procedure relaxes a check. The builder, full verification,
+receipt cross-check and snapshot-only read are unchanged. V6
+(`docs/contracts/mlb_2026_postseason_authority_v6/`) is the first child built
+this way.
 
 Tests: `backend/mlb/tests/test_mlb_phase_authority_snapshot_only_verification_v1.py`.

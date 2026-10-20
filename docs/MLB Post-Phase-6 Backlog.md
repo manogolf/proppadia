@@ -1109,10 +1109,26 @@ consumers keep full verification. Open items:
   admitted locally through the runtime overlay and is not in V5. V5 holds
   only 849816 and 849817, through 2026-10-18. Such rows are now withheld in
   `excluded_rows`, so the date returns `200` with no rows.
-- **Postseason games after V5 need a governed V6 child to be served on
-  Render.** Build it from retained schedules, following the V5 package, and
-  get operator review for the selector swap. Until then, each new postseason
-  date shows no hosted predictions.
+- **V6 child prepared, not activated (2026-10-19).** V6 adds the 18 retained
+  postseason gamePks missing from V5, including 849815: 4 ALCS, 4 NLCS,
+  10 Division Series. It has 2,954 rows, 35 postseason, through 2026-10-20.
+  See `docs/contracts/mlb_2026_postseason_authority_v6/`. `--validate` passes
+  under full raw-byte verification. Tests show the proposed selector serves
+  849815 on the snapshot-only read. **Open, operator decision:** run
+  `--activate`, then commit, push and deploy. The V5 validator now reports
+  `GOVERNED_CHILD_VALID_SUPERSEDED` instead of failing once V6 is selected.
+  `test_25` now uses a synthetic absent gamePk, so it no longer depends on
+  849815 being absent.
+- **Open: one child per postseason game day through the World Series.**
+  Retained schedules end on the run date, so each game first appears on its
+  own game day. Follow "Keeping postseason authority current" in
+  `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`: add a
+  `ChildSpec` and source set, prepare, validate, review, activate and push,
+  ideally after the 12:30Z run and before first pitch. Each push is one paid
+  Render rebuild. Alternative, needing owner approval for one StatsAPI
+  request: retain one forward schedule through the end of the World Series,
+  which lists if-necessary games with TBD teams. One child built from it
+  covers every remaining game, with one rebuild.
 - **Stale archived-baseline tests:**
   `test_public_game_prediction_baseline_v1::test_17_api_test_on_renders_rows`
   sends archived baseline rows to the certified adapter. The adapter rejects
