@@ -14,10 +14,15 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "artifacts/analysis/model_development/nhl_2026_mainline_shadow_activation_and_sog_lineage_closure_v1/2026-09-15"
 
 
+PUCK_PARENT = ROOT / "artifacts/analysis/model_development/nhl_standard_puck_line_simple_baseline_v1/2026-09-15/fitted_research_artifact.json"
+requires_package = unittest.skipUnless(
+    PACKAGE.is_dir(), "retained 2026 mainline shadow activation package is a local artifact")
+
+
 class MainlineShadowActivationAndSogClosureTest(unittest.TestCase):
+    @unittest.skipUnless(PUCK_PARENT.is_file(), "retained puck line baseline research artifact is a local artifact")
     def test_puck_runtime_is_exact_frozen_artifact(self):
-        parent = ROOT / "artifacts/analysis/model_development/nhl_standard_puck_line_simple_baseline_v1/2026-09-15/fitted_research_artifact.json"
-        self.assertEqual(PUCK_PARAMETER_PATH.read_bytes(), parent.read_bytes())
+        self.assertEqual(PUCK_PARAMETER_PATH.read_bytes(), PUCK_PARENT.read_bytes())
 
     def test_puck_probability_coherence_and_replay(self):
         schedule = pd.DataFrame([{
@@ -35,6 +40,7 @@ class MainlineShadowActivationAndSogClosureTest(unittest.TestCase):
         self.assertAlmostEqual(float(first.away_minus_1_5_cover_probability.iloc[0] + first.home_plus_1_5_cover_probability.iloc[0]), 1.0, places=14)
         self.assertEqual(first.substantive_prediction_sha256.tolist(), second.substantive_prediction_sha256.tolist())
 
+    @requires_package
     def test_closed_package_team_uniqueness_and_parity(self):
         backcast = pd.read_parquet(PACKAGE / "sog_repaired_backcast_team_complete.parquet")
         coverage = json.loads((PACKAGE / "coverage_and_parity.json").read_text())
@@ -43,6 +49,7 @@ class MainlineShadowActivationAndSogClosureTest(unittest.TestCase):
         self.assertEqual(coverage["original_before_digest"], coverage["original_after_digest"])
         self.assertEqual(coverage["frozen_probability_parity_rows"], 13389)
 
+    @requires_package
     def test_all_74_dispositions_are_pregame_and_non_outcome(self):
         rows = pd.read_csv(PACKAGE / "sog_74_team_side_dispositions.csv")
         self.assertEqual(len(rows), 74)
@@ -51,6 +58,7 @@ class MainlineShadowActivationAndSogClosureTest(unittest.TestCase):
         self.assertTrue(rows.current_game_box_score_used.eq(False).all())
         self.assertTrue(rows.disposition.eq("RESOLVED_DETERMINISTIC_TEAM_SIDE").all())
 
+    @requires_package
     def test_decision_and_manifest(self):
         decision = json.loads((PACKAGE / "decision.json").read_text())
         self.assertEqual(decision["NHL_SOG_REPAIR_SENSITIVITY"], "CONCLUSION_UNCHANGED")
