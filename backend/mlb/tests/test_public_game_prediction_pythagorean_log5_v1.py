@@ -282,11 +282,12 @@ def _scored_game(game_id, start):
 
 
 def test_25_game_absent_from_snapshot_is_withheld_not_503(monkeypatch):
-    # 849815 (2026 ALCS) was admitted locally by the runtime overlay but is not
-    # in the committed V5 snapshot; 849817 is.
+    # A game admitted locally by the runtime overlay but absent from the
+    # committed snapshot (as 849815 was under V5). The synthetic gamePk stays
+    # absent from every child snapshot; 849817 is committed.
     monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
     in_snapshot = {**_scored_game(849817, "2026-10-18T21:08:00Z"), "game_date": "2026-10-18"}
-    absent = {**_scored_game(849815, "2026-10-18T23:08:00Z"), "game_date": "2026-10-18"}
+    absent = {**_scored_game(999999001, "2026-10-18T23:08:00Z"), "game_date": "2026-10-18"}
     monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: [in_snapshot, absent])
     response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-10-18"})
     assert response.status_code == 200
@@ -295,7 +296,7 @@ def test_25_game_absent_from_snapshot_is_withheld_not_503(monkeypatch):
     assert payload["rows"][0]["normalized_phase"] == "POSTSEASON"
     assert payload["count"] == 1
     assert payload["excluded_rows"] == [
-        {"game_id": 849815, "excluded_code": "PHASE_AUTHORITY_GAME_NOT_IN_COMMITTED_SNAPSHOT"}
+        {"game_id": 999999001, "excluded_code": "PHASE_AUTHORITY_GAME_NOT_IN_COMMITTED_SNAPSHOT"}
     ]
 
 
@@ -321,4 +322,30 @@ def test_27_pregame_row_is_served_after_its_game_finished(monkeypatch):
     monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: [row])
     payload = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-10-17"}).json()
     assert payload["count"] == 1 and "excluded_rows" not in payload
+    assert payload["rows"][0]["postseason_round"] == "LEAGUE_CHAMPIONSHIP_SERIES"
+
+
+def test_28_proposed_v6_selection_serves_alcs_game_849815(monkeypatch):
+    # Simulates the reviewed V6 selector swap without touching the real selector.
+    import shutil
+    import tempfile
+
+    from backend.mlb.season_transition.game_phase_authority_v1 import REPO_ROOT, HashedProposalAuthority
+
+    (REPO_ROOT / "tmp").mkdir(exist_ok=True)
+    directory = Path(tempfile.mkdtemp(prefix="v6_selection_", dir=REPO_ROOT / "tmp"))
+    selection = directory / "active_selection.json"
+    selection.write_bytes((REPO_ROOT / "docs/contracts/mlb_2026_postseason_authority_v6/"
+                           "proposed_active_selection.json").read_bytes())
+    monkeypatch.setattr(service, "snapshot_verified_moneyline_phase_authority", lambda: HashedProposalAuthority(
+        selection_path=selection, verify_source_bytes=False))
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    row = {**_scored_game(849815, "2026-10-20T00:08:00Z"), "game_date": "2026-10-19"}
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: [row])
+    try:
+        payload = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-10-19"}).json()
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
+    assert payload["count"] == 1 and "excluded_rows" not in payload
+    assert payload["rows"][0]["game_id"] == 849815
     assert payload["rows"][0]["postseason_round"] == "LEAGUE_CHAMPIONSHIP_SERIES"

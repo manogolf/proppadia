@@ -1,0 +1,40 @@
+{
+  "contract_name": "MLB_2026_PHASE_AUTHORITY_EXPLICIT_SOURCE_SET_V1",
+  "parent_descriptor_path": "backend/mlb/season_transition/authority_snapshots/v5/descriptor.json",
+  "parent_descriptor_sha256": "fa639c543ba77bab4ca4a5a853ec78cb10eaf2163b7cebddad6156eeed4d941d",
+  "schema_version": 1,
+  "source_set_id": "MLB_2026_POSTSEASON_AUTHORITY_V6_RETAINED_OCT19_2000Z",
+  "sources": [
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-19/20261019T200007091727Z_2026-08-05_2026-10-19_c063b1f4cccf5745bbb200477ca61a5aa003f01b23e29f59bce306643309cf00.json",
+      "source_sha256": "c063b1f4cccf5745bbb200477ca61a5aa003f01b23e29f59bce306643309cf00",
+      "source_bytes": 4585179,
+      "selected_game_pks": [849809, 849810, 849811, 849812, 849813, 849815, 849818, 849819, 849820, 849822, 849826, 849827, 849831, 849832, 849833, 849834, 849838, 849839]
+    }
+  ],
+  "corroborating_schedule_evidence": [
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-19/20261019T233007668928Z_2026-08-05_2026-10-19_09ae3958b9f02e42c7aa1b3b19580e7212d4f23f00c9d8c9394ad2c8679502c9.json",
+      "source_sha256": "09ae3958b9f02e42c7aa1b3b19580e7212d4f23f00c9d8c9394ad2c8679502c9",
+      "source_bytes": 4587193,
+      "game_pks": [849809, 849810, 849811, 849812, 849813, 849815, 849818, 849819, 849820, 849822, 849826, 849827, 849831, 849832, 849833, 849834, 849838, 849839],
+      "evidence_role": "LATEST_RETAINED_IDENTITY_OBSERVATION"
+    },
+    {
+      "source_path": "artifacts/ops/mlb_current_slate_sources/2026-10-19/local_daily_20261019T233005Z/moneyline_schedule.json",
+      "source_sha256": "66574b6c3a2e4ee9b0db62aa76ce4b0afb42bdfe9dbc7b77dbb2001b3591047b",
+      "source_bytes": 4704,
+      "game_pks": [849815],
+      "evidence_role": "CURRENT_SLATE_PRE_GAME_OBSERVATION"
+    }
+  ],
+  "selection_evidence": [
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-19/20261019T200007091727Z_2026-08-05_2026-10-19_c063b1f4cccf5745bbb200477ca61a5aa003f01b23e29f59bce306643309cf00_c497cd92130e1a6fc65cbab9a228e8a9ac88ea6d0a3297926ca38f16ed50c1b7.selection.json",
+      "source_sha256": "b3d5181d1f2e2ba22378f74392b8a7fbd45ee08f201d7160a472705e44c337b8",
+      "source_bytes": 1670339,
+      "schedule_sha256": "c063b1f4cccf5745bbb200477ca61a5aa003f01b23e29f59bce306643309cf00",
+      "game_pks": [849809, 849810, 849811, 849812, 849813, 849815, 849818, 849819, 849820, 849822, 849826, 849827, 849831, 849832, 849833, 849834, 849838, 849839]
+    }
+  ]
+}

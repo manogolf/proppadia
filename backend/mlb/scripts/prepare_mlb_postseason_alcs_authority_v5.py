@@ -6,12 +6,13 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 from backend.mlb.scripts.build_mlb_versioned_file_phase_authority_v1 import (
     CANDIDATE_READY,
     build_candidate_snapshot,
 )
+from backend.mlb.scripts.prepare_mlb_postseason_authority_child_v1 import _descends_from
 from backend.mlb.season_transition.game_phase_authority_v1 import VersionedFileAuthority
 from backend.mlb.season_transition.phase_authority_snapshot_v1 import (
     ACTIVE_SELECTION_PATH,
@@ -277,7 +278,9 @@ def validate_package() -> dict[str, Any]:
     if hashlib.sha256(proposed_bytes).hexdigest() != PROPOSED_SELECTION_SHA.read_text().split()[0]:
         raise PackageValidationError("PROPOSED_SELECTION_FILE_HASH_MISMATCH")
     proposed_selection_sha = hashlib.sha256(proposed_bytes).hexdigest()
-    if active_selection_sha not in {ACTIVE_SELECTION_SHA, proposed_selection_sha}:
+    superseded = (active_selection_sha not in {ACTIVE_SELECTION_SHA, proposed_selection_sha}
+                  and _descends_from(ACTIVE_SELECTION_PATH.read_bytes(), descriptor_sha))
+    if active_selection_sha not in {ACTIVE_SELECTION_SHA, proposed_selection_sha} and not superseded:
         raise PackageValidationError("ACTIVE_SELECTION_NOT_REVIEWED_V4_OR_V5")
     if promotion.get("active_selection_sha256_before_and_after") != ACTIVE_SELECTION_SHA:
         raise PackageValidationError("ACTIVE_SELECTION_COMMITMENT_MISMATCH")
@@ -299,7 +302,8 @@ def validate_package() -> dict[str, Any]:
     ).metadata.proposal_count != len(proposal_rows):
         raise PackageValidationError("V5_LOADER_COUNT_MISMATCH")
     return {
-        "decision": ("GOVERNED_CHILD_VALID_ACTIVE" if active_selection_sha == proposed_selection_sha
+        "decision": ("GOVERNED_CHILD_VALID_SUPERSEDED" if superseded
+                     else "GOVERNED_CHILD_VALID_ACTIVE" if active_selection_sha == proposed_selection_sha
                      else "GOVERNED_CHILD_VALID_INACTIVE"),
         "active_selection_sha256": active_selection_sha,
         "parent_descriptor_sha256": V4_DESCRIPTOR_SHA,
