@@ -259,6 +259,25 @@ def _retained_schedule_spine(*, operational_root: Path, slate_date: str) -> tupl
     return _local_spine(bound, slate_date), {"path": str(path), "sha256": digest}
 
 
+def _drop_rows_after_their_game_started(
+    frame: pd.DataFrame, schedule: pd.DataFrame, timestamp_col: str, durable: Any,
+) -> tuple[pd.DataFrame, int]:
+    """Drop rows predicted or published at/after their own game's start.
+
+    Pregame is judged per game: a package may hold valid rows for games that
+    had not started alongside rows for one that had. Rows whose game or
+    timestamp is unknown are kept so the identity checks still fail closed.
+    """
+    starts_by_game = dict(zip(schedule.game_id.astype(int),
+                              pd.to_datetime(schedule.scheduled_start_time_utc, utc=True, errors="coerce")))
+    starts = pd.to_datetime(frame.game_id.astype(int).map(starts_by_game), utc=True, errors="coerce")
+    stamps = pd.to_datetime(frame[timestamp_col], utc=True, errors="coerce")
+    late = starts.notna() & stamps.notna() & (stamps >= starts)
+    if durable is not None and not pd.isna(durable):
+        late |= starts.notna() & (pd.Timestamp(durable) >= starts)
+    return frame.loc[~late].copy(), int(late.sum())
+
+
 def _verify_resilient_prop_package(*, run: Path, lane: str, slate_date: str,
                                   schedule: pd.DataFrame,
                                   durable_publication_timestamp_utc: str | None = None) -> pd.DataFrame:
@@ -308,14 +327,19 @@ def _verify_resilient_prop_package(*, run: Path, lane: str, slate_date: str,
                          f"RESILIENT_{lane}_CANONICAL_SPINE")
         if spine.game_id.duplicated().any() or set(spine.game_id.astype(int)) != set(schedule.game_id.astype(int)):
             raise RuntimeError(f"RESILIENT_{lane}_CANONICAL_GAME_SET_MISMATCH")
+        durable = pd.to_datetime(durable_publication_timestamp_utc
+                                  or marker.get("completed_at_utc"),
+                                  utc=True, errors="coerce")
+        frame, post_start_rows = _drop_rows_after_their_game_started(
+            frame, schedule, "prediction_timestamp_utc", durable)
+        if frame.empty:
+            raise RuntimeError(f"RESILIENT_{lane}_TIMESTAMP_NOT_PREGAME")
         frame = _pregame(frame, "prediction_timestamp_utc", schedule)
+        frame.attrs["post_start_rows_excluded"] = post_start_rows
         cutoff_column = ("feature_cutoff_timestamp_utc" if "feature_cutoff_timestamp_utc" in frame
                          else "input_cutoff_timestamp_utc")
         cutoff = pd.to_datetime(frame[cutoff_column], utc=True, errors="coerce")
         published = pd.to_datetime(frame.prediction_timestamp_utc, utc=True, errors="coerce")
-        durable = pd.to_datetime(durable_publication_timestamp_utc
-                                  or marker.get("completed_at_utc"),
-                                  utc=True, errors="coerce")
         starts = pd.to_datetime(frame.canonical_scheduled_start_time_utc, utc=True)
         if (cutoff.isna().any() or pd.isna(durable) or (cutoff > published).any()
                 or (cutoff >= starts).any() or (published >= starts).any()
@@ -363,10 +387,15 @@ def _verify_resilient_prop_package(*, run: Path, lane: str, slate_date: str,
     _require_columns(spine, {"game_id", "scheduled_start_time_utc"}, "RESILIENT_SOG_CANONICAL_SPINE")
     if spine.game_id.duplicated().any() or set(spine.game_id.astype(int)) != set(schedule.game_id.astype(int)):
         raise RuntimeError("RESILIENT_SOG_CANONICAL_GAME_SET_MISMATCH")
-    frame = _pregame(frame, "prediction_timestamp_utc", schedule)
     durable = pd.to_datetime(durable_publication_timestamp_utc
                               or marker.get("completed_at_utc"),
                               utc=True, errors="coerce")
+    frame, post_start_rows = _drop_rows_after_their_game_started(
+        frame, schedule, "prediction_timestamp_utc", durable)
+    if frame.empty:
+        raise RuntimeError("RESILIENT_SOG_TIMESTAMP_NOT_PREGAME")
+    frame = _pregame(frame, "prediction_timestamp_utc", schedule)
+    frame.attrs["post_start_rows_excluded"] = post_start_rows
     starts = pd.to_datetime(frame.canonical_scheduled_start_time_utc, utc=True)
     cutoff = pd.to_datetime(frame.input_cutoff_timestamp_utc, utc=True, errors="coerce")
     published = pd.to_datetime(frame.prediction_timestamp_utc, utc=True, errors="coerce")
@@ -1609,6 +1638,21 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                                 durable = str(linked_status.get("durable_publication_timestamp_utc") or "")
                                 break
                         if not durable:
+                            # A daily run links the observer status current at
+                            # its own run time (usually a no-op), not the one
+                            # that captured this package; find that one in
+                            # the observer's status directory by exact run_dir.
+                            status_dir = operational_root / "sog_prediction_only/status" / slate_date
+                            for status_path in sorted(status_dir.glob("*.json")) if status_dir.is_dir() else []:
+                                try:
+                                    observer_status = json.loads(status_path.read_text())
+                                except (OSError, ValueError, json.JSONDecodeError):
+                                    continue
+                                if (observer_status.get("status") == "CAPTURED"
+                                        and str(observer_status.get("run_dir") or "") == str(source_run)):
+                                    durable = str(observer_status.get("durable_publication_timestamp_utc") or "")
+                                    break
+                        if not durable:
                             proof_notes.append({
                                 "source_path": str(source_run),
                                 "observer_receipt_path": str(receipt_path),
@@ -1627,7 +1671,10 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                     if expected_output_hash and expected_output_hash != actual_output_hash:
                         raise RuntimeError("RESILIENT_CROSS_MARKET_RECEIPT_HASH_MISMATCH")
                     parent_digest = _sha(receipt_path)
-                    durable = str(lane.get("ended_at_utc") or parent.get("ended_at_utc") or "")
+                    if not is_sog_package:
+                        # SOG packages keep the observer's own durable time; the
+                        # listing run's end time is not when they were published.
+                        durable = str(lane.get("ended_at_utc") or parent.get("ended_at_utc") or "")
                     parent_feature_cutoff = str(parent.get("feature_cutoff_utc") or "")
                     source_key = "immutable_predictions.csv" if is_sog_package else output_path.name
                     if source_key not in source_files:
@@ -1743,7 +1790,11 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         atomic = canonical_atomic_identity(lane_key, identity_row)
                         timestamp = str(row.get("prediction_timestamp_utc")
                                        or row.get("prediction_creation_time_utc") or durable)
-                        payload = _hash_bytes(json.dumps(row, sort_keys=True, default=str).encode())
+                        # SOG rows can also arrive through the orchestration
+                        # path, which hashes the atomic group as a list; an SOG
+                        # group is one row, so hash it the same way.
+                        payload = _hash_bytes(json.dumps([row] if lane_key == "SOG" else row,
+                                                         sort_keys=True, default=str).encode())
                         item = {
                             "game_id": game_id, "atomic_prediction_identity": atomic,
                             "eligible": True, "source_phase": phase,
@@ -1991,7 +2042,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                      and child_cert.get("package_manifest_sha256")
                      != verified_cert["package_manifest_sha256"])
                         or (child_roster.get("package_manifest_sha256")
-                            and child_roster.get("package_manifest_sha256") != roster_hash)):
+                            and child_roster.get("package_manifest_sha256") not in verified_slate_rosters)):
                     raise RuntimeError(f"RESILIENT_{lane}_CHILD_READINESS_EVIDENCE_CONFLICT")
                 source_run = Path(str(child.get("run_dir") or ""))
                 if not source_run.is_dir():
@@ -2008,9 +2059,11 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                 if readiness is not None:
                     source_cert = readiness.get("prior_day_reconciliation_certificate") or {}
                     source_roster = readiness.get("current_slate_roster_observation") or {}
+                    # Any snapshot verified for this slate, not only the
+                    # orchestration parent's (several snapshots per slate).
                     if (source_cert.get("package_manifest_sha256")
                             != verified_cert["package_manifest_sha256"]
-                            or source_roster.get("package_manifest_sha256") != roster_hash):
+                            or source_roster.get("package_manifest_sha256") not in verified_slate_rosters):
                         raise RuntimeError(f"RESILIENT_{lane}_SOURCE_READINESS_CONFLICT")
                 expected_file = ("immutable_conditional_predictions.csv" if lane == "SAVES"
                                  else "immutable_predictions.csv")

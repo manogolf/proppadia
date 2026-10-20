@@ -301,7 +301,7 @@ class ResilientCrossMarketAdapterTests(unittest.TestCase):
 class ResilientSogMultipleSnapshotTests(unittest.TestCase):
     """A slate may have up to four daily snapshots, each with its own roster."""
 
-    def _run(self, package_roster: str | None):
+    def _run(self, package_roster: str | None, complete: bool = False, before_run=None):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp) / "operational"
             slate_date = "2026-10-19"
@@ -324,8 +324,12 @@ class ResilientSogMultipleSnapshotTests(unittest.TestCase):
                         "package_manifest_sha256": package_roster or sha(rosters["midday"] / "SHA256SUMS")},
                 },
             }))
+            if complete:
+                (package / "RUN_COMPLETE.json").write_text(json.dumps({"status": "COMPLETE"}))
             (package / "SHA256SUMS").write_text("".join(
                 f"{sha(path)}  {path.name}\n" for path in sorted(package.iterdir())))
+            if before_run:
+                before_run(root, package)
             certificate = {"status": "CERTIFIED_FINAL", "package_path": "/verified/cert",
                            "package_manifest_sha256": "cert-hash"}
             for name, outputs in (("midday", []), ("late", [{"path": str(package)}])):
@@ -366,9 +370,58 @@ class ResilientSogMultipleSnapshotTests(unittest.TestCase):
             item.get("excluded_reason") == "RESILIENT_SOG_SOURCE_COMPLETION_MARKER_MISSING"
             for item in index["proof_receipts"]))
 
+    def test_captured_status_is_found_in_the_observer_status_directory(self):
+        # Without it the package is excluded as unproven; with it the
+        # package proceeds to its prediction artifact (absent in this
+        # fixture), which shows the receipt was found.
+        def add_status(root, package):
+            status = root / "sog_prediction_only/status/2026-10-19/prediction_captured.json"
+            status.parent.mkdir(parents=True)
+            status.write_text(json.dumps({
+                "status": "CAPTURED", "run_dir": str(package),
+                "durable_publication_timestamp_utc": "2026-10-19T16:06:00Z"}))
+        _, index = self._run(package_roster=None, complete=True)
+        self.assertTrue(any(
+            item.get("excluded_reason") == "RESILIENT_SOG_SOURCE_RECEIPT_OR_DURABLE_PUBLICATION_UNPROVEN"
+            for item in index["proof_receipts"]))
+        with self.assertRaisesRegex(RuntimeError, "RESILIENT_SOG_PREDICTION_ARTIFACT_MISSING"):
+            self._run(package_roster=None, complete=True, before_run=add_status)
+
     def test_package_bound_to_an_unverified_roster_still_fails_closed(self):
         with self.assertRaisesRegex(RuntimeError, "RESILIENT_SOG_SOURCE_READINESS_EVIDENCE_CONFLICT"):
             self._run(package_roster="f" * 64)
+
+
+class PerRowPregameTests(unittest.TestCase):
+    """P2.24 I/G: a package keeps its rows for games that had not started."""
+
+    def test_rows_for_a_started_game_are_dropped_and_the_rest_kept(self):
+        schedule = pd.DataFrame({"game_id": [1, 2], "scheduled_start_time_utc": [
+            "2026-10-19T23:00:00Z", "2026-10-20T01:00:00Z"]})
+        frame = pd.DataFrame({"game_id": [1, 2, 2], "prediction_timestamp_utc": [
+            "2026-10-19T23:05:00Z", "2026-10-19T23:05:00Z", "2026-10-19T23:06:00Z"]})
+        kept, dropped = core._drop_rows_after_their_game_started(
+            frame, schedule, "prediction_timestamp_utc", None)
+        self.assertEqual(list(kept.game_id), [2, 2])
+        self.assertEqual(dropped, 1)
+
+    def test_publication_time_is_judged_per_game(self):
+        schedule = pd.DataFrame({"game_id": [1, 2], "scheduled_start_time_utc": [
+            "2026-10-19T23:00:00Z", "2026-10-20T01:00:00Z"]})
+        frame = pd.DataFrame({"game_id": [1, 2], "prediction_timestamp_utc": [
+            "2026-10-19T22:50:00Z", "2026-10-19T22:50:00Z"]})
+        kept, dropped = core._drop_rows_after_their_game_started(
+            frame, schedule, "prediction_timestamp_utc", pd.Timestamp("2026-10-19T23:10:00Z"))
+        self.assertEqual(list(kept.game_id), [2])
+        self.assertEqual(dropped, 1)
+
+    def test_unknown_game_or_timestamp_is_kept_for_the_identity_checks(self):
+        schedule = pd.DataFrame({"game_id": [1], "scheduled_start_time_utc": ["2026-10-19T23:00:00Z"]})
+        frame = pd.DataFrame({"game_id": [1, 9], "prediction_timestamp_utc": [None, "2026-10-19T22:00:00Z"]})
+        kept, dropped = core._drop_rows_after_their_game_started(
+            frame, schedule, "prediction_timestamp_utc", None)
+        self.assertEqual(len(kept), 2)
+        self.assertEqual(dropped, 0)
 
 
 if __name__ == "__main__":

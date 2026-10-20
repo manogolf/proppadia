@@ -96,6 +96,21 @@ kept only in its snapshot, and the importer still exits with an error, so it
 never replaces a good current schedule that the next morning's prior-day
 check depends on.
 
+Per-row pregame and snapshot provenance in resilient grading (2026-10-20,
+P2.24 G/H/I):
+- Prop and SOG packages drop only the rows whose own game had started at
+  prediction or durable publication, and record the count
+  (`post_start_rows_excluded`). One late row no longer fails a package or
+  aborts the slate. Unknown games or timestamps still fail closed.
+- SOG packages listed by a daily run keep the observer's own CAPTURED
+  status and durable publication time. If the listing run linked a later
+  no-op status, the CAPTURED status is found in
+  `sog_prediction_only/status/<date>/` by exact `run_dir`.
+- Rows from the daily path and the orchestration path hash identically, so
+  the same package found both ways is not a conflict.
+- Points/Saves child and source roster checks accept any roster snapshot
+  verified for the slate, not only the orchestration parent's.
+
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has
   inputs. A pregame game with no feature rows or slate identities is recorded
