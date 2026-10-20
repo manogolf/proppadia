@@ -1160,6 +1160,11 @@ consumers keep full verification. Open items:
        a postseason game newer than V6.
 
   Until then, the per-game-day committed child below remains the route.
+- **Open, before 2027 Opening Day: the phase authority and DB chain cover
+  2026 only.** `phase_authority_db_chain.json` pins `supported_season: 2026`
+  and the V6 anchor, and the snapshot chain is rooted in the 2026 V1 anchors.
+  2027 games will be withheld on the hosted page until a governed 2027
+  snapshot root and a new chain id or anchor are committed.
 - **Fallback: one committed child per postseason game day.** Follow
   "Per-game-day committed children (fallback)" in the same contract. Each
   push is one paid Render rebuild.
