@@ -8,6 +8,7 @@
 - Preserve ordinary provider retry behavior; do not add arbitrary one-attempt limits.
 - Protect populated historical source values. Routine operations must use their configured restricted database identity; never switch to owner-level access to bypass a failure.
 - Before changing a database caller, inspect the relevant SQL schema, returned column aliases, actual Python result shape, and connection routing.
+- Before creating a new directory (in code or artifacts), scan the repository for an existing directory that serves the same or a similar purpose, and use it if it fits. Avoid repository bloat.
 - Prefer narrow corrections to demonstrated defects. Avoid repeating completed historical audits, adding defensive frameworks, or building speculative infrastructure.
 - Preserve unrelated worktree changes. Commit coherent completed corrections locally; never push without explicit authorization.
 - Commit source code, tests, documentation, and small reproducibility manifests. Do not stage generated research datasets, especially CSV exports, unless explicitly authorized. Respect existing `artifacts/**` ignore rules; do not use `git add -f` to bypass ignored generated data without explicit authorization. Before committing, inspect staged paths and sizes. Keep large generated outputs local with regeneration instructions and checksums, and do not delete unrelated research artifacts to reduce commit size.
