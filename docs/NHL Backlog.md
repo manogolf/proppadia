@@ -1452,11 +1452,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     2026-10-08 ledger; live receipts must contain it and still verify (skipped
     when no local receipts exist).
 - Real regressions: none found.
-- Deferred: P2.19.
+- Deferred: P2.19 (resolved 2026-10-19).
 
 ### P2.19 Make NHL tests independent of local operational artifacts
 
-- Status: **OPEN — found 2026-10-18 while resolving P2.18**. In a fresh
+- Status: **RESOLVED 2026-10-19**. Found 2026-10-18 while resolving P2.18. In a fresh
   worktree (no ignored `artifacts/**`, no `backend/.env`) the same command
   gives 96 failures and 31 errors, for example `RETAINED_ROSTER` and
   `artifacts/operational/nhl/slates/2026-09-24` in daily lane containment,
@@ -1476,6 +1476,34 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   Status-only no-ops remain from 2026-10-18 23:13 to 2026-10-19 00:05 UTC.
 - Completion: for each test, commit a small fixture, build it in `tmp_path`,
   or skip with a reason when it needs retained operational evidence.
+- Evidence 2026-10-19: in a fresh worktree (no ignored `artifacts/**`, no
+  `backend/.env`, no symlinks) the suite went from 74 failures and 31 errors
+  to 1,094 passed and 82 skipped. In the main checkout it still gives 1,176
+  passed with no skips. After both runs the fresh worktree had no untracked
+  or ignored files and the main checkout had no new files. All 105 failures
+  came from missing ignored artifacts or `backend/.env`; none needed a DSN or
+  a production-code change.
+  - Built in `tmp_path`: daily lane roster reuse uses a small synthetic roster
+    package (only the exact-hash test still needs the retained 2026-09-24
+    package). The preseason Moneyline fixture also points `cli.ROOT` at a
+    temp schedule. Before, the lane read the real 2026-09-24
+    `raw_schedule_response.json`, so two tests failed `FAILED_BLOCKING`.
+  - Offline env file: morning fixture-scenario runs (reconciliation order,
+    Saves morning prerequisite) now pass `--env-file` with a placeholder DSN.
+    Before, they read the operator's `backend/.env` and failed with
+    `NHL_DATABASE_CREDENTIAL_MISSING_OR_EMPTY` without it. Fixture scenarios
+    run no child commands.
+  - Missing stub: the cross-market readiness source-failure test now stubs
+    `require_slate_history_certificate`. Before, it verified the real
+    2026-10-16 reconciliation package.
+  - Synthetic inputs: Saves quote-capture-only tests and the generic loader
+    hash-mismatch test.
+  - Skipped by existence guard, with a reason naming the retained evidence:
+    tests that pin hashes, counts or identities of retained request runs,
+    reconciliation days, daily receipts, research packages, training exports
+    or frozen model files under ignored `backend/nhl/models/**`. Staging sync
+    loads its retained source only when present, so 22 of its 26 tests now
+    run anywhere.
 
 ### P2.20 Keep captured games when one game misses its inputs or starts early
 
