@@ -5,6 +5,7 @@ from typing import Any
 
 from backend.mlb.public_game_predictions.durable_store_v1 import fetch_prediction_rows
 from backend.mlb.public_game_predictions.phase_gating_v1 import (
+    MoneylinePhaseGateError,
     classify_moneyline_row,
     snapshot_verified_moneyline_phase_authority,
 )
@@ -23,6 +24,7 @@ CERTIFIED_MODEL_HASH = "804535afde26e09516571c7a105d8376c2607cb7abc572621e80d8a9
 CERTIFICATION_STATUS = "MONEYLINE_STANDALONE_PREDICTION_CERTIFIED"
 DISPLAY_STATUS = "MONEYLINE_PUBLIC_PREDICTION_READY"
 PHASE_AUTHORITY_UNAVAILABLE = "PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE"
+GAME_NOT_IN_SNAPSHOT = "PHASE_AUTHORITY_GAME_NOT_IN_COMMITTED_SNAPSHOT"
 CONFIDENCE_LABELS = {"STRONG", "MODERATE", "LEAN", "NEAR_EVEN"}
 
 
@@ -81,15 +83,25 @@ def _certified_rows(
 
 def _phase_joined_rows(
     certified: list[tuple[dict[str, Any], dict[str, Any]]],
-) -> tuple[list[dict[str, Any]], str | None]:
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str | None]:
     if not certified:
-        return [], None
+        return [], [], None
     # Hosts lack the git-ignored raw schedule sources, so the projection reads
     # the committed hash-chained snapshot. Row admission was fully verified.
     authority = snapshot_verified_moneyline_phase_authority()
     joined = []
+    excluded = []
     for source, public in certified:
-        phase = classify_moneyline_row(source, authority=authority)
+        try:
+            phase = classify_moneyline_row(source, authority=authority)
+        except MoneylinePhaseGateError as exc:
+            # A game admitted locally through the run-bound runtime overlay is
+            # absent until a governed snapshot child adds it. Withhold only
+            # that row; every other phase failure still fails the request.
+            if exc.code != "MONEYLINE_PHASE_AUTHORITY_INVALID" or exc.detail != "GAME_PHASE_ABSENT":
+                raise
+            excluded.append({"game_id": public["game_id"], "excluded_code": GAME_NOT_IN_SNAPSHOT})
+            continue
         # These values are joined at read time and remain absent from the
         # immutable Moneyline prediction ledger.
         joined.append({
@@ -98,7 +110,7 @@ def _phase_joined_rows(
             "normalized_phase": phase.normalized_phase,
             "postseason_round": phase.postseason_round,
         })
-    return joined, authority.source_verification
+    return joined, excluded, authority.source_verification
 
 
 def get_public_game_prediction_status() -> dict[str, Any]:
@@ -122,7 +134,7 @@ def get_public_game_predictions(game_date: str) -> dict[str, Any]:
     # pregame lifecycle. Requests never synthesize retrospective predictions.
     certified = _certified_rows(fetch_prediction_rows(game_date), game_date)
     try:
-        rows, verification = _phase_joined_rows(certified)
+        rows, excluded, verification = _phase_joined_rows(certified)
     except GamePhaseAuthorityError as exc:
         # Committed snapshot evidence failed verification; no row can be
         # phase-joined, so publish nothing and report a typed reason.
@@ -136,4 +148,6 @@ def get_public_game_predictions(game_date: str) -> dict[str, Any]:
     payload = {**status, "rows": rows, "count": len(rows)}
     if verification is not None:
         payload["phase_authority_verification"] = verification
+    if excluded:
+        payload["excluded_rows"] = excluded
     return payload

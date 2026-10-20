@@ -409,7 +409,13 @@ Responses:
   `SNAPSHOT_PROPOSAL_HASH_MISMATCH`). The committed snapshot failed
   verification, so no row is published and there is no fallback. Evidence
   paths are not included in the response.
-- Certification or per-row phase failures (for example model hash mismatch,
+- Game absent from the committed snapshot: the row is withheld and listed in
+  `excluded_rows` as `{"game_id", "excluded_code":
+  "PHASE_AUTHORITY_GAME_NOT_IN_COMMITTED_SNAPSHOT"}`. Other rows are still
+  served, and `count` covers served rows only. This happens for a postseason
+  game that the local lifecycle admitted through the run-bound runtime overlay
+  before a governed snapshot child added it.
+- Certification or other per-row phase failures (for example model hash mismatch,
   duplicate identity, wrong date scope, stale or conflicting phase): `503`
   with `detail`.
 - Invalid `game_date`: `400`.

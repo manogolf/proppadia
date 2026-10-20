@@ -1102,9 +1102,17 @@ snapshot-only mode. It checks the committed hash chain but not the raw bytes.
 See `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`. All other
 consumers keep full verification. Open items:
 
-- **Confirm on Render after the next authorized push.** Request a date with
-  durable rows. Expect `200` with rows and
-  `phase_authority_verification: COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY`.
+- **Snapshot-only path confirmed live** at `c1769536`. The earlier deploy of
+  `3a421bb5` failed on a module-level sqlalchemy import. The next response
+  was `503 MONEYLINE_PHASE_AUTHORITY_INVALID:849815:GAME_PHASE_ABSENT`.
+  849815, the 2026-10-19 ALCS game CLE @ TB, is the date's only row. It was
+  admitted locally through the runtime overlay and is not in V5. V5 holds
+  only 849816 and 849817, through 2026-10-18. Such rows are now withheld in
+  `excluded_rows`, so the date returns `200` with no rows.
+- **Postseason games after V5 need a governed V6 child to be served on
+  Render.** Build it from retained schedules, following the V5 package, and
+  get operator review for the selector swap. Until then, each new postseason
+  date shows no hosted predictions.
 - **Stale archived-baseline tests:**
   `test_public_game_prediction_baseline_v1::test_17_api_test_on_renders_rows`
   sends archived baseline rows to the certified adapter. The adapter rejects

@@ -275,3 +275,38 @@ def test_24_certification_failures_still_fail_closed_with_503(monkeypatch):
         AssertionError("phase join reached before certification")))
     response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"})
     assert response.status_code == 503
+
+
+def _scored_game(game_id, start):
+    return score(schedule_fixture(game_id=game_id, start=start))[0]
+
+
+def test_25_game_absent_from_snapshot_is_withheld_not_503(monkeypatch):
+    # 849815 (2026 ALCS) was admitted locally by the runtime overlay but is not
+    # in the committed V5 snapshot; 849817 is.
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    in_snapshot = {**_scored_game(849817, "2026-10-18T21:08:00Z"), "game_date": "2026-10-18"}
+    absent = {**_scored_game(849815, "2026-10-18T23:08:00Z"), "game_date": "2026-10-18"}
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: [in_snapshot, absent])
+    response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-10-18"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert [row["game_id"] for row in payload["rows"]] == [849817]
+    assert payload["rows"][0]["normalized_phase"] == "POSTSEASON"
+    assert payload["count"] == 1
+    assert payload["excluded_rows"] == [
+        {"game_id": 849815, "excluded_code": "PHASE_AUTHORITY_GAME_NOT_IN_COMMITTED_SNAPSHOT"}
+    ]
+
+
+def test_26_other_phase_failures_still_fail_closed_with_503(monkeypatch):
+    from backend.mlb.public_game_predictions.phase_gating_v1 import MoneylinePhaseGateError
+
+    def conflict(row, *, authority):
+        raise MoneylinePhaseGateError("MONEYLINE_SOURCE_TYPE_CONFLICT", game_pk=849817)
+
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: score())
+    monkeypatch.setattr(service, "classify_moneyline_row", conflict)
+    response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"})
+    assert response.status_code == 503

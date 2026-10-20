@@ -243,7 +243,7 @@ class MoneylinePhaseGatingV1Tests(unittest.TestCase):
             "backend.app.services.mlb.public_game_prediction_service.snapshot_verified_moneyline_phase_authority",
             return_value=authority,
         ):
-            joined, verification = _phase_joined_rows(_certified_rows([source], "2026-09-22"))
+            joined, _excluded, verification = _phase_joined_rows(_certified_rows([source], "2026-09-22"))
         projected = joined[0]
         self.assertEqual(verification, "COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY")
         self.assertEqual(projected["normalized_phase"], "POSTSEASON")

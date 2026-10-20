@@ -45,8 +45,14 @@ evidence fails verification, the endpoint publishes no rows and returns
 
 ## Limitation
 
-The hosted API can label only games in the committed active snapshot. A later
-game is `GAME_PHASE_ABSENT` (row-level `503`) until a new snapshot is built
-locally, reviewed, committed, and deployed.
+The hosted API can label only games in the committed active snapshot. The local
+pregame lifecycle admits newer postseason games through the run-bound runtime
+schedule overlay, whose source files are git-ignored. The projection withholds
+such a row (`GAME_PHASE_ABSENT`) with `excluded_code:
+PHASE_AUTHORITY_GAME_NOT_IN_COMMITTED_SNAPSHOT` and still serves the other
+rows. Its phase is never inferred from the date or the row. Every other phase
+failure (conflict, special, stale, correction review) still fails the request.
+The row is served once a governed snapshot child adds the game and that child
+is activated, committed, and deployed (see the V5 package for the pattern).
 
 Tests: `backend/mlb/tests/test_mlb_phase_authority_snapshot_only_verification_v1.py`.
