@@ -14,7 +14,9 @@ echo "[${started_at}] START MLB moneyline shadow lifecycle slate_date=${slate_da
 
 set +e
 # Durable ledger writes run on the restricted MLB ingest login (column INSERT/SELECT only).
-MLB_USE_RESTRICTED_INGEST=1 MLB_RUN_IDENTITY="${run_identity}" .venv/bin/python -m backend.mlb.scripts.run_mlb_public_game_moneyline_daily_v1 \
+# Admitted postseason games are then appended to the phase-authority DB hash
+# chain so the hosted API can serve them without a deploy (non-fatal).
+MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1 MLB_USE_RESTRICTED_INGEST=1 MLB_RUN_IDENTITY="${run_identity}" .venv/bin/python -m backend.mlb.scripts.run_mlb_public_game_moneyline_daily_v1 \
   --mlb-date "${slate_date}" \
   --run-identity "${run_identity}" \
   --prediction-cutoff-utc auto \
@@ -71,6 +73,7 @@ fields = {
     "post_start_predictions": payload.get("post_start_predictions", 0),
     "agreement_barrier_status": payload.get("agreement_barrier_status", ""),
     "grading_rows_written": payload.get("grading_rows_written", 0),
+    "phase_chain_publication": (payload.get("phase_authority_chain_publication") or {}).get("status", ""),
 }
 print("MLB_MONEYLINE_LIFECYCLE " + " ".join(f"{key}={value}" for key, value in fields.items()))
 PY

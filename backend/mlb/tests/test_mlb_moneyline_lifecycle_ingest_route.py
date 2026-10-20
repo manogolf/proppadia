@@ -41,6 +41,13 @@ class LifecycleRouteTests(unittest.TestCase):
         )
         self.assertEqual(hook.count("run_mlb_public_game_moneyline_daily_v1"), 1)
 
+    def test_hook_publishes_the_phase_authority_chain(self) -> None:
+        hook = HOOK.read_text(encoding="utf-8")
+        self.assertIn(
+            "MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1 MLB_USE_RESTRICTED_INGEST=1 MLB_RUN_IDENTITY=", hook
+        )
+        self.assertIn('"phase_chain_publication"', hook)
+
     def test_insert_grants_match_the_durable_store_inserts_exactly(self) -> None:
         sql = FORWARD.read_text(encoding="utf-8")
         self.assertEqual(_grants(sql, "GRANT", "INSERT"), _store_inserts())

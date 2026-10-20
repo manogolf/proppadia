@@ -1144,9 +1144,12 @@ consumers keep full verification. Open items:
      - Only `proppadia_mlb_ingest` can execute it.
      - `proppadia_api` has `SELECT` only and ingest has no `INSERT`.
      - RLS is on, both triggers exist, and the table has 0 entries.
-  3. **Open, operator:** merge and push the branch. Set
-     `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1` for the Moneyline daily run; it
-     needs `MLB_INGEST_DATABASE_URL` in `backend/.env`.
+  3. Merged into local main (`e2473979`). The daily hook
+     `bin/mlb_public_game_moneyline_daily_hook.sh` now sets
+     `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1` alongside the existing
+     restricted-ingest flag. `MLB_INGEST_DATABASE_URL` is already in
+     `backend/.env`. Its log line reports `phase_chain_publication`.
+     **Open, operator:** push.
 
   Until then, the per-game-day committed child below remains the route.
 - **Fallback: one committed child per postseason game day.** Follow

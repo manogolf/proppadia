@@ -91,7 +91,8 @@ key.
   - A game already in the committed snapshot is never written, and a
     conflicting one fails.
   - `run_mlb_public_game_moneyline_daily_v1.py` publishes the admitted games
-    after durable writes when `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1`. It opens
+    after durable writes when `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1`, which
+    `bin/mlb_public_game_moneyline_daily_hook.sh` sets. It opens
     its own identity-checked connection from `MLB_INGEST_DATABASE_URL`, and
     the rest of the run keeps its connections. A publication failure is
     recorded in the run result and never fails the run.
