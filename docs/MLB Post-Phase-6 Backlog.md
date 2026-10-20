@@ -1135,10 +1135,15 @@ consumers keep full verification. Open items:
        `search_path=pg_catalog`.
      - RLS is on and both triggers exist.
      - The table has 0 entries.
-  2. **Open, operator:** apply
-     `20261020_mlb_phase_authority_db_chain_keyless.sql`, which drops the
-     signature columns while the table is empty. Then run the five checks in
-     `20261020_mlb_phase_authority_db_chain_keyless_verify/`.
+  2. Done 2026-10-20: the operator applied
+     `20261020_mlb_phase_authority_db_chain_keyless.sql`. All five checks in
+     `20261020_mlb_phase_authority_db_chain_keyless_verify/` matched:
+     - The signature columns are gone.
+     - Only the 6-argument function exists. It is `SECURITY DEFINER`, owned
+       by `postgres`, with `search_path=pg_catalog`.
+     - Only `proppadia_mlb_ingest` can execute it.
+     - `proppadia_api` has `SELECT` only and ingest has no `INSERT`.
+     - RLS is on, both triggers exist, and the table has 0 entries.
   3. **Open, operator:** merge and push the branch. Set
      `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1` for the Moneyline daily run; it
      needs `MLB_INGEST_DATABASE_URL` in `backend/.env`.

@@ -55,7 +55,7 @@ failure (conflict, special, stale, correction review) still fails the request.
 The row is served once a governed snapshot child adds the game and that child
 is activated, committed, and deployed.
 
-## DB hash-chain extension (table applied 2026-10-20; keyless follow-up prepared)
+## DB hash-chain extension (database objects applied 2026-10-20)
 
 New postseason games can reach the hosted read without a code push. The local
 daily run writes them to an append-only, hash-chained table in the database.
@@ -65,7 +65,7 @@ key.
 - **Table:** `mlb.phase_authority_chain_entries`.
   - Created by `backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql`,
     which is applied.
-  - `20261020_mlb_phase_authority_db_chain_keyless.sql` (prepared) drops the
+  - `20261020_mlb_phase_authority_db_chain_keyless.sql` (applied) drops the
     two signature columns and the old 8-argument function. It runs only while
     the table is empty.
   - Rollback for both: `..._rollback.sql`. Editor checks are in the
