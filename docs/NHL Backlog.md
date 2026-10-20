@@ -1648,8 +1648,21 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.24 Remove slate-wide and single-snapshot assumptions added 2026-10-18
 
-- Status: **OPEN — audit complete 2026-10-20; fixes in progress (A, B, F
-  first)**. Three read-only reviews checked the 2026-10-18 commits
+- Status: **OPEN — A, B, E, F, G, H, I fixed 2026-10-20; C and D need a
+  design decision**. Fixed: `40ace9ff` (A), `7afc7f07` (B), `efaaffb4` (F),
+  `3151be95` (G, H, I), `4e11c95e` (E). Verification:
+  - A, F, G, I and E have unit tests that fail on the old code.
+  - B and H rest on read-only real-data replays of the 10-17, 10-18 and
+    10-19 reconciliations. On 10-19, games 139/140 now grade from the 23:24
+    refresh, the two `strictly_prestart` exclusions are gone, and all lanes
+    stay FULL. 10-17 and 10-18 are identical to before, with no aborts.
+  - A replay caught an SOG conflicting-tie abort introduced by G (the same
+    row hashed differently by two discovery paths); it was fixed before
+    commit.
+  - Open: C (off-day certificate identity) and D (postponed, cancelled or
+    suspended prior-day games; whether a suspended game's predictions are
+    graded when it resumes is the operator's call). Neither has a real case
+    to replay yet. Three read-only reviews checked the 2026-10-18 commits
   (`e4cdee47`, `79ef060c`, `46f879a3`, `e6a9f976`, `f593daec`, `41b66d64`)
   against the operating rules. Those rules are: up to four timestamped
   snapshots per slate, all kept as research evidence; pregame judged per
@@ -1703,6 +1716,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Done when every finding has a fix, plus a test built from real cases where
   they exist. Then a walk-forward of slates from 10-13 confirms nothing
   captured is dropped.
+
+### P2.25 Review NHL season rollover before the 2027-28 season
+
+- Status: **OPEN — found 2026-10-20 while fixing P2.24 E**. About a dozen
+  places pin `season=2026` / `season=2026/` paths. Examples:
+  - `postgame_reconcile/core.py` artifact globs (650, 771, 945-955);
+  - `validate_final_slate` (`canonical_season == 2026`);
+  - cross-market observer launches, queries and paths
+    (`run_nhl_mainline_cross_market_capture_warn_only.py` 136, 378, 400, 643).
+
+  The two prior-day game-set queries were fixed in P2.24 E. Not urgent
+  until October 2027, but each would silently find nothing in a new season.
 
 ## Verified Complete — Do Not Reopen
 
