@@ -227,6 +227,9 @@ def require_slate_roster_observation(
         verified = verify_roster_observation_reuse(
             candidate, season=season, slate_date=slate_date, phase=phase,
             canonical_game_ids=game_ids, canonical_game_set_hash=game_hash,
+            # The newest snapshot may follow a puck drop; observers predict
+            # only games still pregame, so it stays valid for those games.
+            require_strictly_prestart=False,
         )
     except (OSError, KeyError, json.JSONDecodeError, TypeError, ValueError) as error:
         raise RuntimeError("CURRENT_SLATE_ROSTER_OBSERVATION_INVALID") from error
@@ -238,6 +241,9 @@ def require_slate_roster_observation(
         "package_path": verified["path"],
         "package_manifest_sha256": verified["manifest_sha256"],
         "observation_timestamp_utc": verified["observation_timestamp_utc"],
+        # False when the snapshot followed a puck drop; it is still valid for
+        # the games not yet started.
+        "strictly_prestart": verified.get("strictly_prestart"),
         "canonical_game_set_hash": game_hash,
         "game_ids": game_ids,
     }

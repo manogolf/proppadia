@@ -510,8 +510,15 @@ class DailyRunRecorder:
 def verify_roster_observation_reuse(
     path: Path, *, season: int, slate_date: str, phase: str,
     canonical_game_ids: Iterable[int], canonical_game_set_hash: str,
+    require_strictly_prestart: bool = True,
 ) -> dict[str, Any]:
-    """Validate a retained roster package without modifying or relabeling it."""
+    """Validate a retained roster package without modifying or relabeling it.
+
+    ``require_strictly_prestart`` (default) demands a capture taken before the
+    slate's first puck, as reusing one capture for a whole slate needs.
+    Observers and reconciliation pass False: a later snapshot stays valid for
+    the games not yet started, and they judge pregame per game downstream.
+    """
     path = Path(path).resolve()
     manifest_sha256 = verify_package(path)
     marker_path = path / "RUN_COMPLETE.json"
@@ -529,7 +536,8 @@ def verify_roster_observation_reuse(
         "canonical_game_ids": sorted(map(int, summary.get("canonical_game_ids") or []))
         == sorted({int(value) for value in canonical_game_ids}),
         "complete_per_game_coverage": summary.get("complete_per_game_coverage") is True,
-        "strictly_prestart": summary.get("strictly_prestart") is True,
+        "strictly_prestart": (not require_strictly_prestart
+                              or summary.get("strictly_prestart") is True),
         "zero_conflicts": int(summary.get("conflict_count", -1)) == 0,
         "no_missing_teams": not summary.get("missing_teams"),
         "no_unexpected_teams": not summary.get("unexpected_teams"),
@@ -542,6 +550,7 @@ def verify_roster_observation_reuse(
         "manifest_sha256": manifest_sha256,
         "source_parent_daily_run_id": summary.get("parent_daily_run_id"),
         "observation_timestamp_utc": summary.get("observation_timestamp_utc"),
+        "strictly_prestart": summary.get("strictly_prestart") is True,
         "snapshot_row_count": int(summary.get("snapshot_row_count", 0)),
         "canonical_game_set_hash": canonical_game_set_hash,
         "reuse_mode": "EXPLICIT_VERIFIED_IMMUTABLE_SOURCE",

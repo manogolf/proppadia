@@ -79,6 +79,15 @@ or whose roster matches no verified capture, still fails closed. The prior-day
 schedule check accepts the importer's recorded hash, which covers the compact,
 key-sorted JSON, as well as the exact file bytes.
 
+Roster snapshots after a puck drop (2026-10-20, P2.24 A). A later daily
+snapshot may be captured after some games have started. Observers and
+reconciliation accept it (`require_strictly_prestart=False`) because they
+judge pregame per game: observers predict only games not yet started, and
+reconciliation checks each prediction row against its own game's start. The
+snapshot keeps its `strictly_prestart` flag and timestamp. Reusing one roster
+capture for a whole slate (`--reuse-roster-observation`, roster refresh) still
+requires a capture taken before the first puck.
+
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has
   inputs. A pregame game with no feature rows or slate identities is recorded

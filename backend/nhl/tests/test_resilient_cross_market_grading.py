@@ -345,10 +345,18 @@ class ResilientSogMultipleSnapshotTests(unittest.TestCase):
             with patch("backend.nhl.reconciliation_certificate.verify_reconciliation_certificate",
                        return_value={"package_manifest_sha256": "cert-hash", "status": "CERTIFIED_FINAL"}), \
                     patch("backend.nhl.daily_orchestration.verify_roster_observation_reuse",
-                          side_effect=lambda path, **_: {"manifest_sha256": sha(Path(path) / "SHA256SUMS")}):
+                          side_effect=self._roster_validator):
                 return core._resilient_cross_market_grades(
                     slate_date=slate_date, operational_root=root, schedule=schedule,
                     games=empty, skaters=empty, goalies=empty)
+
+    @staticmethod
+    def _roster_validator(path, **kwargs):
+        # Like the real validator: the late snapshot followed a puck drop, so
+        # only the per-game rule accepts it.
+        if "late" in str(path) and kwargs.get("require_strictly_prestart", True):
+            raise RuntimeError("ROSTER_REUSE_VALIDATION_FAILED:strictly_prestart")
+        return {"manifest_sha256": sha(Path(path) / "SHA256SUMS")}
 
     def test_package_bound_to_an_earlier_verified_snapshot_is_accepted(self):
         _, index = self._run(package_roster=None)

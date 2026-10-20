@@ -167,5 +167,68 @@ class ReconciliationCertificateTests(unittest.TestCase):
             self.assertNotIsInstance(caught.exception, RosterObservationNotReady)
 
 
+class RosterSnapshotAfterPuckDropTests(unittest.TestCase):
+    """A later daily snapshot may follow a puck drop (2026-10-17, 2026-10-19)."""
+
+    def _package(self, root: Path, **overrides) -> Path:
+        from backend.nhl.daily_capture import sha256_file
+        package = root / "observation=late"
+        package.mkdir(parents=True)
+        summary = {
+            "season": 2026, "slate_date": "2026-10-19", "phase": "REFRESH",
+            "canonical_game_set_hash": "set-hash", "canonical_game_ids": [1, 2],
+            "complete_per_game_coverage": True, "strictly_prestart": False,
+            "conflict_count": 0, "missing_teams": [], "unexpected_teams": [],
+            "observation_timestamp_utc": "2026-10-19T23:22:12Z",
+        }
+        summary.update(overrides)
+        (package / "observation_summary.json").write_text(json.dumps(summary))
+        (package / "RUN_COMPLETE.json").write_text(json.dumps({"status": "COMPLETE"}))
+        (package / "SHA256SUMS").write_text("".join(
+            f"{sha256_file(path)}  {path.name}\n" for path in sorted(package.iterdir())))
+        return package
+
+    def _verify(self, package: Path, **kwargs):
+        from backend.nhl.daily_orchestration import verify_roster_observation_reuse
+        return verify_roster_observation_reuse(
+            package, season=2026, slate_date="2026-10-19", phase="REFRESH",
+            canonical_game_ids=[1, 2], canonical_game_set_hash="set-hash", **kwargs)
+
+    def test_whole_slate_reuse_still_requires_a_prestart_capture(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(RuntimeError, "strictly_prestart"):
+                self._verify(self._package(Path(temp)))
+
+    def test_per_game_callers_accept_a_snapshot_taken_after_a_puck_drop(self):
+        with tempfile.TemporaryDirectory() as temp:
+            verified = self._verify(self._package(Path(temp)), require_strictly_prestart=False)
+        self.assertIs(verified["strictly_prestart"], False)
+        self.assertEqual(verified["observation_timestamp_utc"], "2026-10-19T23:22:12Z")
+
+    def test_per_game_callers_still_reject_other_integrity_failures(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(RuntimeError, "zero_conflicts"):
+                self._verify(self._package(Path(temp), conflict_count=1),
+                             require_strictly_prestart=False)
+
+    def test_observers_use_the_per_game_rule(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            observation = root / "roster/season=2026/slate_date=2026-10-19/observation=late"
+            observation.mkdir(parents=True)
+            (observation / "observation_summary.json").write_text(json.dumps({"phase": "REFRESH"}))
+            verified = {"path": str(observation), "manifest_sha256": "m",
+                        "observation_timestamp_utc": "2026-10-19T23:22:12Z",
+                        "strictly_prestart": False}
+            with patch("backend.nhl.daily_capture.load_canonical_slate",
+                       return_value=[type("Game", (), {"game_id": 1})()]), \
+                    patch("backend.nhl.daily_orchestration.verify_roster_observation_reuse",
+                          return_value=verified) as verify:
+                result = require_slate_roster_observation(
+                    "2026-10-19", slate_root=root / "slates", roster_root=root / "roster")
+        self.assertIs(verify.call_args.kwargs["require_strictly_prestart"], False)
+        self.assertIs(result["strictly_prestart"], False)
+
+
 if __name__ == "__main__":
     unittest.main()

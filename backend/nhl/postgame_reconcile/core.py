@@ -1484,7 +1484,8 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             verified_roster = verify_roster_observation_reuse(
                 roster_path, season=int(roster_summary["season"]), slate_date=slate_date,
                 phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
-                canonical_game_set_hash=canonical_game_set_hash(game_ids))
+                canonical_game_set_hash=canonical_game_set_hash(game_ids),
+                require_strictly_prestart=False)
             if verified_roster["manifest_sha256"] == roster_hash:
                 verified_slate_rosters.add(roster_hash)
         except (OSError, ValueError, KeyError, json.JSONDecodeError, RuntimeError):
@@ -1534,7 +1535,8 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             verified_roster = verify_roster_observation_reuse(
                 roster_path, season=roster_season, slate_date=slate_date,
                 phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
-                canonical_game_set_hash=canonical_game_set_hash(game_ids))
+                canonical_game_set_hash=canonical_game_set_hash(game_ids),
+                require_strictly_prestart=False)
             if verified_roster["manifest_sha256"] != roster_hash:
                 continue
             for lane_name, lane in (parent.get("lanes") or {}).items():
@@ -1822,7 +1824,8 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             verified_roster = verify_roster_observation_reuse(
                 roster_path, season=int(roster_summary["season"]), slate_date=slate_date,
                 phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
-                canonical_game_set_hash=canonical_game_set_hash(game_ids))
+                canonical_game_set_hash=canonical_game_set_hash(game_ids),
+                require_strictly_prestart=False)
             if verified_roster.get("manifest_sha256") != roster_hash:
                 continue
             for source_run in sorted(linked_packages):
@@ -1963,7 +1966,8 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             roster_verified = verify_roster_observation_reuse(
                 roster_path, season=int(roster_summary["season"]), slate_date=slate_date,
                 phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
-                canonical_game_set_hash=canonical_game_set_hash(game_ids))
+                canonical_game_set_hash=canonical_game_set_hash(game_ids),
+                require_strictly_prestart=False)
             roster_hash = str(roster_verified["manifest_sha256"])
             if (roster.get("status") != "VERIFIED_CURRENT_SLATE_ROSTER"
                     or roster.get("package_manifest_sha256") != roster_hash):
