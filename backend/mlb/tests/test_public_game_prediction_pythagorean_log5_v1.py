@@ -310,3 +310,15 @@ def test_26_other_phase_failures_still_fail_closed_with_503(monkeypatch):
     monkeypatch.setattr(service, "classify_moneyline_row", conflict)
     response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-06"})
     assert response.status_code == 503
+
+
+def test_27_pregame_row_is_served_after_its_game_finished(monkeypatch):
+    # Snapshot membership is by exact gamePk only; live or final game state
+    # never affects the read-time phase join.
+    monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
+    row = {**_scored_game(849816, "2026-10-18T00:08:00Z"), "game_date": "2026-10-17",
+           "grading_status": "GRADED", "official_winner": "Home Club", "prediction_correct": True}
+    monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: [row])
+    payload = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-10-17"}).json()
+    assert payload["count"] == 1 and "excluded_rows" not in payload
+    assert payload["rows"][0]["postseason_round"] == "LEAGUE_CHAMPIONSHIP_SERIES"
