@@ -401,20 +401,26 @@ Responses:
 - Normal: `200` with the model status fields, `rows`, `count`, and, when rows
   exist, `phase_authority_verification`. The value is
   `COMMITTED_SNAPSHOT_HASH_CHAIN_ONLY`: the authority checks the committed
-  snapshot hash chain but not the git-ignored raw schedule sources. See
+  snapshot hash chain but not the git-ignored raw schedule sources. It is
+  `COMMITTED_SNAPSHOT_AND_SIGNED_DB_CHAIN` when verified games from the signed
+  DB chain were added. Rows also carry `phase_authority_extension.status`:
+  `DB_CHAIN_NOT_CONFIGURED`, `DB_CHAIN_KEY_UNAVAILABLE`,
+  `DB_CHAIN_KEY_ID_MISMATCH`, `DB_CHAIN_UNAVAILABLE`, or `DB_CHAIN_VERIFIED`
+  (with entry count, head hash and added game count). See
   `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`.
 - Phase authority evidence unavailable: `200` with `rows: []`, `count: 0`,
   `unavailable_status: "PHASE_AUTHORITY_EVIDENCE_UNAVAILABLE"`, and
   `unavailable_code` set to the authority's typed error code (for example
-  `SNAPSHOT_PROPOSAL_HASH_MISMATCH`). The committed snapshot failed
-  verification, so no row is published and there is no fallback. Evidence
+  `SNAPSHOT_PROPOSAL_HASH_MISMATCH`, or a `DB_CHAIN_*` code when the signed
+  DB chain fails verification). The evidence failed verification, so no row
+  is published and there is no fallback. Evidence
   paths are not included in the response.
 - Game absent from the committed snapshot: the row is withheld and listed in
   `excluded_rows` as `{"game_id", "excluded_code":
   "PHASE_AUTHORITY_GAME_NOT_IN_COMMITTED_SNAPSHOT"}`. Other rows are still
   served, and `count` covers served rows only. This happens for a postseason
   game that the local lifecycle admitted through the run-bound runtime overlay
-  before a governed snapshot child added it.
+  before a governed snapshot child or the verified DB chain added it.
 - Certification or other per-row phase failures (for example model hash mismatch,
   duplicate identity, wrong date scope, stale or conflicting phase): `503`
   with `detail`.
