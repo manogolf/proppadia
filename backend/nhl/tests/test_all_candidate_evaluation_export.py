@@ -208,5 +208,57 @@ class AllCandidateExportTests(unittest.TestCase):
         self.assertEqual(exclusions[("2026-10-16", "PREGAME_CHRONOLOGY_UNPROVEN")], 1)
 
 
+class ResilientCrossMarketFillTests(unittest.TestCase):
+    """Resilient cross-market grades fill only games the original file lacks."""
+
+    HEADER = ("canonical_season,slate_date,game_id,scheduled_start_time_utc,challenger_home_win_probability,"
+              "v2_home_win_probability,official_full_game_winner\n")
+
+    def _row(self, game):
+        return f"2026,2026-10-17,{game},2026-10-18T00:00:00Z,0.6,0.55,HOME\n"
+
+    def _moneyline_games(self, root):
+        from backend.nhl.scripts.export_nhl_all_candidate_evaluation import load_candidates
+        predictions, _ = load_candidates(root)
+        return sorted((p.get("slate_date"), str(p.get("game_id")), p.get("model_role"))
+                      for p in predictions if p.get("market_key") == "moneyline_home")
+
+    def test_resilient_rows_fill_an_empty_original_grade_file(self):
+        import tempfile, hashlib, json
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            package = root / "postgame_reconciliation/2026-10-17/reconciliation=fixture"
+            package.mkdir(parents=True)
+            (package / "graded_moneyline.csv").write_text(self.HEADER)
+            sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+            (package / "SHA256SUMS").write_text(f"{sha(package / 'graded_moneyline.csv')}  graded_moneyline.csv\n")
+            restatement = root / "postgame_reconciliation/learning_restatements/2026-10-17/restatement=fixture"
+            restatement.mkdir(parents=True)
+            (restatement / "graded_resilient_moneyline_production_champion.csv").write_text(
+                self.HEADER + self._row(2026020131))
+            (restatement / "lineage.json").write_text(json.dumps({
+                "contract_version": "NHL_RESILIENT_CROSS_MARKET_RESTATEMENT_V1",
+                "source_package": str(package), "source_hashes": {"SHA256SUMS": sha(package / "SHA256SUMS")}}))
+            (restatement / "SHA256SUMS").write_text("".join(
+                f"{sha(p)}  {p.name}\n" for p in sorted(restatement.iterdir()) if p.name != "SHA256SUMS"))
+            games = self._moneyline_games(root)
+        self.assertEqual([g[1] for g in games], ["2026020131", "2026020131"])  # production + shadow
+
+    def test_a_game_graded_in_both_files_counts_once(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            package = root / "postgame_reconciliation/2026-10-17/reconciliation=fixture"
+            package.mkdir(parents=True)
+            (package / "graded_moneyline.csv").write_text(self.HEADER + self._row(2026020131))
+            (package / "graded_resilient_moneyline_production_champion.csv").write_text(
+                self.HEADER + self._row(2026020131) + self._row(2026020132))
+            games = self._moneyline_games(root)
+        self.assertEqual(sorted({g[1] for g in games}), ["2026020131", "2026020132"])
+        self.assertEqual(len(games), 4)  # two games x (production, shadow), none doubled
+
+
 if __name__ == "__main__":
     unittest.main()

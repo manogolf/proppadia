@@ -122,6 +122,10 @@ to a create-only `learning_restatements/<slate>/restatement=<id>`
 (contract `NHL_RESILIENT_CROSS_MARKET_RESTATEMENT_V1`), bound to the package
 manifest. `reconciliation_grades.restated_grade_path` resolves those files.
 Applied to 2026-10-17: 4 games, Moneyline production, shadow and Puck Line.
+`export_nhl_all_candidate_evaluation.py` reads these resilient files only for
+games that the original `graded_moneyline.csv` or `graded_puck_line.csv`
+does not grade. Where both exist, the original grade is kept, so no game is
+counted twice.
 
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has

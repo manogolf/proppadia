@@ -438,13 +438,31 @@ def bind_moneyline_model_sources(candidates: list[dict[str, Any]], operational_r
 def load_candidates(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     predictions: list[dict[str, Any]] = []
     diagnostics: list[dict[str, Any]] = []
+    # Resilient cross-market grades fill only games the original grade file
+    # does not grade (packages sealed before per-game grading, e.g. 10-17);
+    # where both exist the original grade is kept, so no game counts twice.
+    resilient_fill = {
+        "graded_resilient_moneyline_production_champion.csv": "graded_moneyline.csv",
+        "graded_resilient_puck_line.csv": "graded_puck_line.csv",
+    }
     for package in discover_latest_reconciliations(root):
-        for name in ("graded_moneyline.csv", "graded_puck_line.csv", "graded_sog.csv", "graded_saves.csv"):
-            path = restated_grade_path(package, name)
+        graded_games: dict[str, set[str]] = {"graded_moneyline.csv": set(), "graded_puck_line.csv": set()}
+        for source_name in ("graded_moneyline.csv", "graded_resilient_moneyline_production_champion.csv",
+                            "graded_puck_line.csv", "graded_resilient_puck_line.csv",
+                            "graded_sog.csv", "graded_saves.csv"):
+            path = restated_grade_path(package, source_name)
             if not path.exists():
                 continue
+            name = resilient_fill.get(source_name, source_name)
             for source_row in _csv_rows(path):
                 r = source_row
+                if name in graded_games:
+                    game = str(r.get("game_id", ""))
+                    if source_name in resilient_fill:
+                        if game in graded_games[name]:
+                            continue
+                    else:
+                        graded_games[name].add(game)
                 if name == "graded_moneyline.csv":
                     for family, version, role, prob_key in (
                         ("moneyline", "NHL_MONEYLINE_SHOT_FINISHING_CHALLENGER_V3", "PRODUCTION", "challenger_home_win_probability"),
