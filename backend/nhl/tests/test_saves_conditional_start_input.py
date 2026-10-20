@@ -74,6 +74,9 @@ class SavesConditionalStartInputTests(unittest.TestCase):
         self.assertTrue(np.isfinite(prepared.recent_saves).all())
         self.assertEqual(prepared.recent_saves.tolist(), [20.1, 25.0, 29.9])
 
+    @unittest.skipUnless(
+        (Path(__file__).resolve().parents[3] / "backend/nhl/models/latest/goalie_saves/MODEL_ARTIFACT.json").is_file(),
+        "frozen Saves model artifact is a local artifact")
     def test_scored_conditional_probabilities_are_open_interval_model_tails(self):
         repo = Path(__file__).resolve().parents[3]
         feature_meta_path = repo / "backend/nhl/features/feature_metadata_nhl.json"

@@ -15,8 +15,12 @@ from backend.nhl.scripts import run_nhl_morning_orchestration as morning
 class MorningOrchestrationReconciliationOrderTests(unittest.TestCase):
     def _run_fixture(self, root: Path, scenario: str) -> tuple[int, dict]:
         output = io.StringIO()
+        # Fixture scenarios run no child commands; an offline value keeps them
+        # independent of the operator's backend/.env.
+        env_file = root / "fixture.env"
+        env_file.write_text("SUPABASE_DB_URL=postgresql://offline.invalid/fixture\n")
         args = ["morning", "--slate-date", "2026-10-18", "--fixture-scenario", scenario,
-                "--output-root", str(root)]
+                "--output-root", str(root), "--env-file", str(env_file)]
         with patch.object(sys, "argv", args), contextlib.redirect_stdout(output):
             code = morning.main()
         receipt_path = Path(output.getvalue().strip().splitlines()[-1])

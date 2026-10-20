@@ -13,6 +13,8 @@ from backend.nhl.scripts.evaluate_nhl_2025_v2_market_and_sog_cross_market_v1 imp
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "artifacts/analysis/model_development/nhl_2025_sog_backcast_residual_repair_v1/2026-09-15"
+requires_package = unittest.skipUnless(
+    PACKAGE.is_dir(), "retained 2025 SOG backcast residual repair package is a local artifact")
 
 
 class TestNhl2025SogBackcastResidualRepairV1(unittest.TestCase):
@@ -36,6 +38,7 @@ class TestNhl2025SogBackcastResidualRepairV1(unittest.TestCase):
         self.assertEqual(scored.selected_toi_source, "MISSING")
         self.assertEqual(scored.missingness_fallback_state, "MISSING_RATE_ZERO_DEFAULT")
 
+    @requires_package
     def test_residual_ledger_is_complete_unique_and_strict_prior(self) -> None:
         ledger = pd.read_parquet(PACKAGE / "residual_feature_repair_ledger.parquet")
         self.assertEqual(len(ledger), 1014)
@@ -47,6 +50,7 @@ class TestNhl2025SogBackcastResidualRepairV1(unittest.TestCase):
         target = pd.to_datetime(ledger.game_date)
         self.assertTrue((latest[latest.notna()] < target[latest.notna()]).all())
 
+    @requires_package
     def test_population_parity_and_explicit_team_limitations(self) -> None:
         decision = json.loads((PACKAGE / "decision.json").read_text())
         backcast = pd.read_parquet(PACKAGE / "repaired_sog_model_backcast.parquet")
@@ -58,12 +62,14 @@ class TestNhl2025SogBackcastResidualRepairV1(unittest.TestCase):
         self.assertEqual(len(unresolved), 74)
         self.assertEqual(decision["NHL_SOG_ORIGINAL_PARITY"], "PRESERVED")
 
+    @requires_package
     def test_original_rows_are_substantively_identical(self) -> None:
         parity = json.loads((PACKAGE / "original_row_parity.json").read_text())
         self.assertTrue(parity["preserved"])
         self.assertEqual(parity["original_rows_compared"], 18826)
         self.assertEqual(parity["before_digest"], parity["after_digest"])
 
+    @requires_package
     def test_frozen_sensitivity_conclusion_is_unchanged(self) -> None:
         decision = json.loads((PACKAGE / "decision.json").read_text())
         self.assertEqual(decision["after_conditional_decisions"], {

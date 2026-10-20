@@ -102,6 +102,13 @@ def week_fixture(target_games=None):
     ]}
 
 
+RETAINED_OPERATIONAL = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
+
+
+def requires_retained(relative: str):
+    return unittest.skipUnless((RETAINED_OPERATIONAL / relative).is_dir(),
+                               f"retained {relative} is a local artifact")
+
 class Response:
     def __init__(self, payload):
         self.payload = payload
@@ -510,6 +517,7 @@ class PostgameReconciliationTest(unittest.TestCase):
             hashlib.sha256(Path(env[ENV_JOURNAL]).read_bytes()).hexdigest())
         self.assertIn("request_lineage.json", (destination / "SHA256SUMS").read_text())
 
+    @requires_retained("slates/2026-09-21")
     def test_september_21_points_and_saves_operational_sources_grade(self):
         operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
         binding = resolve_operational_sources(
@@ -552,6 +560,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(len(save_grades["saves_unpredicted_starters"]), 0)
         self.assertEqual(len(save_grades["saves_unpredicted_relief_appearances"]), 0)
 
+    @requires_retained("slates/2026-09-21")
     def test_game_level_partial_points_card_binds_for_only_future_games(self):
         operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
         binding = resolve_operational_sources(
@@ -629,6 +638,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual({int(row["game_id"]) for row in bound["game_exclusions"]},
                          started_ids)
 
+    @requires_retained("slates/2026-09-21")
     def test_game_level_partial_saves_card_binds_and_unpredicteds_remain_explicit(self):
         operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
         binding = resolve_operational_sources(
@@ -697,6 +707,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(bound["eligible_game_ids"], sorted(eligible_ids))
         self.assertEqual(bound["prediction_game_ids"], sorted(predicted_ids))
 
+    @requires_retained("daily_runs/run_id=nhldaily_20261017T180823803335Z_ca8a4636")
     def test_october_16_missing_points_card_is_ungradeable_and_nonblocking(self):
         # Retained Oct. 17 daily evidence records this exact prior-day failure.
         receipt = (Path(__file__).resolve().parents[2] / "artifacts/operational/nhl/daily_runs"
@@ -894,6 +905,7 @@ class PostgameReconciliationTest(unittest.TestCase):
                 "STARTER_STATUS_UNRESOLVED",
             )
 
+    @requires_retained("slates/2026-09-20")
     def test_september_20_local_only_source_binding_is_exact(self):
         operational = Path(__file__).resolve().parents[2] / "artifacts/operational/nhl"
         with patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
@@ -945,6 +957,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertNotIn("SEPTEMBER_20_AUDITED_EXACT_EXTERNAL_IDS", text)
         self.assertIn("database_mapping_coverage\": \"UNVERIFIED", text)
 
+    @requires_retained("postgame_reconciliation/request_runs/2026-09-20")
     def test_september_20_typed_sources_and_five_ancestors_preflight_is_fully_local(self):
         original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
         second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
@@ -1011,6 +1024,7 @@ class PostgameReconciliationTest(unittest.TestCase):
                 actual_games=games, actual_skaters=skaters[:-1] + [(7, 999999)],
                 actual_goalies=goalies[:-1], actual_starters=starters)
 
+    @requires_retained("postgame_reconciliation/request_runs/2026-09-20")
     def test_database_preflight_exact_replay_topology_is_60_46_14(self):
         original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
         second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
@@ -1073,6 +1087,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         self.assertEqual(lineage[0]["replay_state"],
                          "ALREADY_BOUND_EXACT_FROM_VERIFIED_RESPONSE")
 
+    @requires_retained("postgame_reconciliation/request_runs/2026-09-20")
     def test_lookup_set_mismatch_stops_before_run_creation_and_network(self):
         original = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
         second = "nhlpostgame_20260920_20260922T161724179739Z_cef0bc8b"
@@ -1138,6 +1153,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         context.assert_not_called()
         lock.assert_not_called()
 
+    @requires_retained("postgame_reconciliation/request_runs/2026-09-20")
     def test_failed_ancestor_alteration_cycle_and_game_set_mismatch_are_rejected(self):
         repository = Path(__file__).resolve().parents[2]
         runs = repository / "artifacts/operational/nhl/postgame_reconciliation/request_runs/2026-09-20"
@@ -1166,6 +1182,7 @@ class PostgameReconciliationTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "JOURNAL_CHANGED"):
             verify_failed_execution_ancestor(altered, **common)
 
+    @requires_retained("postgame_reconciliation/2026-09-19/reconciliation=75d3f2ec2d50f53ee792")
     def test_september_19_completed_package_identity_is_unchanged(self):
         repository = Path(__file__).resolve().parents[2]
         package = (repository / "artifacts/operational/nhl/postgame_reconciliation/2026-09-19/"

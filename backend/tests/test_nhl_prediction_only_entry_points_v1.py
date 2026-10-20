@@ -147,6 +147,9 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         self.assertEqual(pd.read_csv(destination / "market_qualified_population.csv").shape[0], 0)
         self.assertEqual(pd.read_csv(destination / "candidate_population.csv").shape[0], 0)
 
+    @unittest.skipUnless(
+        (Path(__file__).resolve().parents[2] / "backend/nhl/models/latest/points").is_dir(),
+        "frozen Phoenix Points model files are local artifacts")
     def test_explicit_corrected_shadow_contract_is_published_with_model_lineage(self):
         identity_path = Path(__file__).resolve().parents[2] / (
             "backend/nhl/points_shadow/phoenix_shadow_attempt_missingness_v1.json")

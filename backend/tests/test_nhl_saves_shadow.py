@@ -12,6 +12,12 @@ import pytest
 import backend.nhl.saves_shadow.core as shadow
 from backend.nhl.saves_quote_capture.core import capture_run, normalize_quotes, sha256_file
 
+_IDENTITY=shadow.frozen_identity()
+requires_frozen_model=pytest.mark.skipif(
+    not all((shadow.ROOT/path).is_file() for path in (
+        _IDENTITY["model_artifact_path"],_IDENTITY["model_index_path"],_IDENTITY["historical_fixed_input"]["path"])),
+    reason="frozen Saves model and its 2026-04-16 training input are local artifacts")
+
 
 def manifest(directory: Path, *paths: Path, name: str="SHA256SUMS") -> Path:
     target=directory/name
@@ -19,8 +25,22 @@ def manifest(directory: Path, *paths: Path, name: str="SHA256SUMS") -> Path:
     return target
 
 
-def fixture(tmp_path: Path, game_type: int=1):
-    base=pd.read_csv("backend/nhl/exports/history/2026-04-16/train_goalie_saves_v2.csv").iloc[:4].copy()
+def synthetic_features() -> pd.DataFrame:
+    """Four goalie rows with the training export's columns, for capture-only tests."""
+    numeric=["team_id","opponent_id","d10_shots_faced_per60","d10_save_pct","team_d10_sf_per_game",
+             "opp_d10_sf_allowed_per_game","pace_index","rest_days","b2b_flag","d5_saves_per60",
+             "d10_saves_per60","d5_shots_faced_per60","season_save_pct","opp_d10_sf_per60",
+             "team_d10_sa_per60","pace_matchup_index","d20_saves_per60","team_d10_sf_per60",
+             "opp_d10_sa_per60","start_prob"]
+    frame=pd.DataFrame({"full_name":["G1","G2","G3","G4"],"player_id":[1,2,3,4],"game_id":[1,1,2,2],
+                        "is_home":[True,False,True,False],"game_date":"2026-04-16"})
+    for column in numeric:frame[column]=1.0
+    return frame
+
+
+def fixture(tmp_path: Path, game_type: int=1, base: pd.DataFrame|None=None):
+    if base is None:base=pd.read_csv("backend/nhl/exports/history/2026-04-16/train_goalie_saves_v2.csv").iloc[:4]
+    base=base.copy()
     base["game_id"]=[9001,9001,9002,9002];base["player_id"]=[101,102,201,202]
     base["goalie_id"]=base.player_id;base["goalie_name"]=["Alpha Goalie","Backup Alpha","Bravo Goalie","Backup Bravo"]
     base["team"]=["AAA","BBB","CCC","DDD"];base["opponent"]=["BBB","AAA","DDD","CCC"]
@@ -60,6 +80,7 @@ def starter_evidence(status="CONFIRMED"):
     return pd.DataFrame(rows)
 
 
+@requires_frozen_model
 def test_historical_byte_parity_and_bounded_start_amendment():
     assert shadow.verify_historical_parity()["status"]=="EXACT_BYTE_PARITY"
     result=shadow.verify_operational_amendment()
@@ -68,6 +89,7 @@ def test_historical_byte_parity_and_bounded_start_amendment():
     assert shadow.verify_policy_c_historical_fixture()=={"status":"EXACT_CERTIFIED_POLICY_C_POPULATION_PARITY","universe_team_games":706,"selected_team_games":544,"mismatches":2,"mismatch_rate":pytest.approx(2/544)}
 
 
+@requires_frozen_model
 def test_full_population_scores_before_exact_policy_c_gate(tmp_path):
     games,goalies,parent,quote,source=fixture(tmp_path)
     run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"shadow",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY",starter_evidence=starter_evidence(),authorized_starter_sources=("fixture-authority",))
@@ -82,6 +104,7 @@ def test_full_population_scores_before_exact_policy_c_gate(tmp_path):
         shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"other",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY",pre_scoring_population="MARKET_FILTERED")
 
 
+@requires_frozen_model
 def test_projected_starter_is_prediction_eligible_and_keeps_projected_lineage(tmp_path):
     games,goalies,parent,quote,_=fixture(tmp_path)
     run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"shadow",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY",starter_evidence=starter_evidence("PROJECTED"),authorized_starter_sources=("fixture-authority",))
@@ -94,7 +117,7 @@ def test_projected_starter_is_prediction_eligible_and_keeps_projected_lineage(tm
 
 
 def test_capture_rejects_alias_ambiguity_post_start_unavailable_and_unknown_type(tmp_path):
-    games,goalies,_,_,base=fixture(tmp_path)
+    games,goalies,_,_,base=fixture(tmp_path,base=synthetic_features())
     g=pd.read_csv(games);players=base.copy();players.loc[1,"goalie_aliases"]="A Goalie"
     def payload(name,status="ACTIVE",stamp="2026-09-20T19:00:00Z"):
         return [{"id":"event1","home_team":"AAA","away_team":"BBB","commence_time":"2026-09-20T23:00:00Z","bookmakers":[{"key":"b","markets":[{"key":"player_total_saves","outcomes":[{"name":"Over","description":name,"point":24.5,"price":-110,"status":status,"last_update":stamp}]}]}]}]
@@ -109,6 +132,7 @@ def test_capture_rejects_alias_ambiguity_post_start_unavailable_and_unknown_type
     assert q.iloc[0].quote_qualification_status=="WRONG_OR_UNKNOWN_GAME_TYPE"
 
 
+@requires_frozen_model
 def test_actual_state_rejected_from_prediction_and_nonstarter_not_loss(tmp_path):
     games,goalies,parent,quote,_=fixture(tmp_path,game_type=2)
     polluted=pd.read_csv(goalies);polluted["actual_start_flag"]=True;bad=tmp_path/"polluted.csv";polluted.to_csv(bad,index=False);bad_manifest=manifest(tmp_path,bad,name="BAD_SHA256SUMS")
@@ -122,6 +146,7 @@ def test_actual_state_rejected_from_prediction_and_nonstarter_not_loss(tmp_path)
     assert scored.loc[scored.goalie_id.eq(101),"grading_status"].eq("NONSTARTER_EXCLUDED_FROM_CONDITIONAL_EVALUATION").all()
 
 
+@requires_frozen_model
 def test_preseason_has_no_numeric_evaluation_targets(tmp_path):
     games,goalies,parent,quote,_=fixture(tmp_path,game_type=1)
     run=shadow.run_shadow(game_spine_csv=games,game_spine_manifest=parent,goalie_inputs_csv=goalies,goalie_inputs_manifest=parent,quote_run_dir=quote,output_root=tmp_path/"shadow",slate_date="2026-09-20",run_timestamp_utc="2026-09-20T20:00:00Z",run_type="MIDDAY",starter_evidence=starter_evidence(),authorized_starter_sources=("fixture-authority",))
@@ -131,13 +156,14 @@ def test_preseason_has_no_numeric_evaluation_targets(tmp_path):
     assert pd.read_csv(grade/"shadow_grades.csv").grading_status.eq("PRESEASON_NON_EVALUATION").all()
 
 
+@requires_frozen_model
 def test_model_hash_drift_and_create_only(tmp_path,monkeypatch):
     identity=shadow.frozen_identity();bad=dict(identity);bad["coefficient_sha256"]="0"*64;path=tmp_path/"identity.json";path.write_text(json.dumps(bad));monkeypatch.setattr(shadow,"IDENTITY_PATH",path)
     with pytest.raises(RuntimeError,match="COEFFICIENT_HASH_DRIFT"):shadow.verify_frozen_identity()
 
 
 def test_midday_final_are_distinct_and_duplicate_is_blocked(tmp_path):
-    games,goalies,parent,midday,_=fixture(tmp_path)
+    games,goalies,parent,midday,_=fixture(tmp_path,base=synthetic_features())
     midday_hash=sha256_file(midday/"SHA256SUMS")
     payload=tmp_path/"payload.json"
     with pytest.raises(FileExistsError,match="OVERWRITE_ATTEMPT_BLOCKED"):
@@ -148,7 +174,8 @@ def test_midday_final_are_distinct_and_duplicate_is_blocked(tmp_path):
 
 
 def test_morning_adds_prerequisite_only_and_sentinel_enforces_contract(tmp_path):
-    morning=subprocess.run([sys.executable,"backend/nhl/scripts/run_nhl_morning_orchestration.py","--slate-date","2026-09-20","--fixture-scenario","nonempty","--output-root",str(tmp_path/"morning")],capture_output=True,text=True)
+    env_file=tmp_path/"fixture.env";env_file.write_text("SUPABASE_DB_URL=postgresql://offline.invalid/fixture\n")
+    morning=subprocess.run([sys.executable,"backend/nhl/scripts/run_nhl_morning_orchestration.py","--slate-date","2026-09-20","--fixture-scenario","nonempty","--output-root",str(tmp_path/"morning"),"--env-file",str(env_file)],capture_output=True,text=True)
     assert morning.returncode==0
     health=list((tmp_path/"morning").rglob("morning_health.json"));assert len(health)==1
     data=json.loads(health[0].read_text());assert data["saves_prerequisite_readiness"]=="READY_FOR_IMMUTABLE_SNAPSHOT"
@@ -164,6 +191,7 @@ def test_morning_adds_prerequisite_only_and_sentinel_enforces_contract(tmp_path)
     bad=subprocess.run(command,capture_output=True,text=True);assert bad.returncode==2
 
 
+@requires_frozen_model
 def test_no_usable_market_is_valid_zero_m_shadow_run(tmp_path):
     games,goalies,parent,_,_=fixture(tmp_path)
     empty=tmp_path/"empty_payload.json";empty.write_text(json.dumps({"capture_timestamp_utc":"2026-09-20T20:00:00Z","provider_response":[]}))
@@ -175,6 +203,7 @@ def test_no_usable_market_is_valid_zero_m_shadow_run(tmp_path):
     decisions=pd.read_csv(run/"policy_c_team_game_decisions.csv");assert decisions.reason.eq("NO_SAVES_MARKET").all()
 
 
+@requires_frozen_model
 def test_population_collapse_fails_before_scoring(tmp_path):
     games,goalies,parent,quote,_=fixture(tmp_path);collapsed=pd.read_csv(goalies).iloc[:-1];bad=tmp_path/"collapsed.csv";collapsed.to_csv(bad,index=False);bad_manifest=manifest(tmp_path,bad,name="COLLAPSED_SHA256SUMS")
     with pytest.raises(RuntimeError,match="PRE_SCORING_POPULATION_COLLAPSE"):

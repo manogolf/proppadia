@@ -347,11 +347,16 @@ def test_successful_zero_count_is_affirmatively_none():
     assert value.lane("shared_prerequisites").database_rows_written is False
 
 
+RETAINED_FAILED_RECEIPT = Path(
+    "artifacts/operational/nhl/daily_runs/"
+    "run_id=nhldaily_20260924T184502006092Z_37f46bad"
+)
+
+
+@pytest.mark.skipif(not RETAINED_FAILED_RECEIPT.is_dir(),
+                    reason="retained 2026-09-24 failed daily receipt is a local artifact")
 def test_retained_failed_receipt_is_not_rewritten():
-    package = Path(
-        "artifacts/operational/nhl/daily_runs/"
-        "run_id=nhldaily_20260924T184502006092Z_37f46bad"
-    )
+    package = RETAINED_FAILED_RECEIPT
     from backend.nhl.daily_capture import sha256_file
     assert sha256_file(package / "SHA256SUMS") == (
         "5c8c311b9806513a60e699fed583c783761d6a5aafbba24860504687d1041241")

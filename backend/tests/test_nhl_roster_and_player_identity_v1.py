@@ -62,6 +62,9 @@ ORIGINAL = "nhlpostgame_20260920_20260922T151929437487Z_f4cd9da6"
 THIRD = "nhlpostgame_20260920_20260922T171356619916Z_cd2ac1d9"
 FOURTH = "nhlpostgame_20260920_20260922T181726727181Z_70f0280d"
 GAMES = list(range(2026010008, 2026010015))
+requires_retained_runs = unittest.skipUnless(
+    all((RUNS / run).is_dir() for run in (ORIGINAL, THIRD, FOURTH)),
+    "retained 2026-09-20 postgame request runs are local artifacts")
 
 
 class _Transaction:
@@ -184,6 +187,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
                 "PLAYER_LANDING", identity,
                 json.dumps({"playerId": 8482103}).encode())
 
+    @requires_retained_runs
     def test_fourth_run_is_reusable_only_for_ethan_czata_identity(self):
         binding = _player_binding()
         self.assertEqual(binding["role"], "PLAYER_IDENTITY_RESPONSE_SOURCE")
@@ -207,6 +211,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
             preserved_player_provenance_from_binding(
                 {**binding, "responses": binding["responses"] * 2})
 
+    @requires_retained_runs
     def test_all_548_roster_names_are_retained_without_landing_backfill(self):
         unused, roster = _bindings()
         players = []
@@ -292,6 +297,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         self.assertIsNone(pid)
         self.assertFalse(learned)
 
+    @requires_retained_runs
     def test_typed_sources_resolve_23_objects_and_local_coverage_is_unverified(self):
         authority, roster = _bindings()
         player = _player_binding()
@@ -355,6 +361,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
                              player_claim["object_sha256"])
             self.assertEqual(rows[-1]["event_kind"], "REQUEST_REJECTED")
 
+    @requires_retained_runs
     def test_audited_unicode_abbreviation_rule(self):
         authority, unused = _bindings()
         names = []
@@ -376,6 +383,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         for name in ("Ethan Czata", "J Czata"):
             self.assertFalse(is_abbreviated_player_name(name), name)
 
+    @requires_retained_runs
     def test_database_partition_fixture_and_lookup_authorization(self):
         authority, roster = _bindings()
         inventory = local_conditional_lookup_inventory(authority, roster)
@@ -597,6 +605,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
                                  "FAILED_CLOSED_DATABASE_PREFLIGHT")
                 self.assertIn(8485386, conflicted["classification"]["conflict"])
 
+    @requires_retained_runs
     def test_exact_replay_reuses_player_response_without_write_or_network(self):
         provenance = _preserved_provenance()
         partition = {
@@ -648,6 +657,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         self.assertEqual(result["already_bound_exact_from_verified_response"], [8485386])
         self.assertEqual(result["preserved_response_resolutions"], [])
 
+    @requires_retained_runs
     def test_numeric_identity_provenance_fails_closed_on_tampering_or_wrong_slate(self):
         authority, roster = _bindings()
         cases = []
@@ -683,6 +693,7 @@ class RosterAndPlayerIdentityTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "NOT_SAME_NUMBER"):
             resolve_goalie_player_id(8485525, {8485525: 8482103})
 
+    @requires_retained_runs
     def test_typed_sources_reject_overlap_wrong_family_and_tampered_claim(self):
         authority, roster = _bindings()
         overlap = copy.deepcopy(authority)

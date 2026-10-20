@@ -26,6 +26,9 @@ RETAINED_PREDICTION = Path(
     f"backend/nhl/data/processed/daily_runs/{RETAINED_RUN_ID}/saves_predictions.csv")
 RETAINED_PREDICTION_SHA256 = (
     "6dbae0edfd0aa00625f69f8e0ea9eaa0f420d2a14bdfad99108b0870b8a5c67e")
+requires_retained_refresh = pytest.mark.skipif(
+    not RETAINED_PREDICTION.is_file(),
+    reason="retained 2026-09-24 operator refresh Saves run is a local artifact")
 
 
 def prediction_frame(count: int = 1) -> pd.DataFrame:
@@ -97,6 +100,7 @@ def create_odds_observation(tmp_path: Path, *, parent: str = RUN_ID):
     return directory, sha256_file(directory / "SHA256SUMS")
 
 
+@requires_retained_refresh
 def test_retained_988_unmatched_predictions_produce_exactly_988_rows(tmp_path, monkeypatch):
     assert sha256_file(RETAINED_PREDICTION) == RETAINED_PREDICTION_SHA256
     names = Path("backend/nhl/exports/daily/names/names_2026-09-24.csv")
@@ -350,6 +354,7 @@ def test_points_name_enrichment_joins_player_and_game_without_roster_fanout(tmp_
     assert result.price_over.isna().all()
 
 
+@requires_retained_refresh
 def test_retained_refresh_evidence_hashes_remain_unchanged():
     expected = {
         RETAINED_PREDICTION: RETAINED_PREDICTION_SHA256,

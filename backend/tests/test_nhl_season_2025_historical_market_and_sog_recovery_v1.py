@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = ROOT / "artifacts/analysis/model_development/nhl_season_2025_historical_market_and_sog_recovery_v1/2026-09-15"
 
 
+@unittest.skipUnless(PACKAGE.is_dir(), "retained 2025 historical market and SOG recovery package is a local artifact")
 class HistoricalMarketAndSogRecoveryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
