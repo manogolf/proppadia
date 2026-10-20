@@ -1124,8 +1124,17 @@ consumers keep full verification. Open items:
   hosted read after the morning run, with no code push. See "Signed DB chain
   extension" in `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`.
   **Open, operator:**
-  1. Apply `backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql`
-     then run each file in `20261020_mlb_phase_authority_db_chain_verify/` in order (same folder).
+  1. Done 2026-10-20: the operator applied
+     `backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql`
+     in the SQL editor. All six checks in
+     `20261020_mlb_phase_authority_db_chain_verify/` matched:
+     - `proppadia_api` has `SELECT` only.
+     - `proppadia_mlb_ingest` has `SELECT` and function `EXECUTE` only.
+     - `anon` and `authenticated` have no access.
+     - The function is `SECURITY DEFINER`, owned by `postgres`, with
+       `search_path=pg_catalog`.
+     - RLS is on and both triggers exist.
+     - The table has 0 entries.
   2. Generate a 32-byte key and set `MLB_PHASE_AUTHORITY_CHAIN_KEY` in
      `backend/.env` and on Render.
   3. Commit the key id from

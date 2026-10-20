@@ -55,7 +55,7 @@ failure (conflict, special, stale, correction review) still fails the request.
 The row is served once a governed snapshot child adds the game and that child
 is activated, committed, and deployed.
 
-## Signed DB chain extension (prepared 2026-10-20, not active)
+## Signed DB chain extension (table applied 2026-10-20; not active until the key id is committed)
 
 New postseason games can reach the hosted read without a code push. The local
 daily run writes them to a signed, append-only chain in the database. The
