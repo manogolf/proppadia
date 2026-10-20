@@ -185,4 +185,4 @@ $postcheck$;
 
 COMMIT;
 
--- Verification queries: 20261020_mlb_phase_authority_db_chain_verify.sql
+-- Verification queries: 20261020_mlb_phase_authority_db_chain_verify/ (one query per file, run in order)
