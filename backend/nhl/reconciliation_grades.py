@@ -14,8 +14,15 @@ from pathlib import Path
 RESTATED_GRADE_FILES = frozenset({
     "graded_sog.csv", "graded_points.csv",
     "graded_resilient_sog.csv", "graded_resilient_points.csv",
+    # Per-game resilient cross-market grades for packages sealed before
+    # per-game grading (restate_nhl_resilient_cross_market.py).
+    "graded_resilient_moneyline_production_champion.csv",
+    "graded_resilient_moneyline_shadow.csv",
+    "graded_resilient_puck_line.csv",
 })
-CURRENT_RESTATEMENT_CONTRACTS = frozenset({"NHL_PHASE_RESTATEMENT_V4"})
+CURRENT_RESTATEMENT_CONTRACTS = frozenset({
+    "NHL_PHASE_RESTATEMENT_V4", "NHL_RESILIENT_CROSS_MARKET_RESTATEMENT_V1",
+})
 
 
 def _sha(path: Path) -> str:

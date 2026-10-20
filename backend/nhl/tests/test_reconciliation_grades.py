@@ -51,6 +51,23 @@ class RestatedGradePathTests(unittest.TestCase):
         self.assertEqual(restated_grade_path(self.package, "graded_sog.csv"),
                          self.restatement / "graded_sog.csv")
 
+    def test_cross_market_restatement_sits_beside_a_phase_restatement(self):
+        # Two restatements for one package: each file resolves to the one
+        # that carries it.
+        cross = self.restatement.parent / "restatement=crossmarket"
+        cross.mkdir()
+        (cross / "graded_resilient_moneyline_production_champion.csv").write_text("game_id\n2026020120\n")
+        (cross / "lineage.json").write_text(json.dumps({
+            "contract_version": "NHL_RESILIENT_CROSS_MARKET_RESTATEMENT_V1",
+            "source_package": str(self.package),
+            "source_hashes": {"SHA256SUMS": sha(self.package / "SHA256SUMS")}}))
+        seal(cross)
+        self.assertEqual(
+            restated_grade_path(self.package, "graded_resilient_moneyline_production_champion.csv"),
+            cross / "graded_resilient_moneyline_production_champion.csv")
+        self.assertEqual(restated_grade_path(self.package, "graded_sog.csv"),
+                         self.restatement / "graded_sog.csv")
+
     def test_unrestated_files_and_older_contracts_read_the_package(self):
         self.assertEqual(restated_grade_path(self.package, "graded_saves.csv"),
                          self.package / "graded_saves.csv")
