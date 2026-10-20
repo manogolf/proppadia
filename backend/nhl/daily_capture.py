@@ -54,6 +54,11 @@ ODDS_CLASSIFICATIONS = {
     "SKIPPED_BUDGET_GUARD",
 }
 PHASES = ("EARLY", "REFRESH", "FINAL_PREGAME")
+# CLOSING is a scheduled per-game near-puck capture (30–10 minutes before each
+# game's own start) for closing-line evaluation. It is accepted by the capture
+# function only; the daily run's --odds-phase choices stay PHASES.
+CLOSING_PHASE = "CLOSING"
+CAPTURE_PHASES = (*PHASES, CLOSING_PHASE)
 SENSITIVE_KEY = re.compile(
     r"(?:^|_)(?:api_?key|authorization|password|secret|token|signature|credential)(?:$|_)",
     re.IGNORECASE,
@@ -889,10 +894,17 @@ def capture_odds_observation(
     regions: str = NHL_ODDS_REGIONS_CSV, odds_format: str = "american",
     credit_rules: Mapping[str, Any] | None = None,
     reuse_observation_dir: Path | None = None,
+    claim_scope: str | None = None,
 ) -> OddsObservationResult:
     phase = str(phase).upper()
-    if phase not in PHASES:
+    if phase not in CAPTURE_PHASES:
         raise ValueError(f"unsupported odds phase: {phase}")
+    # Claims are one per phase per slate; a per-game phase needs its own claim
+    # namespace (for example "game=2026020141") so each game captures once.
+    if phase == CLOSING_PHASE and not (claim_scope and re.fullmatch(r"game=\d{10}", claim_scope)):
+        raise ValueError("CLOSING_PHASE_REQUIRES_GAME_CLAIM_SCOPE")
+    if claim_scope is not None and not re.fullmatch(r"game=\d{10}", claim_scope):
+        raise ValueError("ODDS_CLAIM_SCOPE_INVALID")
     observed = (now or utc_now()).astimezone(UTC)
     day_root = Path(root) / f"season={int(season)}" / f"slate_date={slate_date}"
     game_ids = [game.game_id for game in canonical_games]
@@ -905,8 +917,11 @@ def capture_odds_observation(
 
     first_puck = min((game.start_time_utc for game in canonical_games), default=None)
     claim_root = Path(root) / ".claims" / f"season={int(season)}" / f"slate_date={slate_date}"
+    # A scoped claim stays in the existing claims folder, named by phase and
+    # scope (phase=CLOSING.game=<id>.claim.json); no new directory.
+    claim_label = phase if claim_scope is None else f"{phase}.{claim_scope}"
     attempt_number, claim, lease = _next_phase_attempt_paths(
-        claim_root, phase=phase, expected_game_set_hash=game_hash, day_root=day_root)
+        claim_root, phase=claim_label, expected_game_set_hash=game_hash, day_root=day_root)
     invocation_id = invocation_id or f"nhldailyodds_{observed.strftime('%Y%m%dT%H%M%S%fZ')}_{uuid.uuid4().hex[:8]}"
     stable_id = sha256_bytes(
         f"{season}|{slate_date}|{phase}|{attempt_number}|{parent_daily_run_id}|{invocation_id}|{game_hash}".encode()
