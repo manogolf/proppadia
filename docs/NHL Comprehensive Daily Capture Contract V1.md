@@ -358,6 +358,16 @@ mismatches block before current-slate schedule acquisition, roster writes,
 history ingestion, evaluation, feature construction, predictions, or odds.
 `NO_PRIOR_GAMES` is accepted only when the retained official NHL schedule
 response and its date-bound health/hash record verify an empty prior date.
+A postponed, suspended or cancelled prior-day game (official
+`gameScheduleState` `PPD`, `SUSP`, `CNCL`) is void and does not block: the
+package admits and certifies the played games, and lists each void game with
+its state in `schedule_voided_games.csv` and the summary. The certificate
+reports them as `voided_game_ids`; the cross-market prior-day check compares
+its certified set with the date's games less those. Void games' predictions
+are never graded in any lane (FINAL_PREGAME or resilient); resilient sources
+are still verified against the full scheduled slate they were captured for,
+and their void-game rows are recorded as excluded (`GAME_VOID_<state>`).
+Request-level detail is in the Postgame Official Request Accounting Contract.
 Official-outcome certification is independent of prediction grading. In
 prior-learning mode, a missing immutable lane prediction must remain ungraded
 for that lane and must not be replaced with a synthetic capture. Present

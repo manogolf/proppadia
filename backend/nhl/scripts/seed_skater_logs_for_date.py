@@ -48,7 +48,8 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from backend.nhl.official_request_journal import ENV_REQUIRED, RequestContext, official_get
+from backend.nhl.official_request_journal import (
+    ENV_REQUIRED, RequestContext, official_get, skip_voided_games)
 from backend.nhl.player_external_identity import (
     ABBREVIATED_PLAYER_NAME_RE,
     is_abbreviated_player_name,
@@ -838,7 +839,7 @@ def _persist_attempt_diagnostic(
 
 # ---------------- Main ----------------
 def main():
-    games = get_schedule(SLATE_DATE)
+    games = skip_voided_games(get_schedule(SLATE_DATE))
     if not games:
         print(f"No games on {SLATE_DATE}")
         return

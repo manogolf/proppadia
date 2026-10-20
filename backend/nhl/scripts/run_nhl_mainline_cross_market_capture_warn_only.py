@@ -85,7 +85,10 @@ def _verify_prior_day_package(outcome_root: Path, prior_slate: str,
             f"CROSS_MARKET_PRIOR_DAY_PACKAGE_CARDINALITY:{len(packages)}"
         )
     certificate = verify_reconciliation_certificate(packages[0], prior_slate)
-    expected = set(map(int, expected_game_ids))
+    # Postponed, suspended or cancelled games are void: reconciliation leaves
+    # them out of the certified (played) game set.
+    expected = (set(map(int, expected_game_ids))
+                - set(map(int, certificate.get("voided_game_ids") or [])))
     certified = set(map(int, certificate.get("game_ids") or []))
     if certified != expected:
         raise RuntimeError(
@@ -315,7 +318,10 @@ def ensure_prior_day_official_outcomes(
             reason=f"{type(error).__name__}:{error}",
         ) from error
     source_id = str(acquisition_payload.get("run_id") or "")
-    if not source_id or set(map(int, acquisition_payload.get("game_ids") or [])) != set(game_ids):
+    voided_ids = {int(row["game_id"])
+                  for row in acquisition_payload.get("schedule_voided_games") or []}
+    if (not source_id or set(map(int, acquisition_payload.get("game_ids") or []))
+            != set(game_ids) - voided_ids):
         raise RuntimeError("CROSS_MARKET_PRIOR_DAY_ACQUISITION_GAME_SET_MISMATCH")
     sources = [
         "--response-source", f"AUTHORITY_RESPONSE_SOURCE={source_id}",

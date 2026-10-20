@@ -22,7 +22,8 @@ from urllib3.util.retry import Retry
 import psycopg
 from backend.nhl.database_access import database_url
 
-from backend.nhl.official_request_journal import ENV_REQUIRED, RequestContext, official_get
+from backend.nhl.official_request_journal import (
+    ENV_REQUIRED, RequestContext, official_get, skip_voided_games)
 
 # ---------------- Env & date ----------------
 try:
@@ -256,6 +257,7 @@ def main():
         game_ids = game_ids_from_db(conn, SLATE_DATE)
         if not game_ids:
             game_ids = game_ids_from_api(SLATE_DATE)
+        game_ids = skip_voided_games(game_ids)
 
         if not game_ids:
             print(f"No games on {SLATE_DATE}")

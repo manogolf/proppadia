@@ -42,7 +42,7 @@ from backend.nhl.database_access import database_url
 
 from backend.nhl.pp_toi_source import pp_toi_conflict, write_pp_toi_conflict_diagnostic
 
-from backend.nhl.official_request_journal import RequestContext, official_get
+from backend.nhl.official_request_journal import RequestContext, official_get, skip_voided_games
 
 
 BOX_URL = "https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
@@ -399,7 +399,7 @@ def main() -> None:
     conn.autocommit = False
     cur = conn.cursor()
 
-    game_ids = get_games_for_date(cur, slate_date)
+    game_ids = skip_voided_games(get_games_for_date(cur, slate_date))
     if not game_ids:
         print(f"No regular-season games found for {slate_date} (game_type=2).")
         conn.rollback()

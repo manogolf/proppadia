@@ -26,7 +26,7 @@ import psycopg
 import requests
 from backend.nhl.database_access import database_url, restricted_mode
 
-from backend.nhl.official_request_journal import ENV_REQUIRED, official_get
+from backend.nhl.official_request_journal import ENV_REQUIRED, official_get, skip_voided_games
 
 
 SHIFTCHARTS_URL = "https://api.nhle.com/stats/rest/en/shiftcharts"
@@ -372,7 +372,7 @@ def main() -> None:
     if not restricted_mode():
         ensure_table(conn)
 
-    game_ids = fetch_game_ids_for_date(conn, game_date)
+    game_ids = skip_voided_games(fetch_game_ids_for_date(conn, game_date))
     if not game_ids:
         print(f"[shiftcharts] No games found in nhl.games for {game_date}; nothing to ingest.")
         return

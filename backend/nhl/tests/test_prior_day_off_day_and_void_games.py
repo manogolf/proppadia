@@ -244,5 +244,54 @@ class OffDayPriorCertificateTests(unittest.TestCase):
             self.assertEqual(index["lanes"][lane]["coverage_status"], "EMPTY", lane)
 
 
+VOID_STATES = ("PPD", "SUSP", "CNCL")
+
+
+class VoidGameResilientGradingTests(unittest.TestCase):
+    """P2.24 D: a void game's predictions are never graded; the rest grade."""
+
+    def test_void_game_rows_are_excluded_and_played_game_grades(self):
+        for state in VOID_STATES:
+            with self.subTest(state=state), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp) / "operational"
+                build_slate(root, write_empty_prior_schedule(root))
+                grades, index = grade(root, [2026020500], voided_games={2026020501: state})
+                for lane in LANES:
+                    lane_index = index["lanes"][lane]
+                    self.assertEqual(lane_index["coverage_status"], "FULL", lane)
+                    self.assertEqual(lane_index["canonical_game_ids"], [2026020500], lane)
+                    self.assertEqual({row["game_id"] for row in lane_index["selected"]},
+                                     {2026020500}, lane)
+                    self.assertIn(f"GAME_VOID_{state}",
+                                  {row["reason"] for row in lane_index["excluded"]}, lane)
+                for name, frame in grades.items():
+                    if not frame.empty and "game_id" in frame:
+                        self.assertEqual(set(frame.game_id.astype(int)), {2026020500}, name)
+                self.assertEqual(len(grades["resilient_points"]), 3)
+                self.assertEqual(len(grades["resilient_saves"]), 13)
+
+    def test_void_rows_are_dropped_from_the_final_pregame_lanes(self):
+        frame = pd.DataFrame({"game_id": [2026020500, 2026020501], "value": [1, 2]})
+        kept = core._drop_void_games(frame, {2026020501})
+        self.assertEqual(list(kept.game_id), [2026020500])
+        self.assertIs(core._drop_void_games(frame, ()), frame)
+
+    def test_played_schedule_records_each_void_game_and_its_reason(self):
+        schedule = pd.DataFrame([{
+            "game_id": game_id, "scheduled_start_time_utc": start, "game_type_code": 2,
+            "home_team_id": 1, "away_team_id": 2, "home_team": "AAA", "away_team": "BBB"}
+            for game_id, (start, _, _) in GAMES.items()])
+        played, rows = core._played_schedule(schedule, {2026020501: "SUSP"}, SLATE)
+        self.assertEqual(list(played.game_id), [2026020500])
+        self.assertEqual([(row["game_id"], row["reason"]) for row in rows],
+                         [(2026020501, "VOID_SUSP")])
+        with self.assertRaisesRegex(RuntimeError, "SCHEDULE_VOID_STATE_INVALID"):
+            core._played_schedule(schedule, {2026020501: "LIVE"}, SLATE)
+        with self.assertRaisesRegex(RuntimeError, "OUTSIDE_LOCAL_SPINE"):
+            core._played_schedule(schedule, {2026020999: "PPD"}, SLATE)
+        with self.assertRaisesRegex(RuntimeError, "ALL_SCHEDULED_GAMES_VOID"):
+            core._played_schedule(schedule, {game_id: "PPD" for game_id in GAMES}, SLATE)
+
+
 if __name__ == "__main__":
     unittest.main()

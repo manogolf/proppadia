@@ -102,7 +102,7 @@ If the question is “what is the active runtime path right now?”:
 ## NHL UX and Validation
 
 - `docs/NHL Backlog.md`: prioritized outstanding NHL access, source-integrity, and operational-validation work.
-- `docs/NHL Comprehensive Daily Capture Contract V1.md`: authoritative daily execution order and readiness gates, including prior-day reconciliation certification.
+- `docs/NHL Comprehensive Daily Capture Contract V1.md`: authoritative daily execution order and readiness gates, including prior-day reconciliation certification, void (PPD/SUSP/CNCL) prior-day games and off-day certificates.
 - The comprehensive capture contract records the RESILIENT_PREGAME source resolver and the separate research-only prediction-evidence classification. P2.17 contains bounded October 14/17 certified-outcome grading, October 18 SOG corroboration without grading, source replays, exact denominators, unchanged legacy grade hashes, and unresolved historical input/publication proof limits. October 18 has since certified (`CERTIFIED_FINAL`, 2026-10-19 daily run). Research grades do not change governed reconciliation, legacy populations, promotion eligibility, or betting-edge claims; natural-run acceptance remains open.
 - The comprehensive capture contract also records the NHL wake/network-responsiveness purpose, Points ladder validity, roster coverage/integrity semantics, and late-outcome research grading sequence. Root `AGENTS.md` owns sandbox DNS escalation; consult it before authorized network inspection.
 - Roster failure diagnosis and natural-run acceptance criteria are recorded in the comprehensive capture contract's “Roster availability incident finding” section and NHL Backlog P2.15. P2.13's partial-coverage proposal is independent and remains unimplemented.

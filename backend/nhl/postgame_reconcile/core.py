@@ -31,6 +31,7 @@ from backend.nhl.sog_cold_start.core import (
 )
 from backend.nhl.prediction_only.core import digest as prediction_only_digest
 from backend.nhl.daily_capture import canonical_game_set_hash
+from backend.nhl.reconciliation_certificate import VOID_SCHEDULE_STATES, VOIDED_GAMES_FILE
 from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluation_eligible
 from backend.nhl.postgame_reconcile.resilient_finalization import (
     canonical_atomic_identity, select_latest_atomic_sources, validate_atomic_group,
@@ -764,8 +765,14 @@ def _verify_cross_market_identities(
 def resolve_operational_sources(*, slate_date: str, operational_root: Path,
                                 allow_missing_active_final_for_prior_learning: bool = False,
                                 allow_missing_final_for_resilient: bool = False,
+                                voided_games: dict[int, str] | None = None,
                                 ) -> dict[str, Any]:
-    """Resolve and fully validate immutable local inputs without I/O outside disk."""
+    """Resolve and fully validate immutable local inputs without I/O outside disk.
+
+    Sources are validated against the full scheduled spine they were captured
+    for. ``voided_games`` (game ID -> official PPD/SUSP/CNCL schedule state)
+    then leaves those games out of the admitted (played) game set.
+    """
     cross_runs = _cross_market_final_runs(operational_root, slate_date)
     if len(cross_runs) > 1:
         raise RuntimeError(f"IMMUTABLE_CROSS_MARKET_FINAL_PREGAME_RUN_CARDINALITY:{len(cross_runs)}")
@@ -970,18 +977,23 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path,
                 if sog is not None else None)
     starts = pd.to_datetime(schedule.scheduled_start_time_utc, utc=True).set_axis(
         schedule.game_id.astype(int))
-    first_puck = starts.min()
+    played, voided_rows = _played_schedule(schedule, voided_games or {}, slate_date)
+    ids = set(played.game_id.astype(int))
+    first_puck = starts[sorted(ids)].min()
     # Each card is judged per game: a game that started before capture is
     # excluded, and the captured balance of the slate still grades.
     if observed is not None and any(
             observed >= starts[int(game_id)] for game_id in predictions.game_id.unique()):
         raise RuntimeError("IMMUTABLE_SOURCE_OBSERVED_AFTER_GAME_START")
+    void_binding = ({"scheduled_game_ids": sorted(schedule.game_id.astype(int)),
+                     "schedule_voided_games": voided_rows} if voided_rows else {})
     return {
         "contract_version": "NHL_POSTGAME_LOCAL_SOURCE_BINDING_V1", "slate_date": slate_date,
         "operational_root": str(operational_root),
-        "canonical_games": len(schedule), "game_ids": sorted(ids),
-        "team_codes": sorted(set(schedule.home_team.astype(str))
-                             | set(schedule.away_team.astype(str))),
+        "canonical_games": len(played), "game_ids": sorted(ids),
+        "team_codes": sorted(set(played.home_team.astype(str))
+                             | set(played.away_team.astype(str))),
+        **void_binding,
         "canonical_game_set_hash": _hash_bytes(json.dumps(sorted(ids), separators=(",", ":")).encode()),
         "first_puck_utc": first_puck.isoformat(),
         "canonical_schedule_source": retained_schedule_source or {
@@ -1006,6 +1018,40 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path,
                 }),
         "points": points, "saves": saves,
     }
+
+
+def _played_schedule(schedule: pd.DataFrame, voided_games: dict[int, str],
+                     slate_date: str) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+    """Split the scheduled spine into played games and void (PPD/SUSP/CNCL) games."""
+    voided = {int(game_id): str(state).upper() for game_id, state in voided_games.items()}
+    if any(state not in VOID_SCHEDULE_STATES for state in voided.values()):
+        raise RuntimeError("SCHEDULE_VOID_STATE_INVALID")
+    scheduled = schedule.game_id.astype(int)
+    if set(voided) - set(scheduled):
+        raise RuntimeError("SCHEDULE_VOIDED_GAME_OUTSIDE_LOCAL_SPINE")
+    played = schedule.loc[~scheduled.isin(voided)]
+    if played.empty:
+        # Deferred (NHL Backlog P2.24 D): no package can certify a day with
+        # no played game yet, so this stays an operator review.
+        raise RuntimeError("ALL_SCHEDULED_GAMES_VOID_REQUIRES_REVIEW")
+    rows = [{
+        "slate_date": slate_date, "game_id": int(row.game_id),
+        "game_schedule_state": voided[int(row.game_id)],
+        "reason": "VOID_" + voided[int(row.game_id)],
+        "scheduled_start_time_utc": pd.Timestamp(row.scheduled_start_time_utc).isoformat(),
+        "game_type_code": int(row.game_type_code),
+        "home_team_id": int(row.home_team_id), "away_team_id": int(row.away_team_id),
+        "home_team": str(row.home_team), "away_team": str(row.away_team),
+    } for row in schedule.itertuples(index=False) if int(row.game_id) in voided]
+    return played, sorted(rows, key=lambda row: row["game_id"])
+
+
+def _drop_void_games(frame: pd.DataFrame, void_game_ids) -> pd.DataFrame:
+    """Leave out prediction rows for void games; they are never graded."""
+    void = {int(game_id) for game_id in void_game_ids or ()}
+    if not void or frame.empty or "game_id" not in frame:
+        return frame
+    return frame.loc[~frame.game_id.astype(int).isin(void)].copy()
 
 
 def _hash_bytes(value: bytes) -> str:
@@ -1372,10 +1418,11 @@ def _sog_outcomes(skaters: pd.DataFrame, predictions: pd.DataFrame) -> pd.DataFr
 
 
 def _grade_points(run: Path | None, schedule: pd.DataFrame,
-                  skaters: pd.DataFrame, *, predictions: pd.DataFrame | None = None
-                  ) -> dict[str, pd.DataFrame]:
+                  skaters: pd.DataFrame, *, predictions: pd.DataFrame | None = None,
+                  void_game_ids=()) -> dict[str, pd.DataFrame]:
     predictions = (predictions.copy() if predictions is not None else _pregame(
-        pd.read_csv(run / "immutable_predictions.csv"), "prediction_timestamp_utc", schedule))
+        _drop_void_games(pd.read_csv(run / "immutable_predictions.csv"), void_game_ids),
+        "prediction_timestamp_utc", schedule))
     outcomes = skaters.copy()
     if outcomes.duplicated(["game_id", "player_id"]).any():
         raise RuntimeError("POINTS_OUTCOME_IDENTITY_DUPLICATE")
@@ -1414,10 +1461,11 @@ def _grade_points(run: Path | None, schedule: pd.DataFrame,
 
 
 def _grade_saves(run: Path | None, schedule: pd.DataFrame,
-                 goalies: pd.DataFrame, *, predictions: pd.DataFrame | None = None
-                 ) -> dict[str, pd.DataFrame]:
+                 goalies: pd.DataFrame, *, predictions: pd.DataFrame | None = None,
+                 void_game_ids=()) -> dict[str, pd.DataFrame]:
     predictions = (predictions.copy() if predictions is not None else _pregame(
-        pd.read_csv(run / "immutable_conditional_predictions.csv"), "prediction_timestamp_utc", schedule))
+        _drop_void_games(pd.read_csv(run / "immutable_conditional_predictions.csv"), void_game_ids),
+        "prediction_timestamp_utc", schedule))
     if goalies.duplicated(["game_id", "goalie_id"]).any():
         raise RuntimeError("SAVES_OUTCOME_IDENTITY_DUPLICATE")
     joined = predictions.merge(
@@ -1462,24 +1510,31 @@ def _grade_saves(run: Path | None, schedule: pd.DataFrame,
 
 
 def _grade_points_source(points_status: dict[str, Any], schedule: pd.DataFrame,
-                        skaters: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
+                        skaters: pd.DataFrame, void_game_ids=()
+                        ) -> tuple[pd.DataFrame, dict[str, pd.DataFrame]]:
     if points_status["status"] in {
             "NO_PROSPECTIVE_POINTS_PREDICTIONS", "NOT_GRADEABLE_NO_PREDICTION"}:
         return _zero_evidence_surface(points_status["status"], points_status["reason"]), {}
-    point_grades = _grade_points(Path(points_status["run"]), schedule, skaters)
+    point_grades = _grade_points(Path(points_status["run"]), schedule, skaters,
+                                 void_game_ids=void_game_ids)
     points = point_grades.pop("points")
     return points, point_grades
 
 
 def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                                   schedule: pd.DataFrame, games: pd.DataFrame,
-                                  skaters: pd.DataFrame, goalies: pd.DataFrame
+                                  skaters: pd.DataFrame, goalies: pd.DataFrame,
+                                  voided_games: dict[int, str] | None = None,
                                   ) -> tuple[dict[str, pd.DataFrame], dict[str, Any]]:
     """Grade receipt-bound cross-market observations as a separate population.
 
     This adapter intentionally accepts only a daily parent receipt that names
     the immutable source artifact, prior-day certificate, and roster manifest.
     It does not infer lineage from timestamps or directory names.
+
+    ``schedule`` is the full scheduled slate the sources were captured for.
+    Rows for ``voided_games`` (game ID -> PPD/SUSP/CNCL) are recorded as
+    excluded and never graded; coverage is judged on the played games.
     """
     from backend.nhl.reconciliation_certificate import (
         certificate_identity, verify_prior_day_certificate, verify_reconciliation_certificate)
@@ -1491,6 +1546,10 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
     starts = {int(row.game_id): pd.Timestamp(row.scheduled_start_time_utc).isoformat()
               for row in schedule.itertuples(index=False)}
     game_ids = sorted(starts)
+    voided = {int(game_id): str(state) for game_id, state in (voided_games or {}).items()}
+    if set(voided) - set(starts):
+        raise RuntimeError("RESILIENT_VOIDED_GAME_OUTSIDE_SLATE")
+    played_starts = {game_id: start for game_id, start in starts.items() if game_id not in voided}
     candidates: dict[str, list[dict[str, Any]]] = {
         "MONEYLINE": [], "PUCK_LINE": [], "SOG": [], "POINTS": [], "SAVES": [],
     }
@@ -1762,6 +1821,11 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         game_id = int(row["game_id"])
                         if game_id not in starts:
                             raise RuntimeError("RESILIENT_CROSS_MARKET_GAME_OUTSIDE_SLATE")
+                        if game_id in voided:
+                            exclusions[lane_key].append({
+                                "game_id": game_id, "reason": f"GAME_VOID_{voided[game_id]}",
+                                "source_path": str(output_file)})
+                            continue
                         row_feature_cutoff = next((row.get(name) for name in (
                             "feature_cutoff_timestamp_utc", "feature_cutoff_utc",
                         ) if row.get(name) is not None and not pd.isna(row.get(name))
@@ -1928,6 +1992,15 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                 feature_cutoff = str(parent.get("feature_cutoff_utc") or "")
                 parent_hash = _sha(receipt_path)
                 for row in puck.to_dict(orient="records"):
+                    if int(row["game_id"]) in voided:
+                        key = (str(puck_path), int(row["game_id"]))
+                        if key not in puck_source_keys:
+                            puck_source_keys.add(key)
+                            exclusions["PUCK_LINE"].append({
+                                "game_id": int(row["game_id"]),
+                                "reason": f"GAME_VOID_{voided[int(row['game_id'])]}",
+                                "source_path": str(puck_path)})
+                        continue
                     puck_model_identity = str(row.get("model_version")
                                               or row.get("model_parameter_sha256") or "PUCK_LINE")
                     puck_feature_identity = str(
@@ -2106,6 +2179,8 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         game_id = int(identity_row["game_id"])
                         if game_id not in starts:
                             raise RuntimeError("GAME_NOT_IN_CANONICAL_SLATE")
+                        if game_id in voided:
+                            raise RuntimeError(f"GAME_VOID_{voided[game_id]}")
                         feature_cutoff = str(identity_row.get("feature_cutoff_timestamp_utc")
                                              or identity_row.get("input_cutoff_timestamp_utc") or "")
                         prediction_at = str(identity_row.get(timestamp_column) or "")
@@ -2204,8 +2279,11 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
     for lane_key, output_name in (("MONEYLINE", "moneyline"), ("PUCK_LINE", "puck_line"),
                                  ("SOG", "sog"), ("POINTS", "points"), ("SAVES", "saves")):
         index = select_latest_atomic_sources(
-            lane=lane_key, slate_date=slate_date, canonical_game_ids=game_ids,
-            scheduled_starts_utc=starts, candidates=candidates[lane_key])
+            lane=lane_key, slate_date=slate_date, canonical_game_ids=sorted(played_starts),
+            scheduled_starts_utc=played_starts, candidates=candidates[lane_key])
+        if voided:
+            index["voided_games"] = [{"game_id": game_id, "game_schedule_state": state}
+                                     for game_id, state in sorted(voided.items())]
         index["discovered_candidate_count"] = len(candidates[lane_key])
         index["proof_valid_candidate_count"] = len(candidates[lane_key])
         unique_source_packages = {
@@ -2406,6 +2484,10 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
                               goalies: pd.DataFrame, observed_at: str) -> dict[str, pd.DataFrame]:
     outcome_columns = ["game_id", "official_full_game_winner", "official_final_home_goals",
                        "official_final_away_goals"]
+    # Void (PPD/SUSP/CNCL) games are not in the admitted schedule; their
+    # predictions are dropped before any check, never graded.
+    voided_games = source_binding.get("schedule_voided_games") or []
+    void_ids = {int(row["game_id"]) for row in voided_games}
     cross_binding = source_binding["cross_market"]
     if cross_binding["run"] is None:
         empty_columns = ["canonical_season", "slate_date", "game_id",
@@ -2420,14 +2502,15 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
         if (capture_status.get("mode") == "PROSPECTIVE_PRODUCTION_WITH_SHADOW_CHALLENGER"
                 and not production_path.is_file()):
             raise RuntimeError("IMMUTABLE_MONEYLINE_PRODUCTION_ARTIFACT_MISSING")
-        moneyline = _pregame(pd.read_csv(
+        moneyline = _pregame(_drop_void_games(pd.read_csv(
             production_path if production_path.is_file() else cross / "v2_immutable_predictions.csv"),
-            "prediction_creation_time_utc", schedule)
+            void_ids), "prediction_creation_time_utc", schedule)
         if production_path.is_file():
             moneyline["operational_role"] = "PRODUCTION_CHAMPION"
             moneyline["model_favored_team"] = moneyline.challenger_favored_team
-        puck = _pregame(pd.read_csv(cross / "puck_line_v1_immutable_predictions.csv"),
-                        "prediction_creation_time_utc", schedule)
+        puck = _pregame(_drop_void_games(
+            pd.read_csv(cross / "puck_line_v1_immutable_predictions.csv"), void_ids),
+            "prediction_creation_time_utc", schedule)
         moneyline = moneyline.merge(games[outcome_columns], on="game_id", validate="one_to_one")
         puck = puck.merge(games[outcome_columns], on="game_id", validate="one_to_one")
     moneyline, puck = _grade_game_lines(moneyline, puck)
@@ -2441,7 +2524,7 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
         sog_exclusions = pd.DataFrame(columns=["game_id", "player_id", "reason"])
     else:
         sog_run = Path(source_binding["sog"]["run"])
-        predictions = pd.read_csv(sog_run / "immutable_predictions.csv")
+        predictions = _drop_void_games(pd.read_csv(sog_run / "immutable_predictions.csv"), void_ids)
         outcome = _sog_outcomes(skaters, predictions)
         graded_sog = grade_predictions(predictions, outcome, grading_timestamp_utc=observed_at)
         arm = graded_sog.contract_arm.astype(str)
@@ -2462,25 +2545,34 @@ def grade_operational_sources(source_binding: dict[str, Any], schedule: pd.DataF
         ].copy()
         missing["grading_status"] = "MISSING_PROSPECTIVE_PREDICTION_EXCLUDED"
         missing["reason"] = "NO_PROSPECTIVE_SOG_ROW"
-        sog_exclusions = pd.read_csv(sog_run / "excluded_players.csv")
+        sog_exclusions = _drop_void_games(pd.read_csv(sog_run / "excluded_players.csv"), void_ids)
 
     points_status = source_binding["points"]
     saves_status = source_binding["saves"]
     extra: dict[str, pd.DataFrame] = {}
-    points, point_grades = _grade_points_source(points_status, schedule, skaters)
+    points, point_grades = _grade_points_source(points_status, schedule, skaters, void_ids)
     extra.update(point_grades)
     if saves_status["status"] in {
             "NO_PROSPECTIVE_SAVES_PREDICTIONS", "NOT_GRADEABLE_NO_PREDICTION"}:
         saves = _zero_evidence_surface(saves_status["status"], saves_status["reason"])
     else:
-        save_grades = _grade_saves(Path(saves_status["run"]), schedule, goalies)
+        save_grades = _grade_saves(Path(saves_status["run"]), schedule, goalies,
+                                   void_game_ids=void_ids)
         saves = save_grades.pop("saves"); extra.update(save_grades)
     # Empty surfaces carry their status in the package summary/source lineage;
     # these columns remain schema-valid without inventing a prediction row.
+    # Resilient sources are verified against the full scheduled slate they
+    # were captured for; the void games' rows are then left ungraded.
+    scheduled = (pd.concat([schedule, pd.DataFrame(voided_games).assign(
+        scheduled_start_time_utc=lambda frame: pd.to_datetime(
+            frame.scheduled_start_time_utc, utc=True))], ignore_index=True)
+        if voided_games else schedule)
     resilient_frames, resilient_index = _resilient_cross_market_grades(
         slate_date=str(source_binding["slate_date"]),
         operational_root=Path(source_binding["operational_root"]),
-        schedule=schedule, games=games, skaters=skaters, goalies=goalies)
+        schedule=scheduled, games=games, skaters=skaters, goalies=goalies,
+        voided_games={int(row["game_id"]): str(row["game_schedule_state"])
+                      for row in voided_games})
     source_binding["resilient_finalization_index"] = resilient_index
     return {"moneyline": moneyline, "puck_line": puck, "points": points, "saves": saves,
             "sog": graded_sog, "sog_missing_predictions": missing,
@@ -2549,6 +2641,11 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
     staging = Path(tempfile.mkdtemp(prefix=".reconciliation.incomplete.", dir=day_root))
     try:
         canonical.to_csv(staging / "canonical_admitted_slate.csv", index=False)
+        # Postponed, suspended or cancelled games: left out of the admitted
+        # slate, recorded with the official schedule state, never graded.
+        voided_games = (source_binding or {}).get("schedule_voided_games") or []
+        if voided_games:
+            pd.DataFrame(voided_games).to_csv(staging / VOIDED_GAMES_FILE, index=False)
         games.to_csv(staging / "canonical_game_outcomes.csv", index=False)
         skaters.to_csv(staging / "canonical_skater_outcomes.csv", index=False)
         goalies.to_csv(staging / "canonical_goalie_outcomes.csv", index=False)
@@ -2586,6 +2683,8 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
             "odds_api_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
             "database_action_accounting": database_action_accounting,
         }
+        if voided_games:
+            summary["schedule_voided_games"] = voided_games
         if request_accounting is not None:
             summary["official_request_accounting"] = request_accounting
             packaged_journal = staging / "official_request_journal.jsonl"
@@ -2647,6 +2746,9 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
         (staging / "report.md").write_text(
             f"# NHL postgame reconciliation — {slate_date}\n\n"
             f"Status: COMPLETE\n\nGames: {len(games)}; skaters: {len(skaters)}; goalies: {len(goalies)}.\n\n"
+            + (f"Void games (never graded): " + ", ".join(
+                f"{row['game_id']} {row['game_schedule_state']}" for row in voided_games) + ".\n\n"
+               if voided_games else "")
             + (("WARNING: no valid immutable FINAL_PREGAME Points prediction existed; Points grading was skipped. "
                 if points_missing_warning else "")
              + ("Prospective SOG is graded by separate contract arm; Points/Saves are graded from their bound prospective sources. "

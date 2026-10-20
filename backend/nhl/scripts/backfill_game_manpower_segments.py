@@ -43,7 +43,7 @@ import psycopg
 import requests
 from backend.nhl.database_access import database_url, restricted_mode
 
-from backend.nhl.official_request_journal import ENV_REQUIRED, official_get
+from backend.nhl.official_request_journal import ENV_REQUIRED, official_get, skip_voided_games
 
 API = "https://api-web.nhle.com/v1/gamecenter/{game_id}/play-by-play"
 SRC = "pbp_situation_breakdown"
@@ -339,7 +339,8 @@ def main() -> None:
         game_ids = list(dict.fromkeys(args.game_ids))  # dedupe, keep order
     else:
         assert conn is not None
-        game_ids = fetch_game_ids_from_db(conn, args.start_date, args.end_date, args.season, args.limit)
+        game_ids = skip_voided_games(
+            fetch_game_ids_from_db(conn, args.start_date, args.end_date, args.season, args.limit))
 
     if not game_ids:
         print("No game_ids found. Nothing to do.")

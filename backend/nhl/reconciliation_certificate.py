@@ -12,6 +12,11 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_RECONCILIATION_ROOT = ROOT / "artifacts/operational/nhl/postgame_reconciliation"
 DEFAULT_SLATE_ROOT = ROOT / "artifacts/operational/nhl/slates"
 DEFAULT_ROSTER_ROOT = ROOT / "artifacts/operational/nhl/roster_observations"
+# Official schedule states (gameScheduleState) that void a game: postponed,
+# suspended or cancelled. Its predictions are never graded, like a book
+# cancelling wagers; a rescheduled game gets new predictions on its new date.
+VOID_SCHEDULE_STATES = frozenset({"PPD", "SUSP", "CNCL"})
+VOIDED_GAMES_FILE = "schedule_voided_games.csv"
 REQUIRED_PACKAGE_FILES = {
     "canonical_admitted_slate.csv",
     "canonical_game_outcomes.csv",
@@ -110,7 +115,7 @@ def verify_reconciliation_certificate(
                 raise RuntimeError("RECONCILIATION_PACKAGE_OFFICIAL_SCORE_INVALID")
     if summary.get("games") is not None and int(summary["games"]) != len(outcomes):
         raise RuntimeError("RECONCILIATION_PACKAGE_GAME_COUNT_MISMATCH")
-    return {
+    certificate = {
         "status": "CERTIFIED_FINAL",
         "slate_date": slate_date,
         "package_path": str(package),
@@ -119,6 +124,13 @@ def verify_reconciliation_certificate(
         "game_count": len(outcomes),
         "files": sorted(files),
     }
+    if VOIDED_GAMES_FILE in files:
+        voided = _csv_rows(package / VOIDED_GAMES_FILE, slate_date=slate_date)
+        if (any(row.get("game_schedule_state") not in VOID_SCHEDULE_STATES for row in voided)
+                or {row["game_id"] for row in voided} & admitted_ids):
+            raise RuntimeError("RECONCILIATION_PACKAGE_VOIDED_GAMES_INVALID")
+        certificate["voided_game_ids"] = sorted(int(row["game_id"]) for row in voided)
+    return certificate
 
 
 def schedule_hash_matches(recorded: object, raw_path: Path) -> bool:

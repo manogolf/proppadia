@@ -69,6 +69,7 @@ from backend.nhl.official_request_journal import (
     RequestContext,
     official_get,
     official_season_id,
+    skip_voided_games,
 )
 from backend.nhl.player_external_identity import localized_text
 from backend.nhl.player_stage_normalizer import (
@@ -824,6 +825,8 @@ def main():
                ORDER BY g.game_id
             """, (SLATE_DATE,))
             games = cur.fetchall()
+        playing = set(skip_voided_games(int(game["game_id"]) for game in games))
+        games = [game for game in games if int(game["game_id"]) in playing]
 
         if not games:
             print(f"ℹ️ No games for {SLATE_DATE} in nhl.games; run import_schedule_today.py first.")

@@ -35,6 +35,7 @@ from backend.nhl.official_request_journal import (
     ENV_SOURCE_CACHE,
     ENV_SOURCE_JOURNAL_SHA256,
     ENV_SOURCE_RUN_ID,
+    ENV_VOIDED_GAME_IDS,
     RequestContext,
     canonical_game_set_hash,
     build_typed_response_source_ledger,
@@ -50,6 +51,7 @@ from backend.nhl.official_request_journal import (
     verify_player_identity_response_run,
     verify_roster_response_run,
 )
+from backend.nhl.reconciliation_certificate import VOID_SCHEDULE_STATES
 from backend.nhl.daily_orchestration import (
     redact_sensitive_text,
     safe_called_process_error,
@@ -238,6 +240,15 @@ def _claims_for_identities(cache: Path, identities: list[tuple[str, dict[str, ob
     return claims
 
 
+def _preserved_schedule_payload(cache: Path, slate_date: str) -> dict:
+    """Read the schedule response preserved (and hash-verified) in a request run."""
+    identity = {"slate_date": slate_date}
+    token = sha256_bytes(json.dumps({"endpoint_family": "SCHEDULE", "identity": identity},
+                                    sort_keys=True, separators=(",", ":")).encode())
+    metadata = json.loads((cache / "index" / f"{token}.json").read_text())
+    return json.loads((cache / "objects" / str(metadata["object_name"])).read_bytes())
+
+
 def _binding_from_acquisition(
     *, output_root: Path, run_id: str, role: str, slate_date: str,
     game_ids: list[int], teams: list[str],
@@ -292,6 +303,15 @@ def _binding_from_acquisition(
     else:
         raise RuntimeError("ACQUISITION_SOURCE_ROLE_INVALID")
     claims = _claims_for_identities(cache, identities)
+    if role == "AUTHORITY_RESPONSE_SOURCE":
+        # Void games recorded in the receipt must be exactly what the
+        # preserved official schedule says, and the played set its balance.
+        official = official_games_for_slate(
+            _preserved_schedule_payload(cache, slate_date), slate_date)
+        recorded = _binding_voided_games(receipt)
+        if (official_voided_games(official) != recorded
+                or set(official.game_id.astype(int)) != set(map(int, game_ids)) | set(recorded)):
+            raise RuntimeError("ACQUISITION_RECEIPT_VOIDED_GAMES_MISMATCH")
     for claim in claims:
         terminal = [row for row in records
                     if row.get("endpoint_family") == claim["endpoint_family"]
@@ -331,10 +351,29 @@ def _binding_from_acquisition(
     }
 
 
+def _write_receipt(path: Path, receipt: dict[str, object]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    try:
+        os.write(descriptor, (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode())
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def authority_roster_acquisition(
     *, slate_date: str, source_binding: dict[str, object], output_root: Path,
+    rebind=None, schedule_state_probe: dict[str, object] | None = None,
 ) -> dict[str, object]:
+    """Acquire the authority (schedule, box scores) and roster responses.
+
+    The request journal is bound to the played game set. When the schedule
+    shows a postponed, suspended or cancelled game the binding did not
+    expect, this run is retained as a schedule-state probe and the
+    acquisition is repeated, once, for ``rebind(voided)``'s played games.
+    """
     game_ids = [int(value) for value in source_binding["game_ids"]]
+    expected_voided = _binding_voided_games(source_binding)
     teams = sorted(str(value).upper() for value in source_binding["team_codes"])
     if len(teams) != len(set(teams)) or len(teams) < 2:
         raise RuntimeError("ACQUISITION_CANONICAL_TEAM_SET_INVALID")
@@ -360,8 +399,31 @@ def authority_roster_acquisition(
         identity=schedule_identity, authority_boundary=True, preserve_response=True)
     response.raise_for_status()
     official = official_games_for_slate(response.json(), slate_date)
-    if set(official.game_id.astype(int)) != set(game_ids):
+    if set(official.game_id.astype(int)) != set(game_ids) | set(expected_voided):
         raise RuntimeError("ACQUISITION_OFFICIAL_GAME_SET_MISMATCH")
+    voided = official_voided_games(official)
+    if voided != expected_voided:
+        if expected_voided or rebind is None:
+            raise RuntimeError(
+                f"ACQUISITION_SCHEDULE_VOID_STATE_CHANGED:expected={expected_voided}:actual={voided}")
+        journal = Path(context_values[ENV_JOURNAL])
+        probe_path = _acquisition_receipt_path(output_root, slate_date, run_id)
+        _write_receipt(probe_path, {
+            "contract_version": "NHL_SCHEDULE_STATE_PROBE_V1", "status": "COMPLETE",
+            "run_id": run_id, "slate_date": slate_date,
+            "canonical_game_set_hash": game_hash, "game_ids": sorted(game_ids),
+            "voided_games": {str(game_id): state for game_id, state in sorted(voided.items())},
+            "request_accounting": summarize_journal(
+                journal, run_id=run_id, expected_game_hash=game_hash),
+            "journal_sha256": _sha256_file(journal),
+            "tree_fingerprint": request_run_tree_fingerprint(request_root, repository_root=ROOT),
+            "database_requests": 0, "database_writes": 0,
+            "bookmaker_requests": 0, "paid_credits": 0,
+        })
+        return authority_roster_acquisition(
+            slate_date=slate_date, source_binding=rebind(voided), output_root=output_root,
+            schedule_state_probe={"run_id": run_id, "receipt_sha256": _sha256_file(probe_path),
+                                  "journal_sha256": _sha256_file(journal)})
     for game_id in sorted(game_ids):
         response = official_get(
             f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore", timeout=30,
@@ -423,14 +485,14 @@ def authority_roster_acquisition(
         "player_landing_requests": 0, "shift_chart_requests": 0,
         "play_by_play_requests": 0, "bookmaker_requests": 0, "paid_credits": 0,
     }
+    if expected_voided:
+        receipt.update({
+            "scheduled_game_ids": source_binding["scheduled_game_ids"],
+            "schedule_voided_games": source_binding["schedule_voided_games"],
+            "schedule_state_probe": schedule_state_probe,
+        })
     receipt_path = _acquisition_receipt_path(output_root, slate_date, run_id)
-    receipt_path.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(receipt_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    try:
-        os.write(descriptor, (json.dumps(receipt, indent=2, sort_keys=True) + "\n").encode())
-        os.fsync(descriptor)
-    finally:
-        os.close(descriptor)
+    _write_receipt(receipt_path, receipt)
     return {**receipt, "receipt_path": str(receipt_path)}
 
 
@@ -625,18 +687,53 @@ def official_games_for_slate(payload: dict, slate_date: str) -> pd.DataFrame:
         games.append({
             "game_id": int(raw_id),
             "game_state": str(item.get("gameState") or item.get("gameScheduleState") or "").upper(),
+            # OK, or PPD/SUSP/CNCL for a void game; absent in legacy shapes.
+            "schedule_state": str(item.get("gameScheduleState") or "OK").upper(),
             "home_team_id": int((item.get("homeTeam") or {}).get("id")),
             "away_team_id": int((item.get("awayTeam") or {}).get("id")),
             "home_score": (item.get("homeTeam") or {}).get("score"),
             "away_score": (item.get("awayTeam") or {}).get("score"),
         })
     official = pd.DataFrame(games, columns=[
-        "game_id", "game_state", "home_team_id", "away_team_id", "home_score", "away_score",
+        "game_id", "game_state", "schedule_state", "home_team_id", "away_team_id",
+        "home_score", "away_score",
     ])
     if official.game_id.duplicated().any():
         duplicate_ids = sorted(official.loc[official.game_id.duplicated(False), "game_id"].astype(int).unique())
         raise RuntimeError(f"OFFICIAL_DUPLICATE_GAME_IDENTITY:{duplicate_ids}")
     return official
+
+
+def official_voided_games(official: pd.DataFrame) -> dict[int, str]:
+    """Return {game_id: state} for postponed, suspended or cancelled games.
+
+    Those games are void: left out of reconciliation and never graded. An
+    unknown schedule state fails closed.
+    """
+    states = official.schedule_state.astype(str)
+    unknown = sorted(set(states) - {"OK"} - set(VOID_SCHEDULE_STATES))
+    if unknown:
+        raise RuntimeError(f"OFFICIAL_SCHEDULE_STATE_UNSUPPORTED:{unknown}")
+    return {int(game_id): state for game_id, state in zip(official.game_id, states)
+            if state in VOID_SCHEDULE_STATES}
+
+
+def _binding_voided_games(binding: dict[str, object] | None) -> dict[int, str]:
+    return {int(row["game_id"]): str(row["game_schedule_state"])
+            for row in (binding or {}).get("schedule_voided_games") or []}
+
+
+def _receipt_voided_games(output_root: Path, slate_date: str,
+                          response_source: list[str]) -> dict[int, str]:
+    """Void games recorded by the typed authority acquisition, if one is named.
+
+    The acquisition's binding re-verifies them against its preserved schedule.
+    """
+    run_id = _parse_response_source_specs(response_source).get("AUTHORITY_RESPONSE_SOURCE")
+    path = _acquisition_receipt_path(output_root, slate_date, run_id) if run_id else None
+    if path is None or not path.is_file():
+        return {}
+    return _binding_voided_games(json.loads(path.read_text()))
 
 
 def local_conditional_lookup_inventory(authority: dict[str, object],
@@ -1102,8 +1199,16 @@ def database_identity_preflight(
         connection.close()
 
 
-def fetch_official(slate_date: str, canonical_game_ids: set[int], *, reuse_authority: bool = False) -> tuple[pd.DataFrame, dict[int, dict], dict[str, int]]:
+def fetch_official(slate_date: str, canonical_game_ids: set[int], *, reuse_authority: bool = False,
+                   voided_games: dict[int, str] | None = None,
+                   ) -> tuple[pd.DataFrame, dict[int, dict], dict[str, int]]:
+    """Fetch the schedule and the played games' box scores.
+
+    ``voided_games`` are on the official schedule with a PPD/SUSP/CNCL state;
+    they must still be exactly those games, and get no box score request.
+    """
     expected_ids = {int(value) for value in canonical_game_ids}
+    voided = {int(game_id): str(state) for game_id, state in (voided_games or {}).items()}
     response = official_get(
         f"https://api-web.nhle.com/v1/schedule/{slate_date}", timeout=30,
         stage="POSTGAME_AUTHORITY", endpoint_family="SCHEDULE",
@@ -1113,14 +1218,19 @@ def fetch_official(slate_date: str, canonical_game_ids: set[int], *, reuse_autho
     response.raise_for_status()
     official = official_games_for_slate(response.json(), slate_date)
     actual_ids = set(official.game_id.astype(int))
-    if actual_ids != expected_ids:
-        missing = sorted(expected_ids - actual_ids)
-        unexpected = sorted(actual_ids - expected_ids)
+    if actual_ids != expected_ids | set(voided):
+        missing = sorted((expected_ids | set(voided)) - actual_ids)
+        unexpected = sorted(actual_ids - expected_ids - set(voided))
         raise RuntimeError(
             "OFFICIAL_GAME_SET_MISMATCH_BEFORE_BOXSCORE_REQUESTS:"
-            f"expected={len(expected_ids)}:actual={len(actual_ids)}:"
+            f"expected={len(expected_ids | set(voided))}:actual={len(actual_ids)}:"
             f"missing={missing}:unexpected={unexpected}"
         )
+    if official_voided_games(official) != voided:
+        raise RuntimeError(
+            f"OFFICIAL_SCHEDULE_VOID_STATE_CHANGED:expected={voided}:"
+            f"actual={official_voided_games(official)}")
+    official = official.loc[official.game_id.astype(int).isin(expected_ids)].reset_index(drop=True)
     boxes: dict[int, dict] = {}
     for gid in sorted(expected_ids):
         box = official_get(
@@ -1633,10 +1743,17 @@ def main() -> int:
     request_lineage = None
     if slate_date != "2026-09-19":
         try:
-            source_binding = resolve_operational_sources(
-                slate_date=slate_date, operational_root=args.operational_root,
-                allow_missing_active_final_for_prior_learning=args.prior_learning,
-                allow_missing_final_for_resilient=True)
+            def resolve_sources(voided_games: dict[int, str]) -> dict[str, object]:
+                return resolve_operational_sources(
+                    slate_date=slate_date, operational_root=args.operational_root,
+                    allow_missing_active_final_for_prior_learning=args.prior_learning,
+                    allow_missing_final_for_resilient=True, voided_games=voided_games)
+
+            # Void (PPD/SUSP/CNCL) games found by the typed authority
+            # acquisition leave the played set; every mode below uses it.
+            source_binding = resolve_sources(
+                _receipt_voided_games(args.output_root, slate_date, args.response_source)
+                if slate_date != "2026-09-20" and args.response_source else {})
             if args.player_identity_acquisition:
                 typed_sources = _parse_response_source_specs(args.response_source)
                 if (slate_date != SEP24_PLAYER_IDENTITY_SLATE
@@ -1670,7 +1787,7 @@ def main() -> int:
                     os.environ.pop(key, None)
                 result = authority_roster_acquisition(
                     slate_date=slate_date, source_binding=source_binding,
-                    output_root=args.output_root)
+                    output_root=args.output_root, rebind=resolve_sources)
                 print(json.dumps(result, indent=2, sort_keys=True))
                 return 0
             if slate_date != "2026-09-20" and args.response_source:
@@ -2034,7 +2151,12 @@ def main() -> int:
         return code
     try:
         with reconciliation_lock(args.output_root, slate_date):
+            voided_games = _binding_voided_games(source_binding)
+            # A void game may already be moved to its new date in nhl.games;
+            # either way it is not admitted.
             canonical = canonical_slate(dsn, slate_date)
+            canonical = canonical.loc[
+                ~canonical.game_id.astype(int).isin(voided_games)].reset_index(drop=True)
             canonical_ids = set(canonical.game_id.astype(int))
             if source_binding is not None and canonical_ids != set(source_binding["game_ids"]):
                 raise RuntimeError("DATABASE_CANONICAL_GAME_SET_DIFFERS_FROM_IMMUTABLE_LOCAL_SPINE")
@@ -2050,6 +2172,7 @@ def main() -> int:
                 ENV_GAME_IDS: ",".join(str(value) for value in sorted(canonical_ids)),
                 ENV_AUTHORIZED_PLAYER_LOOKUP_IDS: ",".join(
                     str(value) for value in sorted(args.authorized_player_lookup_id)),
+                ENV_VOIDED_GAME_IDS: ",".join(str(value) for value in sorted(voided_games)),
             }
             if response_source_ledger is not None:
                 context_values[ENV_RESPONSE_SOURCE_LEDGER] = json.dumps(
@@ -2063,7 +2186,8 @@ def main() -> int:
             os.environ.update(context_values)
             RequestContext.from_env(required=True)
             official, boxes, request_counts = fetch_official(
-                slate_date, canonical_ids, reuse_authority=authority_binding is not None)
+                slate_date, canonical_ids, reuse_authority=authority_binding is not None,
+                voided_games=voided_games)
             validated = validate_final_slate(canonical, official, slate_date)
             expected_games, expected_skaters, expected_goalies = build_outcomes(
                 validated, boxes, datetime.now(timezone.utc).isoformat())

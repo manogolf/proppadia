@@ -34,6 +34,9 @@ ENV_SOURCE_RUN_ID = "NHL_OFFICIAL_RESPONSE_SOURCE_RUN_ID"
 ENV_SOURCE_JOURNAL_SHA256 = "NHL_OFFICIAL_RESPONSE_SOURCE_JOURNAL_SHA256"
 ENV_RESPONSE_SOURCE_LEDGER = "NHL_OFFICIAL_RESPONSE_SOURCE_LEDGER_JSON"
 ENV_AUTHORIZED_PLAYER_LOOKUP_IDS = "NHL_AUTHORIZED_PLAYER_LOOKUP_IDS"
+# Postponed, suspended or cancelled games left out of a reconciliation run.
+# Collectors that list a date's games from nhl.games skip them by name.
+ENV_VOIDED_GAME_IDS = "NHL_SCHEDULE_VOIDED_GAME_IDS"
 CONTRACT = "NHL_OFFICIAL_REQUEST_JOURNAL_V1"
 SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_.:-]+$")
 ROSTER_REDIRECT_POLICY = "NHL_ROSTER_CURRENT_TO_OFFICIAL_SEASON_V1"
@@ -66,6 +69,17 @@ def request_run_tree_fingerprint(request_root: Path, *, repository_root: Path) -
             raise RuntimeError("REQUEST_RUN_OUTSIDE_REPOSITORY") from error
         lines.append(f"{sha256_file(path)}  {relative}\n")
     return sha256_bytes("".join(lines).encode())
+
+
+def skip_voided_games(game_ids: Iterable[int]) -> list[int]:
+    """Drop the run's declared void games (PPD/SUSP/CNCL) from a game list.
+
+    Only games named in ENV_VOIDED_GAME_IDS are skipped; any other game the
+    request context does not authorize still fails closed when requested.
+    """
+    raw = os.environ.get(ENV_VOIDED_GAME_IDS, "").strip()
+    voided = {int(value) for value in raw.split(",") if value.strip()}
+    return [game_id for game_id in game_ids if int(game_id) not in voided]
 
 
 def canonical_game_set_hash(game_ids: Iterable[int]) -> str:

@@ -120,6 +120,33 @@ For eight games and sixteen unique teams, successful acquisition has exactly
 25 logical operations, 41 transport attempts, 25 terminal HTTP 200 responses,
 16 allowed redirects and zero reuse events.
 
+Void games (NHL Backlog P2.24 D). A game whose official `gameScheduleState`
+is `PPD`, `SUSP` or `CNCL` is void: its predictions are never graded, like a
+book cancelling wagers, even if a suspended game later resumes; the
+rescheduled game gets new predictions on its new date. Any other state than
+`OK` or those three fails closed (`OFFICIAL_SCHEDULE_STATE_UNSUPPORTED`).
+When the acquisition's schedule response shows a void game, that run stops
+after its one schedule request and is retained as
+`NHL_SCHEDULE_STATE_PROBE_V1` (in `acquisition_receipts/`). The acquisition
+then runs once more for the played games only: its journal's game IDs and
+hash, box scores, rosters (teams of played games) and receipt all use the
+played set. The receipt adds `scheduled_game_ids`, `schedule_voided_games`
+(game, state, scheduled start, teams) and `schedule_state_probe`. If the
+second schedule response shows different void games, it fails closed
+(`ACQUISITION_SCHEDULE_VOID_STATE_CHANGED`); a later poll retries. Days
+without a void game are acquired exactly as before, with one schedule request.
+
+The execute run, and the local and database preflights, read the void games
+from that receipt and re-verify them against the preserved schedule
+(`ACQUISITION_RECEIPT_VOIDED_GAMES_MISMATCH`). The local source binding,
+`nhl.games` check (a void game may already sit on its new date), execute
+journal, official fetch and FINAL check all use the played set. The execute
+context names the void games in `NHL_SCHEDULE_VOIDED_GAME_IDS`; child
+collectors that list a date's games from `nhl.games` or the schedule skip
+exactly those games. A played game still in progress keeps the run
+`NOT_FINAL`. A day on which every scheduled game is void stops with
+`ALL_SCHEDULED_GAMES_VOID_REQUIRES_REVIEW` (deferred; P2.24 D follow-up).
+
 ## Expected September 19-shaped seven-game plan after reuse
 
 For seven games involving 12 unique teams (two teams repeat), the normal
