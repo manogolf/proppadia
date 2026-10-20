@@ -1114,21 +1114,44 @@ consumers keep full verification. Open items:
   10 Division Series. It has 2,954 rows, 35 postseason, through 2026-10-20.
   See `docs/contracts/mlb_2026_postseason_authority_v6/`. `--validate` passes
   under full raw-byte verification. Tests show the proposed selector serves
-  849815 on the snapshot-only read. **Open, operator decision:** run
-  `--activate`, then commit, push and deploy. The V5 validator now reports
+  849815 on the snapshot-only read. Activated in the main checkout and
+  committed; it reaches Render with the operator's next batch push. The V5 validator now reports
   `GOVERNED_CHILD_VALID_SUPERSEDED` instead of failing once V6 is selected.
   `test_25` now uses a synthetic absent gamePk, so it no longer depends on
   849815 being absent.
-- **Open: one child per postseason game day through the World Series.**
-  Retained schedules end on the run date, so each game first appears on its
-  own game day. Follow "Keeping postseason authority current" in
-  `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`: add a
-  `ChildSpec` and source set, prepare, validate, review, activate and push,
-  ideally after the 12:30Z run and before first pitch. Each push is one paid
-  Render rebuild. Alternative, needing owner approval for one StatsAPI
-  request: retain one forward schedule through the end of the World Series,
-  which lists if-necessary games with TBD teams. One child built from it
-  covers every remaining game, with one rebuild.
+- **DB hash chain (2026-10-20, branch `claude/mlb-phase-authority-db-chain`).**
+  New postseason games reach the hosted read after the morning run, with no
+  code push. See "DB hash-chain extension" in
+  `docs/contracts/mlb_phase_authority_snapshot_only_read_v1.md`. HMAC signing
+  was dropped at the operator's direction, so there is no key to manage.
+  1. Done 2026-10-20: the operator applied
+     `backend/mlb/sql/migrations/20261020_mlb_phase_authority_db_chain.sql`
+     in the SQL editor. All six checks in
+     `20261020_mlb_phase_authority_db_chain_verify/` matched:
+     - `proppadia_api` has `SELECT` only.
+     - `proppadia_mlb_ingest` has `SELECT` and function `EXECUTE` only.
+     - `anon` and `authenticated` have no access.
+     - The function is `SECURITY DEFINER`, owned by `postgres`, with
+       `search_path=pg_catalog`.
+     - RLS is on and both triggers exist.
+     - The table has 0 entries.
+  2. Done 2026-10-20: the operator applied
+     `20261020_mlb_phase_authority_db_chain_keyless.sql`. All five checks in
+     `20261020_mlb_phase_authority_db_chain_keyless_verify/` matched:
+     - The signature columns are gone.
+     - Only the 6-argument function exists. It is `SECURITY DEFINER`, owned
+       by `postgres`, with `search_path=pg_catalog`.
+     - Only `proppadia_mlb_ingest` can execute it.
+     - `proppadia_api` has `SELECT` only and ingest has no `INSERT`.
+     - RLS is on, both triggers exist, and the table has 0 entries.
+  3. **Open, operator:** merge and push the branch. Set
+     `MLB_PHASE_AUTHORITY_CHAIN_PUBLISH=1` for the Moneyline daily run; it
+     needs `MLB_INGEST_DATABASE_URL` in `backend/.env`.
+
+  Until then, the per-game-day committed child below remains the route.
+- **Fallback: one committed child per postseason game day.** Follow
+  "Per-game-day committed children (fallback)" in the same contract. Each
+  push is one paid Render rebuild.
 - **Stale archived-baseline tests:**
   `test_public_game_prediction_baseline_v1::test_17_api_test_on_renders_rows`
   sends archived baseline rows to the certified adapter. The adapter rejects

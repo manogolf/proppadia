@@ -394,6 +394,32 @@ def _apply_dependency_blocks(
     return result
 
 
+PHASE_AUTHORITY_CHAIN_PUBLISH_ENV = "MLB_PHASE_AUTHORITY_CHAIN_PUBLISH"
+
+
+def _publish_phase_authority_chain(runtime_authority, admitted, selection_receipt, *, write_durable: bool):
+    """Append admitted postseason games to the DB hash chain (opt-in, non-fatal).
+
+    Predictions are already durable; a publication failure only keeps the
+    hosted API withholding these games and is reported in the run result.
+    """
+    if os.environ.get(PHASE_AUTHORITY_CHAIN_PUBLISH_ENV) != "1":
+        return {"status": "DISABLED"}
+    if not write_durable or runtime_authority is None or selection_receipt is None:
+        return {"status": "SKIPPED_NO_DURABLE_RUNTIME_EVIDENCE"}
+    from backend.mlb.season_transition.phase_authority_db_chain_v1 import publish_runtime_records
+
+    try:
+        return publish_runtime_records(
+            runtime_authority, [int(row['game_id']) for row in admitted],
+            selection_receipt_sha256=str(selection_receipt['sha256']),
+        )
+    except Exception as error:  # noqa: BLE001 - recorded, never blocks the run
+        code = getattr(error, "code", None) or type(error).__name__
+        print(f"MLB_PHASE_AUTHORITY_CHAIN_PUBLISH_FAILED={code}", file=sys.stderr)
+        return {"status": "FAILED", "error": str(code)}
+
+
 def _execute() -> int:
     parser=argparse.ArgumentParser()
     parser.add_argument('--mlb-date',default=date.today().isoformat())
@@ -638,6 +664,8 @@ def _execute() -> int:
         _ATTEMPT_CONTEXT["stage"] = "MONEYLINE_PREDICTION_PERSISTENCE"
         state_written=int(append_state_snapshot(snapshot))
         predictions_written=append_prediction_rows(admitted, authority=runtime_authority)
+    chain_publication=_publish_phase_authority_chain(
+        runtime_authority, admitted, selection_receipt, write_durable=args.write_durable)
     result={'mode':'DURABLE_WRITE' if args.write_durable else 'DRY_RUN','mlb_date':args.mlb_date,
             'prediction_generated_at_utc':generated,
             'prediction_cutoff_utc':cutoff,'source_schedule_hash':schedule_hash,
@@ -653,6 +681,7 @@ def _execute() -> int:
             'current_slate_source_provenance':provenance,
             'history_selection_receipt':None if selection_receipt is None else {
                 'path':selection_receipt['path'],'sha256':selection_receipt['sha256']},
+            'phase_authority_chain_publication':chain_publication,
             'playable_terminal_contract':FINALITY_CONTRACT_VERSION,
             'history_games_quarantined':collection.quarantined_count,
             'history_games_rejected_nonplayable':collection.rejected_count,

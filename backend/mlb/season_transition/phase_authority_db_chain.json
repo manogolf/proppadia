@@ -1,0 +1,9 @@
+{
+  "anchor_descriptor_path": "backend/mlb/season_transition/authority_snapshots/v6/descriptor.json",
+  "anchor_descriptor_sha256": "280cc121f12a4dc7d6a7a37ea61a20667db863be1846dcc917f466fb5cdab22b",
+  "admitted_phases": ["POSTSEASON"],
+  "chain_id": "MLB_2026_PHASE_AUTHORITY_DB_CHAIN_V1",
+  "contract_name": "MLB_PHASE_AUTHORITY_DB_CHAIN_V1",
+  "schema_version": 1,
+  "supported_season": 2026
+}
