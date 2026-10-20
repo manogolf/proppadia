@@ -1648,9 +1648,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.24 Remove slate-wide and single-snapshot assumptions added 2026-10-18
 
-- Status: **OPEN — A, B, E, F, G, H, I fixed 2026-10-20; C and D need a
-  design decision**. Fixed: `40ace9ff` (A), `7afc7f07` (B), `efaaffb4` (F),
-  `3151be95` (G, H, I), `4e11c95e` (E). Verification:
+- Status: **OPEN — all nine findings fixed 2026-10-20; the walk-forward
+  from 10-13 and three D follow-ups remain**. Fixed: `40ace9ff` (A),
+  `7afc7f07` (B), `efaaffb4` (F), `3151be95` (G, H, I), `4e11c95e` (E),
+  `6e664567` (C), `cfaf2d6f` (D). Verification:
   - A, F, G, I and E have unit tests that fail on the old code.
   - B and H rest on read-only real-data replays of the 10-17, 10-18 and
     10-19 reconciliations. On 10-19, games 139/140 now grade from the 23:24
@@ -1659,8 +1660,35 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - A replay caught an SOG conflicting-tie abort introduced by G (the same
     row hashed differently by two discovery paths); it was fixed before
     commit.
-  - Open: C (off-day certificate identity) and D (postponed, cancelled or
-    suspended prior-day games). Neither has a real case to replay yet.
+  - C and D have no real case yet. Tests built on fixtures fail on the old
+    code and pass now: an off day gives every resilient lane FULL coverage
+    (was EMPTY), and PPD, SUSP and CNCL each certify the played games (was
+    `ADMITTED_GAMES_NOT_OFFICIAL_FINAL`). A played game still in progress
+    still waits as NOT_FINAL. Read-only replays of the retained 10-17, 10-18
+    and 10-19 reconciliations through `_resilient_cross_market_grades` match
+    main exactly (grades, lane coverage, index hash). The full NHL suite
+    passes in the worktree and against the main checkout's retained data.
+  - C fix: `reconciliation_certificate.certificate_identity` is the one
+    certificate identity (package manifest, or the retained empty
+    schedule's hash for an off day); `verify_prior_day_certificate`
+    re-verifies either kind.
+  - D fix: the acquisition reads `gameScheduleState`. On a void game it
+    keeps that run as a `NHL_SCHEDULE_STATE_PROBE_V1` probe and re-acquires
+    for the played games. The played set then binds the journal, receipt,
+    local spine, `nhl.games` check, official fetch, collectors
+    (`NHL_SCHEDULE_VOIDED_GAME_IDS`), package (`schedule_voided_games.csv`),
+    certificate (`voided_game_ids`), cross-market prior-day checks and every
+    grading lane.
+  - D follow-ups (deferred, not built):
+    1. A day on which every scheduled game is void stops with
+       `ALL_SCHEDULED_GAMES_VOID_REQUIRES_REVIEW`. It needs an empty-day
+       style certificate built from the probe receipt.
+    2. A spine game that is missing from the official schedule for its
+       date (if the NHL drops a postponed game from the original date
+       instead of marking it PPD) still fails closed as a game-set mismatch.
+    3. The daily pipeline's later prior-date seeding (`cli.py` phase A)
+       does not skip void games, so a suspended game's partial box score
+       can reach history tables. Grading is unaffected.
   - Operator decision for D (2026-10-20): predictions for postponed,
     suspended or cancelled games are void and never graded, the way books
     cancel wagers placed on them. The rescheduled game gets fresh
