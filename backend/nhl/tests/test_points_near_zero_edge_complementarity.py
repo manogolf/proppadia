@@ -34,6 +34,8 @@ class NearZeroEdgeTests(unittest.TestCase):
         self.assertAlmostEqual(row["model_brier_contribution"], .04)
         self.assertLess(row["model_logloss_contribution"], row["market_logloss_contribution"])
 
+    @unittest.skipUnless((study.HISTORY / "2026-10-10/points_attachment_integrity.json").is_file(),
+                         "retained 2026-10-10 to 2026-10-14 Points attachment archives are local artifacts")
     def test_retained_price_integrity_and_study_periods(self):
         rows, hashes = study.load_rows()
         self.assertIn("2026-10-10_integrity", hashes)

@@ -32,6 +32,9 @@ PRED_SHA256 = "08522b88589b0adc8e25b387c6e7dfdd33c657ef2d1f57f105f675327df97c94"
 ODDS_SHA256 = "84ee05d3fd7a9c1426b982fb96a93b05772d34550a0f1d94d6adb0751ddfc3c2"
 SLATE_GAME_IDS = list(range(2026020070, 2026020084))
 STARTED_GAME_IDS = {2026020070, 2026020071}
+requires_retained_oct10 = unittest.skipUnless(
+    PRED.is_file() and NAMES.is_file() and ODDS_DIR.is_dir(),
+    "retained 2026-10-10 Saves prediction run and odds observation are local artifacts")
 
 
 class SavesAttachmentMixedStartTests(unittest.TestCase):
@@ -64,6 +67,7 @@ class SavesAttachmentMixedStartTests(unittest.TestCase):
         ):
             saves.main()
 
+    @requires_retained_oct10
     def test_retained_eligible_subset_attaches_without_started_game_predictions(self):
         self.assertEqual(sha256_file(PRED), PRED_SHA256)
         self.assertEqual(sha256_file(ODDS_DIR / "SHA256SUMS"), ODDS_SHA256)
@@ -100,14 +104,17 @@ class SavesAttachmentMixedStartTests(unittest.TestCase):
         self.assertEqual(sha256_file(PRED), PRED_SHA256)
         self.assertEqual(sha256_file(ODDS_DIR / "SHA256SUMS"), ODDS_SHA256)
 
+    @requires_retained_oct10
     def test_prediction_hash_mismatch_is_rejected(self):
         with self.assertRaisesRegex(AttachmentIntegrityError, "PREDICTION_ARTIFACT_HASH_MISMATCH"):
             self.run_builder(prediction_sha="0" * 64)
 
+    @requires_retained_oct10
     def test_odds_manifest_mismatch_is_rejected(self):
         with self.assertRaisesRegex(AttachmentIntegrityError, "ODDS_OBSERVATION_MANIFEST_HASH_MISMATCH"):
             self.run_builder(odds_sha="0" * 64)
 
+    @requires_retained_oct10
     def test_parent_run_mismatch_is_rejected(self):
         with self.assertRaisesRegex(AttachmentIntegrityError, "PREDICTION_PARENT_RUN_ID_MISMATCH"):
             self.run_builder(parent_run_id="substituted-run")
@@ -232,6 +239,8 @@ class SavesMiddayAttachmentRegressionTests(unittest.TestCase):
             saves.main()
         return pd.read_csv(out), json.loads(report_path.read_text())
 
+    @unittest.skipUnless(prediction_path.is_file() and odds_dir.is_dir(),
+                         "retained 2026-10-11 Saves prediction run and odds observation are local artifacts")
     def test_exact_midday_replay_preserves_keys_and_is_deterministic(self):
         self.assertEqual(sha256_file(self.prediction_path), self.prediction_sha)
         self.assertEqual(sha256_file(self.odds_dir / "SHA256SUMS"), self.odds_sha)
