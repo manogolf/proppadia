@@ -744,6 +744,19 @@ SELECT/INSERT grants are prepared, not applied: `backend/mlb/sql/migrations/2026
 files on 2026-10-19 (keeping `player_props.user_id`); read-only verification
 passed. Open: installing the tracked daily wrapper and a natural run.
 
+### Plan status (2026-10-20): complete
+
+All eight steps are done:
+- No application environment, stored file or hosted service holds the
+  production owner login, and the owner password was rotated. Steps 5 and 6
+  were done by the operator, including clearing the Trash and the Render
+  secret file.
+- The guard is enforced in every NHL daily receipt.
+- NHL, MLB and hosted-API runs completed on restricted logins.
+
+Evidence: NHL backlog P1.5. Remaining MLB natural-run checks are tracked in
+MLB backlog P2.2.
+
 ### Operator decisions
 
 - Whether the owner aliases stay in `backend/.env` during the transition

@@ -126,19 +126,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P1.5 Keep the production owner login out of application environments
 
-- Status: **NEARLY CLOSED — steps 1–4, 6, 7, and 8 done 2026-10-19.** The owner login is out of `backend/.env` and out of Render (the hosted API runs on `proppadia_api_login`). The guard is enforced, and the owner password was rotated. Step 5: the last on-disk backup (`.env.known_good_both_sports_20261016T204129Z`) is deleted. Whether older copies sit in the macOS Trash is unverified; the rotation makes any such copy useless. Remaining: the first natural NHL and MLB runs without the owner login on 2026-10-19 and 2026-10-20. The owner login
-  returned to `backend/.env` (`SUPABASE_DB_URL`, `DATABASE_URL`) on 2026-10-16
-  around 13:20 PDT, most likely for MLB. It also sits in four 2026-10-16
-  backups and `.env.train` (mode 644). Step 1: in restricted mode, morning
-  orchestration now hands its children the research login under both aliases,
-  and the 12 NHL readers resolve `database_url("research")`. The live
-  preflight passed on the research login. The other six of the 18 scripts
-  need no change; the plan's "Step 1 status" explains why. The owner login
-  is still in the files above until step 4. Step 2: NHL child environments (daily
-  CLI, morning orchestration, cross-market prior-day children) drop every
-  owner login and libpq route in restricted mode; the morning check refuses a
-  research login with owner reach; morning and daily receipts record the
-  owner-login variable names in `backend/.env` (names only).
+- Status: **VERIFIED COMPLETE 2026-10-20.** Every completion condition holds:
+  - The production owner login is gone from `backend/.env`, Render (env vars
+    and the service-role secret file), all local backups, and the macOS Trash.
+    The only owner-role value left is the separate test project's
+    `NHL_PP_TOI_TEST_DSN`.
+  - The owner password was rotated on 2026-10-19, and owner work goes through
+    the Supabase SQL editor.
+  - The owner-login guard is enforced and every NHL daily receipt since
+    records it (`owner_login_guard=ENFORCED`, `child_owner_logins=STRIPPED`).
+  - Runs completed without the owner login: NHL daily 10-19 23:22Z
+    (`READY`), NHL morning orchestration 10-20 14:30Z (`READY`), MLB refresh
+    run 97, and the hosted API on `proppadia_api_login`
+    (`db_route=API_LOGIN`).
+  - The 10-20 13:58Z failure was the unrelated schedule-hash defect (P2.23).
+  - MLB readers that lost access softly were routed and granted (MLB P2.2);
+    their first natural run is tracked there.
 - 2026-10-19 step 8 (hosted API, missed by steps 1–7): the owner rotation
   broke `/api/nhl/ping-db` on Render, which still used the owner login. The
   API's NHL writes are INSERT, DELETE, and UPDATE (`status`, `outcome`,
