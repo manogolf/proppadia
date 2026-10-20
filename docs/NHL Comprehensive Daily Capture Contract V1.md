@@ -88,6 +88,14 @@ snapshot keeps its `strictly_prestart` flag and timestamp. Reusing one roster
 capture for a whole slate (`--reuse-roster-observation`, roster refresh) still
 requires a capture taken before the first puck.
 
+Schedule snapshots (2026-10-20, P2.24 F). Every schedule fetch is retained,
+create-only, under `slates/<date>/snapshots/fetch=<timestamp>/`
+(`raw_schedule_response.json`, `slate_health.json`). A successful fetch also
+updates the current `slates/<date>/` files. A failed or partial fetch is
+kept only in its snapshot, and the importer still exits with an error, so it
+never replaces a good current schedule that the next morning's prior-day
+check depends on.
+
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has
   inputs. A pregame game with no feature rows or slate identities is recorded

@@ -165,11 +165,7 @@ def _write_slate_health(date_str: str, games: list[dict], completion_status: str
     dest = HEALTH_ROOT / date_str
     dest.mkdir(parents=True, exist_ok=True)
     raw = LAST_FETCH_EVIDENCE.get("raw_source")
-    if raw is not None:
-        raw_path = dest / "raw_schedule_response.json"
-        tmp = raw_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(raw, indent=2, sort_keys=True) + "\n")
-        tmp.replace(raw_path)
+    raw_text = json.dumps(raw, indent=2, sort_keys=True) + "\n" if raw is not None else None
     ids = [g.get("id") or g.get("gamePk") or g.get("gameId") for g in games]
     types = [g.get("gameType") for g in games]
     states: dict[str, int] = {}
@@ -203,9 +199,32 @@ def _write_slate_health(date_str: str, games: list[dict], completion_status: str
         "downstream_ready": downstream_ready,
         "error": error,
     }
+    health_text = json.dumps(health, indent=2, sort_keys=True) + "\n"
+    # Every fetch is kept as its own create-only snapshot: the day's schedule
+    # changes are research evidence and are never overwritten.
+    stamp = str(LAST_FETCH_EVIDENCE.get("fetch_timestamp_utc")
+                or dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z"))
+    snapshot = dest / "snapshots" / f"fetch={stamp.replace(':', '')}"
+    snapshot.mkdir(parents=True, exist_ok=False)
+    if raw_text is not None:
+        (snapshot / "raw_schedule_response.json").write_text(raw_text)
+    (snapshot / "slate_health.json").write_text(health_text)
     health_path = dest / "slate_health.json"
+    # A failed or partial fetch never replaces a good current schedule; it is
+    # retained in its snapshot and the caller still fails.
+    if not downstream_ready and health_path.is_file():
+        try:
+            if json.loads(health_path.read_text()).get("downstream_ready") is True:
+                return snapshot / "slate_health.json"
+        except (OSError, ValueError):
+            pass
+    if raw_text is not None:
+        raw_path = dest / "raw_schedule_response.json"
+        tmp = raw_path.with_suffix(".json.tmp")
+        tmp.write_text(raw_text)
+        tmp.replace(raw_path)
     tmp = health_path.with_suffix(".json.tmp")
-    tmp.write_text(json.dumps(health, indent=2, sort_keys=True) + "\n")
+    tmp.write_text(health_text)
     tmp.replace(health_path)
     return health_path
 
