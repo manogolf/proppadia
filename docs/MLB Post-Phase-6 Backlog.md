@@ -440,6 +440,14 @@ writer validation does not authorize a hosted cutover or a different writer.
     rolled-back ingest probe; it skips while no MLB model is qualified. The
     operator then removed the owner login from `backend/.env` (isolation
     plan step 4). The first MLB refresh without it is the next scheduled run.
+  - Run 97 (2026-10-19, first without the owner login) exited 0 but several
+    readers degraded silently. A full re-sweep routed them to the research
+    login, and the wrapper now exports `MLB_RESEARCH_DATABASE_URL` for the
+    run. The extra columns are prepared, not applied, in `backend/mlb/sql/migrations/20261019_mlb_research_daily_fallback_read.sql`; review
+    `player_props.user_id`. The details are in the inventory section "Run 97
+    silent fallbacks". Open: the moneyline shadow lifecycle writer failed in
+    run 97 and needs a restricted writer route; installing the tracked
+    wrapper.
 
 - 2026-10-19 hosted API (isolation plan step 8): the Render API still used
   the owner login for its MLB reads and its `mlb.player_props` INSERT (POST

@@ -109,6 +109,57 @@ read-only catalog check through the research login then confirmed SELECT on
 exactly those five columns and no INSERT, UPDATE, DELETE, or TRUNCATE on
 either relation. The three readers above were then switched on.
 
+## Run 97 silent fallbacks (2026-10-19)
+
+MLB refresh run 97 was the first without the owner login. It exited 0, but
+several readers degraded quietly ("not configured", `UNAVAILABLE`,
+`DATABASE_URL_UNAVAILABLE`). The earlier inventory missed them. It counted
+direct database calls in Make-recipe scripts, but not readers reached only
+through imports, the wrapper's bin hooks, or Make targets launched from
+Python. A re-sweep covered the wrapper, its 16 hooks, about 130 reached Make
+targets, and the full import closure. It found these readers:
+
+| Reader (where it runs) | Route now | New research columns |
+| --- | --- | --- |
+| `durable_store_v1.fetch_prediction_rows` (Pinnacle and Bookmaker.eu captures) | research-or-current connection | `public_game_moneyline_predictions.created_at`, `prediction_payload` |
+| `build_mlb_ubo5_tb15_daily_closeout.load_certified_player_stats` (UBO5 closeout and audits) | research psycopg session | none |
+| `audit_mlb_reporting_alignment.py` (workspace repository) | already research variant; lacked the URL | none |
+| `reconcile_mlb_prospective_lineage_outcomes.py` (reconcile-rows loaders) | already research variant; lacked the URL | none |
+| `build_mlb_hits_nonmarket_player_game_feature_spine.py` (Hits 0.5 parent producer) | research variant | `game_info.starting_pitcher_id_home`, `starting_pitcher_id_away` |
+| `run_mlb_hits_15_tier_backtest.py`, `score_mlb_hits05_full_board_shadow_v1.py`, `run_mlb_review_aid_performance_tracker.py` | research variant | none |
+| `analyze_mlb_prediction_quality.py`, `audit_mlb_prediction_flow.py` (pipeline log, prediction gate, prod12 tracking) | research variant | `model_training_props` and `player_props` outcome/prediction columns (see grant) |
+| `report_mlb_feature_health.py`, `report_mlb_bvp_impact.py` | research variant | `model_training_props.outcome` (in grant) |
+| Strong-agreement live capture and separation study | research-or-current connection | `public_game_moneyline_outcomes.grading_timestamp_utc` |
+| Exact-game feature shadow (reads only; writes files) | research URL preferred | all of `player_ids` (it reads `to_jsonb(p)`) |
+| Cleanroom routine outcome `local_rows` (enabled cohort) | research-or-current connection | none |
+| Shared `prop_workflow` and `player_repository` reads (predictions-wide `prepare_prop`/`predict_prop`, idle while no model qualifies) | research variant | all of `player_derived_stats` (`row_to_json`), `model_training_props.player_name`, `team` |
+| `bvp_identity.retained_authority` | research variant | none |
+
+The daily wrapper now exports `MLB_RESEARCH_DATABASE_URL` once, after it
+sources `backend/.env`. Every reader in the run, hooks included, therefore
+gets the research route. Writers keep their explicit ingest opt-in. The shared
+API-domain modules fall back to their current route when the variable is unset,
+as it is in the hosted API.
+
+Bounded research reads on 2026-10-19 succeeded where no new column is needed.
+They were denied exactly where the prepared grant adds columns:
+`backend/mlb/sql/migrations/20261019_mlb_research_daily_fallback_read.sql` and its rollback, not applied. Review note: the grant includes
+`player_props.user_id`, an account identifier that the prediction-flow audit
+uses to group duplicate user rows. Drop it from the grant to keep it from the
+research login.
+
+Not readers, and still failing without the owner login:
+
+- The moneyline shadow lifecycle (`run_mlb_public_game_moneyline_daily_v1`)
+  appends to `mlb.public_game_official_finals`,
+  `public_game_team_state_snapshots`, `public_game_moneyline_predictions`, and
+  `public_game_moneyline_outcomes` through the generic route. Run 97 logged
+  `MLB moneyline shadow lifecycle failed ... exit_status=1`. It needs a
+  restricted writer route (ingest grants or fixed functions).
+- Other run-97 warnings were already failing before the owner was removed:
+  the phase-authority staleness, the BetOnline validation, and the routine
+  cohort's missing support file.
+
 ## Materialized-view refresh
 
 Correction: the plan's statement that the four `mlb.today_*` refreshes are
