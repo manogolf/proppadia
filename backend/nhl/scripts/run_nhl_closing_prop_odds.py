@@ -87,10 +87,12 @@ def run(*, now: datetime, observation_root: Path, slate_root: Path, dry_run: boo
     season = _season(slate_date)
     day_root = observation_root / f"season={season}" / f"slate_date={slate_date}"
     claim_root = observation_root / ".claims" / f"season={season}" / f"slate_date={slate_date}"
-    games = load_canonical_slate(
-        slate_date=slate_date,
-        raw_schedule_path=slate_root / slate_date / "raw_schedule_response.json",
-        slate_health_path=slate_root / slate_date / "slate_health.json")
+    raw_schedule = slate_root / slate_date / "raw_schedule_response.json"
+    slate_health = slate_root / slate_date / "slate_health.json"
+    if not (raw_schedule.is_file() and slate_health.is_file()):
+        return []  # the day's slate is imported by the morning run; nothing to do before it
+    games = load_canonical_slate(slate_date=slate_date, raw_schedule_path=raw_schedule,
+                                 slate_health_path=slate_health)
     if provider is None and not dry_run:
         key = os.environ.get("ODDS_API_KEY", "").strip()
         provider = RequestsOddsProvider(key) if key else None

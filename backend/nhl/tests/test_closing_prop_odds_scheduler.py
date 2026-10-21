@@ -17,12 +17,20 @@ BOS = CanonicalGame(2026020301, "2026-10-22T02:00:00Z", "BOS", "TOR",
                     ("BOS", "Boston Bruins"), ("TOR", "Toronto Maple Leafs"))
 
 
+def touch_slate(slate_root):
+    day = Path(slate_root) / "2026-10-21"  # contents come from the patched load_canonical_slate
+    day.mkdir(parents=True, exist_ok=True)
+    for name in ("raw_schedule_response.json", "slate_health.json"):
+        (day / name).write_text("{}")
+
+
 class ClosingSchedulerTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         patcher = patch.object(scheduler, "load_canonical_slate", return_value=[NJD, BOS])
         patcher.start(); self.addCleanup(patcher.stop)
+        touch_slate(self.root / "slates")
 
     def tearDown(self):
         self.temp.cleanup()
@@ -85,6 +93,13 @@ class ClosingSchedulerTests(unittest.TestCase):
                                   provider_for("Boston Bruins", "Toronto Maple Leafs", "wrong"))
         self.assertEqual(records[0]["decision"], "SKIPPED_ATTEMPT_LIMIT")
 
+    def test_a_day_without_an_imported_slate_does_nothing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            records = scheduler.run(now=datetime(2026, 10, 22, 4, 30, tzinfo=UTC),
+                                    observation_root=Path(temp) / "obs", slate_root=Path(temp) / "slates",
+                                    dry_run=False, provider=provider_for("a", "b", "e"), authorized=True)
+        self.assertEqual(records, [])
+
     def test_dry_run_requests_nothing_and_writes_nothing(self):
         records = self.run_at(datetime(2026, 10, 21, 22, 48, tzinfo=UTC), dry_run=True)
         self.assertEqual(records[0]["decision"], "WOULD_CAPTURE")
@@ -106,6 +121,7 @@ class ClosingReportTests(unittest.TestCase):
         from backend.nhl.scripts import report_nhl_closing_odds as report
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
+            touch_slate(root / "slates")
             with patch.object(scheduler, "load_canonical_slate", return_value=[NJD, BOS]), \
                     patch.object(report, "load_canonical_slate", return_value=[NJD, BOS]):
                 scheduler.run(now=datetime(2026, 10, 21, 22, 48, tzinfo=UTC), observation_root=root / "odds_observations",
