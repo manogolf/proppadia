@@ -18,6 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 from backend.nhl.daily_capture import is_closing_observation, load_canonical_slate  # noqa: E402
+from backend.nhl.scripts.run_nhl_closing_prop_odds import WINDOW_CLOSE_MINUTES, WINDOW_OPEN_MINUTES  # noqa: E402
 
 
 def _ts(value: str) -> datetime:
@@ -80,7 +81,8 @@ def main() -> int:
               f"{r['prop_rows']:>9}  {r['status']}")
     captured = [r for r in rows if r["status"] == "CAPTURED"]
     print(f"\n{len(captured)} of {len(rows)} games have a pregame CLOSING snapshot; "
-          f"{sum(1 for r in captured if 10 <= r['minutes_before_puck'] <= 30)} inside 10-30 minutes.")
+          f"{sum(1 for r in captured if WINDOW_CLOSE_MINUTES <= r['minutes_before_puck'] <= WINDOW_OPEN_MINUTES)} "
+          f"inside {WINDOW_CLOSE_MINUTES}-{WINDOW_OPEN_MINUTES} minutes.")
     return 0
 
 

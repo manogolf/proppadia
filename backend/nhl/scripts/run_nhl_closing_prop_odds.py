@@ -3,9 +3,10 @@
 
 Each run looks at today's Eastern slate and captures player-prop odds (SOG,
 Points, Saves; main and alternate lines, the same books and regions as the
-daily run) once for every game whose own scheduled start is 10–30 minutes
-away. Games that have started, or are closer than the window, are never
-requested. Snapshots go to the existing odds_observations layout through
+daily run) once for every game whose own scheduled start is 10–13 minutes
+away. The LaunchAgent runs every minute, so the first attempt lands about 13
+minutes before puck and retries fit before the 10-minute mark. Games that
+have started, or are closer than the window, are never requested. Snapshots go to the existing odds_observations layout through
 daily_capture.capture_odds_observation with phase CLOSING and a per-game claim.
 
 Each run appends one line per considered game to
@@ -34,7 +35,7 @@ from backend.nhl.daily_capture import (  # noqa: E402
 
 EASTERN = ZoneInfo("America/New_York")
 UTC = timezone.utc
-WINDOW_OPEN_MINUTES = 30
+WINDOW_OPEN_MINUTES = 13  # as close to the 10-minute mark as retries allow
 WINDOW_CLOSE_MINUTES = 10
 MAX_ATTEMPTS = 3
 DEFAULT_OBSERVATION_ROOT = ROOT / "artifacts/operational/nhl/odds_observations"

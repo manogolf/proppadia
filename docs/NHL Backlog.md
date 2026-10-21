@@ -1814,11 +1814,14 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   each. There were no binding failures, no stderr output, and no repeat
   requests (later runs logged `SKIPPED_ALREADY_CAPTURED`). The 7 earlier
   games had started before install. Captures land early in the window
-  because the 5-minute cadence first enters it about 3.4 minutes in. Before this, prop
+  because the 5-minute cadence first enters it about 3.4 minutes in. The
+  same evening the window was narrowed to 13-10 minutes and the LaunchAgent
+  moved to every minute, so the first attempt lands about 13 minutes out and
+  up to two retries still fit before 10. Before this, prop
   odds came only from manual daily runs with `--with-odds`. The median last
   pregame snapshot was about 3 hours before puck, and only 11 of 143 games
   since 10-01 had one within 15 minutes.
-- The scheduler captures each game once, 30-10 minutes before its own start
+- The scheduler captures each game once, 13-10 minutes before its own start
   (phase CLOSING). Details are in the capture contract.
 - Budget: 21 credits per bound game, about 150 a day on average and 336 at
   most on a 16-game day. The key had 92,358 remaining on 2026-10-20; the
@@ -1826,7 +1829,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   The Odds API plan refills 100,000 credits on the 1st of each month
   (operator, 2026-10-20). The current whole-key burn (~11,400 a month) plus
   CLOSING (~4,500) is about 16% of it.
-- Done when a live day shows every game with a CLOSING snapshot 10-30
+- Done when a live day shows every game with a CLOSING snapshot 10-13
   minutes before puck (`report_nhl_closing_odds.py`) and no unexplained
   `MISSED_NO_CLOSING_CAPTURE` or binding failure.
 

@@ -16,8 +16,9 @@
     <key>PATH</key><string>/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     <key>PYTHONUNBUFFERED</key><string>1</string>
   </dict>
-  <!-- Every 5 minutes: each game's 30-10 minute window gets about four chances. -->
-  <key>StartInterval</key><integer>300</integer>
+  <!-- Every minute: a game's 13-10 minute window gets about three chances
+       (first attempt and up to two retries) before the 10-minute mark. -->
+  <key>StartInterval</key><integer>60</integer>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><false/>
   <key>StandardOutPath</key><string>/Users/jerrystrain/Projects/proppadia/artifacts/operational/nhl/odds_observations/closing_launchagent.stdout.log</string>

@@ -129,9 +129,12 @@ counted twice.
 
 Scheduled per-game closing odds (2026-10-20). For closing-line value,
 `backend/nhl/scripts/run_nhl_closing_prop_odds.py`
-(LaunchAgent `com.proppadia.nhl.closing-prop-odds`, every 5 minutes;
+(LaunchAgent `com.proppadia.nhl.closing-prop-odds`, every minute;
 tracked in `backend/nhl/launchagents/`) captures player-prop odds once per
-game, 30-10 minutes before that game's own scheduled start:
+game, 13-10 minutes before that game's own scheduled start. The first attempt
+lands about 13 minutes before puck, which leaves room for retries before the
+10-minute mark (changed from 30-10 on 2026-10-20, when the 5-minute cadence
+put captures about 26.6 minutes out):
 - The markets, alternate lines, regions and books are the same as the daily
   run's (`daily_capture.capture_odds_observation`).
 - Snapshots use phase `CLOSING` in the existing

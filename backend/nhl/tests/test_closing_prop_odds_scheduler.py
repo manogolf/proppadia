@@ -35,8 +35,14 @@ class ClosingSchedulerTests(unittest.TestCase):
         day = self.root / "season=2026/slate_date=2026-10-21"
         return sorted(p for p in day.glob("observation=*")) if day.is_dir() else []
 
-    def test_only_games_10_to_30_minutes_out_are_captured(self):
-        now = datetime(2026, 10, 21, 22, 40, tzinfo=UTC)  # NJD in 20 min; BOS in 3h20
+    def test_a_game_20_minutes_out_is_not_yet_requested(self):
+        provider = provider_for("New Jersey Devils", "New York Rangers", "e1")
+        records = self.run_at(datetime(2026, 10, 21, 22, 40, tzinfo=UTC), provider)  # NJD in 20 min
+        self.assertEqual(records, [])
+        self.assertEqual(provider.calls, 0)
+
+    def test_only_games_10_to_13_minutes_out_are_captured(self):
+        now = datetime(2026, 10, 21, 22, 48, tzinfo=UTC)  # NJD in 12 min; BOS in 3h12
         records = self.run_at(now, provider_for("New Jersey Devils", "New York Rangers", "e1"))
         self.assertEqual([(r["game_id"], r["decision"]) for r in records], [(2026020300, "CAPTURE_ATTEMPTED")])
         self.assertTrue(records[0]["game_bound"])
@@ -45,10 +51,10 @@ class ClosingSchedulerTests(unittest.TestCase):
         self.assertIs(summary["strictly_prestart"], True)
 
     def test_a_captured_game_is_not_requested_again(self):
-        now = datetime(2026, 10, 21, 22, 40, tzinfo=UTC)
+        now = datetime(2026, 10, 21, 22, 47, tzinfo=UTC)
         self.run_at(now, provider_for("New Jersey Devils", "New York Rangers", "e1"))
         provider = provider_for("New Jersey Devils", "New York Rangers", "e1")
-        records = self.run_at(now + timedelta(minutes=5), provider)
+        records = self.run_at(now + timedelta(minutes=1), provider)
         self.assertEqual(records[0]["decision"], "SKIPPED_ALREADY_CAPTURED")
         self.assertEqual(provider.calls, 0)
         self.assertEqual(len(self.observations()), 1)
@@ -64,28 +70,28 @@ class ClosingSchedulerTests(unittest.TestCase):
         self.assertEqual(self.observations(), [])
 
     def test_an_unbound_event_is_reported_and_retried_in_the_window(self):
-        now = datetime(2026, 10, 21, 22, 35, tzinfo=UTC)
+        now = datetime(2026, 10, 21, 22, 47, tzinfo=UTC)
         records = self.run_at(now, provider_for("Boston Bruins", "Toronto Maple Leafs", "wrong"))
         self.assertEqual(records[0]["decision"], "CAPTURE_ATTEMPTED")
         self.assertIs(records[0]["game_bound"], False)
         self.assertIn("wrong", records[0]["unbound_provider_events"])
-        records = self.run_at(now + timedelta(minutes=5), provider_for("New Jersey Devils", "New York Rangers", "e1"))
+        records = self.run_at(now + timedelta(minutes=1), provider_for("New Jersey Devils", "New York Rangers", "e1"))
         self.assertIs(records[0]["game_bound"], True)  # retried and bound
 
     def test_attempts_are_capped(self):
-        start = datetime(2026, 10, 21, 22, 31, tzinfo=UTC)
-        for step in range(scheduler.MAX_ATTEMPTS + 1):
-            records = self.run_at(start + timedelta(minutes=5 * step),
+        start = datetime(2026, 10, 21, 22, 47, 30, tzinfo=UTC)
+        for step in range(scheduler.MAX_ATTEMPTS + 1):  # all inside the 13-10 minute window
+            records = self.run_at(start + timedelta(seconds=30 * step),
                                   provider_for("Boston Bruins", "Toronto Maple Leafs", "wrong"))
         self.assertEqual(records[0]["decision"], "SKIPPED_ATTEMPT_LIMIT")
 
     def test_dry_run_requests_nothing_and_writes_nothing(self):
-        records = self.run_at(datetime(2026, 10, 21, 22, 40, tzinfo=UTC), dry_run=True)
+        records = self.run_at(datetime(2026, 10, 21, 22, 48, tzinfo=UTC), dry_run=True)
         self.assertEqual(records[0]["decision"], "WOULD_CAPTURE")
         self.assertFalse((self.root / "season=2026").exists())
 
     def test_each_run_is_logged_beside_the_snapshots(self):
-        self.run_at(datetime(2026, 10, 21, 22, 40, tzinfo=UTC),
+        self.run_at(datetime(2026, 10, 21, 22, 48, tzinfo=UTC),
                     provider_for("New Jersey Devils", "New York Rangers", "e1"))
         log = self.root / "season=2026/slate_date=2026-10-21/closing_capture_log.jsonl"
         self.assertEqual(json.loads(log.read_text().splitlines()[0])["game_id"], 2026020300)
@@ -102,11 +108,11 @@ class ClosingReportTests(unittest.TestCase):
             root = Path(temp)
             with patch.object(scheduler, "load_canonical_slate", return_value=[NJD, BOS]), \
                     patch.object(report, "load_canonical_slate", return_value=[NJD, BOS]):
-                scheduler.run(now=datetime(2026, 10, 21, 22, 40, tzinfo=UTC), observation_root=root / "odds_observations",
+                scheduler.run(now=datetime(2026, 10, 21, 22, 48, tzinfo=UTC), observation_root=root / "odds_observations",
                               slate_root=root / "slates", dry_run=False,
                               provider=provider_for("New Jersey Devils", "New York Rangers", "e1"), authorized=True)
                 rows = report.report("2026-10-21", root)
         njd = next(r for r in rows if r["game_id"] == 2026020300)
         bos = next(r for r in rows if r["game_id"] == 2026020301)
-        self.assertEqual((njd["status"], njd["minutes_before_puck"], njd["prop_rows"]), ("CAPTURED", 20.0, 1))
+        self.assertEqual((njd["status"], njd["minutes_before_puck"], njd["prop_rows"]), ("CAPTURED", 12.0, 1))
         self.assertEqual(bos["status"], "MISSING")
