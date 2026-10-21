@@ -17,6 +17,7 @@ Run from the main checkout, where the retained artifacts live.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import json
 import sys
@@ -65,10 +66,54 @@ def _package(day: str, identity: str) -> Path:
     raise FileNotFoundError(f"RECONCILIATION_PACKAGE_NOT_FOUND:{day}")
 
 
-def sog_rows(day: str) -> tuple[pd.DataFrame, dict]:
+UNPROVEN_MODEL = "UNPROVEN_BEFORE_2026_10_08"
+
+
+def _load_unproven_sog_run(receipt_path: Path, slate_date: str) -> dict:
+    """Load a pre-2026-10-08 run whose receipt binds predictions but no fitted model.
+
+    Runs before commit b6ed889c (2026-10-08) record the prediction file and its
+    hash but not the fitted model identity. The receipt package and prediction
+    hash are verified; the model identity is recorded as unproven.
+    """
+    receipt, manifest_sha = performance_summary._verify_daily_receipt(
+        receipt_path, slate_date, require_ready=False)
+    run_id = str(receipt.get("parent_daily_run_id") or "")
+    lane = receipt.get("lanes", {}).get("legacy_sog", {})
+    if lane.get("status") != "COMPLETE" or not lane.get("ended_at_utc"):
+        raise ValueError("SOG_LANE_NOT_COMPLETE")
+    output = next((o for o in lane.get("outputs", [])
+                   if str(o.get("path", "")).endswith("sog_predictions_wide_calibrated.csv")), None)
+    path = Path(str((output or {}).get("path", "")))
+    if not output or not path.is_file() or _sha(path) != output.get("sha256"):
+        raise ValueError("SOG_PREDICTION_ARTIFACT_BINDING_MISMATCH")
+    predictions = pd.read_csv(path)
+    canonical = sorted(map(int, receipt.get("canonical_game_ids", [])))
+    if predictions.duplicated(["game_id", "player_id"]).any() or not set(
+            map(int, predictions.game_id.unique())) <= set(canonical):
+        raise ValueError("SOG_PREDICTION_IDENTITY_INVALID")
+    ended = str(lane["ended_at_utc"])
+    return {
+        "run_id": run_id, "ended_at_utc": str(receipt.get("ended_at_utc") or ""),
+        "receipt_path": str(Path(receipt_path).resolve()), "receipt_sha": _sha(Path(receipt_path)),
+        "prediction_path": str(path), "phase": str(receipt.get("resolved_phase") or "DAILY"),
+        "lane_ended_at_utc": ended, "feature_cutoff_utc": str(receipt.get("feature_cutoff_utc") or ended),
+        "feature_contract": "LEGACY_SOG_FEATURE_INPUT_UNBOUND",
+        "receipt": receipt, "receipt_manifest_sha": manifest_sha,
+        "evidence": {"model_family": "poisson_baseline", "model_version": "baseline_v1",
+                     "fitted_model_identity_sha256": UNPROVEN_MODEL, "scoring_run_id": run_id},
+        "scorer": {"sha256": UNPROVEN_MODEL}, "scorer_path": "backend/nhl/scripts/score_sog_poisson_baseline.py",
+        "prediction_sha": str(output["sha256"]), "feature_binding": {},
+        "predictions": predictions, "unscored_rows": pd.DataFrame(), "unscored_sha": None,
+        "canonical_ids": canonical,
+        "eligible_ids": sorted(map(int, receipt.get("eligible_pregame_game_ids") or canonical)),
+    }
+
+
+def sog_rows(day: str, *, unproven: bool = False) -> tuple[pd.DataFrame, dict]:
     summary_path, summary = _latest_summary(day)
     reference = (summary.get("models", {}).get("sog") or {}).get("reference")
-    if not reference:
+    if not reference and not unproven:
         return pd.DataFrame(), {}
     package = _package(day, summary["reconciliation_package"])
     coverage = summary["models"]["sog"].get("market_coverage") or {}
@@ -80,7 +125,13 @@ def sog_rows(day: str) -> tuple[pd.DataFrame, dict]:
         captured.append(graded.copy())
         return graded
 
-    with mock.patch.object(performance_summary, "grade_sog_predictions", capture):
+    patches = [mock.patch.object(performance_summary, "grade_sog_predictions", capture)]
+    if unproven:
+        patches.append(mock.patch.object(performance_summary, "_load_production_sog_run", _load_unproven_sog_run))
+        coverage = {}
+    with contextlib.ExitStack() as stack:
+        for patch in patches:
+            stack.enter_context(patch)
         display, _ = performance_summary.build_production_sog_reference(
             slate_date=day, package=package, daily_run_root=OPERATIONAL / "daily_runs",
             market_coverage=coverage if coverage.get("daily_run_id") else None)
@@ -90,14 +141,17 @@ def sog_rows(day: str) -> tuple[pd.DataFrame, dict]:
     governed = display["overall"]
     if (wins, losses) != (governed["wins"], governed["losses"]):
         raise RuntimeError(f"SOG_TOTALS_DO_NOT_MATCH_GOVERNED:{day}:{wins}-{losses}")
-    stored = reference["overall"]
+    stored = (reference or {}).get("overall") or {}
     settled["slate_date"] = day
     return settled[["slate_date", "game_id", "player_id", "line", "p_over", "selected_side", "grading_state"]], {
         "slate_date": day, "summary": str(summary_path.relative_to(ROOT)),
         "summary_identity": summary.get("summary_identity"), "summary_revision": summary.get("summary_revision"),
         "package_manifest_sha256": _sha(package / "SHA256SUMS"),
         "wins": wins, "losses": losses,
-        "matches_stored_summary": (wins, losses) == (stored["wins"], stored["losses"]),
+        "matches_stored_summary": (wins, losses) == (stored.get("wins"), stored.get("losses")) if stored else None,
+        "model_identity": UNPROVEN_MODEL if unproven else "PROVEN_FITTED_MODEL_EVIDENCE",
+        "source_daily_runs": [r["parent_daily_run_id"] for r in display["model_identity"].get("source_daily_runs", [])]
+                             or [display["model_identity"].get("parent_daily_run_id")],
     }
 
 
@@ -171,6 +225,9 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--start", default="2026-10-08")
     parser.add_argument("--end", default="2026-10-20")
+    parser.add_argument("--unproven-sog-start", default="2026-10-01",
+                        help="first slate of the separate unproven-model SOG section")
+    parser.add_argument("--unproven-sog-end", default="2026-10-07")
     parser.add_argument("--output-root", type=Path, default=ROOT / "artifacts/analysis/nhl/sog_points_wl_baseline")
     args = parser.parse_args()
     days = [d.name for d in sorted(RESTATEMENTS.iterdir()) if d.is_dir() and args.start <= d.name <= args.end]
@@ -185,8 +242,19 @@ def main() -> int:
             points_days.append(meta)
             if not rows.empty:
                 points_parts.append(rows)
+    early_parts, early_days = [], []
+    for day in [d.name for d in sorted(RESTATEMENTS.iterdir())
+                if d.is_dir() and args.unproven_sog_start <= d.name <= args.unproven_sog_end]:
+        try:
+            rows, meta = sog_rows(day, unproven=True)
+        except (RuntimeError, ValueError, FileNotFoundError) as error:
+            early_days.append({"slate_date": day, "skipped": f"{type(error).__name__}:{error}"[:200]})
+            continue
+        early_parts.append(rows)
+        early_days.append(meta)
     sog, points = pd.concat(sog_parts, ignore_index=True), pd.concat(points_parts, ignore_index=True)
-    for frame in (sog, points):
+    early = pd.concat(early_parts, ignore_index=True) if early_parts else pd.DataFrame(columns=sog.columns)
+    for frame in (sog, points, early):
         frame["probability_band"] = pd.Categorical(frame.p_over.map(_band), [b[0] for b in BANDS], ordered=True)
     out = args.output_root / date.today().isoformat()
     out.mkdir(parents=True, exist_ok=False)
@@ -198,6 +266,11 @@ def main() -> int:
         "points_hgb_by_line_side.csv": _table(points, ["line", "selected_side"]),
         "points_hgb_by_line_band.csv": _table(points, ["line", "probability_band"]),
         "sog_by_day.csv": pd.DataFrame(sog_days), "points_hgb_by_day.csv": pd.DataFrame(points_days),
+        # Separate section: model identity unproven (no fitted-model evidence before 2026-10-08).
+        "sog_unproven_rows.csv": early, "sog_unproven_by_line.csv": _table(early, ["line"]),
+        "sog_unproven_by_line_side.csv": _table(early, ["line", "selected_side"]),
+        "sog_unproven_by_line_band.csv": _table(early, ["line", "probability_band"]),
+        "sog_unproven_by_day.csv": pd.DataFrame(early_days),
     }
     for name, frame in tables.items():
         frame.to_csv(out / name, index=False)
@@ -211,6 +284,10 @@ def main() -> int:
         "side_rule": "OVER when P(over) >= 0.5, else UNDER",
         "bands": "P(over) edges from backend/nhl/scripts/analyze_sog_1_5_deep.py",
         "sog_days": sog_days, "points_days": points_days,
+        "sog_unproven_window": {"start": args.unproven_sog_start, "end": args.unproven_sog_end,
+                                "model_identity": UNPROVEN_MODEL,
+                                "proof": "receipt package and prediction-file hash only; same selector, pregame checks and grading",
+                                "days": early_days},
         "script_sha256": _sha(Path(__file__)),
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
@@ -220,6 +297,8 @@ def main() -> int:
                       "sog": [int(sog.grading_state.eq("WIN").sum()), int(sog.grading_state.eq("LOSS").sum())],
                       "points_hgb": [int(points.grading_state.eq("WIN").sum()), int(points.grading_state.eq("LOSS").sum())],
                       "sog_days": len(sog_days),
+                      "sog_unproven": [int(early.grading_state.eq("WIN").sum()), int(early.grading_state.eq("LOSS").sum())],
+                      "sog_unproven_days": early_days,
                       "points_days": [d["slate_date"] for d in points_days if "wins" in d],
                       "points_skipped": [d for d in points_days if "skipped" in d]}))
     return 0
