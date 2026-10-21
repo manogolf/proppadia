@@ -1816,6 +1816,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Budget: 21 credits per bound game, about 150 a day on average and 336 at
   most on a 16-game day. The key had 92,358 remaining on 2026-10-20; the
   whole key burned 7,581 from 10-01 to 10-20.
+  The Odds API plan refills 100,000 credits on the 1st of each month
+  (operator, 2026-10-20). The current whole-key burn (~11,400 a month) plus
+  CLOSING (~4,500) is about 16% of it.
 - Done when a live day shows every game with a CLOSING snapshot 10-30
   minutes before puck (`report_nhl_closing_odds.py`) and no unexplained
   `MISSED_NO_CLOSING_CAPTURE` or binding failure.
