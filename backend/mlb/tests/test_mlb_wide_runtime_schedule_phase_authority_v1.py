@@ -11,7 +11,7 @@ from unittest.mock import patch
 from backend.mlb.identity.provider_event_game_binding_v1 import BindingRegistry, EvidenceSource
 from backend.mlb.scripts import build_mlb_predictions_wide as wide
 from backend.mlb.shared.mlb_api_v2 import _parse_schedule
-from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
+from backend.mlb.season_transition.game_phase_authority_v1 import load_v1_authority
 from backend.mlb.season_transition.phase_authority_snapshot_v1 import REPO_ROOT
 
 
@@ -77,7 +77,9 @@ class WideRuntimeSchedulePhaseAuthorityTests(unittest.TestCase):
         )
 
         rejected, rejected_counts = wide._resolve_offers(
-            **common, authority=HashedProposalAuthority())
+            # The immutable V1 regular-season authority has no postseason games, so
+            # this stays the no-runtime-source case after the committed chain grew.
+            **common, authority=load_v1_authority())
         self.assertEqual([], rejected)
         self.assertEqual(1, rejected_counts["skip_identity_canonical_authority_rejected"])
 

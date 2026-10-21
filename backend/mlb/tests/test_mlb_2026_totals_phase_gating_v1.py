@@ -32,8 +32,14 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     GamePhaseAuthorityError,
     GamePhaseAuthorityMetadata,
     GamePhaseAuthorityRecord,
+    load_v1_authority,
 )
 from backend.mlb.season_transition.runtime_schedule_authority_v1 import RuntimeScheduleAuthority
+
+# These overlay tests use the immutable V1 regular-season authority as the base,
+# so the Division Series games stay novel to the overlay even after the
+# committed postseason chain (V5/V6) began covering them.
+POSTSEASON_FREE_BASE = load_v1_authority
 from backend.mlb.season_transition.phase_authority_snapshot_v1 import REPO_ROOT
 from backend.mlb.scripts.validate_mlb_2026_totals_phase_gating_v1 import (
     aggregate_status,
@@ -261,7 +267,7 @@ class TotalsPhaseGatingV1Tests(unittest.TestCase):
         )
         source_hash = hashlib.sha256(source.read_bytes()).hexdigest()
         authority = RuntimeScheduleAuthority(
-            source_path=source, expected_source_sha256=source_hash,
+            source_path=source, expected_source_sha256=source_hash, base=POSTSEASON_FREE_BASE(),
         )
         decisions = []
         for game_pk in (849819, 849826):
@@ -287,7 +293,7 @@ class TotalsPhaseGatingV1Tests(unittest.TestCase):
             row(849819, "2026-10-06", source_game_type="D",
                 schedule_source_path=source.relative_to(REPO_ROOT).as_posix(),
                 schedule_source_sha256=source_hash),
-        ])
+        ], base=POSTSEASON_FREE_BASE())
         decision = classify_totals_row(
             row(849819, "2026-10-06", source_game_type="D"), authority=overlay,
         )
@@ -301,6 +307,7 @@ class TotalsPhaseGatingV1Tests(unittest.TestCase):
         )
         authority = RuntimeScheduleAuthority(
             source_path=source, expected_source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+            base=POSTSEASON_FREE_BASE(),
         )
         with self.assertRaisesRegex(TotalsPhaseGateError, "SOURCE_TYPE_CONFLICT"):
             classify_totals_row(

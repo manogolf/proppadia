@@ -16,7 +16,6 @@ class MoneylineAuditReadOnlyIsolationTests(unittest.TestCase):
         import pandas as pd
 
         from backend.mlb.public_game_predictions.phase_gating_v1 import (
-            MoneylinePhaseGateError,
             verified_moneyline_phase_authority,
         )
 
@@ -30,7 +29,15 @@ class MoneylineAuditReadOnlyIsolationTests(unittest.TestCase):
         self.assertEqual(record.source_game_type, "D")
         self.assertEqual(record.season_phase, audit.POSTSEASON)
         self.assertEqual(record.postseason_round, "DIVISION_SERIES")
-        self.assertEqual(record.primary_source_sha256, audit.AUDIT_SCHEDULE_SOURCE_SHA256)
+        # The active chain now covers this game, so the audit inherits its record.
+        # Over the postseason-free V1 base the pinned retained schedule itself binds it.
+        from backend.mlb.season_transition.game_phase_authority_v1 import load_v1_authority
+        pinned = audit.RuntimeScheduleAuthority(
+            source_path=source, expected_source_sha256=audit.AUDIT_SCHEDULE_SOURCE_SHA256,
+            base=load_v1_authority(),
+        ).lookup_exact(849834)
+        self.assertEqual(pinned.primary_source_sha256, audit.AUDIT_SCHEDULE_SOURCE_SHA256)
+        self.assertEqual(pinned.source_round, record.source_round)
 
         row = {
             "game_date": "2026-10-05", "game_id": 849834,
@@ -44,12 +51,13 @@ class MoneylineAuditReadOnlyIsolationTests(unittest.TestCase):
         )
         self.assertEqual(postseason.game_id.tolist(), [849834])
 
-        # The general authority remains fail-closed for this game; only the
-        # Moneyline audit receives the source-bound overlay.
-        with self.assertRaises(MoneylinePhaseGateError):
-            audit._phase_partition_frame(
-                pd.DataFrame([row]), authority=verified_moneyline_phase_authority()
-            )
+        # Since the committed postseason chain (V5/V6) the general authority covers
+        # this game too, and agrees with the audit's overlay.
+        general = audit._phase_partition_frame(
+            pd.DataFrame([row]), authority=verified_moneyline_phase_authority(),
+            evaluation_phase=audit.POSTSEASON,
+        )
+        self.assertEqual(general.game_id.tolist(), [849834])
 
     def test_only_two_postgres_query_shapes_are_selects_on_target_relations(self) -> None:
         queries = (audit.PREDICTIONS_QUERY, audit.LATEST_RESOLVED_QUERY)

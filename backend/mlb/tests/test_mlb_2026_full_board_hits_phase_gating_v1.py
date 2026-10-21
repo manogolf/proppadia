@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from backend.mlb.hits05_full_board_shadow import ledger_v1 as ledger
+from backend.mlb.season_transition.phase_authority_snapshot_v1 import REPO_ROOT
 from backend.mlb.scripts.validate_mlb_2026_full_board_hits_phase_gating_v1 import (
     regular_metric_rows,
     retained_schedule_phase_supplements,
@@ -124,9 +125,58 @@ def row(game_pk: int = 1, slate_date: str = "2026-09-22", **changes: object) -> 
 
 class FullBoardHitsPhaseGatingV1Tests(unittest.TestCase):
     def test_absent_hits_games_use_hash_verified_schedule_not_receipt_phase_claim(self) -> None:
-        game_pks = {849819, 849822, 849826, 849827, 849832, 849833, 849838}
-        authority = HashedProposalAuthority()
-        supplements, failures = retained_schedule_phase_supplements(game_pks, authority)
+        # The committed chain now covers every 2026 Division Series game, so the
+        # supplement path (for games the shared authority lacks) is exercised with
+        # a synthetic bound receipt over two games from the retained 10-06 schedule.
+        import hashlib
+        import json
+        from types import SimpleNamespace
+        from unittest import mock
+
+        from backend.mlb.scripts import validate_mlb_2026_full_board_hits_phase_gating_v1 as validator
+
+        retained = REPO_ROOT / (
+            "backend/mlb/exports/provider_event_game_bindings/schedule_sources/2026-10-06/"
+            "statsapi_schedule__local_daily_20261006T123004Z.json"
+        )
+        game_pks = {849819, 849826}
+
+        class AbsentAuthority:
+            metadata = SimpleNamespace(snapshot_descriptor_sha256="d" * 64)
+
+            def lookup_exact(self, game_pk):
+                raise GamePhaseAuthorityError("GAME_PHASE_ABSENT", game_pk=game_pk)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            schedule_path = root / "schedules/statsapi_schedule.json"
+            schedule_path.parent.mkdir(parents=True)
+            schedule_path.write_bytes(retained.read_bytes())
+            schedule_sha = hashlib.sha256(schedule_path.read_bytes()).hexdigest()
+            selection = root / "active_selection.json"
+            selection.write_text('{"active": "fixture"}')
+            attempts = root / "attempts"
+            (attempts / "2026-10-06").mkdir(parents=True)
+            receipt = {
+                "classification": "COMPLETED",
+                "run_identity": "local_daily_20261006T123004Z",
+                "active_authority_descriptor_sha256": "d" * 64,
+                "active_authority_selection_sha256": hashlib.sha256(selection.read_bytes()).hexdigest(),
+                "retained_schedule_source_path": "schedules/statsapi_schedule.json",
+                "retained_schedule_source_sha256": schedule_sha,
+                "per_game_decisions": [
+                    {"game_pk": pk, "authority_decision": "EXACT_GAME_AUTHORITY_ACCEPTED",
+                     "schedule_source_sha256": schedule_sha, "game_identity_source_sha256": schedule_sha,
+                     # The receipt's phase claim is deliberately wrong; phase comes from the schedule.
+                     "source_season": 2026, "source_game_type": "D", "normalized_phase": "REGULAR_SEASON"}
+                    for pk in sorted(game_pks)
+                ],
+            }
+            (attempts / "2026-10-06/attempt.json").write_text(json.dumps(receipt))
+            with mock.patch.object(validator, "ROOT", root), \
+                    mock.patch.object(validator, "MONEYLINE_ATTEMPTS", attempts), \
+                    mock.patch.object(validator, "ACTIVE_SELECTION", selection):
+                supplements, failures = retained_schedule_phase_supplements(game_pks, AbsentAuthority())
         self.assertFalse(failures)
         self.assertEqual(set(supplements), game_pks)
         for game_pk, evidence in supplements.items():
@@ -134,7 +184,7 @@ class FullBoardHitsPhaseGatingV1Tests(unittest.TestCase):
             self.assertEqual(evidence["source_season"], 2026)
             self.assertEqual(evidence["source_game_type"], "D")
             self.assertEqual(evidence["normalized_phase"], "POSTSEASON")
-            self.assertEqual(len(evidence["schedule_source_sha256"]), 64)
+            self.assertEqual(evidence["schedule_source_sha256"], schedule_sha)
             self.assertEqual(evidence["shared_authority_status"], "ABSENT_EXACT_GAME; scoped retained-source supplement")
 
     def test_regular_metrics_fail_closed_for_missing_authority(self) -> None:
