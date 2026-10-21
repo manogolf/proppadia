@@ -15,6 +15,10 @@ OUTPUT = repair.DEFAULT_OUTPUT
 PRE_FRESHNESS_REPAIR_BRIDGE_SHA = "7727541ecc35fd882fa832b4e6633fd11c0622a432c2f9988562360c3ec5257f"
 
 
+# The live totals-shadow store changes on every daily run; studies retain the hash they read.
+TOTALS_SHADOW_DB_SHA_AT_STUDY = "6f3da83a338b21ee076a796d933d068c394ff8ec2a213c97647e0f9c88e50d9b"
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -22,6 +26,8 @@ def digest(path):
 def assert_historical_input(path, expected):
     if repair.Path(path).name == "live_context_bridge_v1.py":
         assert expected == PRE_FRESHNESS_REPAIR_BRIDGE_SHA
+    elif repair.Path(path).name == "totals_shadow_v1.sqlite3":
+        assert expected == TOTALS_SHADOW_DB_SHA_AT_STUDY
     else:
         assert digest(repair.Path(path)) == expected
 

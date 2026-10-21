@@ -17,6 +17,10 @@ def rows(name):
         return list(csv.DictReader(handle))
 
 
+# The live totals-shadow store changes on every daily run; studies retain the hash they read.
+TOTALS_SHADOW_DB_SHA_AT_STUDY = "6f3da83a338b21ee076a796d933d068c394ff8ec2a213c97647e0f9c88e50d9b"
+
+
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -24,6 +28,8 @@ def digest(path):
 def assert_historical_input(path, expected):
     if Path(path).name == "live_context_bridge_v1.py":
         assert expected == PRE_FRESHNESS_REPAIR_BRIDGE_SHA
+    elif Path(path).name == "totals_shadow_v1.sqlite3":
+        assert expected == TOTALS_SHADOW_DB_SHA_AT_STUDY
     else:
         assert digest(Path(path)) == expected
 
