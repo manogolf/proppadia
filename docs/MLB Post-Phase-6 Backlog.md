@@ -1197,5 +1197,17 @@ consumers keep full verification. Open items:
   normal 10-17 and 10-18 runs while no qualified MLB model writes slate
   output. The actual-wager compare is skipped (`NO_QUALIFIED_MLB_MODEL`), as
   on 10-18.
-- Open: 2026-07-12 was never reconciled; a catch-up needs operator approval.
+- 2026-07-12 (All-Star break, 15 games): the off-day failure also skipped the
+  next morning's blank-only PA refresh, so all 319 batter rows had NULL
+  `plate_appearances` and every game failed the per-game completeness gate
+  (`STAT_MISMATCH`). On 2026-10-21 (operator-approved) the dry run of
+  `mlb-refresh-player-pa MLB_PA_ONLY_MISSING=1` matched 319 rows with 0
+  conflicts with populated values, and the real run filled 319 NULLs
+  (`writes_applied=319`, rolling PA rows updated 319). 14 of 15 games now pass.
+- Open: game 824814, player 668942 is stored with 0 hits while the official
+  box score shows 1 (a single; total bases 1), likely a post-game scoring
+  change. It is a populated value, so the repair rule refuses to overwrite it;
+  correcting it needs explicit operator authorization. Until then the
+  completeness check reports `824814:STAT_MISMATCH` and the 2026-07-12
+  reconciliation stays blocked.
 
