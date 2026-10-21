@@ -1216,8 +1216,17 @@ consumers keep full verification. Open items:
   Verified afterwards: completeness check passes all 15 games.
 - 2026-07-12 reconciled: `mlb-full-slate-performance` wrote 2,189 reconcile
   rows; 2,078 graded picks went 1,327-751 (63.86%, ROI −2.32%).
-- Not corrected (operator aware): player 668942's 30 `player_derived_stats`
-  rows from 2026-07-12 to 2026-09-27 still count one hit too few, and the
-  `streak_*` fields on later hits/singles training rows came from the old
-  outcome. Frozen past predictions are unaffected.
+- **Closed 2026-10-21:** player 668942's 30 `player_derived_stats` rows
+  (2026-07-12 to 2026-09-27) were recomputed with the existing scoped writer
+  `insert_mlb_stat_derived._refresh_player_game_derived_stats` through the
+  restricted ingest login (operator-run). A rolled-back preview showed exactly
+  30 rows changing, and only the hits, singles, total_bases and
+  hits_runs_rbis rolling columns (d7/d15/d30). Verified: on 2026-07-12, d7/d15/d30
+  hits are 0.4286/0.4667/0.5 (were 0.2857/0.4/0.4667).
+- **Closed 2026-10-21, no change by design:** the `streak_*` fields on later
+  training rows cannot be rebuilt. `_get_streak` reads
+  `mlb.player_streak_profiles`, a mutable current-state table that keeps no
+  history, so a past row's streak is the snapshot taken when it was written.
+  Re-running the writer would find no anchor before those dates and blank the
+  streaks, so they are left as written. Frozen past predictions are unaffected.
 
