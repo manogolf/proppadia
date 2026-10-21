@@ -172,13 +172,27 @@ put captures about 26.6 minutes out):
   to the full canonical slate. The SOG production reference summary grades
   predicted games and lists eligible games without predictions.
 - Per-game prediction source (2026-10-21). The performance summary's
-  production SOG reference and the Points HGB grade take each game from the
-  latest READY daily run (SOG) or HGB capture (Points) that predicted that
-  game pregame, using each run's own `eligible_pregame_game_ids`. A late run
-  that excludes started games no longer drops the earlier run's predictions
-  for them. When more than one run contributes, the summary lists them under
-  `source_daily_runs` (SOG) or `source_captures` (Points) with each run's
-  games; a slate with a single contributing run grades exactly as before.
+  production SOG reference and the Points HGB grade use the resilient
+  selector (`postgame_reconcile.resilient_finalization.select_latest_atomic_sources`,
+  `NHL_RESILIENT_PREGAME_FINALIZATION_V1`). Every daily run whose SOG lane
+  completed, and every HGB capture, is a candidate; all stay retained, and
+  each player-line (SOG) or player-game (Points) is graded from its latest
+  source whose feature cutoff, prediction and publication all precede that
+  game's own scheduled start (`canonical_admitted_slate.csv`). Proofs:
+  - prior-day certificate and roster from the parent daily receipt, re-verified
+    by `reconciliation_certificate.daily_receipt_source_proofs` (runs before
+    2026-10-18 re-verify from the prior-day package they recorded);
+  - SOG identity uses the fixed arm `PRODUCTION_REFERENCE` with the fitted
+    model identity; Points uses `NHL_POINTS_COUNT_HGB_V1` with the capture's
+    model identity, so repeated runs of one model share an identity;
+  - SOG prediction and publication time are the SOG lane's `ended_at_utc`;
+    runs before 2026-10-10 recorded no SOG feature cutoff and use the same
+    bound;
+  - a run that failed after its lane completed counts when its proofs verify;
+    Points combines only captures in the latest capture's production/shadow
+    role.
+  When more than one run contributes, the summary lists them under
+  `source_daily_runs` (SOG) or `source_captures` (Points).
 - Participation. Official skater outcomes list only dressed players. When a
   final game's official box score lists dressed skaters for both teams, a
   predicted skater absent from it did not play: SOG grades

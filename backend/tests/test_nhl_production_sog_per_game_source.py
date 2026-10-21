@@ -4,13 +4,28 @@ import json
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
+from backend.nhl import performance_summary
 from backend.nhl.daily_capture import canonical_game_set_hash
 from backend.nhl.performance_summary import build_production_sog_reference
 
 SLATE = "2026-10-20"
 EARLY_GAME, LATE_GAME = 2026020141, 2026020148
 GAMES = [EARLY_GAME, LATE_GAME]
+STARTS = {EARLY_GAME: "2026-10-20T23:00:00+00:00", LATE_GAME: "2026-10-21T02:00:00+00:00"}
+UNVERIFIED: set[str] = set()
+
+
+@pytest.fixture(autouse=True)
+def verified_proofs(monkeypatch):
+    """Certificate and roster re-verification are covered by their own tests."""
+    def proofs(receipt):
+        if receipt["parent_daily_run_id"] in UNVERIFIED:
+            raise RuntimeError("DAILY_RECEIPT_PRIOR_CERTIFICATE_UNVERIFIED")
+        return {"certificate_sha256": "certificate", "roster_source_sha256": "roster"}
+    UNVERIFIED.clear()
+    monkeypatch.setattr(performance_summary, "daily_receipt_source_proofs", proofs)
 
 
 def _sha(path: Path) -> str:
@@ -40,7 +55,8 @@ def _daily_run(root: Path, run_id: str, ended_at: str, eligible: list[int],
                "canonical_season": 2026, "canonical_game_ids": GAMES,
                "canonical_game_set_hash": game_hash, "eligible_pregame_game_ids": eligible,
                "started_excluded_game_ids": sorted(set(GAMES) - set(eligible)),
-               "lanes": {"legacy_sog": {"status": "COMPLETE", "outputs": [{
+               "resolved_phase": "EARLY",
+               "lanes": {"legacy_sog": {"status": "COMPLETE", "ended_at_utc": ended_at, "outputs": [{
                    "path": str(predictions_path.resolve()), "sha256": prediction_sha,
                    "canonical_game_set_hash": game_hash,
                    "natural_identity_count": 2 * len(eligible),
@@ -61,6 +77,8 @@ def _outcomes(root: Path) -> Path:
                    "outcome_source_timestamp_utc": "2026-10-21T05:00:00Z"}
                   for game in GAMES for offset in (1, 2)]
                  ).to_csv(package / "canonical_skater_outcomes.csv", index=False)
+    pd.DataFrame([{"game_id": game, "scheduled_start_time_utc": STARTS[game]} for game in GAMES]
+                 ).to_csv(package / "canonical_admitted_slate.csv", index=False)
     return package
 
 
@@ -72,7 +90,7 @@ def test_a_game_a_late_run_excluded_keeps_the_earlier_runs_prediction(tmp_path):
         slate_date=SLATE, package=_outcomes(tmp_path), daily_run_root=tmp_path / "daily_runs")
     identity = display["model_identity"]
     assert identity["eligible_pregame_game_ids"] == GAMES
-    assert identity["source_selection"] == "LATEST_PREGAME_RUN_PER_GAME"
+    assert identity["source_selection"] == "NHL_RESILIENT_PREGAME_FINALIZATION_V1"
     assert [(run["parent_daily_run_id"], run["game_ids"]) for run in identity["source_daily_runs"]] == [
         ("midday", [EARLY_GAME]), ("late", [LATE_GAME])]
     # Every player had 0 shots: midday's UNDER picks win, the late run's OVER picks lose.
@@ -99,3 +117,24 @@ def test_a_single_run_slate_is_graded_as_before(tmp_path):
     assert display["model_identity"]["eligible_pregame_game_ids"] == [LATE_GAME]
     assert "source_daily_runs" not in display["model_identity"]
     assert display["overall"]["settled"] == 6
+
+
+def test_a_run_after_a_games_start_never_supplies_that_game(tmp_path):
+    # The late run listed both games, but ran after the early game's start.
+    _daily_run(tmp_path, "midday", "2026-10-20T19:00:00Z", GAMES, p_over=0.2)
+    _daily_run(tmp_path, "late", "2026-10-20T23:10:00Z", GAMES, p_over=0.8)
+    display, _ = build_production_sog_reference(
+        slate_date=SLATE, package=_outcomes(tmp_path), daily_run_root=tmp_path / "daily_runs")
+    assert [(run["parent_daily_run_id"], run["game_ids"])
+            for run in display["model_identity"]["source_daily_runs"]] == [
+        ("midday", [EARLY_GAME]), ("late", [LATE_GAME])]
+
+
+def test_a_run_whose_proofs_do_not_verify_contributes_nothing(tmp_path):
+    _daily_run(tmp_path, "midday", "2026-10-20T19:00:00Z", GAMES, p_over=0.2)
+    _daily_run(tmp_path, "late", "2026-10-20T22:00:00Z", GAMES, p_over=0.8)
+    UNVERIFIED.add("late")
+    display, _ = build_production_sog_reference(
+        slate_date=SLATE, package=_outcomes(tmp_path), daily_run_root=tmp_path / "daily_runs")
+    assert display["model_identity"]["parent_daily_run_id"] == "midday"
+    assert (display["overall"]["wins"], display["overall"]["losses"]) == (12, 0)

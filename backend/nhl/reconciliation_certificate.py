@@ -292,3 +292,52 @@ def require_slate_roster_observation(
         "canonical_game_set_hash": game_hash,
         "game_ids": game_ids,
     }
+
+
+def daily_receipt_source_proofs(
+    receipt: dict[str, object], *, slate_root: Path = DEFAULT_SLATE_ROOT,
+) -> dict[str, str]:
+    """Re-verify the prior-day certificate and roster a daily run was built on.
+
+    Mirrors the cross-market resilient adapter. A run recorded before
+    certificates were written (2026-10-18) is re-verified from the prior-day
+    reconciliation package it recorded. Raises RuntimeError when either proof
+    does not verify.
+    """
+    from backend.nhl.daily_orchestration import verify_roster_observation_reuse
+
+    slate_date = str(receipt.get("slate_date") or "")
+    prior = receipt.get("prior_day_learning") or {}
+    certificate = prior.get("certificate") or {} if isinstance(prior, dict) else {}
+    prior_date = (date.fromisoformat(slate_date) - timedelta(days=1)).isoformat()
+    verified = verify_prior_day_certificate(
+        certificate, prior_date, slate_root=slate_root,
+        fallback_package=prior.get("reconciliation_package"))
+    identity = certificate_identity(verified)
+    if (not identity or verified.get("status") not in {"CERTIFIED_FINAL", "VERIFIED_EMPTY_SCHEDULE"}
+            or (certificate_identity(certificate) and certificate_identity(certificate) != identity)):
+        raise RuntimeError("DAILY_RECEIPT_PRIOR_CERTIFICATE_UNVERIFIED")
+    roster = receipt.get("roster_observation") or {}
+    roster_path = Path(str(roster.get("path") or ""))
+    roster_hash = hashlib.sha256((roster_path / "SHA256SUMS").read_bytes()).hexdigest()
+    if roster.get("manifest_sha256") != roster_hash:
+        raise RuntimeError("DAILY_RECEIPT_ROSTER_MANIFEST_MISMATCH")
+    summary = json.loads((roster_path / "observation_summary.json").read_text())
+    game_ids = [int(game_id) for game_id in receipt.get("canonical_game_ids") or []]
+    verified_roster = verify_roster_observation_reuse(
+        roster_path, season=int(summary["season"]), slate_date=slate_date,
+        phase=str(summary["phase"]), canonical_game_ids=game_ids,
+        canonical_game_set_hash=str(receipt.get("canonical_game_set_hash") or ""),
+        require_strictly_prestart=False)
+    if verified_roster.get("manifest_sha256") != roster_hash:
+        raise RuntimeError("DAILY_RECEIPT_ROSTER_UNVERIFIED")
+    return {"certificate_sha256": str(identity), "roster_source_sha256": roster_hash}
+
+
+def admitted_scheduled_starts(package: Path) -> dict[int, str]:
+    """Return each admitted (played) game's scheduled UTC start from a package."""
+    with (Path(package) / "canonical_admitted_slate.csv").open(newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if rows and "scheduled_start_time_utc" not in rows[0]:
+        raise ValueError("RECONCILIATION_ADMITTED_SLATE_SCHEDULED_START_MISSING")
+    return {int(row["game_id"]): str(row["scheduled_start_time_utc"]) for row in rows}

@@ -104,7 +104,11 @@ def test_operational_feature_builder_enforces_120_day_and_strict_prior_membershi
     assert features.last10_team_sog_share == 0.6
 
 
-def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_path):
+def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_path, monkeypatch):
+    import backend.nhl.points_hgb_shadow as shadow_module
+    monkeypatch.setattr(shadow_module, "daily_receipt_source_proofs",
+                        lambda receipt: {"certificate_sha256": "certificate",
+                                         "roster_source_sha256": "roster"})
     logs = pd.DataFrame([{"game_id":2026020001,"player_id":11,"team_id":1,"is_home":True,
         "home_team_id":1,"away_team_id":2,
         "toi_minutes":20,"pp_toi_minutes":2,"shots_on_goal":4,"shot_attempts":8}])
@@ -167,7 +171,8 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
         "official_final":True,"participation_state":"PARTICIPATED",
         "slate_date":"2026-10-09"}]).to_csv(
             reconciliation/"canonical_skater_outcomes.csv",index=False)
-    pd.DataFrame([{"game_id":2026020066,"slate_date":"2026-10-09"}]).to_csv(
+    pd.DataFrame([{"game_id":2026020066,"slate_date":"2026-10-09",
+        "scheduled_start_time_utc":"2099-01-01T00:00:00+00:00"}]).to_csv(
         reconciliation/"canonical_admitted_slate.csv",index=False)
     pd.DataFrame([{"game_id":2026020066,"slate_date":"2026-10-09","game_type_code":2,
         "official_final":True,"official_final_home_goals":3,"official_final_away_goals":2,
@@ -210,7 +215,7 @@ def test_routine_capture_uses_exporter_retains_phoenix_control_and_replays(tmp_p
         "fitted_model_evidence":prod_evidence})
     daily_receipt = {"slate_date":"2026-10-09","parent_daily_run_id":"routine-test",
         "ended_at_utc":"2026-10-09T15:05:00Z","lanes":{"points_hgb_shadow":{
-            "status":"COMPLETE","outputs":[{"capture_path":str(capture.resolve()),
+            "status":"COMPLETE","ended_at_utc":receipt["capture_timestamp_utc"],"outputs":[{"capture_path":str(capture.resolve()),
                 "manifest_sha256":hashlib.sha256((capture/"SHA256SUMS").read_bytes()).hexdigest(),
                 "prediction_sha256":receipt["prediction_sha256"],
                 "feature_sha256":receipt["feature_sha256"],

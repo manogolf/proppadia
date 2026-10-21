@@ -1844,12 +1844,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   2026-10-20 the 11:58 PT run predicted all 11 games, but the 16:08 PT run
   covered only 6, so the summary graded SOG 497-151 and Points HGB 563-85 on 6
   games.
-- Fix: `performance_summary.build_production_sog_reference` and
-  `points_hgb_shadow.grade_prior_hgb_capture` pick each game's latest
-  pregame source. Read-only replays of 2026-10-20 give SOG 911-271 and Points
-  HGB 1,013-169 on all 11 games. Tests:
+- Fix: both grades now go through the existing resilient selector
+  (`select_latest_atomic_sources`, added 2026-10-18 for the resilient lanes)
+  instead of a single source. A first version (d90a3b52) wrote its own
+  per-game selection without reusing it; the rework replaces that. The two
+  grading functions had used a single source since they were added on
+  2026-10-09; nothing earlier was overwritten. Read-only replays: 2026-10-20
+  SOG 911-271 and Points HGB 1,013-169 on all 11 games. Days that change:
+  SOG 10-10, 10-12, 10-15, 10-17, 10-19, 10-20 (10-16 changes source only);
+  Points 10-10, 10-12, 10-15, 10-16, 10-17, 10-19, 10-20. Tests:
   `backend/tests/test_nhl_production_sog_per_game_source.py`,
-  `backend/tests/test_nhl_points_hgb_per_game_source.py`.
+  `backend/tests/test_nhl_points_hgb_per_game_source.py`,
+  `backend/nhl/tests/test_daily_receipt_source_proofs.py`.
 - Open: regenerate the affected days' performance summaries (new revisions;
   sealed packages and earlier summaries stay) after operator approval.
 
