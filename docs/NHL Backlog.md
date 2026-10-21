@@ -1807,7 +1807,14 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.26 Scheduled per-game closing player-prop odds for CLV
 
-- Status: **BUILT 2026-10-20 — first live day pending**. Before this, prop
+- Status: **LIVE 2026-10-20 (LaunchAgent installed 17:13 PT); first full day
+  pending**. On 2026-10-20, the 4 games still ahead after install
+  (2026020148–151) each got one CLOSING snapshot 26.5–26.6 minutes before
+  puck. Every event bound, with 2,229–2,360 prop rows each and 21 credits
+  each. There were no binding failures, no stderr output, and no repeat
+  requests (later runs logged `SKIPPED_ALREADY_CAPTURED`). The 7 earlier
+  games had started before install. Captures land early in the window
+  because the 5-minute cadence first enters it about 3.4 minutes in. Before this, prop
   odds came only from manual daily runs with `--with-odds`. The median last
   pregame snapshot was about 3 hours before puck, and only 11 of 143 games
   since 10-01 had one within 15 minutes.
