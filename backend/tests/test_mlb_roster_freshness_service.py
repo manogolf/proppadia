@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch
 
 from backend.app.services.mlb import roster_freshness_service as service
@@ -10,7 +11,8 @@ class TestMlbRosterFreshnessService(unittest.TestCase):
             {"has_active": True, "has_updated_at": True},
             {"n": 1200},  # total
             {"n": 1197},  # active
-            {"latest_updated_at": "2026-02-15T00:00:00+00:00"},
+            # Fresh relative to the real clock (the service compares with now).
+            {"latest_updated_at": (datetime.now(timezone.utc) - timedelta(hours=1)).isoformat()},
         ]
         with patch.object(service, "pg_fetchone", side_effect=side_effects):
             out = service.get_roster_freshness(require_min=1, stale_after_hours=30)

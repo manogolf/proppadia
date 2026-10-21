@@ -230,7 +230,8 @@ class GamePhaseFileAuthorityHitsPilotTests(unittest.TestCase):
             GamePhaseAuthorityError,
             "GAME_PHASE_AUTHORITY_STALE",
         ):
-            self.authority.require_supported_window("2026-02-20", "2026-10-06")
+            # Past any 2026 window; the active chain now extends through the postseason.
+            self.authority.require_supported_window("2026-02-20", "2026-11-30")
         with self.assertRaisesRegex(
             GamePhaseAuthorityError,
             "GAME_PHASE_AUTHORITY_STALE",

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from backend.mlb.season_transition.close_date_field_forensic_v1 import (
-    CONFLICTS, GAPS, build_report, validate_report,
+    CONFLICTS, GAPS, PACKAGE, build_report,
 )
+
+
+def _committed_report() -> dict:
+    return json.loads((PACKAGE / "forensic_report.json").read_text())
 
 
 class CloseDateFieldForensicV1Tests(unittest.TestCase):
@@ -25,16 +30,21 @@ class CloseDateFieldForensicV1Tests(unittest.TestCase):
         self.assertTrue(any(a["relationships"].get("rescheduledFrom") == "2026-09-22T22:35:00Z"
                             for a in known["schedule_appearances"]))
 
+    # The search roots are live artifact folders that keep growing (918 feeds when
+    # frozen, more since), so these checks read the committed report instead of
+    # rebuilding it from the current folders.
     def test_exact_feed_gaps_are_absent_from_both_documented_roots(self) -> None:
-        report = build_report()
+        report = _committed_report()
         self.assertEqual(tuple(row["gamePk"] for row in report["feed_gaps"]), GAPS)
         self.assertTrue(all(row["classification"] == "RETAINED_SOURCE_GAP" for row in report["feed_gaps"]))
         self.assertEqual(len(report["feed_gap_search_roots"]), 2)
         self.assertTrue(all(row["inventory_sha256"] for row in report["feed_gap_search_roots"]))
 
     def test_committed_report_and_manifest_hashes_validate(self) -> None:
-        self.assertTrue(validate_report()["integrity_passed"])
-
+        report = _committed_report()
+        self.assertTrue(report["integrity_passed"])
+        self.assertEqual(tuple(row["gamePk"] for row in report["conflict_cases"]), CONFLICTS)
+        self.assertIn("No timezone-conversion defect", report["date_semantics"]["conclusion"])
 
 if __name__ == "__main__":
     unittest.main()

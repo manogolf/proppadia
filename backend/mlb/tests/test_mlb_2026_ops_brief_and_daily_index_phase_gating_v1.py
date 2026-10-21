@@ -21,6 +21,20 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
 )
 
 
+
+
+def _v4_authority():
+    """The authority these counts were written against (V4: 15 postseason games).
+
+    The active chain keeps growing through the postseason, so pinning V4 keeps the
+    expected population and freshness window fixed.
+    """
+    from backend.mlb.scripts.prepare_mlb_postseason_alcs_authority_v5 import (
+        V4_DESCRIPTOR, V4_DESCRIPTOR_SHA,
+    )
+    from backend.mlb.season_transition.game_phase_authority_v1 import HashedProposalAuthority
+    return HashedProposalAuthority(descriptor_path=V4_DESCRIPTOR, expected_descriptor_sha256=V4_DESCRIPTOR_SHA)
+
 class FakeAuthority:
     def __init__(self, phases: dict[int, str | None], *, errors: dict[int, str] | None = None):
         self.phases = phases
@@ -131,7 +145,7 @@ class OpsBriefAndDailyIndexPhaseGatingV1Tests(unittest.TestCase):
             str(path): sha256_file(path)
             for path in (AGREEMENT_RECONCILIATION, AGREEMENT_STALENESS)
         }
-        control = build_current_phase_reporting_control(report_date="2026-09-22")
+        control = build_current_phase_reporting_control(report_date="2026-09-22", authority=_v4_authority())
         after = {
             str(path): sha256_file(path)
             for path in (AGREEMENT_RECONCILIATION, AGREEMENT_STALENESS)
@@ -166,7 +180,7 @@ class OpsBriefAndDailyIndexPhaseGatingV1Tests(unittest.TestCase):
 
     def test_stale_report_date_fails_before_governing_counts_are_rendered(self) -> None:
         with self.assertRaisesRegex(PhaseReportingError, "PHASE_AUTHORITY_STALE"):
-            build_current_phase_reporting_control(report_date="2026-10-06")
+            build_current_phase_reporting_control(report_date="2026-10-06", authority=_v4_authority())
 
     def test_ops_brief_and_daily_index_use_shared_renderer(self) -> None:
         root = Path(__file__).resolve().parents[3]
