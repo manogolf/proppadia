@@ -312,17 +312,22 @@ def test_17_designated_snapshot_guard_uses_durable_identity(monkeypatch,row):
 
 
 def test_18_runner_guard_advances_finals_and_grading_then_skips_scoring(monkeypatch,tmp_path,capsys):
+    # Since 5aa8d108 the runner binds retained history through RuntimeScheduleAuthority,
+    # which accepts only repository paths; treat this test's temp folder as the root.
+    from backend.mlb.season_transition import runtime_schedule_authority_v1
+    monkeypatch.setattr(runtime_schedule_authority_v1, "REPO_ROOT", tmp_path)
     monkeypatch.setattr(daily_runner,'designated_snapshot_exists',lambda *_:True)
-    monkeypatch.setattr(daily_runner,'_fetch_schedule',lambda *_:({'dates':[]},b'{}'))
+    # Raw bytes must match the payload; the retained copy is re-parsed.
+    monkeypatch.setattr(daily_runner,'_fetch_schedule',lambda *_:({'dates':[]},b'{"dates":[]}'))
     monkeypatch.setattr(daily_runner,'append_official_finals',lambda rows:0)
     monkeypatch.setattr(daily_runner,'load_official_finals_before',lambda *_:[])
     prediction=_durable_prediction()
-    monkeypatch.setattr(daily_runner,'fetch_ungraded_final_predictions',lambda *_:[{
+    monkeypatch.setattr(daily_runner,'fetch_ungraded_final_predictions',lambda *_,**_kwargs:[{
         'prediction':prediction,'official_home_runs':5,'official_away_runs':3,
         'official_source_identity':'official.json','official_source_sha256':'b'*64,
     }])
     appended=[]
-    monkeypatch.setattr(daily_runner,'append_outcome_grade',lambda row:appended.append(row) or True)
+    monkeypatch.setattr(daily_runner,'append_outcome_grade',lambda row,**_kwargs:appended.append(row) or True)
     monkeypatch.setattr(daily_runner,'score_schedule_payload',lambda *_args,**_kwargs:pytest.fail('scoring called'))
     output=tmp_path/'skip.json'
     monkeypatch.setattr(sys,'argv',['runner','--mlb-date','2026-08-05','--write-durable',

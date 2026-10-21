@@ -45,8 +45,9 @@ class MlbResearchReadRoutingTests(unittest.TestCase):
             return decorate
 
         with patch.dict(os.environ, {"MLB_RESEARCH_DATABASE_URL": "postgresql://research"}, clear=True), \
-             patch.object(mlb_research, "create_engine", return_value=fake_engine) as create_engine, \
-             patch.object(mlb_research.event, "listens_for", side_effect=listen_for):
+             patch("sqlalchemy.create_engine", return_value=fake_engine) as create_engine, \
+             patch("sqlalchemy.event.listens_for", side_effect=listen_for):
+            # sqlalchemy is imported inside the helper (c1769536), so patch it at the source.
             self.assertIs(mlb_research.create_mlb_research_readonly_engine("postgresql://legacy"), fake_engine)
         create_engine.assert_called_once_with("postgresql://research")
         self.assertEqual(len(listeners), 1)

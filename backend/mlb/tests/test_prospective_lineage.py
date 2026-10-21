@@ -11,7 +11,10 @@ def certified_row():
     row={k:"x" for k in p.MANDATORY}
     row.update({"canonical_row_identity":p.canonical_json(identity),"selected_side":"over","price_over_american":-120,
                 "price_under_american":100,"model_artifact_sha256":"a"*64,"feature_vector_sha256":"b"*64,
-                "feature_schema_sha256":"c"*64,"configuration_sha256":"d"*64})
+                "feature_schema_sha256":"c"*64,"configuration_sha256":"d"*64,
+                # The validator parses these as ISO-8601; prediction precedes the start.
+                "prediction_timestamp":"2026-08-04T16:00:00Z","odds_snapshot_timestamp":"2026-08-04T15:55:00Z",
+                "scheduled_game_start":"2026-08-04T23:05:00Z"})
     return row
 
 

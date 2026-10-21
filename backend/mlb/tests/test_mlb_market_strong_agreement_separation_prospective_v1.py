@@ -66,7 +66,8 @@ class ProspectiveAgreementSeparationTest(unittest.TestCase):
             risk["row_sha256"] = study.digest(risk)
             with sqlite3.connect(ledger) as conn:
                 study.immutable_insert(conn, "risk_set", "game_key", risk); conn.commit()
-            with patch.object(study, "pg_connect", return_value=Connection()):
+            # Reads route through the research login since b2d823b6.
+            with patch.object(study, "mlb_research_or_current_connection", return_value=Connection()):
                 self.assertEqual(study.grade(out, ledger, "2026-09-11")["inserted_rows"], 1)
                 self.assertEqual(study.grade(out, ledger, "2026-09-11")["inserted_rows"], 0)
 

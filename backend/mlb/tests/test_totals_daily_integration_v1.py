@@ -113,7 +113,7 @@ def test_existing_identity_is_bypassed_before_context_reconstruction(monkeypatch
     monkeypatch.setattr(shadow,"verified_totals_phase_authority",lambda:_phase_authority(10))
     schedule_path=tmp_path/"schedule.json";schedule_path.write_text("{}")
     schedule_hash=hashlib.sha256(schedule_path.read_bytes()).hexdigest()
-    monkeypatch.setattr(shadow,"load_retained_schedule",lambda *_:({},"2026-08-07T15:00:00Z",schedule_hash))
+    monkeypatch.setattr(shadow,"load_retained_schedule_projection",lambda *_:({},"2026-08-07T15:00:00Z",schedule_hash,"p"*64))
     monkeypatch.setattr(shadow,"normalize_schedule",lambda *_:[{"game_pk":10,"game_date":"2026-08-07"}])
     monkeypatch.setattr(shadow,"build_history",lambda :{})
     monkeypatch.setattr(shadow,"dynamic_environment",lambda *_:{})

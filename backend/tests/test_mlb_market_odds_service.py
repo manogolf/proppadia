@@ -112,7 +112,8 @@ class TestMlbMarketOddsService(unittest.TestCase):
     def test_fetch_market_odds_unsupported_prop(self):
         out = fetch_mlb_market_odds(
             player_name="Shohei Ohtani",
-            prop_type="runs_rbis",
+            # runs_rbis became a supported alias lane (20ed04e1); this prop has no mapping.
+            prop_type="first_home_run",
             game_date="2026-06-01",
             over_under="over",
             line=0.5,
@@ -147,7 +148,10 @@ class TestMlbMarketOddsService(unittest.TestCase):
 
     @patch.dict("os.environ", {"ODDS_API_KEY": "test-key"}, clear=False)
     @patch("backend.app.services.mlb.market_odds_service.requests.get")
-    def test_fetch_market_odds_reuses_cached_snapshot_across_props(self, mock_get):
+    # Isolate the core fetch path from the always-attempted runs_rbis alias lane,
+    # which adds its own event-level requests (20ed04e1).
+    @patch("backend.app.services.mlb.market_odds_service._experimental_market_keys", return_value=[])
+    def test_fetch_market_odds_reuses_cached_snapshot_across_props(self, _no_alias_lane, mock_get):
         class _Resp:
             status_code = 200
 
@@ -210,7 +214,10 @@ class TestMlbMarketOddsService(unittest.TestCase):
 
     @patch.dict("os.environ", {"ODDS_API_KEY": "test-key"}, clear=False)
     @patch("backend.app.services.mlb.market_odds_service.requests.get")
-    def test_fetch_market_odds_falls_back_to_event_endpoint_on_422(self, mock_get):
+    # Isolate the core fetch path from the always-attempted runs_rbis alias lane,
+    # which adds its own event-level requests (20ed04e1).
+    @patch("backend.app.services.mlb.market_odds_service._experimental_market_keys", return_value=[])
+    def test_fetch_market_odds_falls_back_to_event_endpoint_on_422(self, _no_alias_lane, mock_get):
         class _Sport422:
             status_code = 422
 
@@ -267,7 +274,10 @@ class TestMlbMarketOddsService(unittest.TestCase):
                     ],
                 }
 
-        mock_get.side_effect = [_Sport422(), _EventsResp(), _EventOddsResp()]
+        # The fallback batches markets per call (MLB_ODDS_EVENT_MAX_MARKETS_PER_CALL),
+        # so one event can take several odds requests after the events listing.
+        responses = iter([_Sport422(), _EventsResp()])
+        mock_get.side_effect = lambda *args, **kwargs: next(responses, _EventOddsResp())
 
         out = fetch_mlb_market_odds(
             player_name="Shohei Ohtani",

@@ -338,6 +338,10 @@ def test_agreement_barrier_requires_valid_published_artifact():
 
 
 def test_main_reports_atomic_publication_counts_without_external_requests(monkeypatch, tmp_path):
+    # Since 5aa8d108 the runner binds retained history through RuntimeScheduleAuthority,
+    # which accepts only repository paths; treat this test's temp folder as the root.
+    from backend.mlb.season_transition import runtime_schedule_authority_v1
+    monkeypatch.setattr(runtime_schedule_authority_v1, "REPO_ROOT", tmp_path)
     current = payload(schedule_game(
         60, status("Preview", "Scheduled", "S"), start="2099-09-23T17:35:00Z",
     ))

@@ -182,10 +182,13 @@ def test_frozen_candidate_reconstructs_exact_coefficients_alpha_and_order():
     model = Pipeline([("s", StandardScaler()), ("p", PoissonRegressor(alpha=.1, max_iter=1000))]).fit(train[cols], train.final_total)
     mu = model.predict(train[cols]); alpha = max(0, float((((train.final_total - mu) ** 2 - train.final_total).sum()) / np.maximum((mu ** 2).sum(), 1)))
     assert model["p"].intercept_ == candidate["intercept"]
-    assert np.array_equal(model["p"].coef_, np.array(candidate["coefficients"]))
+    # Refits can differ in the last bit (~4e-17, numerical-library noise); scoring uses the
+    # stored coefficients, so reproduce them within 1e-12 rather than bit-for-bit.
+    assert np.allclose(model["p"].coef_, np.array(candidate["coefficients"]), rtol=0, atol=1e-12)
     assert np.array_equal(model["s"].mean_, np.array(candidate["scaler_mean"]))
     assert np.array_equal(model["s"].scale_, np.array(candidate["scaler_scale"]))
-    assert alpha == candidate["dispersion_alpha"] == 0.12944479977012996
+    assert candidate["dispersion_alpha"] == 0.12944479977012996
+    assert abs(alpha - candidate["dispersion_alpha"]) < 1e-12
     assert canonical_hash({k: candidate[k] for k in candidate if k != "canonical_model_hash"}) == candidate["canonical_model_hash"]
 
 
