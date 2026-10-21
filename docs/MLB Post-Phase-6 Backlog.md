@@ -1204,10 +1204,20 @@ consumers keep full verification. Open items:
   `mlb-refresh-player-pa MLB_PA_ONLY_MISSING=1` matched 319 rows with 0
   conflicts with populated values, and the real run filled 319 NULLs
   (`writes_applied=319`, rolling PA rows updated 319). 14 of 15 games now pass.
-- Open: game 824814, player 668942 is stored with 0 hits while the official
-  box score shows 1 (a single; total bases 1), likely a post-game scoring
-  change. It is a populated value, so the repair rule refuses to overwrite it;
-  correcting it needs explicit operator authorization. Until then the
-  completeness check reports `824814:STAT_MISMATCH` and the 2026-07-12
-  reconciliation stays blocked.
+- Game 824814, player 668942 (Josh Rojas) was stored with 0 hits; the official
+  feed (sha256 d795ac5d…59b0eb) shows a 2nd-inning single and a 6th-inning
+  fielding error, i.e. 1 hit. Restricted writers cannot change populated
+  values, so on 2026-10-21 the operator ran owner SQL in the Supabase editor:
+  `player_stats` hits/singles/total_bases 0 → 1, and the three dependent
+  training rows regenerated with the deterministic synthetic line rules (hits
+  1/1.5/under/win, singles 1/0.5/over/win (was loss), hits_runs_rbis
+  2/1.5/over/win). Guarded, one-row-each SQL, verify and rollback are under
+  `artifacts/analysis/model_development/mlb_player_stats_scoring_correction/2026-10-21/`.
+  Verified afterwards: completeness check passes all 15 games.
+- 2026-07-12 reconciled: `mlb-full-slate-performance` wrote 2,189 reconcile
+  rows; 2,078 graded picks went 1,327-751 (63.86%, ROI −2.32%).
+- Not corrected (operator aware): player 668942's 30 `player_derived_stats`
+  rows from 2026-07-12 to 2026-09-27 still count one hit too few, and the
+  `streak_*` fields on later hits/singles training rows came from the old
+  outcome. Frozen past predictions are unaffected.
 
