@@ -1189,6 +1189,13 @@ consumers keep full verification. Open items:
   guard skips it, extending the existing late-slate and BvP no-work exits
   (MLB Slate Output Contract). Tests in
   `backend/mlb/tests/test_mlb_morning_workflow_active_health.py`.
-- 2026-10-19 reconciliation run as a one-time catch-up (see below).
-  2026-07-12 is still unreconciled; catch-up needs operator approval.
+- 2026-10-19 catch-up (2026-10-21, read-only database access): finalized data
+  was already present (198 model-training prop rows, 47 player-stat rows).
+  `mlb-reconcile-prospective-lineage-outcomes` created the 10-19 sidecar with
+  35 resolved and 0 unresolved. `mlb-full-slate-performance` wrote 0 rows
+  because there is no 10-19 `mlb_slate_output.csv`, the same result as the
+  normal 10-17 and 10-18 runs while no qualified MLB model writes slate
+  output. The actual-wager compare is skipped (`NO_QUALIFIED_MLB_MODEL`), as
+  on 10-18.
+- Open: 2026-07-12 was never reconciled; a catch-up needs operator approval.
 
