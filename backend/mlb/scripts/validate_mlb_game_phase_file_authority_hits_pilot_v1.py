@@ -21,6 +21,7 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     EXPECTED_SOURCE_MANIFEST_SHA256,
     GamePhaseAuthorityError,
     HashedProposalAuthority,
+    load_v1_authority,
 )
 
 
@@ -182,7 +183,9 @@ def validate() -> dict[str, Any]:
         sorted(rows[0]) if rows else [],
     )
 
-    authority = HashedProposalAuthority()
+    # The pilot's expected identity is V1's (2,919 games, 464 sources); later
+    # postseason snapshots became active, so load V1 explicitly.
+    authority = load_v1_authority()
     authority.require_supported_window(
         min(row["game_date"] for row in rows),
         max(row["game_date"] for row in rows),

@@ -204,8 +204,13 @@ class TrainingPhaseEligibilityDryRunTests(unittest.TestCase):
     def test_dry_run_cannot_fit_or_write_operational_artifacts(self) -> None:
         from backend.mlb import model_trainer
 
+        from backend.mlb.scripts import build_mlb_training_phase_eligibility_dry_run_v1 as dry_run
+
         forbidden = AssertionError("DRY_RUN_REACHED_FORBIDDEN_PATH")
-        with patch.object(
+        # The CLI writes review evidence; keep it out of the tracked docs/contracts copy.
+        evidence = tempfile.TemporaryDirectory(prefix="dry_run_evidence_")
+        self.addCleanup(evidence.cleanup)
+        with patch.object(dry_run, "EVIDENCE_DIR", Path(evidence.name)), patch.object(
             model_trainer, "train_models_for_prop", side_effect=forbidden
         ), patch.object(
             model_trainer, "build_pipeline", side_effect=forbidden

@@ -14,7 +14,7 @@ from backend.mlb.season_transition.game_phase_authority_v1 import (
     EXPECTED_PHASE_CONTRACT_SHA256,
     EXPECTED_PROPOSAL_SHA256,
     EXPECTED_SOURCE_MANIFEST_SHA256,
-    HashedProposalAuthority,
+    load_v1_authority,
 )
 from backend.mlb.season_transition.training_phase_eligibility_v1 import (
     BLOCKED_ABSENT_AUTHORITY,
@@ -148,7 +148,8 @@ def _write_evidence(report: dict[str, Any], output_dir: Path) -> list[str]:
         raise RuntimeError("DRY_RUN_EVIDENCE_DESTINATION_NOT_GOVERNED")
     exclusions = report["gate_report"]["decision_game_pk_row_counts"]
     csv_lines = ["game_pk,authoritative_phase,authoritative_game_type,row_count"]
-    authority = HashedProposalAuthority()
+    # Frozen against V1 (EXPECTED_PROPOSAL_SHA256); later snapshots became active.
+    authority = load_v1_authority()
     for decision, phase in (
         (EXCLUDED_PRESEASON, "PRESEASON"),
         (EXCLUDED_POSTSEASON, "POSTSEASON"),
@@ -174,7 +175,8 @@ def execute_dry_run(*, output_dir: Path | None = None) -> dict[str, Any]:
     """Verify the freeze, execute only the membership gate, and optionally emit evidence."""
 
     freeze = _freeze_manifest()
-    authority = HashedProposalAuthority()
+    # Frozen against V1 (EXPECTED_PROPOSAL_SHA256); later snapshots became active.
+    authority = load_v1_authority()
     result = filter_regular_season_membership(
         _rows(),
         game_pk_field="game_pk",
