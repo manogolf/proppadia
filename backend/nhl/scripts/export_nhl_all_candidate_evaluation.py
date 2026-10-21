@@ -854,8 +854,13 @@ def latest_daily_receipt(operational_root: Path, slate_date: str) -> tuple[Path 
     return max(matches, key=lambda item: item[0].stat().st_mtime_ns)
 
 
-def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Bind normalized retained quotes; retain only each book's latest eligible quote."""
+def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]], *,
+                         price_both_sides: bool = False) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Bind normalized retained quotes; retain only each book's latest eligible quote.
+
+    With ``price_both_sides`` a player prop's opposite outcome is also bound and
+    evaluated at the model's probability for that side (1 - selected).
+    """
     by_game_player: dict[tuple[str, str], list[dict[str, Any]]] = {}
     by_game_goalie: dict[tuple[str, str], list[dict[str, Any]]] = {}
     by_game: dict[str, list[dict[str, Any]]] = {}
@@ -953,7 +958,17 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
             for c in matching_candidates:
                 if c.get("market_key") != market or str(c.get("market_line")) != str(line_val): continue
                 side = str(q.get("outcome", "")).upper()
-                if side != c.get("selected_side"): continue
+                if side != c.get("selected_side"):
+                    if price_both_sides and side in ("OVER", "UNDER"):
+                        side_matched = True
+                        _consider_quote(output, diagnostics, c, q, obs_dir, obs_sha, odds_manifest_sha, observed,
+                                        source_time, price, decimal, _american_implied(price), player_id,
+                                        quote_side=side)
+                        opposite_key = (c["candidate_key"], str(q.get("bookmaker", "")), side)
+                        if opposite_key in output:
+                            output[opposite_key]["source_parent_run_id"] = source_parent_run_id
+                            output[opposite_key]["source_capture_identity"] = source_capture_identity
+                    continue
                 side_matched = True
                 _consider_quote(output, diagnostics, c, q, obs_dir, obs_sha, odds_manifest_sha, observed, source_time, price, decimal, _american_implied(price), player_id)
                 key = (c["candidate_key"], str(q.get("bookmaker", "")), "")
@@ -1041,9 +1056,10 @@ def _consider_quote(output: dict[tuple[str, str], dict[str, Any]], diagnostics: 
         if probability in (None, ""):
             probability = candidate.get("probability_over") if row["quote_side"] == "HOME" else candidate.get("probability_under")
     else:
-        probability = candidate.get("probability_over") if candidate.get("selected_side") == "OVER" else candidate.get("probability_under")
+        # Equal to the selected side unless the opposite outcome is being priced.
+        probability = candidate.get("probability_over") if row["quote_side"] == "OVER" else candidate.get("probability_under")
     row = evaluate_quote(row, probability)
-    key = (candidate["candidate_key"], str(q.get("bookmaker", "")), row["quote_side"] if candidate.get("market_key") == "moneyline_home" else "")
+    key = (candidate["candidate_key"], str(q.get("bookmaker", "")), _quote_side_key(row))
     prior = output.get(key)
     rank = (0 if str(q.get("market", "")).endswith("_alternate") else 1,
             parse_utc(row["observation_timestamp_utc"]))
@@ -1051,6 +1067,14 @@ def _consider_quote(output: dict[tuple[str, str], dict[str, Any]], diagnostics: 
                   parse_utc(prior["observation_timestamp_utc"])) if prior else None
     if prior is None or rank > prior_rank:
         output[key] = row
+
+
+def _quote_side_key(row: dict[str, Any]) -> str:
+    """Moneyline keeps both outcomes; a prop keys its opposite side separately."""
+    side = str(row.get("quote_side", ""))
+    if row.get("market_key") == "moneyline_home" or side != str(row.get("selected_side", "")):
+        return side
+    return ""
 
 
 def _american_implied(price: int) -> float | None:
@@ -1069,8 +1093,7 @@ def deduplicate_quotes(rows: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
             continue
         if not parse_utc(row.get("source_quote_timestamp_utc")) or not parse_utc(row.get("observation_timestamp_utc")):
             continue
-        quote_side = str(row.get("quote_side", "")) if row.get("market_key") == "moneyline_home" else ""
-        key = (str(row["candidate_key"]), str(row["sportsbook_key"]), quote_side)
+        key = (str(row["candidate_key"]), str(row["sportsbook_key"]), _quote_side_key(row))
         rank = (0 if str(row.get("provider_market_key", "")).endswith("_alternate") else 1,
                 parse_utc(row.get("observation_timestamp_utc")))
         prior = selected.get(key)
@@ -1095,7 +1118,8 @@ def _write_csv(path: Path, fields: list[str], rows: Iterable[dict[str, Any]]) ->
         writer.writerows(rows)
 
 
-def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, Any]:
+def export(root: Path, out: Path, slate_date: str | None = None, *,
+           price_both_sides: bool = False) -> dict[str, Any]:
     predictions, diagnostics = load_candidates(root)
     if slate_date:
         predictions = [r for r in predictions if r["slate_date"] == slate_date]
@@ -1125,7 +1149,7 @@ def export(root: Path, out: Path, slate_date: str | None = None) -> dict[str, An
     if slate_date:
         candidate_keys = {r["candidate_key"] for r in predictions}
         diagnostics = [r for r in diagnostics if r["candidate_key"] in candidate_keys]
-    quotes, quote_diagnostics = load_retained_quotes(root, predictions)
+    quotes, quote_diagnostics = load_retained_quotes(root, predictions, price_both_sides=price_both_sides)
     diagnostics.extend(quote_diagnostics)
     out.mkdir(parents=True, exist_ok=True)
     prediction_path = out / "candidate_predictions.csv"
@@ -1251,8 +1275,11 @@ def main() -> None:
     parser.add_argument("--root", type=Path, default=Path("artifacts/operational/nhl"))
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--slate-date", help="Optional exact slate date for a bounded sample, YYYY-MM-DD")
+    parser.add_argument("--price-both-sides", action="store_true",
+                        help="also price each player prop's opposite outcome (quote_side != selected_side)")
     args = parser.parse_args()
-    print(json.dumps(export(args.root, args.out, args.slate_date), indent=2, sort_keys=True))
+    print(json.dumps(export(args.root, args.out, args.slate_date, price_both_sides=args.price_both_sides),
+                     indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

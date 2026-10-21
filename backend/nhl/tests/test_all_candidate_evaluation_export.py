@@ -176,6 +176,25 @@ class AllCandidateExportTests(unittest.TestCase):
         self.assertEqual(len(result), 2)
         self.assertEqual({row["quote_side"] for row in result}, {"HOME", "AWAY"})
 
+    def test_prop_opposite_side_quote_is_kept_separately_and_priced_at_its_own_probability(self):
+        from backend.nhl.scripts.export_nhl_all_candidate_evaluation import _consider_quote
+        from pathlib import Path
+        candidate = {**self._candidate(), "candidate_key": "sog-1", "model_role": "PRODUCTION", "probability_over": 0.6,
+                     "probability_under": 0.4, "prediction_timestamp_utc": "2026-10-16T20:00:00Z",
+                     "scheduled_start_utc": "2026-10-16T23:00:00Z", "parent_run_id": "run"}
+        output, diagnostics = {}, []
+        for side, price in (("OVER", -150), ("UNDER", 130)):
+            _consider_quote(output, diagnostics, candidate, {"bookmaker": "book", "market": "player_shots_on_goal",
+                            "outcome": side.title()}, Path("obs"), "sha", "msha", "2026-10-16T19:00:00Z",
+                            "2026-10-16T18:59:00Z", price, None, None, "42",
+                            quote_side="" if side == "OVER" else side)
+        selected = output[("sog-1", "book", "")]
+        opposite = output[("sog-1", "book", "UNDER")]
+        self.assertEqual(selected["quote_side"], "OVER")
+        self.assertAlmostEqual(selected["expected_value_per_unit"], 0.6 * (1 + 100 / 150) - 1)
+        self.assertAlmostEqual(opposite["expected_value_per_unit"], 0.4 * 2.3 - 1)
+        self.assertEqual(len(deduplicate_quotes([{**selected, "decimal_price": 1.667}, opposite])), 2)
+
     def test_moneyline_quote_team_names_follow_provider_home_away_orientation(self):
         self.assertEqual(canonical_moneyline_quote_side("CAR", "CAR", "FLA"), "HOME")
         self.assertEqual(canonical_moneyline_quote_side("FLA", "CAR", "FLA"), "AWAY")
