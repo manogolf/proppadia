@@ -69,7 +69,7 @@ def _package(day: str, identity: str) -> Path:
 UNPROVEN_MODEL = "UNPROVEN_BEFORE_2026_10_08"
 
 
-def _load_unproven_sog_run(receipt_path: Path, slate_date: str) -> dict:
+def _load_unproven_sog_run(receipt_path: Path, slate_date: str, *, require_ready: bool = False) -> dict:
     """Load a pre-2026-10-08 run whose receipt binds predictions but no fitted model.
 
     Runs before commit b6ed889c (2026-10-08) record the prediction file and its
