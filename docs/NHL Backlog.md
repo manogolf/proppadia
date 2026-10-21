@@ -1835,8 +1835,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.27 Grade production SOG and Points from each game's latest pregame run
 
-- Status: **CODE FIXED 2026-10-21; restatement of past summaries pending
-  operator review**.
+- Status: **FIXED AND RESTATED 2026-10-21** (operator-approved). New
+  summary revisions for 10-10, 10-12, 10-15, 10-16, 10-17, 10-19 and 10-20
+  were written through `postgame_learning.ensure_prior_learning` on the
+  existing sealed packages; earlier summaries and packages are unchanged.
 - Defect: the performance summary graded production SOG from one daily run
   (the latest READY run) and Points HGB from one capture (the latest). When
   the last run of the day came after some games started, those games were
@@ -1856,8 +1858,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `backend/tests/test_nhl_production_sog_per_game_source.py`,
   `backend/tests/test_nhl_points_hgb_per_game_source.py`,
   `backend/nhl/tests/test_daily_receipt_source_proofs.py`.
-- Open: regenerate the affected days' performance summaries (new revisions;
-  sealed packages and earlier summaries stay) after operator approval.
+- Restated records (before → after): SOG 10-10 843-228 → 1,182-318;
+  10-12 157-56 → 238-83; 10-15 167-49 → 927-258; 10-16 unchanged 181-32;
+  10-17 341-91 → 1,092-309; 10-19 172-44 → 338-91; 10-20 497-151 → 911-271.
+  Points HGB 10-10 934-137 → 1,131-156; 10-12 186-27 → 271-50; 10-15 none →
+  1,012-173 (grade record; no Phoenix side-by-side because one capture has
+  no Phoenix control); 10-16 89-16 → 184-29; 10-17 376-56 → 1,216-185; 10-19
+  182-34 → 360-69; 10-20 563-85 → 1,013-169.
 
 ## Verified Complete — Do Not Reopen
 
