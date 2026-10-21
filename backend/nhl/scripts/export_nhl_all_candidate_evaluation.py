@@ -435,6 +435,34 @@ def bind_moneyline_model_sources(candidates: list[dict[str, Any]], operational_r
     return output
 
 
+def _hgb_grade_sources(grade: dict[str, Any], capture: Path):
+    """Yield (production file, Phoenix control file, ownership test, production sha) per grade source.
+
+    A single-capture grade has one source. A grade built from several captures
+    (``source_captures``) takes each player-game from the latest source that
+    lists the game and has the player, the same selection the grade made.
+    """
+    sources = grade.get("source_captures") or []
+    if not sources:
+        production = Path(grade["production_prediction_path"]) if grade.get("production_prediction_path") else None
+        yield production, capture / "phoenix_control_predictions.csv", (lambda row: True), grade.get("production_prediction_sha256")
+        return
+    owner: dict[tuple[str, str], int] = {}
+    for index, source in enumerate(sources):
+        games = {str(game) for game in source.get("game_ids", [])}
+        path = source.get("production_prediction_path")
+        rows_path = Path(path) if path else Path(source["capture_path"]) / "predictions.csv"
+        if rows_path.exists():
+            for row in _csv_rows(rows_path):
+                if str(row.get("game_id")) in games:
+                    owner[(str(row.get("game_id")), str(row.get("player_id")))] = index
+    for index, source in enumerate(sources):
+        path = source.get("production_prediction_path")
+        yield ((Path(path) if path else None), Path(source["capture_path"]) / "phoenix_control_predictions.csv",
+               (lambda row, mine=index: owner.get((str(row.get("game_id")), str(row.get("player_id")))) == mine),
+               source.get("production_prediction_sha256"))
+
+
 def load_candidates(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     predictions: list[dict[str, Any]] = []
     diagnostics: list[dict[str, Any]] = []
@@ -526,64 +554,68 @@ def load_candidates(root: Path) -> tuple[list[dict[str, Any]], list[dict[str, An
         outcome_path = Path(grade["official_outcome_path"]) if grade.get("official_outcome_path") else None
         outcomes = {(r.get("game_id"), r.get("player_id")): r for r in _csv_rows(outcome_path)} if outcome_path and outcome_path.exists() else {}
         # HGB production has one wide row per player/game and three line probabilities.
-        hgb_path = Path(grade["production_prediction_path"]) if grade.get("production_prediction_path") else None
-        if hgb_path and hgb_path.exists():
-            hgb_sha = _sha(hgb_path)
-            for r in _csv_rows(hgb_path):
-                hgb_lines = [(r.get("line"), _num(r.get("prob_over")))] if r.get("prob_over") not in (None, "") else [(line, _num(r.get(f"prob_over_{line.replace('.', '_')}"))) for line in ("0.5", "1.5", "2.5")]
-                for line, p in hgb_lines:
+        # A grade built from several captures lists them under source_captures (P2.27).
+        for hgb_path, phoenix_path, owned, production_sha in _hgb_grade_sources(grade, capture):
+            if hgb_path and hgb_path.exists():
+                hgb_sha = _sha(hgb_path)
+                for r in _csv_rows(hgb_path):
+                    if not owned(r):
+                        continue
+                    hgb_lines = [(r.get("line"), _num(r.get("prob_over")))] if r.get("prob_over") not in (None, "") else [(line, _num(r.get(f"prob_over_{line.replace('.', '_')}"))) for line in ("0.5", "1.5", "2.5")]
+                    for line, p in hgb_lines:
+                        if p is None:
+                            continue
+                        outcome = outcomes.get((r.get("game_id"), r.get("player_id")), {})
+                        points = _num(outcome.get("official_points"))
+                        b = {
+                            "canonical_season": 2026, "slate_date": slate, "game_type": "", "canonical_phase": "REGULAR_SEASON",
+                            "run_id": r.get("parent_daily_run_id") or "", "run_type": "FINAL_PREGAME_CAPTURE",
+                            "scheduled_start_utc": r.get("game_start_utc") or "", "prediction_timestamp_utc": r.get("feature_input_cutoff_utc") or "",
+                            "feature_cutoff_utc": r.get("feature_input_cutoff_utc") or "", "prediction_identity": retained_row_identity(r),
+                            "model_role": "PRODUCTION", "model_family": "hist_gradient_boosting", "model_version": "NHL_POINTS_COUNT_HGB_V1",
+                            "feature_contract_sha256": grade.get("feature_contract_identity", {}).get("feature_contract_sha256", ""),
+                            "model_identity_sha256": grade.get("model_identity", {}).get("model_identity_sha256", ""),
+                            "prediction_artifact_sha256": production_sha or hgb_sha, "odds_manifest_sha256": "",
+                            "market_key": "player_points", "market_line": line, "selected_side": "OVER" if p >= .5 else "UNDER",
+                            "probability_over": p, "probability_under": 1-p, "expected_count": r.get("expected_points"), "candidate_policy_status": "NOT_APPLIED",
+                            "game_id": r.get("game_id"), "player_id": r.get("player_id"), "goalie_id": "", "team_id": "", "opponent_id": "",
+                            "display_name": "", "outcome_status": "SETTLED" if points is not None else "UNRESOLVED",
+                            "outcome_value": points if points is not None else "", "outcome_side": ("OVER" if points > float(line) else "UNDER") if points is not None else "",
+                            "outcome_source": outcome.get("outcome_source", ""), "outcome_source_timestamp_utc": outcome.get("outcome_source_timestamp_utc", ""),
+                            "source_path": str(hgb_path), "source_sha256": hgb_sha, "parent_run_id": r.get("parent_daily_run_id") or "",
+                        }
+                        b["candidate_key"] = candidate_key(b)
+                        predictions.append({field: b.get(field, "") for field in PREDICTION_FIELDS})
+            # Phoenix is a same-capture shadow; use only the exact retained output.
+            if phoenix_path.exists():
+                phoenix_sha = _sha(phoenix_path)
+                for r in _csv_rows(phoenix_path):
+                    if not owned(r):
+                        continue
+                    line = r.get("line") or ""
+                    p = _num(r.get("prob_over"))
                     if p is None:
                         continue
                     outcome = outcomes.get((r.get("game_id"), r.get("player_id")), {})
                     points = _num(outcome.get("official_points"))
                     b = {
                         "canonical_season": 2026, "slate_date": slate, "game_type": "", "canonical_phase": "REGULAR_SEASON",
-                        "run_id": r.get("parent_daily_run_id") or "", "run_type": "FINAL_PREGAME_CAPTURE",
+                        "run_id": r.get("parent_daily_run_id") or grade.get("capture_path", "").split("/run_id=")[-1].split("/")[0], "run_type": "FINAL_PREGAME_CAPTURE",
                         "scheduled_start_utc": r.get("game_start_utc") or "", "prediction_timestamp_utc": r.get("feature_input_cutoff_utc") or "",
                         "feature_cutoff_utc": r.get("feature_input_cutoff_utc") or "", "prediction_identity": retained_row_identity(r),
-                        "model_role": "PRODUCTION", "model_family": "hist_gradient_boosting", "model_version": "NHL_POINTS_COUNT_HGB_V1",
-                        "feature_contract_sha256": grade.get("feature_contract_identity", {}).get("feature_contract_sha256", ""),
-                        "model_identity_sha256": grade.get("model_identity", {}).get("model_identity_sha256", ""),
-                        "prediction_artifact_sha256": grade.get("production_prediction_sha256", hgb_sha), "odds_manifest_sha256": "",
+                        "model_role": "SHADOW", "model_family": "phoenix", "model_version": "phoenix_v2",
+                        "feature_contract_sha256": "", "model_identity_sha256": grade.get("phoenix_prediction_sha256", ""),
+                        "prediction_artifact_sha256": grade.get("phoenix_prediction_sha256", phoenix_sha), "odds_manifest_sha256": "",
                         "market_key": "player_points", "market_line": line, "selected_side": "OVER" if p >= .5 else "UNDER",
-                        "probability_over": p, "probability_under": 1-p, "expected_count": r.get("expected_points"), "candidate_policy_status": "NOT_APPLIED",
+                        "probability_over": p, "probability_under": 1-p, "expected_count": "", "candidate_policy_status": "NOT_APPLIED",
                         "game_id": r.get("game_id"), "player_id": r.get("player_id"), "goalie_id": "", "team_id": "", "opponent_id": "",
                         "display_name": "", "outcome_status": "SETTLED" if points is not None else "UNRESOLVED",
                         "outcome_value": points if points is not None else "", "outcome_side": ("OVER" if points > float(line) else "UNDER") if points is not None else "",
                         "outcome_source": outcome.get("outcome_source", ""), "outcome_source_timestamp_utc": outcome.get("outcome_source_timestamp_utc", ""),
-                        "source_path": str(hgb_path), "source_sha256": hgb_sha, "parent_run_id": r.get("parent_daily_run_id") or "",
+                        "source_path": str(phoenix_path), "source_sha256": phoenix_sha, "parent_run_id": r.get("parent_daily_run_id") or "",
                     }
                     b["candidate_key"] = candidate_key(b)
                     predictions.append({field: b.get(field, "") for field in PREDICTION_FIELDS})
-        # Phoenix is a same-capture shadow; use only the exact retained output.
-        phoenix_path = capture / "phoenix_control_predictions.csv"
-        if phoenix_path.exists():
-            phoenix_sha = _sha(phoenix_path)
-            for r in _csv_rows(phoenix_path):
-                line = r.get("line") or ""
-                p = _num(r.get("prob_over"))
-                if p is None:
-                    continue
-                outcome = outcomes.get((r.get("game_id"), r.get("player_id")), {})
-                points = _num(outcome.get("official_points"))
-                b = {
-                    "canonical_season": 2026, "slate_date": slate, "game_type": "", "canonical_phase": "REGULAR_SEASON",
-                    "run_id": r.get("parent_daily_run_id") or grade.get("capture_path", "").split("/run_id=")[-1].split("/")[0], "run_type": "FINAL_PREGAME_CAPTURE",
-                    "scheduled_start_utc": r.get("game_start_utc") or "", "prediction_timestamp_utc": r.get("feature_input_cutoff_utc") or "",
-                    "feature_cutoff_utc": r.get("feature_input_cutoff_utc") or "", "prediction_identity": retained_row_identity(r),
-                    "model_role": "SHADOW", "model_family": "phoenix", "model_version": "phoenix_v2",
-                    "feature_contract_sha256": "", "model_identity_sha256": grade.get("phoenix_prediction_sha256", ""),
-                    "prediction_artifact_sha256": grade.get("phoenix_prediction_sha256", phoenix_sha), "odds_manifest_sha256": "",
-                    "market_key": "player_points", "market_line": line, "selected_side": "OVER" if p >= .5 else "UNDER",
-                    "probability_over": p, "probability_under": 1-p, "expected_count": "", "candidate_policy_status": "NOT_APPLIED",
-                    "game_id": r.get("game_id"), "player_id": r.get("player_id"), "goalie_id": "", "team_id": "", "opponent_id": "",
-                    "display_name": "", "outcome_status": "SETTLED" if points is not None else "UNRESOLVED",
-                    "outcome_value": points if points is not None else "", "outcome_side": ("OVER" if points > float(line) else "UNDER") if points is not None else "",
-                    "outcome_source": outcome.get("outcome_source", ""), "outcome_source_timestamp_utc": outcome.get("outcome_source_timestamp_utc", ""),
-                    "source_path": str(phoenix_path), "source_sha256": phoenix_sha, "parent_run_id": r.get("parent_daily_run_id") or "",
-                }
-                b["candidate_key"] = candidate_key(b)
-                predictions.append({field: b.get(field, "") for field in PREDICTION_FIELDS})
     return deduplicate_candidates(predictions), diagnostics
 
 
@@ -854,6 +886,23 @@ def latest_daily_receipt(operational_root: Path, slate_date: str) -> tuple[Path 
     return max(matches, key=lambda item: item[0].stat().st_mtime_ns)
 
 
+def unreconciled_slate(operational_root: Path) -> str | None:
+    """Latest slate with a retained daily receipt but no reconciliation package yet."""
+    dates = set()
+    for path in (operational_root / "daily_runs").glob("run_id=*/parent_receipt.json"):
+        try:
+            slate = str(json.loads(path.read_text(encoding="utf-8")).get("slate_date") or "")
+        except (OSError, json.JSONDecodeError):
+            continue
+        if slate:
+            dates.add(slate)
+    for slate in sorted(dates, reverse=True):
+        if not any((operational_root / "postgame_reconciliation" / slate).glob("reconciliation=*")):
+            return slate
+        return None
+    return None
+
+
 def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]], *,
                          price_both_sides: bool = False) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Bind normalized retained quotes; retain only each book's latest eligible quote.
@@ -1121,18 +1170,22 @@ def _write_csv(path: Path, fields: list[str], rows: Iterable[dict[str, Any]]) ->
 def export(root: Path, out: Path, slate_date: str | None = None, *,
            price_both_sides: bool = False) -> dict[str, Any]:
     predictions, diagnostics = load_candidates(root)
+    open_slate = None
     if slate_date:
         predictions = [r for r in predictions if r["slate_date"] == slate_date]
         dates = [slate_date]
     else:
-        dates = sorted({r["slate_date"] for r in predictions} | {"2026-10-17"})
+        # The latest slate with a daily receipt but no reconciliation package yet
+        # (formerly fixed at 2026-10-17, the open slate when this was written).
+        open_slate = unreconciled_slate(root)
+        dates = sorted({r["slate_date"] for r in predictions} | ({open_slate} if open_slate else set()))
     for date in dates:
         predictions = add_captured_sog_arms(predictions, root, date)
         predictions = add_puck_line_challenger(predictions, root, date)
     # The final retained operational capture is not in postgame reconciliation
     # yet. Bind its eligible pregame identities directly from its parent receipt.
-    if not slate_date:
-        predictions = add_ungraded_slate_candidates(predictions, root, "2026-10-17")
+    if not slate_date and open_slate:
+        predictions = add_ungraded_slate_candidates(predictions, root, open_slate)
     scoped, exclusions = scope_regular_season_pregame(predictions)
     scoped = bind_moneyline_model_sources(scoped, root)
     predictions = deduplicate_candidates(scoped)
@@ -1205,7 +1258,7 @@ def export(root: Path, out: Path, slate_date: str | None = None, *,
         "complete_home_away_probability_count", "selected_side_agreement_count", "model_source_path_and_hash_count"
     )):
         raise ValueError(f"Moneyline retained identity validation failed: {moneyline_validation}")
-    final_receipt_path, final_receipt = latest_daily_receipt(root, "2026-10-17") if not slate_date else (None, {})
+    final_receipt_path, final_receipt = latest_daily_receipt(root, open_slate) if open_slate else (None, {})
     started_ids = [str(x) for x in (final_receipt.get("started_excluded_game_ids") or [])]
     eligible_ids = [str(x) for x in (final_receipt.get("eligible_pregame_game_ids") or [])]
     manifest = {
@@ -1232,16 +1285,16 @@ def export(root: Path, out: Path, slate_date: str | None = None, *,
         "market_counts": dict(sorted(market_counts.items())),
         "model_counts": [{"market_key": k[0], "model_family": k[1], "model_version": k[2], "model_role": k[3], "rows": n} for k, n in sorted(model_counts.items())],
         "source_evidence_scope": f"latest retained 2026 reconciliation package per slate{'; bounded to ' + slate_date if slate_date else ''}",
-        "regular_season_scope": {"game_type_code": "2", "start_date_inclusive": "2026-09-29", "end_date_inclusive": "2026-10-17"},
+        "regular_season_scope": {"game_type_code": "2", "start_date_inclusive": "2026-09-29", "end_date_inclusive": max((r["slate_date"] for r in predictions), default="")},
         "exclusions_by_date_and_reason": {f"{date}|{reason}": count for (date, reason), count in sorted(exclusions.items())},
-        "started_game_exclusion_counts_by_date": ({date: count for (date, reason), count in sorted(exclusions.items()) if reason == "PREDICTION_AT_OR_AFTER_SCHEDULED_START"} | ({"2026-10-17": len(started_ids)} if started_ids else {})),
-        "started_game_exclusion_ids_by_date": {"2026-10-17": started_ids} if started_ids else {},
-        "eligible_pregame_game_ids_by_date": {"2026-10-17": eligible_ids} if eligible_ids else {},
+        "started_game_exclusion_counts_by_date": ({date: count for (date, reason), count in sorted(exclusions.items()) if reason == "PREDICTION_AT_OR_AFTER_SCHEDULED_START"} | ({open_slate: len(started_ids)} if started_ids else {})),
+        "started_game_exclusion_ids_by_date": {open_slate: started_ids} if started_ids else {},
+        "eligible_pregame_game_ids_by_date": {open_slate: eligible_ids} if eligible_ids else {},
         "date_counts": {date: dict(Counter(r["market_key"] for r in predictions if r["slate_date"] == date)) for date in sorted({r["slate_date"] for r in predictions})},
         "game_counts_by_date": {date: len({r["game_id"] for r in predictions if r["slate_date"] == date}) for date in sorted({r["slate_date"] for r in predictions})},
         "outcome_status_counts": dict(Counter(r["outcome_status"] for r in predictions)),
         "outcome_status_counts_by_date": {date: dict(Counter(r["outcome_status"] for r in predictions if r["slate_date"] == date)) for date in sorted({r["slate_date"] for r in predictions})},
-        "conditional_prediction_counts_by_date": {date: (sum(r["run_type"] in ("DAILY_RETAINED_CAPTURE", "FINAL_PREGAME_CAPTURE") for r in predictions if r["slate_date"] == date) if date == "2026-10-17" else 0) for date in sorted({r["slate_date"] for r in predictions})},
+        "conditional_prediction_counts_by_date": {date: (sum(r["run_type"] in ("DAILY_RETAINED_CAPTURE", "FINAL_PREGAME_CAPTURE") for r in predictions if r["slate_date"] == date) if date == open_slate else 0) for date in sorted({r["slate_date"] for r in predictions})},
         "model_counts_by_date": {
             "|".join(key): count for key, count in sorted(Counter(
                 (r["slate_date"], r["market_key"], r["model_family"], r["model_version"], r["model_role"])
@@ -1253,7 +1306,7 @@ def export(root: Path, out: Path, slate_date: str | None = None, *,
         },
         "operationally_impaired_dates": {
             "2026-10-16": "Two-game slate; small outcome sample. Retained as observed.",
-            "2026-10-17": "Late daily capture excludes ten games that had already started; four pregame games remain. Outcomes are unresolved at the export cutoff.",
+            "2026-10-17": "Late daily capture excludes ten games that had already started; four pregame games remain.",
         },
         "game_candidate_counts": {
             "|".join(key): count for key, count in sorted(Counter((r["slate_date"], r["game_id"], r["market_key"]) for r in predictions).items())

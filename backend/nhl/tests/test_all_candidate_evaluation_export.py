@@ -281,3 +281,59 @@ class ResilientCrossMarketFillTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HgbGradeSourceTests(unittest.TestCase):
+    def test_multi_capture_grade_takes_each_player_from_the_latest_source_listing_its_game(self):
+        import csv, tempfile
+        from pathlib import Path
+        from backend.nhl.scripts.export_nhl_all_candidate_evaluation import _hgb_grade_sources
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def capture(name, rows):
+                folder = root / name
+                folder.mkdir()
+                production = folder / "points_predictions.csv"
+                with production.open("w", newline="") as handle:
+                    writer = csv.DictWriter(handle, fieldnames=["game_id", "player_id", "line", "prob_over"])
+                    writer.writeheader()
+                    writer.writerows(rows)
+                return folder, production
+            early, early_rows = capture("early", [{"game_id": 1, "player_id": 10, "line": 0.5, "prob_over": 0.4},
+                                                  {"game_id": 2, "player_id": 20, "line": 0.5, "prob_over": 0.4},
+                                                  {"game_id": 2, "player_id": 21, "line": 0.5, "prob_over": 0.4}])
+            late, late_rows = capture("late", [{"game_id": 2, "player_id": 20, "line": 0.5, "prob_over": 0.6}])
+            grade = {"source_captures": [
+                {"capture_path": str(early), "production_prediction_path": str(early_rows), "game_ids": [1, 2]},
+                {"capture_path": str(late), "production_prediction_path": str(late_rows), "game_ids": [2]},
+            ]}
+            sources = list(_hgb_grade_sources(grade, late))
+            owned = {(path.parent.name, row["game_id"], row["player_id"])
+                     for path, _, test, _ in sources for row in csv.DictReader(path.open()) if test(row)}
+        # Game 1 and player 21 only exist early; player 20 comes from the later capture.
+        self.assertEqual(owned, {("early", "1", "10"), ("early", "2", "21"), ("late", "2", "20")})
+
+    def test_single_capture_grade_is_read_as_before(self):
+        from pathlib import Path
+        from backend.nhl.scripts.export_nhl_all_candidate_evaluation import _hgb_grade_sources
+        grade = {"production_prediction_path": "/x/points_predictions.csv", "production_prediction_sha256": "s"}
+        [(production, phoenix, owned, sha)] = list(_hgb_grade_sources(grade, Path("/cap")))
+        self.assertEqual((str(production), str(phoenix), sha), ("/x/points_predictions.csv", "/cap/phoenix_control_predictions.csv", "s"))
+        self.assertTrue(owned({"game_id": "9", "player_id": "9"}))
+
+
+class UnreconciledSlateTests(unittest.TestCase):
+    def test_open_slate_is_the_latest_receipt_without_a_package(self):
+        import json, tempfile
+        from pathlib import Path
+        from backend.nhl.scripts.export_nhl_all_candidate_evaluation import unreconciled_slate
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for run, slate in (("a", "2026-10-17"), ("b", "2026-10-18")):
+                folder = root / "daily_runs" / f"run_id={run}"
+                folder.mkdir(parents=True)
+                (folder / "parent_receipt.json").write_text(json.dumps({"slate_date": slate}))
+            (root / "postgame_reconciliation/2026-10-17/reconciliation=x").mkdir(parents=True)
+            self.assertEqual(unreconciled_slate(root), "2026-10-18")
+            (root / "postgame_reconciliation/2026-10-18/reconciliation=y").mkdir(parents=True)
+            self.assertIsNone(unreconciled_slate(root))
