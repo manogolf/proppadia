@@ -1833,6 +1833,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   minutes before puck (`report_nhl_closing_odds.py`) and no unexplained
   `MISSED_NO_CLOSING_CAPTURE` or binding failure.
 
+### P2.27 Grade production SOG and Points from each game's latest pregame run
+
+- Status: **CODE FIXED 2026-10-21; restatement of past summaries pending
+  operator review**.
+- Defect: the performance summary graded production SOG from one daily run
+  (the latest READY run) and Points HGB from one capture (the latest). When
+  the last run of the day came after some games started, those games were
+  dropped even though an earlier run had predicted them pregame. On
+  2026-10-20 the 11:58 PT run predicted all 11 games, but the 16:08 PT run
+  covered only 6, so the summary graded SOG 497-151 and Points HGB 563-85 on 6
+  games.
+- Fix: `performance_summary.build_production_sog_reference` and
+  `points_hgb_shadow.grade_prior_hgb_capture` pick each game's latest
+  pregame source. Read-only replays of 2026-10-20 give SOG 911-271 and Points
+  HGB 1,013-169 on all 11 games. Tests:
+  `backend/tests/test_nhl_production_sog_per_game_source.py`,
+  `backend/tests/test_nhl_points_hgb_per_game_source.py`.
+- Open: regenerate the affected days' performance summaries (new revisions;
+  sealed packages and earlier summaries stay) after operator approval.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** the 32 verified 2023–25 PP-TOI corrections

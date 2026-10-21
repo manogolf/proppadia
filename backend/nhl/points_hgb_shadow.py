@@ -709,8 +709,12 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
 
 
 def discover_daily_points_authority(*, slate_date: str,
-                                    daily_run_root: Path | None = None) -> dict[str, Any] | None:
-    """Read the exact production/shadow Points identities from a daily receipt."""
+                                    daily_run_root: Path | None = None,
+                                    parent_daily_run_id: str | None = None) -> dict[str, Any] | None:
+    """Read the exact production/shadow Points identities from a daily receipt.
+
+    Without ``parent_daily_run_id`` the latest qualifying run is returned.
+    """
     from backend.nhl.daily_capture import verify_package
 
     root = Path(daily_run_root or ROOT / "artifacts/operational/nhl/daily_runs")
@@ -719,6 +723,8 @@ def discover_daily_points_authority(*, slate_date: str,
         try:
             receipt = json.loads(receipt_path.read_text())
             if receipt.get("slate_date") != slate_date:
+                continue
+            if parent_daily_run_id is not None and receipt.get("parent_daily_run_id") != parent_daily_run_id:
                 continue
             verify_package(receipt_path.parent)
             points_lane = (receipt.get("lanes") or {}).get("points") or {}
@@ -774,42 +780,9 @@ def discover_daily_points_authority(*, slate_date: str,
     return max(matches, key=lambda item: item[0])[1] if matches else None
 
 
-def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
-                            shadow_root: Path | None = None,
-                            daily_run_root: Path | None = None) -> dict[str, Any]:
-    """Grade the highest available pregame phase without rebuilding predictions."""
-    from backend.nhl.daily_capture import verify_package
-    from backend.nhl.scripts.grade_nhl_points_hgb_shadow import grade, selected_side_record
-    from backend.nhl.postgame_learning import verify_reconciliation_package
-
-    shadow_root = Path(shadow_root or ROOT / "artifacts/operational/nhl/points_hgb_shadow")
-    daily_run_root = Path(daily_run_root or ROOT / "artifacts/operational/nhl/daily_runs")
-    year, month = int(slate_date[:4]), int(slate_date[5:7])
-    season = year if month >= 9 else year - 1
-    root = shadow_root / f"season={season}" / f"slate_date={slate_date}"
-    candidates = []
-    phase_order = {"EARLY": 0, "REFRESH": 1, "FINAL_PREGAME": 2}
-    for receipt_path in root.glob("run_id=*/phase=*/captured_at=*/receipt.json"):
-        capture = receipt_path.parent
-        try:
-            receipt = validate_hgb_capture(capture, daily_run_root=daily_run_root)
-            if receipt.get("slate_date") != slate_date:
-                continue
-            candidates.append((phase_order.get(str(receipt.get("capture_phase", "")).upper(), -1),
-                               str(receipt.get("capture_timestamp_utc", "")), capture, receipt))
-        except (OSError, ValueError, KeyError, RuntimeError, json.JSONDecodeError):
-            continue
-    if not candidates:
-        return {"status": "NOT_AVAILABLE", "reason": "NO_VALID_IMMUTABLE_HGB_CAPTURE"}
-    _, _, capture, receipt = max(candidates, key=lambda row: (row[0], row[1]))
-    daily_authority = discover_daily_points_authority(
-        slate_date=slate_date, daily_run_root=daily_run_root)
-    if (daily_authority and daily_authority.get("parent_daily_run_id")
-            != receipt.get("parent_run_id")):
-        daily_authority = None
-    outcomes_path = Path(reconciliation_package) / "canonical_skater_outcomes.csv"
-    verify_reconciliation_package(Path(reconciliation_package), slate_date)
-    outcomes = pd.read_csv(outcomes_path)
+def _hgb_capture_predictions(capture: Path, receipt: dict[str, Any],
+                             daily_authority: dict[str, Any] | None):
+    """Return one capture's graded predictions and whether HGB was production."""
     pred = pd.read_csv(capture / "predictions.csv")
     production_prediction_sha256 = None
     production_prediction_path = None
@@ -842,7 +815,97 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
         expected_columns = {"prob_over_0_5", "prob_over_1_5", "prob_over_2_5"}
         if not expected_columns.issubset(pred.columns):
             raise RuntimeError("HGB_PRODUCTION_PREDICTION_LINE_SET_INVALID")
-    game_ids = set(map(int, receipt["canonical_game_ids"]))
+    return pred, production_prediction_path, production_prediction_sha256, hgb_is_production
+
+
+def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
+                            shadow_root: Path | None = None,
+                            daily_run_root: Path | None = None) -> dict[str, Any]:
+    """Grade the highest available pregame phase without rebuilding predictions."""
+    from backend.nhl.daily_capture import verify_package
+    from backend.nhl.scripts.grade_nhl_points_hgb_shadow import grade, selected_side_record
+    from backend.nhl.postgame_learning import verify_reconciliation_package
+
+    shadow_root = Path(shadow_root or ROOT / "artifacts/operational/nhl/points_hgb_shadow")
+    daily_run_root = Path(daily_run_root or ROOT / "artifacts/operational/nhl/daily_runs")
+    year, month = int(slate_date[:4]), int(slate_date[5:7])
+    season = year if month >= 9 else year - 1
+    root = shadow_root / f"season={season}" / f"slate_date={slate_date}"
+    candidates = []
+    phase_order = {"EARLY": 0, "REFRESH": 1, "FINAL_PREGAME": 2}
+    for receipt_path in root.glob("run_id=*/phase=*/captured_at=*/receipt.json"):
+        capture = receipt_path.parent
+        try:
+            receipt = validate_hgb_capture(capture, daily_run_root=daily_run_root)
+            if receipt.get("slate_date") != slate_date:
+                continue
+            candidates.append((phase_order.get(str(receipt.get("capture_phase", "")).upper(), -1),
+                               str(receipt.get("capture_timestamp_utc", "")), capture, receipt))
+        except (OSError, ValueError, KeyError, RuntimeError, json.JSONDecodeError):
+            continue
+    if not candidates:
+        return {"status": "NOT_AVAILABLE", "reason": "NO_VALID_IMMUTABLE_HGB_CAPTURE"}
+    candidates.sort(key=lambda row: (row[0], row[1]))
+    _, _, capture, receipt = candidates[-1]
+    # Each game is graded from the latest capture that predicted it pregame. A
+    # late capture that excludes started games keeps earlier captures' games.
+    game_source: dict[int, int] = {}
+    for index, (_, _, candidate, candidate_receipt) in enumerate(candidates):
+        predicted = set(map(int, pd.read_csv(candidate / "predictions.csv").game_id.unique()))
+        eligible = candidate_receipt.get("eligible_pregame_game_ids")
+        for game_id in (map(int, eligible) if eligible is not None else predicted):
+            if game_id in predicted:
+                game_source[game_id] = index
+    contributing = sorted(set(game_source.values())) or [len(candidates) - 1]
+    multi_source = len(contributing) > 1
+    if not multi_source:
+        _, _, capture, receipt = candidates[contributing[0]]
+    daily_authority = discover_daily_points_authority(
+        slate_date=slate_date, daily_run_root=daily_run_root)
+    if (daily_authority and daily_authority.get("parent_daily_run_id")
+            != receipt.get("parent_run_id")):
+        daily_authority = None
+    outcomes_path = Path(reconciliation_package) / "canonical_skater_outcomes.csv"
+    verify_reconciliation_package(Path(reconciliation_package), slate_date)
+    outcomes = pd.read_csv(outcomes_path)
+    sources: list[dict[str, Any]] = []
+    phoenix_pieces: list[pd.DataFrame] = []
+    if multi_source:
+        pieces, roles = [], set()
+        for index in contributing:
+            _, _, source_capture, source_receipt = candidates[index]
+            authority = discover_daily_points_authority(
+                slate_date=slate_date, daily_run_root=daily_run_root,
+                parent_daily_run_id=source_receipt.get("parent_run_id"))
+            frame, production_path, production_sha, production_role = _hgb_capture_predictions(
+                source_capture, source_receipt, authority)
+            games = {game for game, owner in game_source.items() if owner == index}
+            pieces.append(frame[frame.game_id.astype(int).isin(games)])
+            if source_receipt.get("phoenix_control", {}).get("status") == "BOUND":
+                phoenix_frame = pd.read_csv(source_capture / "phoenix_control_predictions.csv")
+                phoenix_pieces.append(phoenix_frame[phoenix_frame.game_id.astype(int).isin(games)])
+            roles.add(production_role)
+            sources.append({"capture_path": str(source_capture),
+                            "capture_manifest_sha256": verify_package(source_capture),
+                            "parent_daily_run_id": source_receipt.get("parent_run_id"),
+                            "hgb_prediction_sha256": source_receipt["prediction_sha256"],
+                            "production_prediction_path": (str(production_path.resolve())
+                                                           if production_path else None),
+                            "production_prediction_sha256": production_sha,
+                            "evaluation_role": "PRODUCTION" if production_role else "SHADOW",
+                            "game_ids": sorted(games)})
+        pred = pd.concat(pieces, ignore_index=True)
+        hgb_is_production = roles == {True}
+        production_prediction_path = None
+        production_prediction_sha256 = None
+        phoenix_bound = len(phoenix_pieces) == len(contributing)
+        game_ids = set().union(*(set(map(int, candidates[index][3]["canonical_game_ids"]))
+                                 for index in contributing))
+    else:
+        pred, production_prediction_path, production_prediction_sha256, hgb_is_production = (
+            _hgb_capture_predictions(capture, receipt, daily_authority))
+        phoenix_bound = receipt.get("phoenix_control", {}).get("status") == "BOUND"
+        game_ids = set(map(int, receipt["canonical_game_ids"]))
     outcomes = outcomes.loc[outcomes.game_id.astype(int).isin(game_ids)].copy()
     if outcomes.empty or not outcomes.get("official_final", pd.Series(True, index=outcomes.index)).astype(str).str.lower().isin({"true", "t", "1"}).all():
         return {"status": "OUTCOMES_NOT_FINAL", "capture_path": str(capture)}
@@ -850,8 +913,9 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
     phoenix_thresholds = {}
     phoenix_selected_side = None
     selected_side_comparison = None
-    if receipt.get("phoenix_control", {}).get("status") == "BOUND":
-        phoenix = pd.read_csv(capture / "phoenix_control_predictions.csv")
+    if phoenix_bound:
+        phoenix = (pd.concat(phoenix_pieces, ignore_index=True) if multi_source
+                   else pd.read_csv(capture / "phoenix_control_predictions.csv"))
         phoenix = phoenix.loc[phoenix.game_id.astype(int).isin(game_ids)]
         if phoenix.duplicated(["game_id", "player_id", "line"]).any():
             raise RuntimeError("PHOENIX_DUPLICATE_GRADE_KEY")
@@ -938,11 +1002,17 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
                 "base_rate": float(y.mean()) if len(y) else None}
     outcome_sha = sha(outcomes_path)
     capture_manifest_sha = verify_package(capture)
-    input_identity = hashlib.sha256(json.dumps({"capture_manifest_sha256":capture_manifest_sha,
+    identity_payload = {"capture_manifest_sha256":capture_manifest_sha,
         "prediction_sha256":production_prediction_sha256 or receipt["prediction_sha256"],
         "outcomes_sha256":outcome_sha,
         "selected_side_contract":"POINTS_SELECTED_SIDE_AT_0_5_V1",
-        "game_ids":sorted(game_ids)}, sort_keys=True).encode()).hexdigest()
+        "game_ids":sorted(game_ids)}
+    if multi_source:
+        identity_payload["source_selection"] = "LATEST_PREGAME_CAPTURE_PER_GAME"
+        identity_payload["sources"] = [{key: item[key] for key in (
+            "capture_manifest_sha256", "hgb_prediction_sha256", "production_prediction_sha256",
+            "game_ids")} for item in sources]
+    input_identity = hashlib.sha256(json.dumps(identity_payload, sort_keys=True).encode()).hexdigest()
     grade_root = shadow_root / "grades" / f"season={season}" / f"slate_date={slate_date}" / f"capture={capture.name}" / f"grade={input_identity[:20]}"
     # A prior failed grade may have created its destination before finishing.
     # Recover only a truly empty directory; populated packages remain create-only.
@@ -980,6 +1050,9 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
         "selected_side_comparison":selected_side_comparison,
         "phoenix_prediction_sha256":receipt.get("phoenix_control", {}).get("prediction_sha256"),
         "comparison_type":"DESCRIPTIVE_SAME_CAPTURE_CONTROL", "promotion_decision_from_single_slate":False}
+    if multi_source:
+        result["source_selection"] = "LATEST_PREGAME_CAPTURE_PER_GAME"
+        result["source_captures"] = sources
     (grade_root / "grade.json").write_text(json.dumps(result, indent=2, sort_keys=True)+"\n")
     (grade_root / "RUN_COMPLETE.json").write_text(json.dumps({"status":"COMPLETE",
         "official_outcome_identity":input_identity}, indent=2, sort_keys=True)+"\n")

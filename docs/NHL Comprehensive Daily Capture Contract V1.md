@@ -171,6 +171,14 @@ put captures about 26.6 minutes out):
   (`IMMUTABLE_CROSS_MARKET_STARTED_EXCLUSION_INVALID`), and grading stays bound
   to the full canonical slate. The SOG production reference summary grades
   predicted games and lists eligible games without predictions.
+- Per-game prediction source (2026-10-21). The performance summary's
+  production SOG reference and the Points HGB grade take each game from the
+  latest READY daily run (SOG) or HGB capture (Points) that predicted that
+  game pregame, using each run's own `eligible_pregame_game_ids`. A late run
+  that excludes started games no longer drops the earlier run's predictions
+  for them. When more than one run contributes, the summary lists them under
+  `source_daily_runs` (SOG) or `source_captures` (Points) with each run's
+  games; a slate with a single contributing run grades exactly as before.
 - Participation. Official skater outcomes list only dressed players. When a
   final game's official box score lists dressed skaters for both teams, a
   predicted skater absent from it did not play: SOG grades

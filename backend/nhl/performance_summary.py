@@ -408,33 +408,10 @@ def _validate_production_sog_game_set(
     return sorted(set(eligible_ids) - set(prediction_ids))
 
 
-def build_production_sog_reference(
-    *, slate_date: str, package: Path, daily_run_root: Path,
-    market_coverage: dict[str, Any] | None = None,
-) -> tuple[dict[str, Any], dict[str, str]]:
-    """Grade the immutable baseline SOG predictions for a reconciled slate."""
-    package = Path(package).resolve()
-    daily_run_root = Path(daily_run_root).resolve()
-    coverage = dict(market_coverage or {})
-    run_id = str(coverage.get("daily_run_id") or "")
-    if not run_id:
-        candidates = []
-        for receipt_path in daily_run_root.glob("run_id=*/parent_receipt.json"):
-            try:
-                receipt, receipt_manifest_sha = _verify_daily_receipt(receipt_path, slate_date)
-                candidates.append((str(receipt.get("ended_at_utc") or ""), receipt_path,
-                                  receipt, receipt_manifest_sha))
-            except (OSError, ValueError, KeyError, json.JSONDecodeError):
-                continue
-        if not candidates:
-            raise RuntimeError("PRODUCTION_SOG_DAILY_RECEIPT_NOT_FOUND")
-        _, receipt_path, receipt, receipt_manifest_sha = sorted(candidates, reverse=True)[0]
-        run_id = str(receipt.get("parent_daily_run_id") or "")
-    else:
-        receipt_path = daily_run_root / f"run_id={run_id}" / "parent_receipt.json"
-        receipt, receipt_manifest_sha = _verify_daily_receipt(receipt_path, slate_date)
-    if receipt.get("parent_daily_run_id") != run_id:
-        raise ValueError("PRODUCTION_SOG_PARENT_RUN_ID_MISMATCH")
+def _load_production_sog_run(receipt_path: Path, slate_date: str) -> dict[str, Any]:
+    """Validate one daily run's immutable baseline SOG predictions."""
+    receipt, receipt_manifest_sha = _verify_daily_receipt(receipt_path, slate_date)
+    run_id = str(receipt.get("parent_daily_run_id") or "")
     lane = receipt.get("lanes", {}).get("legacy_sog", {})
     if lane.get("status") != "COMPLETE":
         raise ValueError("PRODUCTION_SOG_LANE_NOT_COMPLETE")
@@ -487,13 +464,119 @@ def build_production_sog_reference(
     predictions = pd.read_csv(prediction_path)
     if predictions.duplicated(["game_id", "player_id"]).any():
         raise ValueError("PRODUCTION_SOG_DUPLICATE_PLAYER_GAME_IDENTITY")
-    canonical_ids = sorted(map(int, receipt.get("canonical_game_ids", [])))
-    game_hash = canonical_game_set_hash(canonical_ids)
-    eligible_ids = sorted(map(int, receipt.get("eligible_pregame_game_ids") or canonical_ids))
-    unpredicted_game_ids = _validate_production_sog_game_set(
-        receipt, output_identity, predictions)
+    _validate_production_sog_game_set(receipt, output_identity, predictions)
     if len(predictions) != int(output_identity.get("natural_identity_count", len(predictions))):
         raise ValueError("PRODUCTION_SOG_PREDICTION_ROW_COUNT_MISMATCH")
+    unscored_item = next((item for item in lane.get("outputs", [])
+                          if str(item.get("path", "")).endswith("sog_predictions_unscored.csv")), None)
+    unscored_rows = pd.DataFrame()
+    unscored_sha = None
+    if unscored_item:
+        unscored_path = Path(str(unscored_item["path"])).resolve()
+        unscored_sha = _sha(unscored_path)
+        if unscored_sha != unscored_item.get("sha256"):
+            raise ValueError("PRODUCTION_SOG_UNSCORED_ARTIFACT_HASH_MISMATCH")
+        unscored_rows = pd.read_csv(unscored_path)
+    canonical_ids = sorted(map(int, receipt.get("canonical_game_ids", [])))
+    return {
+        "run_id": run_id, "ended_at_utc": str(receipt.get("ended_at_utc") or ""),
+        "receipt": receipt, "receipt_manifest_sha": receipt_manifest_sha,
+        "evidence": evidence, "scorer": scorer, "scorer_path": expected_scorer_path,
+        "prediction_sha": prediction_sha, "feature_binding": feature_binding,
+        "predictions": predictions, "unscored_rows": unscored_rows, "unscored_sha": unscored_sha,
+        "canonical_ids": canonical_ids,
+        "eligible_ids": sorted(map(int, receipt.get("eligible_pregame_game_ids") or canonical_ids)),
+    }
+
+
+def _select_production_sog_sources(
+    anchor: dict[str, Any], others: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[int, str]]:
+    """Pick, per game, the latest run that predicted it before that game's start.
+
+    Each run's eligible set is its own per-game pregame judgment, so a game a
+    later run excluded as started keeps the prediction an earlier run made for
+    it. Returns the contributing runs (oldest first) and each game's source run.
+    """
+    runs = [anchor] + [run for run in others
+                       if run["run_id"] != anchor["run_id"]
+                       and run["receipt"].get("canonical_game_set_hash")
+                       == anchor["receipt"].get("canonical_game_set_hash")]
+    runs.sort(key=lambda run: (run["ended_at_utc"], run["run_id"]))
+    source: dict[int, str] = {}
+    for run in runs:
+        predicted = set(map(int, run["predictions"].game_id.unique()))
+        for game_id in run["eligible_ids"]:
+            if game_id in predicted:
+                source[game_id] = run["run_id"]
+    contributing = [run for run in runs if run["run_id"] in set(source.values())]
+    return contributing or [anchor], source
+
+
+def build_production_sog_reference(
+    *, slate_date: str, package: Path, daily_run_root: Path,
+    market_coverage: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Grade the immutable baseline SOG predictions for a reconciled slate.
+
+    Every READY daily run of the slate is a candidate source. Each game is
+    graded from the latest run that predicted it pregame, so a late run that
+    excludes started games does not drop the earlier runs' predictions.
+    """
+    package = Path(package).resolve()
+    daily_run_root = Path(daily_run_root).resolve()
+    coverage = dict(market_coverage or {})
+    run_id = str(coverage.get("daily_run_id") or "")
+    if not run_id:
+        candidates = []
+        for receipt_path in daily_run_root.glob("run_id=*/parent_receipt.json"):
+            try:
+                receipt, _ = _verify_daily_receipt(receipt_path, slate_date)
+                candidates.append((str(receipt.get("ended_at_utc") or ""), str(receipt_path), receipt))
+            except (OSError, ValueError, KeyError, json.JSONDecodeError):
+                continue
+        if not candidates:
+            raise RuntimeError("PRODUCTION_SOG_DAILY_RECEIPT_NOT_FOUND")
+        _, receipt_path, receipt = sorted(candidates, key=lambda item: item[:2], reverse=True)[0]
+        receipt_path = Path(receipt_path)
+        run_id = str(receipt.get("parent_daily_run_id") or "")
+    else:
+        receipt_path = daily_run_root / f"run_id={run_id}" / "parent_receipt.json"
+    # The anchor run keeps its fail-closed validation; other runs only add games
+    # they predicted pregame, and are skipped when their evidence does not verify.
+    anchor = _load_production_sog_run(receipt_path, slate_date)
+    if anchor["run_id"] != run_id:
+        raise ValueError("PRODUCTION_SOG_PARENT_RUN_ID_MISMATCH")
+    others: list[dict[str, Any]] = []
+    for other_path in sorted(daily_run_root.glob("run_id=*/parent_receipt.json")):
+        if other_path.resolve() == receipt_path.resolve():
+            continue
+        try:
+            others.append(_load_production_sog_run(other_path, slate_date))
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            continue
+    sources, game_source = _select_production_sog_sources(anchor, others)
+    latest = sources[-1]
+    multi_source = len(sources) > 1
+    by_run = {run["run_id"]: run for run in [anchor, *sources]}
+    receipt = latest["receipt"]
+    evidence, scorer = latest["evidence"], latest["scorer"]
+    expected_scorer_path = latest["scorer_path"]
+    prediction_sha = latest["prediction_sha"]
+    receipt_manifest_sha = latest["receipt_manifest_sha"]
+    feature_binding = latest["feature_binding"]
+    run_id = latest["run_id"]
+    if multi_source:
+        predictions = pd.concat([
+            run["predictions"][run["predictions"].game_id.astype(int).map(game_source).eq(run["run_id"])]
+            for run in sources], ignore_index=True)
+        eligible_ids = sorted(set().union(*(run["eligible_ids"] for run in sources)))
+    else:
+        predictions = latest["predictions"]
+        eligible_ids = latest["eligible_ids"]
+    canonical_ids = latest["canonical_ids"]
+    game_hash = canonical_game_set_hash(canonical_ids)
+    unpredicted_game_ids = sorted(set(eligible_ids) - set(map(int, predictions.game_id.unique())))
 
     outcomes_path = package / "canonical_skater_outcomes.csv"
     outcomes = pd.read_csv(outcomes_path)
@@ -554,6 +637,15 @@ def build_production_sog_reference(
         "downstream_export": "bin/nhl_ops.sh eight-rain-export --latest-refresh",
         "side_selection": "OVER when p_over >= 0.5; otherwise UNDER",
     }
+    if multi_source:
+        display["model_identity"]["source_selection"] = "LATEST_PREGAME_RUN_PER_GAME"
+        display["model_identity"]["source_daily_runs"] = [{
+            "parent_daily_run_id": run["run_id"],
+            "prediction_artifact_sha256": run["prediction_sha"],
+            "daily_receipt_manifest_sha256": run["receipt_manifest_sha"],
+            "fitted_model_identity_sha256": run["evidence"].get("fitted_model_identity_sha256"),
+            "game_ids": sorted(game for game, owner in game_source.items() if owner == run["run_id"]),
+        } for run in sources]
 
     prediction_keys = set(map(tuple, predictions[["game_id", "player_id"]].astype("int64").to_numpy()))
     outcome_keys = set(map(tuple, eligible_outcomes[["game_id", "player_id"]]
@@ -567,16 +659,18 @@ def build_production_sog_reference(
         missing_predictions = pd.read_csv(missing_predictions_path)
         if not {"game_id", "player_id", "reason"}.issubset(missing_predictions.columns):
             raise ValueError("PRODUCTION_SOG_MISSING_PREDICTIONS_SCHEMA_MISSING")
-    unscored_item = next((item for item in lane.get("outputs", [])
-                          if str(item.get("path", "")).endswith("sog_predictions_unscored.csv")), None)
-    unscored_rows = pd.DataFrame()
-    unscored_sha = None
-    if unscored_item:
-        unscored_path = Path(str(unscored_item["path"])).resolve()
-        unscored_sha = _sha(unscored_path)
-        if unscored_sha != unscored_item.get("sha256"):
-            raise ValueError("PRODUCTION_SOG_UNSCORED_ARTIFACT_HASH_MISMATCH")
-        unscored_rows = pd.read_csv(unscored_path)
+    unscored_rows = latest["unscored_rows"]
+    unscored_sha = latest["unscored_sha"]
+    if multi_source:
+        # A game's source exclusions come from the run that supplied its predictions.
+        parts = []
+        for run in sources:
+            rows = run["unscored_rows"]
+            if {"game_id", "player_id"}.issubset(rows.columns):
+                owner = rows.game_id.astype(int).map(
+                    lambda game_id: game_source.get(int(game_id), latest["run_id"]))
+                parts.append(rows[owner.eq(run["run_id"])])
+        unscored_rows = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
     reason_counts = ({str(key): int(value) for key, value in
                       unscored_rows.reason.fillna("UNSPECIFIED").value_counts().items()}
                      if "reason" in unscored_rows else {})
@@ -607,14 +701,17 @@ def build_production_sog_reference(
     display["prediction_rows"] = int(len(graded))
     display["prediction_artifact_sha256"] = prediction_sha
     if coverage.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
-        if (coverage.get("prediction_artifact_sha256") != prediction_sha
-                or coverage.get("daily_run_id") != run_id):
+        # Market coverage is descriptive and binds to the run it was built from.
+        coverage_run = by_run.get(str(coverage.get("daily_run_id") or ""))
+        if (coverage_run is None
+                or coverage.get("prediction_artifact_sha256") != coverage_run["prediction_sha"]
+                or (not multi_source and coverage.get("daily_run_id") != run_id)):
             raise ValueError("PRODUCTION_SOG_MARKET_COVERAGE_REFERENCE_MISMATCH")
         bound_coverage = dict(coverage)
         bound_coverage.update({"reference_name": "sog_reference",
             "model_family": "poisson_baseline", "model_version": "baseline_v1",
             "prediction_rows": int(coverage.get("prediction_rows", len(graded))),
-            "prediction_artifact_sha256": prediction_sha,
+            "prediction_artifact_sha256": coverage_run["prediction_sha"],
             "odds_observation_sha": coverage.get("odds_observation_manifest_sha256"),
             "population_binding": coverage.get("population_binding"),
             "affects_grading_denominator": False})
@@ -645,6 +742,12 @@ def build_production_sog_reference(
         })
     if unscored_sha:
         provenance["sog_reference_unscored_artifact_sha256"] = unscored_sha
+    if multi_source:
+        for run in sources[:-1]:
+            provenance[f"sog_reference_prediction_artifact_sha256:{run['run_id']}"] = run["prediction_sha"]
+            provenance[f"sog_reference_daily_receipt_manifest_sha256:{run['run_id']}"] = run["receipt_manifest_sha"]
+            if run["unscored_sha"]:
+                provenance[f"sog_reference_unscored_artifact_sha256:{run['run_id']}"] = run["unscored_sha"]
     return display, provenance
 
 
