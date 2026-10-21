@@ -1230,3 +1230,22 @@ consumers keep full verification. Open items:
   Re-running the writer would find no anchor before those dates and blank the
   streaks, so they are left as written. Frozen past predictions are unaffected.
 
+## prod12 tracking needed the removed owner login (2026-10-21)
+
+- Status: **FIXED 2026-10-21**.
+- Defect: `mlb-prod12-track-daily` (`mlb_pipeline_log.py` → `mlb_pipeline_check`)
+  failed with `DATABASE_URL/SUPABASE_DB_URL not configured` on every run since
+  the owner login was removed on 2026-10-19. `check_mlb_hits_expectation_sources.py`
+  and `report_mlb_prop_coverage.py` used the plain `pg_fetchone`/`pg_fetchall`,
+  whose fallback is the owner URL. The step is nonblocking, so the refresh
+  still exited 0.
+- Fix: both import the existing research opt-in readers
+  (`pg_fetch*_mlb_research_readonly as pg_fetch*`), the pattern 21 MLB readers
+  already use. Both queries ran through the research login before the change.
+  Covered by `READERS` in `backend/tests/test_mlb_research_readonly_routing.py`.
+- Noted, not fixed (pre-existing): `backend/tests/test_shared_mlb_prop_coverage.py`,
+  `test_shared_mlb_prediction_flow_audit.py` and
+  `test_shared_assistant_handoff_bundle.py` import from a `backend.scripts`
+  package that no longer exists; the MLB suite has 193 other failing or
+  erroring tests, unchanged by this fix.
+

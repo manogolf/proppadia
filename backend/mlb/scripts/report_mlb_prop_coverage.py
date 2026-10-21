@@ -8,7 +8,7 @@ import json
 import sys
 from typing import Any, Dict, Sequence
 
-from backend.shared.db.pg import pg_fetchall
+from backend.shared.db.pg import pg_fetchall_mlb_research_readonly as pg_fetchall
 
 
 def _date_filter(date_column: str, source_table: str, window_mode: str) -> str:

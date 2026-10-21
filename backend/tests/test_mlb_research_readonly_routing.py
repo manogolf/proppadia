@@ -262,6 +262,9 @@ class MlbDailyCheckReaderOptInTests(unittest.TestCase):
         "backend/mlb/scripts/hydrate_expanded_o15_context.py": "pg_fetchall_mlb_research_readonly as pg_fetchall",
         "backend/mlb/scripts/run_mlb_hits_o15_review_board.py": "pg_fetchall_mlb_research_readonly as pg_fetchall",
         "backend/mlb/scripts/build_mlb_reconcile_rows.py": "pg_fetchall_mlb_research_readonly as pg_fetchall",
+        # prod12 pipeline log checks (mlb_pipeline_check); failed after owner-login removal.
+        "backend/mlb/scripts/check_mlb_hits_expectation_sources.py": "pg_fetchone_mlb_research_readonly as pg_fetchone",
+        "backend/mlb/scripts/report_mlb_prop_coverage.py": "pg_fetchall_mlb_research_readonly as pg_fetchall",
         "backend/domains/mlb/repository/today_workspace_repository.py": "pg_fetchone_mlb_research_readonly as pg_fetchone",
     }
 

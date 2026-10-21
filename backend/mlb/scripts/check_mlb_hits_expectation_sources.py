@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any, Sequence
 
-from backend.shared.db.pg import pg_fetchone
+from backend.shared.db.pg import pg_fetchone_mlb_research_readonly as pg_fetchone
 
 _TARGET_FILES = [
     "backend/mlb/v2_write_mlb_api_labels_to_mtp.py",
