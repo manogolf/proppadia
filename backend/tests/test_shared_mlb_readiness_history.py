@@ -6,8 +6,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from backend.scripts import mlb_readiness_last
-from backend.scripts import mlb_readiness_log
+from backend.mlb.scripts import mlb_readiness_last
+from backend.mlb.scripts import mlb_readiness_log
 
 
 class TestSharedMlbReadinessHistory(unittest.TestCase):

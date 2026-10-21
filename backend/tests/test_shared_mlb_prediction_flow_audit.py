@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-from backend.scripts import audit_mlb_prediction_flow as audit
+from backend.mlb.scripts import audit_mlb_prediction_flow as audit
 
 
 class TestSharedMlbPredictionFlowAudit(unittest.TestCase):

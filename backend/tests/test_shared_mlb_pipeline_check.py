@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from backend.scripts import mlb_pipeline_check as pipeline
+from backend.mlb.scripts import mlb_pipeline_check as pipeline
 
 
 class TestSharedMlbPipelineCheck(unittest.TestCase):
@@ -23,11 +23,14 @@ class TestSharedMlbPipelineCheck(unittest.TestCase):
                 quality_games_back=30,
                 quality_min_total=100,
                 quality_min_accuracy=50.0,
+                quality_prop_sources="mlb_api",
                 coverage_window_mode="games",
                 coverage_window_days=30,
                 coverage_games_back=30,
                 coverage_required_props="hits,total_bases",
                 coverage_min_graded_per_prop=20,
+                coverage_gate_metric="graded",
+                coverage_training_prop_sources="mlb_api",
             )
         self.assertTrue(payload["ok"])
         self.assertEqual(payload["status"], "pass")
@@ -54,16 +57,20 @@ class TestSharedMlbPipelineCheck(unittest.TestCase):
                 quality_games_back=30,
                 quality_min_total=100,
                 quality_min_accuracy=50.0,
+                quality_prop_sources="mlb_api",
                 coverage_window_mode="days",
                 coverage_window_days=30,
                 coverage_games_back=30,
                 coverage_required_props="hits",
                 coverage_min_graded_per_prop=20,
+                coverage_gate_metric="graded",
+                coverage_training_prop_sources="mlb_api",
             )
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["status"], "fail")
         self.assertIn("prediction_flow_audit", payload["failures"])
-        self.assertIn("prop_coverage", payload["failures"])
+        # The third check is the hits-expectation guard; prop coverage runs only with include_coverage.
+        self.assertIn("hits_expectation_sources", payload["failures"])
 
     def test_main_returns_nonzero_when_not_ok(self):
         with patch.object(

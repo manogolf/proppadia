@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-from backend.scripts import report_mlb_prop_coverage as coverage
+from backend.mlb.scripts import report_mlb_prop_coverage as coverage
 
 
 class TestSharedMlbPropCoverage(unittest.TestCase):
@@ -100,8 +100,9 @@ class TestSharedMlbPropCoverage(unittest.TestCase):
                 },
             ],
             [
-                {"prop_type": "hits", "training_source_count": 40},
-                {"prop_type": "total_bases", "training_source_count": 35},
+                # training_source is now an alias of row_source; the query returns row_source_count.
+                {"prop_type": "hits", "row_source_count": 40},
+                {"prop_type": "total_bases", "row_source_count": 35},
             ],
         ]
         out = StringIO()
@@ -119,7 +120,7 @@ class TestSharedMlbPropCoverage(unittest.TestCase):
         self.assertEqual(rc, 0)
         payload = json.loads(out.getvalue())
         self.assertTrue(payload["ok"])
-        self.assertEqual(payload["gate_metric"], "training_source")
+        self.assertEqual(payload["gate_metric"], "row_source")
 
     def test_training_prop_sources_are_applied_to_training_query(self):
         side_effects = [

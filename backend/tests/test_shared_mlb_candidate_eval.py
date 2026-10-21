@@ -6,7 +6,7 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.scripts import mlb_candidate_eval as cand
+from backend.mlb.scripts import mlb_candidate_eval as cand
 
 
 def _baseline_payload() -> dict:
@@ -34,6 +34,12 @@ class TestSharedMlbCandidateEval(unittest.TestCase):
             min_overall_lift_pct=0.25,
             max_prop_drop_pct=0.5,
             min_candidate_total=1000,
+            # No per-prop tier policy: the flat drop threshold above governs.
+            min_baseline_prop_total_for_drop=0,
+            min_coverage_ratio_for_drop=0.0,
+            prop_tier_map={},
+            prop_tier_default={},
+            prop_tier_config_path="",
         )
         self.assertTrue(result["ok"])
         self.assertEqual(result["recommendation"], "promote")
@@ -53,6 +59,12 @@ class TestSharedMlbCandidateEval(unittest.TestCase):
             min_overall_lift_pct=0.25,
             max_prop_drop_pct=0.5,
             min_candidate_total=1000,
+            # No per-prop tier policy: the flat drop threshold above governs.
+            min_baseline_prop_total_for_drop=0,
+            min_coverage_ratio_for_drop=0.0,
+            prop_tier_map={},
+            prop_tier_default={},
+            prop_tier_config_path="",
         )
         self.assertFalse(result["ok"])
         self.assertIn("required_prop_stability", result["failures"])

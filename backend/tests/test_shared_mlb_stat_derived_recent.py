@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-from backend.scripts import validate_mlb_stat_derived_recent as validator
+from backend.mlb.scripts import validate_mlb_stat_derived_recent as validator
 
 
 class TestSharedMlbStatDerivedRecent(unittest.TestCase):

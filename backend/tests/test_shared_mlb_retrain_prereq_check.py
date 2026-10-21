@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from backend.scripts import mlb_retrain_prereq_check as prereq
+from backend.mlb.scripts import mlb_retrain_prereq_check as prereq
 
 
 class TestSharedMlbRetrainPrereqCheck(unittest.TestCase):

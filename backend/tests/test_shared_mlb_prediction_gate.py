@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-from backend.scripts import mlb_prediction_gate as gate
+from backend.mlb.scripts import mlb_prediction_gate as gate
 
 
 class TestSharedMlbPredictionGate(unittest.TestCase):
@@ -96,7 +96,8 @@ class TestSharedMlbPredictionGate(unittest.TestCase):
                 ]
             )
         self.assertEqual(rc, 0)
-        quality_mock.assert_called_once_with("games", 45, prop_types=["hits"])
+        quality_mock.assert_called_once_with(
+            "games", 45, prop_types=gate.DEFAULT_PROP_TYPES.split(","), prop_sources=["mlb_api"])
 
 
 if __name__ == "__main__":

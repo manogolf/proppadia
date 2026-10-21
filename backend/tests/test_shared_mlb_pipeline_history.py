@@ -6,8 +6,8 @@ from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
-from backend.scripts import mlb_pipeline_last
-from backend.scripts import mlb_pipeline_log
+from backend.mlb.scripts import mlb_pipeline_last
+from backend.mlb.scripts import mlb_pipeline_log
 
 
 class TestSharedMlbPipelineHistory(unittest.TestCase):

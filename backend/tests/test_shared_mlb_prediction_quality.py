@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-from backend.scripts import analyze_mlb_prediction_quality as quality
+from backend.mlb.scripts import analyze_mlb_prediction_quality as quality
 
 
 class TestSharedMlbPredictionQuality(unittest.TestCase):

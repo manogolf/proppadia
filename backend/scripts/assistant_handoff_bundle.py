@@ -10,12 +10,12 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
-from backend.scripts import check_nhl_workflow_compat
+from backend.nhl.scripts import check_nhl_workflow_compat
 from backend.scripts import check_workflow_command_paths
 from backend.scripts import check_workflow_schedule_inventory
-from backend.scripts import json_check_runner
-from backend.scripts import mlb_pipeline_check
-from backend.scripts import mlb_pipeline_last
+from backend.shared.scripts import json_check_runner
+from backend.mlb.scripts import mlb_pipeline_check
+from backend.mlb.scripts import mlb_pipeline_last
 from backend.scripts import season_activation_report
 from backend.mlb.scripts.mlb_readiness_last import _load_history, _regressions
 from backend.mlb.scripts.mlb_readiness_snapshot import collect_snapshot

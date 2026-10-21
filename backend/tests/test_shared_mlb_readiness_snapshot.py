@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from unittest.mock import patch
 
-from backend.scripts import mlb_readiness_snapshot as readiness
+from backend.mlb.scripts import mlb_readiness_snapshot as readiness
 
 
 class TestSharedMlbReadinessSnapshot(unittest.TestCase):
