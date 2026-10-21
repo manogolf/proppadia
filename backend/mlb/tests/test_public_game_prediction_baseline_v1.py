@@ -122,11 +122,14 @@ def test_16_api_flag_off_returns_no_rows(monkeypatch):
     assert response.status_code == 200 and response.json()["rows"] == []
 
 
-def test_17_api_test_on_renders_rows(monkeypatch):
+def test_17_api_refuses_archived_baseline_rows(monkeypatch):
+    # Since ac08937c the API serves only the certified Pythagorean/Log5 model; certified
+    # rows rendering is covered in test_public_game_prediction_pythagorean_log5_v1.
     monkeypatch.setenv("MLB_PUBLIC_GAME_PREDICTIONS_ENABLED", "1")
     monkeypatch.setattr(service, "fetch_prediction_rows", lambda game_date: score())
     response = TestClient(app).get("/api/mlb/game-predictions", params={"game_date": "2026-08-05"})
-    assert response.status_code == 200 and response.json()["count"] == 1
+    assert response.status_code == 503
+    assert "PUBLIC_PREDICTION_MODEL_VERSION_MISMATCH" in response.json()["detail"]
 
 
 def test_18_public_schema_has_disclosure_and_no_ev(monkeypatch):
@@ -143,6 +146,7 @@ def test_19_scorer_isolated_from_retired_and_betting_paths():
 
 def test_20_baseline_remains_archived_but_is_not_public_binding():
     source = (ROOT / "frontend/src/components/mlb/MLBPublicGamePredictionsPanel.jsx").read_text()
-    assert "45.51%" not in source and "Pythagorean/Log5 v1" in source
+    # Since ac08937c the panel names each row's certified model version.
+    assert "45.51%" not in source and "Model: {row.model_version}" in source
     assert "BETTING EDGE NOT DEMONSTRATED" in source
-    assert "Confidence reflects model separation from 50%" in source
+    assert "Confidence reflects the model probability&apos;s distance from 50%." in source
