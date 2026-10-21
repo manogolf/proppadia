@@ -1249,3 +1249,56 @@ consumers keep full verification. Open items:
   package that no longer exists; the MLB suite has 193 other failing or
   erroring tests, unchanged by this fix.
 
+## MLB test baseline restored (2026-10-21)
+
+- Status: **DONE 2026-10-21**. Run from the main checkout, the MLB suite went from
+  46 failures and collection errors to 5 (1,559 passed): `backend/mlb/tests`,
+  `backend/tests/test_mlb_*`, `test_shared_mlb_*`, `test_shared_assistant_handoff_bundle`.
+  Every fix updates a test to an intended, dated code change, or pins a frozen
+  study to the inputs it was written against; no production behavior changed
+  except the two frozen validators below.
+- Fixed:
+  - Stale `backend.scripts` imports: modules moved to `backend/mlb/scripts` and
+    `backend/nhl/scripts` in d1a1b9e3 (2026-02-21). Twelve files now collect;
+    six of their tests were updated to changed signatures and names (b7db0eda).
+  - Phase-overlay tests assumed the Division Series was new to the committed
+    chain. They now use the postseason-free V1 base (`load_v1_authority()`) or a
+    synthetic bound receipt (3aa328cd).
+  - Aged dates and authority versions: ops brief pinned to V4, Hits pilot stale
+    window, roster freshness, close-date forensic reads its committed report
+    (5eacefec). The frozen phase-eligibility dry run and the Hits pilot validator
+    now load V1, matching their recorded identity. The dry-run test writes its
+    evidence to a temp folder instead of rewriting the tracked
+    `docs/contracts/mlb_2026_training_phase_eligibility_dry_run_v1/dry_run_report.json`.
+    The V1 dry run reproduces that committed report byte-for-byte (b51603d9).
+  - Test doubles updated to the current code (a6e45e88): lazy sqlalchemy
+    (c1769536), `load_retained_schedule_projection` (7d9d0a1d), research-login
+    reads (b2d823b6), ISO lineage timestamps (73160edf), the `runs_rbis` alias lane
+    and batched event-level odds (20ed04e1), the 4-value phase join, and
+    `RuntimeScheduleAuthority` repository paths (5aa8d108). The totals refit is
+    compared within 1e-12, because refits drift in the last bit (~4e-17).
+  - Archived public baseline tests 17 and 20 now assert the certified-model
+    behavior from ac08937c (29e56b8c).
+  - Totals studies check the shadow-store hash they recorded instead of the live
+    `totals_shadow_v1.sqlite3` (5eb2a068).
+- Tripwires left failing on purpose (frozen code pins):
+  - `test_mlb_2026_versioned_file_phase_authority_v1::test_agreement_v4_and_network_database_boundaries_unchanged`:
+    `capture_mlb_market_strong_agreement_live_v4.py` changed 2026-10-10 and 2026-10-19.
+  - `test_mlb_hits_active_package_manifest_reconciliation_v1`: 3 files changed
+    since the 2026-08-23 freeze.
+  - `test_totals_count_feature_structural_repair_comparison_v1` (2 tests) and
+    `test_totals_remove_park_history_depth_direct_location_defect_v1::test_outputs_are_complete_and_protected_state_is_unchanged`:
+    their manifests pin `bin/proppadia_mlb_refresh_daily.sh`, which changed
+    afterwards (2026-10-17 to 2026-10-19 routing and skip fixes).
+- Open, not fixed:
+  - 163 MLB tests fail only in a git worktree, because the `artifacts/` evidence
+    they read is git-ignored. This is the MLB analog of NHL P2.19.
+  - Run on its own, `test_mlb_training_phase_eligibility_dry_run_v1.py` imports
+    `backend/supabase` instead of the installed library. pytest prepends
+    `backend/` to `sys.path` for the `mlb` package. In the full suite the real
+    library is already imported, so it passes there.
+  - The close-date forensic's gap game 823490 now has a retained feed (dated
+    2026-09-28) under `artifacts/analysis/mlb/player_stats_completeness`, and one
+    of its source manifests changed after the report was frozen. The committed
+    report is unchanged; a rerun would no longer list 823490 as a gap.
+
