@@ -19,14 +19,15 @@ underdogs a win-rate table cannot show.
   never surface an against-the-model underdog.
 - Exploratory, not executed wagers; best-price shopping flatters the results.
 
-## Coverage (main caveat)
+## Coverage
 
-- **SOG:** 10-10 → 10-20, about 31% of baseline line rows have a price (none on
-  10-18). It depends on which lines books listed and which candidates the
-  export binds.
-- **Points HGB:** only 10-11, 10-13 and 10-14 (1,319 line rows). The export
-  takes Points candidates from the reconciliation packages, which carry HGB
-  production rows only on those days and Phoenix elsewhere.
+- **SOG:** 10-10 → 10-20, about 31% of baseline line rows have a price. It
+  depends on which lines books listed and which candidates the export binds.
+- **Points HGB:** 10-10 → 10-20 (3,331 line rows priced on the against side,
+  2,621 on the model side). Earlier exports covered only three days because
+  they could not read grades built from several captures; fixed in `bddb1aa8`.
+- **No 2026-10-18 prices:** that day's only odds snapshot (18:40 UTC) came after
+  its prediction (18:36 UTC), so no quote qualifies as pregame-priced.
 
 ## Findings (best price)
 
@@ -34,19 +35,19 @@ underdogs a win-rate table cannot show.
 |---|---|---|---|---|---|
 | SOG | Model pick | 2,068 | 1,328-740 | −0.1% | +8.7% |
 | SOG | Against the model | 2,506 | 795-1,711 | −10.5% | −18.3% |
-| Points HGB | Model pick | 1,013 | 716-297 | −5.2% | +13.3% |
-| Points HGB | Against the model | 1,319 | 304-1,015 | −13.7% | −54.6% |
+| Points HGB | Model pick | 2,621 | 1,938-683 | −2.0% | +9.4% |
+| Points HGB | Against the model | 3,331 | 695-2,636 | −25.8% | −42.0% |
 
 - **Underdog value set** (plus-money sides the model rates positive EV, either
-  relation): SOG 950 bets, 317-633, ROI −1.6%, while the model expected
-  roughly +20% to +38%. Points HGB 156 bets, 58-98, ROI −1.4%.
-- **The model overstates its edge.** Its picks average +9% to +13% model EV
-  but return −0.1% (SOG) and −5.2% (Points). Its tail probabilities are too
+  relation): SOG 950 bets, 317-633, ROI −1.6%; Points HGB 641 bets, 184-457,
+  ROI −17.4%. The model expected roughly +20% or more on these.
+- **The model overstates its edge.** Its picks average about +9% model EV but
+  return −0.1% (SOG) and −2.0% (Points). Its tail probabilities are too
   generous, most visibly on long-priced OVERs (SOG 3.5 OVER plus-money:
   51-218).
-- **Only bright spot, small sample:** SOG model picks priced −149 to +149 went
-  418-365 (783 bets), ROI +3.4% to +4.6% by bucket. Thirteen days is not
-  enough to call this an edge.
+- **Only bright spot, small sample:** model picks priced −149 to +149 —
+  SOG 418-365 (783 bets, ROI +3.9%) and Points HGB 248-204 (452 bets, ROI
+  +6.6%). Eleven to thirteen days is not enough to call this an edge.
 
 Full tables: `by_relation.csv`, `by_relation_price.csv`,
 `positive_ev_by_relation_price.csv`, `plus_money_positive_ev.csv`.
@@ -56,18 +57,17 @@ Full tables: `by_relation.csv`, `by_relation_price.csv`,
 From the main checkout (read-only; each writes a new folder):
 
 ```bash
-for d in $(seq -f "2026-10-%02g" 1 20); do
-  ./bin/python -m backend.nhl.scripts.export_nhl_all_candidate_evaluation \
-    --root artifacts/operational/nhl --price-both-sides --slate-date "$d" \
-    --out "artifacts/analysis/nhl/all_candidate_evaluation_export/both_sides_2026-10-21/slate_date=$d"
-done
+./bin/python -m backend.nhl.scripts.export_nhl_all_candidate_evaluation \
+  --root artifacts/operational/nhl --price-both-sides \
+  --out artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-21_both_sides
 ./bin/python backend/nhl/scripts/report_nhl_sog_points_price_view.py \
   --baseline artifacts/analysis/nhl/sog_points_wl_baseline/2026-10-21 \
-  --export artifacts/analysis/nhl/all_candidate_evaluation_export/both_sides_2026-10-21 \
+  --export artifacts/analysis/nhl/all_candidate_evaluation_export/full_window_2026-10-21_both_sides \
   --out artifacts/analysis/nhl/sog_points_price_view/2026-10-21
 ```
 
-The export runs per slate date because the combined full-window run currently
-stops on a conflicting duplicate Phoenix-shadow Points candidate for 10-17
-(each date alone succeeds). Package checksum (sha256 of `SHA256SUMS`):
-`d1ee6df3bd187bb96df1fe3ec80dd915a3ea6ee4664304a0b3128f54d4553010`.
+The full-window export runs in one pass again: the open, not-yet-reconciled
+slate is now derived instead of fixed at 2026-10-17 (`bddb1aa8`), so the
+duplicate Phoenix-shadow Points candidate no longer occurs. Package checksum
+(sha256 of `SHA256SUMS`):
+`421c563403a7bea7b81c5a01b341ab95ce11f649751cb857e20fad72a8e75283`.
