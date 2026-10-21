@@ -3498,6 +3498,20 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     return
 
 
+def finish_unstarted_lanes(recorder) -> None:
+    """Close lanes the run never reached, labelling why.
+
+    A slate whose games have all started is not an empty slate.
+    """
+    all_started = bool(recorder.canonical_game_ids) and not recorder.eligible_pregame_game_ids
+    for lane in recorder.lanes.values():
+        if lane.status == "NOT_STARTED":
+            recorder.finish_lane(
+                lane.name,
+                status="SKIPPED_NO_PREGAME_GAMES" if all_started else "SKIPPED_VALID_EMPTY_SLATE",
+                reason="ALL_CANONICAL_GAMES_ALREADY_STARTED" if all_started else "NO_CANONICAL_GAMES")
+
+
 def cmd_daily(with_odds: bool, morning_only: bool = False,
               odds_phase: str = "EARLY",
               reuse_roster_observation: Path | None = None,
@@ -3541,11 +3555,7 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
         if recorder.lane("shared_prerequisites").status == "RUNNING":
             recorder.finish_lane("shared_prerequisites")
         if recorder.lane("shared_prerequisites").status == "COMPLETE":
-            for lane in recorder.lanes.values():
-                if lane.status == "NOT_STARTED":
-                    recorder.finish_lane(
-                        lane.name, status="SKIPPED_VALID_EMPTY_SLATE",
-                        reason="NO_CANONICAL_GAMES")
+            finish_unstarted_lanes(recorder)
     except BaseException as error:
         failed_lane = _ACTIVE_DAILY_LANE
         recorder.failure = {
