@@ -1175,3 +1175,20 @@ consumers keep full verification. Open items:
   `test_20` expects `45.51%` to be absent from the panel. Both fail with or
   without the evidence and are unrelated to the phase authority.
 
+## Off days stopped the daily refresh (2026-10-21)
+
+- Status: **FIXED 2026-10-21**.
+- Defect: on a day with no MLB games, `build_mlb_predictions_wide.py` exited
+  "no wide rows produced", the guard passed the failure through, and the
+  refresh stopped at step 2 with code 2. Everything after it was skipped,
+  including the prior day's reconciliation (`mlb-full-slate-performance` and
+  the actual-wager compare). The All-Star break hit the same failure: the
+  15-game 2026-07-12 slate has no `execution_vs_model/2026-07-12`. On
+  2026-10-20 the one-game 2026-10-19 slate was skipped the same way.
+- Fix: an empty official schedule is certified as `VALID_EMPTY_SLATE` and the
+  guard skips it, extending the existing late-slate and BvP no-work exits
+  (MLB Slate Output Contract). Tests in
+  `backend/mlb/tests/test_mlb_morning_workflow_active_health.py`.
+- 2026-10-19 reconciliation run as a one-time catch-up (see below).
+  2026-07-12 is still unreconciled; catch-up needs operator approval.
+

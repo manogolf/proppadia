@@ -81,8 +81,16 @@ Optional columns:
 - `prob_over` is interpreted as `P(OVER)` exactly once.
 - `prob_under = 1 - prob_over`.
 - Rows are filtered to a single `slate_date` (ET).
+- Off day (2026-10-21): when the retained official StatsAPI schedule for the
+  current ET date is well formed and lists zero games, the builder records
+  provenance status `VALID_EMPTY_SLATE`, prints
+  `EMPTY_SLATE_NO_WORK_CERTIFIED slate_date=<d> scheduled_games=0 certified_rows=0`
+  and writes no prediction artifact. `bin/mlb_predictions_wide_guarded.sh`
+  accepts that exact marker for today only, with the output unchanged, and the
+  daily refresh continues (including the prior day's reconciliation). The
+  existing BvP-dependency and late-slate no-work exits work the same way.
 - Builder fails when:
-  - no rows remain after slate-date filtering
+  - no rows remain after slate-date filtering on a day with scheduled games
   - required metadata (`mlb.game_info`) is missing
   - a `prop_type` lacks a `market_key` mapping
 

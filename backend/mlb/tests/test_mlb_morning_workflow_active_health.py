@@ -130,3 +130,47 @@ def test_late_slate_guard_keeps_unexplained_and_historical_failures_fatal(tmp_pa
         )
         assert result.returncode != 0
         assert "SKIP MLB predictions-wide" not in result.stdout
+
+
+def test_empty_slate_requires_current_date_and_a_valid_empty_official_schedule():
+    today = wide._date_et_today()
+    assert wide._empty_slate_certified(today, 0, 0) is True
+    assert wide._empty_slate_certified(today, None, 0) is False  # malformed schedule response
+    assert wide._empty_slate_certified(today, 3, 0) is False  # games listed but none projected
+    assert wide._empty_slate_certified("2026-01-01", 0, 0) is False
+
+
+def test_empty_slate_guard_continues_to_later_stages_without_a_prediction_artifact(tmp_path):
+    helper = Path("bin/mlb_predictions_wide_guarded.sh").resolve()
+    output = tmp_path / "predictions.csv"
+    today = wide._date_et_today()
+    diagnostic = (
+        f"echo '[mlb-wide-pred] EMPTY_SLATE_NO_WORK_CERTIFIED slate_date={today} "
+        "scheduled_games=0 certified_rows=0' >&2; exit 2"
+    )
+    command = (
+        f"zsh {helper} --slate-date {today} --output {output} -- zsh -c \"{diagnostic}\" "
+        "&& echo PRIOR_DAY_RECONCILIATION_EXECUTED"
+    )
+    result = subprocess.run(["zsh", "-c", command], text=True, capture_output=True)
+    assert result.returncode == 0
+    assert "SKIP MLB predictions-wide: NO_SCHEDULED_GAMES_OFF_DAY" in result.stdout
+    assert "PRIOR_DAY_RECONCILIATION_EXECUTED" in result.stdout
+    assert not output.exists()
+
+
+def test_empty_slate_guard_stays_fatal_for_other_dates_or_a_changed_output(tmp_path):
+    helper = Path("bin/mlb_predictions_wide_guarded.sh").resolve()
+    output = tmp_path / "predictions.csv"
+    today = wide._date_et_today()
+    marker = "[mlb-wide-pred] EMPTY_SLATE_NO_WORK_CERTIFIED slate_date={day} scheduled_games=0 certified_rows=0"
+    cases = [
+        ("2026-01-01", f"echo '{marker.format(day='2026-01-01')}' >&2; exit 2"),
+        (today, f"echo changed > {output}; echo '{marker.format(day=today)}' >&2; exit 2"),
+    ]
+    for slate_date, diagnostic in cases:
+        result = subprocess.run(
+            ["zsh", str(helper), "--slate-date", slate_date, "--output", str(output), "--", "zsh", "-c", diagnostic],
+            text=True, capture_output=True)
+        assert result.returncode == 2, (slate_date, result.stdout)
+        assert "NO_SCHEDULED_GAMES_OFF_DAY" not in result.stdout

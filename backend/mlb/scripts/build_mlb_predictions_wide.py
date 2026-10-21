@@ -657,6 +657,15 @@ def _write_phase_overlay_receipt(
     return path, hashlib.sha256(body.encode()).hexdigest()
 
 
+def _empty_slate_certified(slate_date: str, raw_schedule_games: int | None, schedule_rows: int) -> bool:
+    """Certify a current-date off day from the retained official schedule.
+
+    Only a well-formed official response listing zero games qualifies; a
+    missing or malformed schedule stays a failure.
+    """
+    return slate_date == _date_et_today() and raw_schedule_games == 0 and schedule_rows == 0
+
+
 def _late_slate_all_games_started(
     slate_date: str,
     by_pair_games: Dict[Tuple[str, str], List[GameLite]],
@@ -1828,11 +1837,20 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         wide = _to_wide(pred_rows)
         if wide.empty:
+            empty_slate = _empty_slate_certified(str(slate_date), raw_schedule_games, schedule_rows)
             _write_current_slate_provenance(
                 slate_date=str(slate_date), run_identity=provenance_run_identity, inputs=provenance_inputs,
-                counts={**provenance_counts, "wide_rows": 0}, status="VALID_EMPTY_PREDICTIONS",
+                counts={**provenance_counts, "wide_rows": 0},
+                status="VALID_EMPTY_SLATE" if empty_slate else "VALID_EMPTY_PREDICTIONS",
             )
             provenance_written = True
+            if empty_slate:
+                # Off day: the official schedule lists no games, so there is
+                # nothing to predict and later stages (e.g. the prior day's
+                # reconciliation) must still run.
+                print(f"[mlb-wide-pred] EMPTY_SLATE_NO_WORK_CERTIFIED slate_date={slate_date} "
+                      "scheduled_games=0 certified_rows=0", file=sys.stderr)
+                return 74
             if pred_counts.get("skip_bvp_dependency_blocked",0) and not pred_counts.get("skip_predict_error",0):
                 print(f"BVP_DEPENDENT_WIDE_NO_WORK_CERTIFIED slate_date={slate_date} blocked_rows={pred_counts['skip_bvp_dependency_blocked']} market_snapshot_preserved=1",file=sys.stderr)
                 return 76

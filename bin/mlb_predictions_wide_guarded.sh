@@ -43,6 +43,19 @@ if [[ "$rc" -eq 76 ]] && grep -Eq "^BVP_DEPENDENT_WIDE_NO_WORK_CERTIFIED slate_d
 fi
 
 current_date="$(TZ=America/New_York date +%F)"
+# Off day: the retained official schedule lists no games for today.
+if [[ "$slate_date" == "$current_date" ]] \
+  && grep -Fqx "[mlb-wide-pred] EMPTY_SLATE_NO_WORK_CERTIFIED slate_date=${slate_date} scheduled_games=0 certified_rows=0" "$stderr_file"; then
+  after="ABSENT"
+  [[ -f "$output" ]] && after="$(shasum -a 256 "$output" | awk '{print $1}')"
+  if [[ "$after" != "$before" ]]; then
+    echo "ERROR MLB predictions-wide empty-slate command changed output artifact" >&2
+    exit "$rc"
+  fi
+  echo "[$(date -u +%FT%TZ)] SKIP MLB predictions-wide: NO_SCHEDULED_GAMES_OFF_DAY"
+  exit 0
+fi
+
 marker="LATE_SLATE_NO_WORK_CERTIFIED slate_date=${slate_date} "
 if [[ "$slate_date" == "$current_date" ]] \
   && grep -Fq '[mlb-wide-pred] ERROR: no lineage-certified pregame rows' "$stderr_file" \
