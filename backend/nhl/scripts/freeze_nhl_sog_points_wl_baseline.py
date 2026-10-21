@@ -54,8 +54,8 @@ def _latest_summary(day: str) -> tuple[Path, dict]:
     if not paths:
         raise FileNotFoundError(f"NO_PERFORMANCE_SUMMARY:{day}")
     loaded = [(p, json.loads(p.read_text())) for p in paths]
-    return max(loaded, key=lambda item: (item[1].get("summary_revision") or 0,
-                                         item[1].get("generated_at_utc", "")))
+    # Revision numbers are per lineage; the newest summary is the current one.
+    return max(loaded, key=lambda item: item[1].get("generated_at_utc", ""))
 
 
 def _package(day: str, identity: str) -> Path:
