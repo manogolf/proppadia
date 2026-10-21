@@ -22,7 +22,7 @@ import hashlib
 import json
 import sys
 import tempfile
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
@@ -93,6 +93,16 @@ def _load_unproven_sog_run(receipt_path: Path, slate_date: str, *, require_ready
             map(int, predictions.game_id.unique())) <= set(canonical):
         raise ValueError("SOG_PREDICTION_IDENTITY_INVALID")
     ended = str(lane["ended_at_utc"])
+    if not receipt.get("prior_day_learning"):
+        # The earliest runs recorded no prior-day link. Verify against the one
+        # retained prior-day reconciliation package instead (recorded in the
+        # manifest as PRIOR_DAY_LINK_NOT_RECORDED).
+        prior = (date.fromisoformat(slate_date) - timedelta(days=1)).isoformat()
+        packages = sorted((OPERATIONAL / "postgame_reconciliation" / prior).glob("reconciliation=*"))
+        if len(packages) != 1:
+            raise ValueError("PRIOR_DAY_PACKAGE_NOT_UNIQUE")
+        receipt = {**receipt, "prior_day_learning": {"reconciliation_package": str(packages[0]),
+                                                     "link": "PRIOR_DAY_LINK_NOT_RECORDED"}}
     return {
         "run_id": run_id, "ended_at_utc": str(receipt.get("ended_at_utc") or ""),
         "receipt_path": str(Path(receipt_path).resolve()), "receipt_sha": _sha(Path(receipt_path)),
@@ -150,6 +160,10 @@ def sog_rows(day: str, *, unproven: bool = False) -> tuple[pd.DataFrame, dict]:
         "wins": wins, "losses": losses,
         "matches_stored_summary": (wins, losses) == (stored.get("wins"), stored.get("losses")) if stored else None,
         "model_identity": UNPROVEN_MODEL if unproven else "PROVEN_FITTED_MODEL_EVIDENCE",
+        "prior_day_link": ("PRIOR_DAY_LINK_NOT_RECORDED" if unproven and not any(
+            (json.loads(Path(OPERATIONAL / "daily_runs" / f"run_id={r['parent_daily_run_id']}" / "parent_receipt.json").read_text())
+             .get("prior_day_learning")) for r in display["model_identity"].get("source_daily_runs", [])
+            or [{"parent_daily_run_id": display["model_identity"].get("parent_daily_run_id")}]) else "RECORDED"),
         "source_daily_runs": [r["parent_daily_run_id"] for r in display["model_identity"].get("source_daily_runs", [])]
                              or [display["model_identity"].get("parent_daily_run_id")],
     }
