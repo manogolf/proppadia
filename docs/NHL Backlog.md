@@ -722,6 +722,117 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   confirm operational scope limitations; no acquisition or model behavior was
   changed.
 
+#### P2.13 roster part — per-game coverage design (proposed 2026-10-22, awaiting operator approval)
+
+- Status: **DESIGN ONLY — not implemented**. Scope is the roster half of
+  P2.13; the Points ladder half is handled separately.
+- Current behavior (inspected, not assumed): `write_roster_observation`
+  (`daily_capture.py`) raises `ROSTER_OBSERVATION_INCOMPLETE_OR_CONFLICTING`
+  before writing anything, so one bad team leaves no package at all. The
+  roster child then fails before any DML (no player/roster rows for the
+  slate), and every observer sees a missing package and reports
+  `ROSTER_NOT_READY` on every poll. Missing teams arise when both
+  `/roster/{team}/current` and the season path 404 or the response has no
+  players (`fetch_roster` returns `[]`); a transport failure after ordinary
+  retries also drops the team, or aborts the child when the request journal
+  is required. All 104 retained packages (2026-09-24 to 2026-10-22) are
+  `NHL_ROSTER_RESEARCH_OBSERVATION_V1`, complete, with no missing teams or
+  exclusions, and no failed staging directory is retained, so this remains
+  a scope limitation, not an observed incident.
+- Existing logic reused, not replaced: the writer's normalization, conflict
+  and divergent-snapshot detection, manifest/`verify_package`, and
+  create-only staging; `verify_roster_observation_reuse` stays the
+  full-slate validator, unchanged; observers' existing per-game
+  `game_exclusions` surface (Points/Saves, `NHL_GAME_LEVEL_PREGAME_COVERAGE_V1`)
+  and per-row pregame checks from P2.24 A. No roster partial-coverage logic
+  exists: code and `git log -S` hits for `PARTIAL_COVERAGE` / `covered_game`
+  in `backend/nhl` concern odds/quote coverage and research reports only.
+- Package format: a complete slate still writes the V1 package exactly as
+  today (same files, fields, marker). Only when some, but not all, games are
+  usable does the writer create a separate schema,
+  `NHL_ROSTER_PARTIAL_COVERAGE_OBSERVATION_V1`, with marker status
+  `PARTIAL_COVERAGE_COMPLETE` and `complete_per_game_coverage=false`, so the
+  unchanged full validator rejects it by construction. It keeps every V1
+  field and file (all raw responses, conflicts, hashes, schedule binding to
+  the full canonical game set and hash, observation time,
+  `strictly_prestart`) and adds:
+  - `roster_game_coverage.csv` (manifest-bound): one row per canonical game
+    with `game_id`, both teams, `coverage` (`COVERED`/`EXCLUDED`) and a
+    per-team reason: `TEAM_RESPONSE_MISSING`, `TEAM_RESPONSE_EMPTY`,
+    `TEAM_RESPONSE_FAILED` (after ordinary retries; redacted error type),
+    `TEAM_NATURAL_KEY_CONFLICT`, `TEAM_DIVERGENT_SNAPSHOTS`;
+  - summary fields `covered_game_ids`, `covered_game_set_hash`,
+    `excluded_game_ids`, `excluded_teams` (team → reason).
+  `roster_snapshot.jsonl` holds rows for covered games only. A game is
+  covered only if both teams have a non-empty, conflict-free, single-hash
+  response. An empty response is never coverage.
+- Still fail-closed in the writer (no package): malformed response or
+  section, an unexpected team, a journal or integrity error, and zero
+  covered games. Zero covered games means acquisition did not work; partial
+  coverage is never written for blocked or late acquisition, and there is no
+  second fetch or retry change.
+- New state: `VERIFIED_PARTIAL_CURRENT_SLATE_ROSTER`, from a new
+  `verify_partial_roster_observation` beside the full validator, and a small
+  dispatcher that picks the validator by `schema_version` and never falls
+  back from one to the other. The partial validator checks everything the
+  full one does (manifest, marker, season, date, phase, full game set and
+  hash, zero conflicts within covered games) plus that the coverage file,
+  covered/excluded IDs and hash agree with each other and with the snapshot
+  rows. States stay distinct: schedule not imported and package missing →
+  `ROSTER_NOT_READY` (retry); empty schedule →
+  `VERIFIED_EMPTY_CURRENT_SLATE`; full → `VERIFIED_CURRENT_SLATE_ROSTER`;
+  partial → the new state; corrupt, wrong date or game set, or bad hash →
+  `CURRENT_SLATE_ROSTER_OBSERVATION_INVALID` (blocking). The newest snapshot
+  still wins, as today.
+- Consumers:
+  - Roster child and daily roster lane: write player/roster rows only for
+    teams in covered games; lane status `COMPLETE_PARTIAL_COVERAGE`, with the
+    excluded games in the parent receipt. `--reuse-roster-observation` keeps
+    requiring a full package.
+  - Points/Saves observers (`nhl_prediction_only_common.py`): eligible games
+    are intersected with `covered_game_ids`; each other game gets a
+    `game_exclusions` row `ROSTER_COVERAGE_EXCLUDED:<reason>`, so
+    `coverage_status` is never `FULL_SLATE`. This is an explicit filter, not
+    reliance on the database, which may still hold older rows for the bad
+    team.
+  - SOG observer: drops feature rows for uncovered games before prediction
+    and records them in `excluded_players.csv` with the same reason; the
+    roster state is kept in `readiness_evidence`.
+  - Daily SOG/Points/Saves lanes: restricted to covered games the same way.
+  - Mainline cross-market observer and daily moneyline/puck line: no
+    per-game exclusion surface exists, so they keep requiring a full package
+    and report a distinct blocking reason,
+    `CURRENT_SLATE_ROSTER_PARTIAL_COVERAGE_NOT_SUPPORTED`, instead of
+    retrying. Extending them needs its own approval (paid odds request plan).
+  - Resilient grading (`postgame_reconcile/core.py`): roster checks use the
+    dispatcher. A prop/SOG package bound to a partial roster is accepted only
+    for rows whose game is in `covered_game_ids`; a row on an uncovered game
+    excludes that package as `RESILIENT_ROSTER_GAME_NOT_COVERED`.
+    `daily_receipt_source_proofs` rejects partial packages unless the caller
+    passes `accept_partial=True` and gets the covered games back, so
+    `performance_summary` and HGB keep today's behavior until each is
+    extended.
+- Compatibility: the full validator, V1 writer output, and every retained V1
+  package verify exactly as before; no package is rewritten or relabeled.
+  Older code that meets a partial package rejects it (marker is not
+  `COMPLETE`), which fails closed.
+- Test plan (fixtures, offline): writer — one team missing, empty, failed,
+  conflicting, divergent → partial package with the right covered/excluded
+  games; all teams bad → no package; malformed/unexpected team → raises;
+  complete slate output unchanged against the current writer. Validators —
+  full validator rejects a partial package; partial validator rejects
+  tampered coverage file, mismatched covered hash, snapshot rows on excluded
+  games, wrong date/game set; dispatcher never falls back; all 104 retained
+  packages still verify. Consumers — Points/Saves/SOG predict only covered
+  games and record exclusions; mainline reports the distinct reason;
+  missing package stays `ROSTER_NOT_READY`; reconciliation grades covered
+  rows and rejects a package with a row on an uncovered game;
+  `daily_receipt_source_proofs` default rejects partial. Contract docs
+  (comprehensive capture "Roster observations", prediction-only roster gate,
+  `docs/README.md` index) change in the same commit as the code.
+- Open choice for the operator: no minimum coverage threshold is proposed;
+  any slate with at least one covered game produces a partial package.
+
 ### P2.14 Correct the isolated PP-TOI PostgreSQL regression assertion
 
 - Status: **RESOLVED 2026-10-18 — fixture defect, writer correct**. A
