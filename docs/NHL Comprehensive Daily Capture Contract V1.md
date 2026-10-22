@@ -432,6 +432,10 @@ its certified set with the date's games less those. Void games' predictions
 are never graded in any lane (FINAL_PREGAME or resilient); resilient sources
 are still verified against the full scheduled slate they were captured for,
 and their void-game rows are recorded as excluded (`GAME_VOID_<state>`).
+The daily run's prior-date history seeding (goalie and skater logs, roster
+refresh, shift charts) receives the certificate's `voided_game_ids` as
+`NHL_SCHEDULE_VOIDED_GAME_IDS` and skips those games, so a suspended game's
+partial box score does not reach history tables.
 Request-level detail is in the Postgame Official Request Accounting Contract.
 Official-outcome certification is independent of prediction grading. In
 prior-learning mode, a missing immutable lane prediction must remain ungraded

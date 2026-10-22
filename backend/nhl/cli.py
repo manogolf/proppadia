@@ -120,6 +120,7 @@ from backend.nhl.postgame_learning import (
     current_et_slate, ensure_prior_learning, prior_et_slate,
 )
 from backend.nhl.reconciliation_certificate import require_prior_day_certificate
+from backend.nhl.official_request_journal import ENV_VOIDED_GAME_IDS
 
 
 # ---------- bootstrap env ----------
@@ -2628,6 +2629,19 @@ def _require_daily_prior_certificate(prior_date: str, result: dict) -> dict:
     return certificate
 
 
+def prior_day_voided_env(prior_learning: dict, yday: str) -> dict[str, str]:
+    """Child environment naming the certified prior day's void games.
+
+    The seed and shift-chart scripts skip games listed in
+    NHL_SCHEDULE_VOIDED_GAME_IDS, so a suspended game's partial box score does
+    not reach history tables (P2.24 D follow-up 3).
+    """
+    certificate = (prior_learning or {}).get("certificate") or {}
+    if certificate.get("slate_date") != yday or not certificate.get("voided_game_ids"):
+        return {}
+    return {ENV_VOIDED_GAME_IDS: ",".join(str(int(g)) for g in certificate["voided_game_ids"])}
+
+
 # ---------- daily pipeline ----------
 
 # --- REPLACE the very top of cmd_daily(with_odds: bool) down through the two print() lines ---
@@ -2714,17 +2728,21 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     # PHASE A: Finalize YDAY into raw/history FIRST (the guardrail)
     # ============================================================
 
-    # A1) Pull yesterday logs + shiftcharts into stage (safe even if yday had no games)
-    run([PY, SCRIPTS_DIR / "seed_goalie_logs_for_date.py"],        env={"SLATE_DATE": yday})
+    # A1) Pull yesterday logs + shiftcharts into stage (safe even if yday had no games).
+    # Certified void games (PPD/SUSP/CNCL) are skipped by every child.
+    voided_env = prior_day_voided_env(recorder.prior_learning, yday)
+    run([PY, SCRIPTS_DIR / "seed_goalie_logs_for_date.py"],
+        env={"SLATE_DATE": yday, **voided_env})
     run(
         [PY, SCRIPTS_DIR / "refresh_players_and_roster_today.py"],
-        env=_roster_refresh_environment(
-            slate_date=yday, reuse_roster_observation=reuse_roster_observation),
+        env={**_roster_refresh_environment(
+            slate_date=yday, reuse_roster_observation=reuse_roster_observation), **voided_env},
     )
     run([PY, SCRIPTS_DIR / "seed_skater_logs_for_date.py"], env={
-        "SLATE_DATE": yday, "NHL_DAILY_RUN_ID": daily_run_id,
+        "SLATE_DATE": yday, "NHL_DAILY_RUN_ID": daily_run_id, **voided_env,
     })
-    run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"],      env={"SLATE_DATE": yday})
+    run([PY, SCRIPTS_DIR / "ingest_shiftcharts_for_date.py"],
+        env={"SLATE_DATE": yday, **voided_env})
 
     # A2) Promote stage → raw for yday (idempotent upsert)
     stage_has_blocks = _table_has_column(db, "nhl", "import_skater_logs_stage", "blocks")
