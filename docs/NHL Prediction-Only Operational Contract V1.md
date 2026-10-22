@@ -33,19 +33,21 @@ Saves:
 
 Each new package records `NHL_GAME_LEVEL_PREGAME_COVERAGE_V1`, the full canonical game IDs and hash, observation-eligible game IDs and hash, the game IDs represented by prediction rows, and a manifest-bound `game_exclusions.csv`. Exclusion reasons distinguish already-started games, games that start before durable publication, missing cutoff-bounded active roster identities, and games with no qualified lane rows. Player-level feature-history and Points ladder exclusions remain in their existing manifest-bound exclusion surfaces. `coverage_status` reports `FULL_SLATE` only when every scheduled game is still eligible and there are no player/input exclusions; otherwise it reports partial coverage. A zero-row lane attempt produces an explicit observer no-op/failure status and no prediction card.
 
-The full, verified, complete, strictly prestart current-slate roster observation remains a publication prerequisite. Game-level coverage does not permit a partial or corrupt roster observation, changed canonical identities, same-day feature leakage, or uncertified prior-day history. Points retains complete coherent ladders for each included player-game; a ladder-ineligible player is excluded from prediction rows. Saves remains conditional-on-start and does not infer a starter when authorized pregame starter evidence is absent. An uncertain starter does not invalidate other eligible goalie rows or games.
+A verified current-slate roster observation remains a publication prerequisite. A partial-coverage package (`VERIFIED_PARTIAL_CURRENT_SLATE_ROSTER`, P2.13) permits predictions only for its covered games; every other game is excluded in `game_exclusions.csv` with the package's `ROSTER_COVERAGE_EXCLUDED:<team>=<reason>` and reconciliation accepts only that exact reason. Game-level coverage does not permit a corrupt roster observation, changed canonical identities, same-day feature leakage, or uncertified prior-day history. Points retains complete coherent ladders for each included player-game; a ladder-ineligible player is excluded from prediction rows. Saves remains conditional-on-start and does not infer a starter when authorized pregame starter evidence is absent. An uncertain starter does not invalidate other eligible goalie rows or games.
 
 Points retains each frozen line-model probability as `raw_prob_over`, then constructs the operational ladder with an equal-weight non-increasing isotonic projection. The line meanings remain `P(points >= 1)`, `P(points >= 2)`, and `P(points >= 3)` for 0.5, 1.5, and 2.5. Projection version and model lineage are recorded in each run; no candidate is emitted when price evidence is absent. Saves retains the complete conditional-on-start distribution. Authorized starter sources include NHL.com projected-lineup articles (`NHL_COM_PROJECTED_LINEUP`) and any separately governed source explicitly supplied to the gate. An NHL.com record qualifies as `PROJECTED` only when it has an exact scheduled game date and matchup, identifies the team, explicitly names one starter, binds that name to exactly one canonical goalie ID on that team, and is captured fresh and before scheduled start. Article URL/identity, content hash, capture time, and publication date or timestamp are retained; date-only publication metadata remains date-only. `CONFIRMED` remains distinct. Ambiguous, stale, conflicting, unauthorized, post-start, or market-only identity cannot qualify a prediction. The policy allowlist does not itself acquire articles; Saves remains blocked on runs without qualifying captured evidence.
 
 Every Points, Saves, and SOG observer validates the immediately prior date's
 reconciliation certificate before reading historical feature rows or
 publishing a prediction. It also requires the validated current-date schedule
-and the complete, strictly prestart immutable roster observation produced by
-the daily roster child. The gate is read-only and never starts a second
+and the verified immutable roster observation produced by the daily roster
+child: complete, or partial with per-game coverage (P2.13), in which case only
+covered games are predicted. A snapshot taken after some puck drops is judged
+per game (P2.24 A). The gate is read-only and never starts a second
 reconciliation or acquisition path. A missing, incomplete, wrong-date,
 corrupt, or non-final certificate produces an explicit failed observer status
-and no prediction. Missing, mismatched, incomplete, or post-start roster
-evidence likewise blocks publication. A verified empty official prior-date
+and no prediction. Missing, mismatched, or corrupt roster evidence likewise
+blocks publication. A verified empty official prior-date
 schedule is the only no-package exception; an empty current slate requires no
 roster package and produces no prediction. A current roster package that has
 not been published yet is not a failure: Points, Saves, and SOG all report

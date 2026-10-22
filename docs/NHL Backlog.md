@@ -681,13 +681,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.13 Resolve NHL roster coverage and Points ladder batch-scope gaps
 
-- Status: **OPEN — ladder part fixed 2026-10-22; per-game roster coverage
-  approved 2026-10-22 and being designed in its own session (design before
-  code)**.
-  Partial roster coverage remains a separate proposed capability. The October
-  18 recurrence review below did not establish it as a correction for any
-  confirmed acquisition failure; do not implement it as a workaround for
-  blocked or late roster acquisition.
+- Status: **IMPLEMENTED LOCALLY — ladder part fixed 2026-10-22; per-game
+  roster coverage implemented 2026-10-22 (see the roster subsection below);
+  natural-run evidence pending**. Partial coverage is not a correction for
+  the confirmed timing incidents (P2.15) and is never written for blocked or
+  late acquisition. Original finding follows.
   The immutable roster writer requires every scheduled team's response and
   normalized coverage from both teams in every canonical game, with no
   natural-key conflict or divergent repeated team snapshots. The reuse and
@@ -747,10 +745,32 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   confirm operational scope limitations; no acquisition or model behavior was
   changed.
 
-#### P2.13 roster part — per-game coverage design (proposed 2026-10-22, awaiting operator approval)
+#### P2.13 roster part — per-game coverage (designed and approved 2026-10-22, implemented 2026-10-22)
 
-- Status: **DESIGN ONLY — not implemented**. Scope is the roster half of
-  P2.13; the Points ladder half is handled separately.
+- Status: **IMPLEMENTED LOCALLY — natural-run evidence pending**. Commits
+  `bf1d5c1c` (writer, validator, gate), `694897c1` (roster child, daily
+  lanes), `84bd7bea` (observers), `80894899` (grading), plus the contract
+  docs commit. The operating contract is the comprehensive capture contract's
+  "Per-game roster coverage" section. Differences from the design below:
+  the daily `roster` lane reuses the existing warning status
+  `COMPLETE_WITH_BOUNDED_LIMITS` (reason `ROSTER_PARTIAL_GAME_COVERAGE`)
+  instead of a new `COMPLETE_PARTIAL_COVERAGE`; the request journal gained
+  `OfficialTransportExhausted` (a `RuntimeError` subclass) so the roster
+  child can tell exhausted transport from integrity errors; daily HGB Points
+  restricts itself through the Phoenix rows and is blocked on a partial
+  slate when Phoenix is unavailable; Points/Saves packages keep
+  `eligible_game_ids` time-based and record roster exclusions in
+  `game_exclusions.csv`, which reconciliation accepts only with the exact
+  reason the package's roster evidence names. Verification: 34 new fixture
+  tests plus one end-to-end publish→reconcile test; the full NHL suites
+  (1,224 tests) pass; all 104 retained V1 roster packages re-verify
+  unchanged through the new dispatcher. No production command, provider
+  request or database write was run.
+- Natural-run acceptance (open): no team-level roster failure has occurred
+  yet. When one does, confirm the partial package, the excluded games in the
+  daily receipt and observer receipts, covered-game predictions, and that
+  reconciliation grades only covered games.
+- Original design (2026-10-22):
 - Current behavior (inspected, not assumed): `write_roster_observation`
   (`daily_capture.py`) raises `ROSTER_OBSERVATION_INCOMPLETE_OR_CONFLICTING`
   before writing anything, so one bad team leaves no package at all. The
@@ -1015,8 +1035,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   certificate/package and do not reach feature export, and (5) once the
   package is complete and prestart, qualified game-level predictions can be
   retained. Also verify a blocked certificate prevents roster and
-  history-dependent work. Keep partial roster coverage in P2.13 until
-  independently designed and explicitly authorized.
+  history-dependent work. Partial roster coverage is P2.13's (implemented
+  2026-10-22); it does not change this timing contract.
 - Remaining evidence: no retained official request journal for the October
   17 pre-acquisition window; no database snapshot at the exact September 30
   observer timestamp; and no full stage-by-stage source/transaction evidence

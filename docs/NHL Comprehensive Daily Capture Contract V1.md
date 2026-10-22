@@ -241,9 +241,10 @@ lists failure reasons and, since 2026-10-19, retains the failing game's box
 score and play-by-play as `failed_source_<game_id>_<kind>.json` with hashes
 under `failed_source_responses`, so a failure can be diagnosed afterward.
 
-Roster coverage remains slate-wide: an incomplete roster package still blocks
-Points/Saves feature export for the slate (see "Roster observations" below and
-NHL Backlog P2.13).
+Roster coverage is per game (2026-10-22, P2.13): a game is usable only when
+both its teams have clean roster evidence. A partial-coverage roster package
+excludes the other games with a recorded reason; Points, Saves and SOG predict
+the covered games only (see "Roster observations" below).
 
 ## Resilient pregame evaluation population
 
@@ -484,8 +485,9 @@ Games already started, or that start before immutable publication completes,
 are excluded with manifest-bound reasons. Other future games may still be
 captured when their lane inputs qualify. Game and player exclusions remain
 visible in the prediction package and observer receipt; partial coverage is
-never labeled full-slate coverage. The complete, strictly prestart roster
-observation and certified prior-day history remain prerequisites. A lane with
+never labeled full-slate coverage. A verified roster observation (complete,
+or partial with per-game coverage, see "Roster observations") and certified
+prior-day history remain prerequisites. A lane with
 no eligible prediction rows creates no card. Reconciliation grades only
 retained prediction keys; missing Points predictions remain explicitly
 ungradeable and missing Saves predictions remain unpredicted starters or
@@ -543,16 +545,14 @@ Package integrity and roster coverage are separate: missing response/team or
 per-game coverage makes a package incomplete; malformed source/sections,
 conflicting identities, altered manifest files, absent completion marker,
 wrong date/game-set binding, or non-prestart observation makes it invalid.
-The current verifier requires both complete coverage and valid package
-integrity, and Points/Saves require that slate-level package before either
-lane exports features. There is no maximum-age check beyond date/game binding
-and observation before first puck. Consequently, a missing team/game currently
-blocks unrelated games even when their own roster evidence is present. A
-verified partial-game package could support only games with both teams and
-valid identity/source evidence, but the current writer and observer contract
-do not support that mode. Supporting it requires an explicit partial-coverage
-manifest state and per-game downstream binding; do not simply relax the
-current completeness or hash checks.
+The full-slate verifier (`verify_roster_observation_reuse`) is unchanged and
+still requires complete coverage and valid package integrity. There is no
+maximum-age check beyond date/game binding and observation before first puck.
+Since 2026-10-22 (P2.13) a team-level coverage gap no longer blocks unrelated
+games: the writer records it in a separate partial-coverage package, verified
+by its own validator, and consumers restrict themselves to the covered games
+(see "Roster observations"). Integrity failures still invalidate the whole
+package.
 
 ### Roster availability incident finding (October 18, 2026)
 
@@ -597,16 +597,18 @@ provider diagnosis. If certification fails, stop and repair the actual
 prior-day evidence or contract; do not move roster acquisition ahead of
 certification. The current code already enforces the certificate and roster
 prerequisites before Points/Saves feature export; natural runs must confirm
-that behavior and transaction evidence. Full-slate roster coverage remains the
-current contract. Partial coverage is a separate proposed capability and is
-not established as a correction for the confirmed incidents.
+that behavior and transaction evidence. Per-game partial coverage (P2.13)
+addresses a single team's bad response; it is not a correction for the
+confirmed timing incidents and is never written for blocked or late
+acquisition (zero covered games writes no package).
 
 Points/Saves observers classify an absent current-slate roster package as
 `ROSTER_NOT_READY`, write a lane status receipt, and remain eligible to retry
 on a later ordinary poll. They do not start feature export or create a
 prediction attempt in that state. A present but corrupt, contradictory,
-wrong-date, wrong-game-set, incomplete, or non-prestart package remains a
-blocking validation failure. Freshness is established by current-slate date
+wrong-date, wrong-game-set, or non-prestart package remains a blocking
+validation failure. A verified partial-coverage package is
+`VERIFIED_PARTIAL_CURRENT_SLATE_ROSTER`, not a failure. Freshness is established by current-slate date
 and canonical game-set binding plus strictly prestart observation; no separate
 maximum-age threshold is defined by this contract.
 
@@ -746,6 +748,71 @@ are recorded distinctly. Divergent repeated snapshots or conflicting
 natural-key values fail
 before player or roster DML. `/roster/current` is explicitly provenance for a
 pregame roster observation, not proof of dressed-game participation.
+
+### Per-game roster coverage (2026-10-22, P2.13)
+
+- Package types. When every game has clean evidence for both teams the
+  writer produces the unchanged `NHL_ROSTER_RESEARCH_OBSERVATION_V1` package
+  (marker `COMPLETE`). When only some games do, it writes
+  `NHL_ROSTER_PARTIAL_COVERAGE_OBSERVATION_V1` (marker
+  `PARTIAL_COVERAGE_COMPLETE`, `complete_per_game_coverage=false`), which the
+  full-slate validator rejects by construction. It keeps every V1 field and
+  file, binds the full canonical game set and hash, and adds the
+  manifest-bound `roster_game_coverage.csv` (one row per canonical game:
+  `game_id`, `home_team`, `away_team`, `coverage` `COVERED`/`EXCLUDED`,
+  `home_team_reason`, `away_team_reason`) and summary fields
+  `covered_game_ids`, `covered_game_set_hash`, `excluded_game_ids`,
+  `excluded_teams`, `team_failure_details`. `roster_snapshot.jsonl` holds
+  covered games only; raw responses and conflicts are all retained.
+- Team reasons, in precedence order: `TEAM_NATURAL_KEY_CONFLICT`,
+  `TEAM_DIVERGENT_SNAPSHOTS`, `TEAM_RESPONSE_FAILED` (HTTP error or exhausted
+  transport after ordinary retries), `TEAM_RESPONSE_MISSING`,
+  `TEAM_RESPONSE_EMPTY` (including an empty roster the request journal
+  rejected). An empty response is never coverage. A game is covered only if
+  neither team has a reason.
+- Still fail-closed with no package: a malformed response or section, an
+  unexpected team, any journal/redirect/identity integrity error, and zero
+  covered games. The governed current-slate roster child records a single
+  team's provider failure and continues; other callers of the same script
+  (the prior-date refresh) keep their previous behavior. There is no second
+  fetch and no retry change.
+- States. `verify_slate_roster_coverage` picks the validator by
+  `schema_version` and never falls back. The observer gate reports
+  `VERIFIED_CURRENT_SLATE_ROSTER` (result unchanged),
+  `VERIFIED_PARTIAL_CURRENT_SLATE_ROSTER` (adds covered/excluded game IDs and
+  `roster_game_exclusions`), `VERIFIED_EMPTY_CURRENT_SLATE`, `ROSTER_NOT_READY`
+  (schedule not imported or no package; retry), or
+  `CURRENT_SLATE_ROSTER_OBSERVATION_INVALID` (blocking). The newest snapshot
+  is used, as before.
+- Daily run. The roster child writes player/roster rows only for teams in
+  covered games. The `roster` lane finishes `COMPLETE_WITH_BOUNDED_LIMITS`
+  with reason `ROSTER_PARTIAL_GAME_COVERAGE`, and the receipt's
+  `roster_observation` lists `covered_game_ids` and `roster_game_exclusions`.
+  Saves and Phoenix Points scoring inputs drop excluded games
+  (`roster_excluded_games`), and prediction validation rejects any row on an
+  excluded game. HGB Points scores from the Phoenix rows; if Phoenix is
+  unavailable on a partial slate HGB is blocked. Daily moneyline/puck line is
+  `BLOCKED_LANE_LOCAL` with `CURRENT_SLATE_ROSTER_PARTIAL_COVERAGE_NOT_SUPPORTED`.
+  `--reuse-roster-observation` still requires a complete prestart package.
+- Observers. Points/Saves exclude each uncovered game in
+  `game_exclusions.csv` and the observer receipt with reason
+  `ROSTER_COVERAGE_EXCLUDED:<team>=<reason>`; their `eligible_game_ids` stay
+  time-based and `coverage_status` is never `FULL_SLATE`. SOG drops those
+  rows and records them in `excluded_players.csv` with the same reason. The
+  mainline cross-market observer reports `FAILED_WARN_ONLY` with
+  `CURRENT_SLATE_ROSTER_PARTIAL_COVERAGE_NOT_SUPPORTED` before export or any
+  odds request.
+- Grading. Resilient grading verifies roster packages through the
+  dispatcher. A package bound to a partial roster with any row on an
+  uncovered game is excluded as `RESILIENT_ROSTER_GAME_NOT_COVERED`; a Points
+  or Saves package's embedded covered games must equal the verified
+  package's. The immutable package validator accepts a roster exclusion
+  reason only when it is exactly the one the package's partial roster
+  evidence names. `daily_receipt_source_proofs` rejects a partial roster
+  unless the caller passes `accept_partial=True`; Points HGB evaluation and
+  the performance summary do not, so they keep the previous behavior.
+- Compatibility. All 104 retained V1 packages (2026-09-24 to 2026-10-22)
+  verify unchanged through the dispatcher; no package is rewritten.
 
 ## Provisional phase planner
 
