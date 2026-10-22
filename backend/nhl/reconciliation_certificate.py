@@ -6,6 +6,8 @@ import hashlib
 import json
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Any, Mapping
+
 from backend.nhl.game_phase import season_for_date
 
 
@@ -35,6 +37,10 @@ REQUIRED_PACKAGE_FILES = {
 # verified day on which every scheduled game was void.
 PRIOR_DAY_CERTIFICATE_STATUSES = frozenset(
     {"CERTIFIED_FINAL", "VERIFIED_EMPTY_SCHEDULE", "VERIFIED_ALL_GAMES_VOID"})
+
+
+PARTIAL_ROSTER_STATUS = "VERIFIED_PARTIAL_CURRENT_SLATE_ROSTER"
+PARTIAL_ROSTER_NOT_SUPPORTED = "CURRENT_SLATE_ROSTER_PARTIAL_COVERAGE_NOT_SUPPORTED"
 
 
 class RosterObservationNotReady(RuntimeError):
@@ -386,7 +392,7 @@ def require_slate_roster_observation(
 ) -> dict[str, object]:
     """Require the current slate's verified, complete prestart roster package."""
     from backend.nhl.daily_capture import canonical_game_set_hash, load_canonical_slate
-    from backend.nhl.daily_orchestration import verify_roster_observation_reuse
+    from backend.nhl.daily_orchestration import verify_slate_roster_coverage
 
     schedule_dir = Path(slate_root) / slate_date
     try:
@@ -415,7 +421,7 @@ def require_slate_roster_observation(
     try:
         summary = json.loads((candidate / "observation_summary.json").read_text())
         phase = str(summary["phase"])
-        verified = verify_roster_observation_reuse(
+        verified = verify_slate_roster_coverage(
             candidate, season=season, slate_date=slate_date, phase=phase,
             canonical_game_ids=game_ids, canonical_game_set_hash=game_hash,
             # The newest snapshot may follow a puck drop; observers predict
@@ -426,7 +432,7 @@ def require_slate_roster_observation(
         raise RuntimeError("CURRENT_SLATE_ROSTER_OBSERVATION_INVALID") from error
     except RuntimeError as error:
         raise RuntimeError(f"CURRENT_SLATE_ROSTER_OBSERVATION_INVALID:{error}") from error
-    return {
+    result = {
         "status": "VERIFIED_CURRENT_SLATE_ROSTER",
         "slate_date": slate_date,
         "package_path": verified["path"],
@@ -438,19 +444,48 @@ def require_slate_roster_observation(
         "canonical_game_set_hash": game_hash,
         "game_ids": game_ids,
     }
+    if verified.get("roster_coverage") == "PARTIAL":
+        # Only games whose two teams both have clean evidence are usable (P2.13).
+        result.update(
+            status=PARTIAL_ROSTER_STATUS,
+            covered_game_ids=verified["covered_game_ids"],
+            covered_game_set_hash=verified["covered_game_set_hash"],
+            excluded_game_ids=verified["excluded_game_ids"],
+            roster_game_exclusions=verified["roster_game_exclusions"],
+        )
+    return result
+
+
+def roster_covered_game_ids(roster: Mapping[str, Any]) -> set[int] | None:
+    """Covered games of a verified current-slate roster; None means every game."""
+    status = roster.get("status")
+    if status == PARTIAL_ROSTER_STATUS:
+        return {int(game_id) for game_id in roster["covered_game_ids"]}
+    if status in {"VERIFIED_CURRENT_SLATE_ROSTER", "VERIFIED_EMPTY_CURRENT_SLATE"}:
+        return None
+    raise RuntimeError(f"CURRENT_SLATE_ROSTER_STATUS_UNKNOWN:{status}")
+
+
+def require_full_roster_coverage(roster: Mapping[str, Any]) -> None:
+    """Block a lane that has no per-game exclusion surface on a partial roster."""
+    if roster.get("status") == PARTIAL_ROSTER_STATUS:
+        raise RuntimeError(PARTIAL_ROSTER_NOT_SUPPORTED)
 
 
 def daily_receipt_source_proofs(
     receipt: dict[str, object], *, slate_root: Path = DEFAULT_SLATE_ROOT,
-) -> dict[str, str]:
+    accept_partial: bool = False,
+) -> dict[str, Any]:
     """Re-verify the prior-day certificate and roster a daily run was built on.
 
     Mirrors the cross-market resilient adapter. A run recorded before
     certificates were written (2026-10-18) is re-verified from the prior-day
     reconciliation package it recorded. Raises RuntimeError when either proof
-    does not verify.
+    does not verify. A partial-coverage roster (P2.13) is rejected unless the
+    caller passes ``accept_partial`` and then restricts itself to the returned
+    ``covered_game_ids``.
     """
-    from backend.nhl.daily_orchestration import verify_roster_observation_reuse
+    from backend.nhl.daily_orchestration import verify_slate_roster_coverage
 
     slate_date = str(receipt.get("slate_date") or "")
     prior = receipt.get("prior_day_learning") or {}
@@ -470,14 +505,21 @@ def daily_receipt_source_proofs(
         raise RuntimeError("DAILY_RECEIPT_ROSTER_MANIFEST_MISMATCH")
     summary = json.loads((roster_path / "observation_summary.json").read_text())
     game_ids = [int(game_id) for game_id in receipt.get("canonical_game_ids") or []]
-    verified_roster = verify_roster_observation_reuse(
+    verified_roster = verify_slate_roster_coverage(
         roster_path, season=int(summary["season"]), slate_date=slate_date,
         phase=str(summary["phase"]), canonical_game_ids=game_ids,
         canonical_game_set_hash=str(receipt.get("canonical_game_set_hash") or ""),
         require_strictly_prestart=False)
     if verified_roster.get("manifest_sha256") != roster_hash:
         raise RuntimeError("DAILY_RECEIPT_ROSTER_UNVERIFIED")
-    return {"certificate_sha256": str(identity), "roster_source_sha256": roster_hash}
+    proofs: dict[str, Any] = {
+        "certificate_sha256": str(identity), "roster_source_sha256": roster_hash}
+    if verified_roster.get("roster_coverage") == "PARTIAL":
+        if not accept_partial:
+            raise RuntimeError(f"DAILY_RECEIPT_{PARTIAL_ROSTER_NOT_SUPPORTED}")
+        proofs.update(roster_coverage="PARTIAL",
+                      covered_game_ids=verified_roster["covered_game_ids"])
+    return proofs
 
 
 def admitted_scheduled_starts(package: Path) -> dict[int, str]:

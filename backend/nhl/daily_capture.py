@@ -13,6 +13,8 @@ import re
 import time
 import uuid
 import base64
+import csv
+import io
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, time as wall_time, timedelta, timezone
 from pathlib import Path
@@ -32,6 +34,17 @@ EASTERN = ZoneInfo("America/New_York")
 UTC = timezone.utc
 ODDS_CONTRACT = "NHL_ODDS_RESEARCH_OBSERVATION_V1"
 ROSTER_CONTRACT = "NHL_ROSTER_RESEARCH_OBSERVATION_V1"
+# Written only when some, but not all, games have both teams' roster evidence
+# (P2.13). The full-slate validator rejects it by its marker and coverage flag.
+ROSTER_PARTIAL_CONTRACT = "NHL_ROSTER_PARTIAL_COVERAGE_OBSERVATION_V1"
+ROSTER_PARTIAL_MARKER_STATUS = "PARTIAL_COVERAGE_COMPLETE"
+ROSTER_GAME_COVERAGE_FILE = "roster_game_coverage.csv"
+ROSTER_GAME_COVERAGE_COLUMNS = (
+    "game_id", "home_team", "away_team", "coverage", "home_team_reason", "away_team_reason")
+# Per-team exclusion reasons, in precedence order.
+ROSTER_TEAM_REASONS = (
+    "TEAM_NATURAL_KEY_CONFLICT", "TEAM_DIVERGENT_SNAPSHOTS", "TEAM_RESPONSE_FAILED",
+    "TEAM_RESPONSE_MISSING", "TEAM_RESPONSE_EMPTY")
 PLANNER_CONTRACT = "NHL_FIRST_PUCK_PHASE_PLANNER_V1"
 ODDS_REQUEST_PLANNER_CONTRACT = "NHL_CANONICAL_EVENT_ODDS_REQUEST_PLAN_V2"
 # The NHL has 32 clubs, so a normal full-league slate can contain no more than
@@ -1319,12 +1332,19 @@ def write_roster_observation(
     *, root: Path, season: int, slate_date: str, phase: str,
     parent_daily_run_id: str, canonical_games: Sequence[CanonicalGame],
     source_responses: Sequence[Mapping[str, Any]], now: datetime | None = None,
+    team_failures: Mapping[str, str] | None = None,
 ) -> Path:
     """Create an immutable roster/current research observation.
 
     ``source_responses`` contains one row per official response with ``team``,
     ``source_url``, ``observed_at_utc`` and the parsed ``payload``.  Repeated
     team responses are retained, while the normalized snapshot is deterministic.
+
+    ``team_failures`` maps a scheduled team to the redacted reason its request
+    failed after ordinary retries. When every game is covered the V1 package is
+    written exactly as before. When only some games have clean evidence for
+    both teams, a separate partial-coverage package records each game's
+    coverage and reason (P2.13). With no covered game nothing is written.
     """
     observed = (now or utc_now()).astimezone(UTC)
     phase = str(phase).upper()
@@ -1458,13 +1478,114 @@ def write_roster_observation(
         "provenance_warning": "roster/current membership is not dressed-game participation evidence",
     }
     if conflicts or not complete:
-        raise RuntimeError(f"ROSTER_OBSERVATION_INCOMPLETE_OR_CONFLICTING:{summary}")
+        return _write_partial_roster_observation(
+            staging=staging, final=final, day_root=day_root, summary=summary,
+            canonical_games=canonical_games, raw_rows=raw_rows, normalized=normalized,
+            conflicts=conflicts, expected_teams=expected_teams,
+            divergent_team_snapshots=divergent_team_snapshots,
+            team_failures=team_failures or {})
     _write_create_only(staging / "raw_roster_responses.jsonl", _jsonl_bytes(raw_rows))
     _write_create_only(staging / "roster_snapshot.jsonl", _jsonl_bytes(normalized))
     _write_create_only(staging / "roster_conflicts.json", _json_bytes(conflicts))
     _write_create_only(staging / "observation_summary.json", _json_bytes(summary))
     _write_create_only(staging / "RUN_COMPLETE.json", _json_bytes({
         "schema_version": ROSTER_CONTRACT, "status": "COMPLETE",
+        "completed_at_utc": iso_utc(utc_now()),
+    }))
+    _manifest(staging)
+    verify_package(staging)
+    day_root.mkdir(parents=True, exist_ok=True)
+    staging.replace(final)
+    return final
+
+
+def _roster_team_reasons(
+    *, expected_teams: set[str], raw_rows: Sequence[Mapping[str, Any]],
+    normalized: Sequence[Mapping[str, Any]], conflicts: Sequence[Mapping[str, Any]],
+    divergent_team_snapshots: Sequence[str], team_failures: Mapping[str, str],
+) -> dict[str, str]:
+    """Return each scheduled team that lacks clean roster evidence, with its reason."""
+    unexpected_failures = sorted(set(map(str.upper, team_failures)) - expected_teams)
+    if unexpected_failures:
+        raise RuntimeError(f"ROSTER_TEAM_FAILURE_UNEXPECTED_TEAM:{unexpected_failures}")
+    failed = {str(team).upper() for team in team_failures}
+    responded = {str(row["team"]).upper() for row in raw_rows}
+    with_rows = {str(row["team"]).upper() for row in normalized}
+    conflicted = {str(item["natural_key"][1]).upper() for item in conflicts}
+    candidates = {
+        "TEAM_NATURAL_KEY_CONFLICT": conflicted,
+        "TEAM_DIVERGENT_SNAPSHOTS": set(divergent_team_snapshots),
+        "TEAM_RESPONSE_FAILED": failed,
+        "TEAM_RESPONSE_MISSING": expected_teams - responded - failed,
+        "TEAM_RESPONSE_EMPTY": expected_teams - with_rows,
+    }
+    reasons: dict[str, str] = {}
+    for team in sorted(expected_teams):
+        for reason in ROSTER_TEAM_REASONS:
+            if team in candidates[reason]:
+                reasons[team] = reason
+                break
+    return reasons
+
+
+def _write_partial_roster_observation(
+    *, staging: Path, final: Path, day_root: Path, summary: dict[str, Any],
+    canonical_games: Sequence[CanonicalGame], raw_rows: list[dict[str, Any]],
+    normalized: list[dict[str, Any]], conflicts: list[dict[str, Any]],
+    expected_teams: set[str], divergent_team_snapshots: list[str],
+    team_failures: Mapping[str, str],
+) -> Path:
+    """Write the partial-coverage package, or fail closed when it cannot apply."""
+    if summary["unexpected_teams"]:
+        raise RuntimeError(f"ROSTER_OBSERVATION_INCOMPLETE_OR_CONFLICTING:{summary}")
+    team_reasons = _roster_team_reasons(
+        expected_teams=expected_teams, raw_rows=raw_rows, normalized=normalized,
+        conflicts=conflicts, divergent_team_snapshots=divergent_team_snapshots,
+        team_failures=team_failures)
+    coverage_rows, covered, excluded = [], [], []
+    for game in sorted(canonical_games, key=lambda value: value.game_id):
+        home, away = game.home_team.upper(), game.away_team.upper()
+        home_reason, away_reason = team_reasons.get(home, ""), team_reasons.get(away, "")
+        is_covered = not home_reason and not away_reason
+        (covered if is_covered else excluded).append(int(game.game_id))
+        coverage_rows.append({
+            "game_id": int(game.game_id), "home_team": home, "away_team": away,
+            "coverage": "COVERED" if is_covered else "EXCLUDED",
+            "home_team_reason": home_reason, "away_team_reason": away_reason,
+        })
+    if not excluded:
+        # Incomplete without an attributable team reason: never relabel as partial.
+        raise RuntimeError(f"ROSTER_OBSERVATION_INCOMPLETE_OR_CONFLICTING:{summary}")
+    if not covered:
+        # Nothing usable: acquisition did not work, so no package is written.
+        raise RuntimeError(
+            f"ROSTER_OBSERVATION_INCOMPLETE_OR_CONFLICTING:NO_COVERED_GAMES:{summary}")
+    covered_set = set(covered)
+    snapshot = [row for row in normalized if int(row["game_id"]) in covered_set]
+    summary = {
+        **summary,
+        "schema_version": ROSTER_PARTIAL_CONTRACT,
+        "coverage_status": "PARTIAL_GAME_COVERAGE",
+        "snapshot_row_count": len(snapshot),
+        "covered_game_ids": covered,
+        "covered_game_set_hash": canonical_game_set_hash(covered),
+        "excluded_game_ids": excluded,
+        "excluded_teams": {team: reason for team, reason in sorted(team_reasons.items())},
+        "team_failure_details": {
+            str(team).upper(): str(detail) for team, detail in sorted(team_failures.items())},
+    }
+    coverage_csv = io.StringIO()
+    writer = csv.DictWriter(coverage_csv, fieldnames=ROSTER_GAME_COVERAGE_COLUMNS,
+                            lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(coverage_rows)
+    _write_create_only(staging / "raw_roster_responses.jsonl", _jsonl_bytes(raw_rows))
+    _write_create_only(staging / "roster_snapshot.jsonl", _jsonl_bytes(snapshot))
+    _write_create_only(staging / "roster_conflicts.json", _json_bytes(conflicts))
+    _write_create_only(staging / ROSTER_GAME_COVERAGE_FILE, coverage_csv.getvalue().encode())
+    _write_create_only(staging / "observation_summary.json", _json_bytes(summary))
+    _write_create_only(staging / "RUN_COMPLETE.json", _json_bytes({
+        "schema_version": ROSTER_PARTIAL_CONTRACT, "status": ROSTER_PARTIAL_MARKER_STATUS,
         "completed_at_utc": iso_utc(utc_now()),
     }))
     _manifest(staging)

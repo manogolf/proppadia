@@ -12,7 +12,16 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 from zoneinfo import ZoneInfo
 
-from backend.nhl.daily_capture import sha256_file, verify_package
+from backend.nhl.daily_capture import (
+    ROSTER_GAME_COVERAGE_COLUMNS,
+    ROSTER_GAME_COVERAGE_FILE,
+    ROSTER_PARTIAL_CONTRACT,
+    ROSTER_PARTIAL_MARKER_STATUS,
+    ROSTER_TEAM_REASONS,
+    canonical_game_set_hash as _game_set_hash,
+    sha256_file,
+    verify_package,
+)
 
 
 UTC = timezone.utc
@@ -556,3 +565,135 @@ def verify_roster_observation_reuse(
         "canonical_game_set_hash": canonical_game_set_hash,
         "reuse_mode": "EXPLICIT_VERIFIED_IMMUTABLE_SOURCE",
     }
+
+
+def roster_game_exclusion_reason(row: Mapping[str, Any]) -> str:
+    """Name the team(s) whose roster evidence excluded a game."""
+    parts = [f"{row[side + '_team']}={row[side + '_team_reason']}"
+             for side in ("home", "away") if row.get(side + "_team_reason")]
+    return "ROSTER_COVERAGE_EXCLUDED:" + ",".join(parts)
+
+
+def verify_partial_roster_observation(
+    path: Path, *, season: int, slate_date: str, phase: str,
+    canonical_game_ids: Iterable[int], canonical_game_set_hash: str,
+    require_strictly_prestart: bool = True,
+) -> dict[str, Any]:
+    """Validate a partial-coverage roster package (P2.13) without relabeling it.
+
+    Applies every full-package binding check, then requires the per-game
+    coverage file, covered/excluded IDs, covered hash and snapshot rows to
+    agree. Never accepts a full V1 package and never falls back to one.
+    """
+    import csv
+
+    path = Path(path).resolve()
+    manifest_sha256 = verify_package(path)
+    marker_path = path / "RUN_COMPLETE.json"
+    summary_path = path / "observation_summary.json"
+    coverage_path = path / ROSTER_GAME_COVERAGE_FILE
+    if not marker_path.is_file() or not summary_path.is_file() or not coverage_path.is_file():
+        raise RuntimeError("ROSTER_PARTIAL_PACKAGE_INCOMPLETE")
+    marker = json.loads(marker_path.read_text())
+    summary = json.loads(summary_path.read_text())
+    canonical = sorted({int(value) for value in canonical_game_ids})
+    with coverage_path.open(newline="") as handle:
+        reader = csv.DictReader(handle)
+        header = tuple(reader.fieldnames or ())
+        rows = list(reader)
+    by_game = {int(row["game_id"]): row for row in rows} if header == ROSTER_GAME_COVERAGE_COLUMNS else {}
+    covered = sorted(map(int, summary.get("covered_game_ids") or []))
+    excluded = sorted(map(int, summary.get("excluded_game_ids") or []))
+    file_covered = sorted(g for g, row in by_game.items() if row["coverage"] == "COVERED")
+    file_excluded = sorted(g for g, row in by_game.items() if row["coverage"] == "EXCLUDED")
+    valid_reasons = set(ROSTER_TEAM_REASONS) | {""}
+    team_reasons: dict[str, str] = {}
+    for row in by_game.values():
+        for side in ("home", "away"):
+            if row[side + "_team_reason"]:
+                team_reasons[row[side + "_team"]] = row[side + "_team_reason"]
+    snapshot_rows = [json.loads(line) for line in
+                     (path / "roster_snapshot.jsonl").read_text().splitlines() if line.strip()]
+    snapshot_teams: dict[int, set[str]] = {}
+    for row in snapshot_rows:
+        snapshot_teams.setdefault(int(row["game_id"]), set()).add(str(row["team"]).upper())
+    conflicts = json.loads((path / "roster_conflicts.json").read_text())
+    checks = {
+        "partial_marker": (marker.get("status") == ROSTER_PARTIAL_MARKER_STATUS
+                           and marker.get("schema_version") == ROSTER_PARTIAL_CONTRACT),
+        "partial_schema": summary.get("schema_version") == ROSTER_PARTIAL_CONTRACT,
+        "season": int(summary.get("season", -1)) == int(season),
+        "slate_date": summary.get("slate_date") == slate_date,
+        "phase": str(summary.get("phase", "")).upper() == str(phase).upper(),
+        "canonical_game_set_hash": summary.get("canonical_game_set_hash") == canonical_game_set_hash,
+        "canonical_game_ids": sorted(map(int, summary.get("canonical_game_ids") or [])) == canonical,
+        "not_full_coverage": summary.get("complete_per_game_coverage") is False,
+        "strictly_prestart": (not require_strictly_prestart
+                              or summary.get("strictly_prestart") is True),
+        "no_unexpected_teams": not summary.get("unexpected_teams"),
+        "coverage_file_header": header == ROSTER_GAME_COVERAGE_COLUMNS,
+        "coverage_file_one_row_per_game": len(rows) == len(by_game) and sorted(by_game) == canonical,
+        "coverage_values": all(row["coverage"] in {"COVERED", "EXCLUDED"}
+                               and row["home_team_reason"] in valid_reasons
+                               and row["away_team_reason"] in valid_reasons
+                               for row in by_game.values()),
+        "coverage_reasons_consistent": all(
+            (row["coverage"] == "COVERED") == (not row["home_team_reason"] and not row["away_team_reason"])
+            for row in by_game.values()),
+        "covered_nonempty": bool(covered),
+        "excluded_nonempty": bool(excluded),
+        "covered_matches_file": covered == file_covered,
+        "excluded_matches_file": excluded == file_excluded,
+        "covered_game_set_hash": summary.get("covered_game_set_hash") == _game_set_hash(covered),
+        "excluded_teams_match_file": summary.get("excluded_teams") == team_reasons,
+        "snapshot_only_covered_games": set(snapshot_teams) <= set(covered),
+        "snapshot_both_teams_per_covered_game": all(
+            snapshot_teams.get(game_id) == {by_game[game_id]["home_team"], by_game[game_id]["away_team"]}
+            for game_id in covered if game_id in by_game),
+        "snapshot_row_count": int(summary.get("snapshot_row_count", -1)) == len(snapshot_rows),
+        "zero_conflicts_in_covered_games": not any(
+            int(item["natural_key"][0]) in set(covered) for item in conflicts),
+    }
+    failed = sorted(name for name, passed in checks.items() if not passed)
+    if failed:
+        raise RuntimeError(f"ROSTER_PARTIAL_VALIDATION_FAILED:{','.join(failed)}")
+    return {
+        "path": str(path),
+        "manifest_sha256": manifest_sha256,
+        "source_parent_daily_run_id": summary.get("parent_daily_run_id"),
+        "observation_timestamp_utc": summary.get("observation_timestamp_utc"),
+        "strictly_prestart": summary.get("strictly_prestart") is True,
+        "snapshot_row_count": len(snapshot_rows),
+        "canonical_game_set_hash": canonical_game_set_hash,
+        "roster_coverage": "PARTIAL",
+        "covered_game_ids": covered,
+        "covered_game_set_hash": summary["covered_game_set_hash"],
+        "excluded_game_ids": excluded,
+        "roster_game_exclusions": [
+            {"game_id": game_id, "reason": roster_game_exclusion_reason(by_game[game_id])}
+            for game_id in excluded],
+    }
+
+
+def verify_slate_roster_coverage(
+    path: Path, *, season: int, slate_date: str, phase: str,
+    canonical_game_ids: Iterable[int], canonical_game_set_hash: str,
+    require_strictly_prestart: bool = True,
+) -> dict[str, Any]:
+    """Verify a roster package with the validator its schema names.
+
+    A partial package goes to the partial validator; anything else goes to the
+    unchanged full-slate validator. Neither falls back to the other.
+    """
+    path = Path(path)
+    summary = json.loads((path / "observation_summary.json").read_text())
+    kwargs = dict(season=season, slate_date=slate_date, phase=phase,
+                  canonical_game_ids=list(canonical_game_ids),
+                  canonical_game_set_hash=canonical_game_set_hash,
+                  require_strictly_prestart=require_strictly_prestart)
+    if summary.get("schema_version") == ROSTER_PARTIAL_CONTRACT:
+        return verify_partial_roster_observation(path, **kwargs)
+    verified = verify_roster_observation_reuse(path, **kwargs)
+    return {**verified, "roster_coverage": "FULL",
+            "covered_game_ids": sorted({int(value) for value in kwargs["canonical_game_ids"]}),
+            "excluded_game_ids": [], "roster_game_exclusions": []}
