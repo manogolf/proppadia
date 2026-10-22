@@ -2629,6 +2629,20 @@ def _require_daily_prior_certificate(prior_date: str, result: dict) -> dict:
     return certificate
 
 
+def protected_null_fill_summary_sql(game_date: str) -> str:
+    """SQL calling the protected NULL-fill promotion and reporting its row count."""
+    datetime.strptime(game_date, "%Y-%m-%d")  # reject anything but a date
+    return (
+        "WITH fill AS (SELECT nhl.promote_skater_game_log_protected_fields("
+        f"DATE '{game_date}') AS n) "
+        "SELECT 'NHL_CHILD_SUMMARY_JSON=' || json_build_object("
+        "'schema_version', 'NHL_PROTECTED_SOURCE_NULL_FILL_SUMMARY_V1', "
+        f"'slate_date', '{game_date}', 'filled_nulls', fill.n, "
+        "'database_row_counts', json_build_object('skater_game_logs_raw_protected_null_fills', fill.n), "
+        "'database_row_counts_complete', true)::text FROM fill;"
+    )
+
+
 def prior_day_voided_env(prior_learning: dict, yday: str) -> dict[str, str]:
     """Child environment naming the certified prior day's void games.
 
@@ -2856,10 +2870,11 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         _ACTIVE_DAILY_RECORDER.record_child(pp_toi_summary)
     print("NHL_PP_TOI_PROMOTION_CONFLICTS=" + json.dumps(pp_toi_summary, sort_keys=True))
     run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-c", promote_sql])
+    # The protected function returns the rows whose NULL shot attempts or PP
+    # TOI it filled; record that count in the parent receipt (P1.3).
     run(["psql", db, "-X", "-qAt", "-v", "ON_ERROR_STOP=1",
          "-v", "VERBOSITY=verbose", "-c",
-         "SELECT 'NHL_PROTECTED_SOURCE_NULL_FILLS=' || "
-         f"nhl.promote_skater_game_log_protected_fields(DATE '{yday}');"],
+         protected_null_fill_summary_sql(yday)],
         database_write_capable=True, database_access="ingestion")
 
     # A3a) Build manpower segments (PP/PK windows) for this slate date (required for PP TOI)

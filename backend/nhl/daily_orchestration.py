@@ -314,6 +314,7 @@ class DailyRunRecorder:
             "confirmed_discrepancy_count", "diagnostic_artifact",
             "promoted_rows", "preserved_existing_values", "filled_nulls",
             "inserted_known_values", "unknown_after_promotion",
+            "unknown_before_protected_null_fill",
             "source_reconstructed_positive_count", "unknown_source_remains_null",
             "populated_zero_preserved",
         }

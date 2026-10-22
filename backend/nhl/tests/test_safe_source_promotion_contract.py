@@ -107,9 +107,10 @@ class SafeSourcePromotionContractTests(unittest.TestCase):
 
     def test_fixed_security_definer_fill_uses_ingestion_route(self):
         cli = (ROOT / "backend/nhl/cli.py").read_text()
-        tail = cli.split(
-            "nhl.promote_skater_game_log_protected_fields(DATE '{yday}');", 1
-        )[1][:200]
+        self.assertIn(
+            "nhl.promote_skater_game_log_protected_fields(", cli.split(
+                "def protected_null_fill_summary_sql(", 1)[1][:600])
+        tail = cli.split("protected_null_fill_summary_sql(yday)", 1)[1][:200]
         self.assertRegex(
             tail,
             r'\],\s*database_write_capable=True,\s*database_access="ingestion"\)',
