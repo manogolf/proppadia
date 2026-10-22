@@ -125,8 +125,13 @@ def prepare_scoring_input(
     allow_partial_slate: bool = False,
     eligible_game_ids: Iterable[int] | None = None,
     constant_feature_values: Mapping[str, float] | None = None,
+    roster_excluded_games: Mapping[int, str] | None = None,
 ) -> dict[str, Any]:
-    """Validate a feature export and write a run-local, canonically joined input."""
+    """Validate a feature export and write a run-local, canonically joined input.
+
+    ``roster_excluded_games`` maps games a partial roster package excluded
+    (P2.13) to their reason; their rows are dropped and recorded separately.
+    """
     source_path, output_path = Path(source_path), Path(output_path)
     frame = pd.read_csv(source_path)
     required = {identity_column, "game_id"}
@@ -156,6 +161,17 @@ def prepare_scoring_input(
     frame = frame[frame.game_id.isin(eligible)].copy()
     if frame.empty:
         raise RuntimeError("SCORING_INPUT_NO_PREGAME_GAMES_REMAIN")
+    roster_excluded = {int(game_id): str(reason)
+                       for game_id, reason in (roster_excluded_games or {}).items()}
+    if not set(roster_excluded).issubset(set(canonical)):
+        raise RuntimeError("SCORING_INPUT_ROSTER_EXCLUDED_GAME_NONCANONICAL")
+    if roster_excluded:
+        if not allow_partial_slate:
+            raise RuntimeError("SCORING_INPUT_ROSTER_PARTIAL_REQUIRES_PARTIAL_SLATE")
+        eligible = eligible - set(roster_excluded)
+        frame = frame[frame.game_id.isin(eligible)].copy()
+        if frame.empty:
+            raise RuntimeError("SCORING_INPUT_NO_ROSTER_COVERED_GAMES_REMAIN")
     observed_games = set(frame["game_id"].tolist())
     if not allow_partial_slate and observed_games != eligible:
         missing_games = sorted(eligible - observed_games)
@@ -213,6 +229,9 @@ def prepare_scoring_input(
         "input_excluded_games": [
             {"game_id": game_id, "reason": INPUT_EXCLUSION_REASON}
             for game_id in sorted(eligible - observed_games)],
+        **({"roster_excluded_games": [
+            {"game_id": game_id, "reason": reason}
+            for game_id, reason in sorted(roster_excluded.items())]} if roster_excluded else {}),
         "parent_daily_run_id": parent_daily_run_id,
         "feature_input_cutoff_utc": feature_input_cutoff_utc,
     }
@@ -297,6 +316,7 @@ def validate_prediction_output(
     parent_daily_run_id: str, feature_input_cutoff_utc: str,
     expected_game_set_hash: str, expected_lines: Sequence[float],
     eligible_game_ids: Iterable[int] | None = None,
+    roster_excluded_game_ids: Iterable[int] = (),
 ) -> dict[str, Any]:
     """Validate a run-local scorer artifact before any DB or market consumer."""
     path = Path(path)
@@ -324,6 +344,9 @@ def validate_prediction_output(
         raise RuntimeError("PREDICTION_ELIGIBILITY_CUTOFF_MISMATCH")
     if not set(frame["game_id"]).issubset(eligible):
         raise RuntimeError("PREDICTION_STARTED_GAME_INCLUDED")
+    roster_excluded = {int(game_id) for game_id in roster_excluded_game_ids}
+    if set(frame["game_id"]) & roster_excluded:
+        raise RuntimeError("PREDICTION_ROSTER_EXCLUDED_GAME_INCLUDED")
     for column in LINEAGE_COLUMNS:
         values = frame[column].astype("string").str.strip()
         if values.isna().any() or (values == "").any():

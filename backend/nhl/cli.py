@@ -75,6 +75,7 @@ from backend.nhl.daily_orchestration import (
     redact_sensitive_text,
     safe_called_process_error,
     verify_roster_observation_reuse,
+    verify_slate_roster_coverage,
 )
 from backend.nhl.prediction_lineage import (
     POINTS_LINES,
@@ -120,7 +121,10 @@ from backend.nhl.market_attachment_retention import retain_market_attachment_pac
 from backend.nhl.postgame_learning import (
     current_et_slate, ensure_prior_learning, prior_et_slate,
 )
-from backend.nhl.reconciliation_certificate import require_prior_day_certificate
+from backend.nhl.reconciliation_certificate import (
+    PARTIAL_ROSTER_NOT_SUPPORTED,
+    require_prior_day_certificate,
+)
 from backend.nhl.official_request_journal import ENV_VOIDED_GAME_IDS
 
 
@@ -1546,6 +1550,13 @@ def build_points(slate: str, *, odds_json: Path | None = None,
     run(args)
 
 
+def _roster_excluded_games(recorder) -> dict[int, str]:
+    """Games the current-slate partial roster package excluded, with reasons (P2.13)."""
+    roster = getattr(recorder, "roster_observation", None) or {}
+    return {int(row["game_id"]): str(row["reason"])
+            for row in roster.get("roster_game_exclusions") or []}
+
+
 def _score_phoenix_points_artifact(*, recorder, prediction_run_dir: Path,
                                    canonical_games, slate: str,
                                    daily_run_id: str, cutoff: str,
@@ -1562,6 +1573,7 @@ def _score_phoenix_points_artifact(*, recorder, prediction_run_dir: Path,
         feature_input_cutoff_utc=cutoff,
         expected_game_set_hash=recorder.canonical_game_set_hash,
         allow_partial_slate=True,
+        roster_excluded_games=_roster_excluded_games(recorder),
     )
     points_input_identity.update(artifact_identity(points_input_csv))
     recorder.lane("points").inputs.append(points_input_identity)
@@ -1610,6 +1622,7 @@ def _score_phoenix_points_artifact(*, recorder, prediction_run_dir: Path,
         feature_input_cutoff_utc=cutoff,
         expected_game_set_hash=recorder.canonical_game_set_hash,
         expected_lines=POINTS_LINES,
+        roster_excluded_game_ids=_roster_excluded_games(recorder),
     )
     identity = artifact_identity(output_path)
     identity.update(validation)
@@ -1797,6 +1810,7 @@ def _run_independent_daily_lanes(
                 expected_game_set_hash=recorder.canonical_game_set_hash,
                 constant_feature_values={"start_prob": 1.0},
                 allow_partial_slate=True,
+                roster_excluded_games=_roster_excluded_games(recorder),
             )
             saves_input_identity.update(artifact_identity(saves_input_csv))
             recorder.lane("saves").inputs.append(saves_input_identity)
@@ -1816,6 +1830,7 @@ def _run_independent_daily_lanes(
                 feature_input_cutoff_utc=saves_cutoff,
                 expected_game_set_hash=recorder.canonical_game_set_hash,
                 expected_lines=SAVES_LINES,
+                roster_excluded_game_ids=_roster_excluded_games(recorder),
             )
             prediction_identities["saves"] = artifact_identity(saves_pred_csv)
             prediction_identities["saves"].update(saves_validation)
@@ -1904,6 +1919,10 @@ def _run_independent_daily_lanes(
                 # scorer failed, continue with canonical roster identities.
                 if phoenix_shadow_identity is None and phoenix_shadow_error is None:
                     phoenix_shadow_error = "PHOENIX_SHADOW_SCORING_UNAVAILABLE"
+                if phoenix_shadow_identity is None and _roster_excluded_games(recorder):
+                    # Without Phoenix rows HGB would read every roster identity,
+                    # including games the partial package excluded.
+                    raise RuntimeError(f"HGB_{PARTIAL_ROSTER_NOT_SUPPORTED}")
                 try:
                     temporary = tempfile.TemporaryDirectory(prefix="nhl_points_hgb_daily_")
                     logs_path, outcomes_paths, slate_path, source_summary = prepare_points_hgb_inputs(
@@ -1959,6 +1978,7 @@ def _run_independent_daily_lanes(
                     feature_input_cutoff_utc=points_cutoff,
                     expected_game_set_hash=recorder.canonical_game_set_hash,
                     expected_lines=POINTS_LINES,
+                    roster_excluded_game_ids=_roster_excluded_games(recorder),
                 )
                 production_identity.update(production_validation)
                 model_identity = hgb_capture_result["model_identity"]
@@ -2129,6 +2149,11 @@ def _run_independent_daily_lanes(
     # capture schema; this integration makes no second provider request.
     if not with_odds:
         recorder.finish_lane("moneyline", status="SKIPPED_NOT_REQUESTED")
+    elif _roster_excluded_games(recorder):
+        # Moneyline/puck line have no per-game roster exclusion surface; a
+        # partial roster package keeps them blocked for the slate (P2.13).
+        recorder.finish_lane("moneyline", status="BLOCKED_LANE_LOCAL",
+                             reason=PARTIAL_ROSTER_NOT_SUPPORTED)
     else:
         _ACTIVE_DAILY_LANE = "moneyline"
         recorder.start_lane("moneyline", inputs=(
@@ -2595,8 +2620,23 @@ def _capture_daily_slate_roster(
                 "manifest_sha256": structured.get("roster_manifest_sha256"),
                 "reuse_mode": "NEW_IMMUTABLE_OBSERVATION",
             }
+        status, reason = ("REUSED" if reuse_roster_observation else "COMPLETE"), None
+        if structured.get("roster_coverage") == "PARTIAL" and recorder.roster_observation:
+            # Only games whose two teams both have clean evidence are usable;
+            # the parent receipt names every excluded game (P2.13).
+            coverage = verify_slate_roster_coverage(
+                Path(recorder.roster_observation["path"]),
+                season=infer_nhl_season_from_date_yyyy_mm_dd(slate), slate_date=slate,
+                phase=odds_phase, canonical_game_ids=[game.game_id for game in canonical_games],
+                canonical_game_set_hash=game_hash, require_strictly_prestart=False)
+            if coverage["manifest_sha256"] != recorder.roster_observation["manifest_sha256"]:
+                raise RuntimeError("ROSTER_PARTIAL_MANIFEST_MISMATCH")
+            recorder.roster_observation.update(
+                roster_coverage="PARTIAL", covered_game_ids=coverage["covered_game_ids"],
+                roster_game_exclusions=coverage["roster_game_exclusions"])
+            status, reason = "COMPLETE_WITH_BOUNDED_LIMITS", "ROSTER_PARTIAL_GAME_COVERAGE"
         recorder.finish_lane(
-            "roster", status="REUSED" if reuse_roster_observation else "COMPLETE",
+            "roster", status=status, reason=reason,
             outputs=[recorder.roster_observation] if recorder.roster_observation else [],
             database_stage_summary=structured.get("database_stage_summary") or {},
         )

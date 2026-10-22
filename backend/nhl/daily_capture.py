@@ -1508,7 +1508,11 @@ def _roster_team_reasons(
     unexpected_failures = sorted(set(map(str.upper, team_failures)) - expected_teams)
     if unexpected_failures:
         raise RuntimeError(f"ROSTER_TEAM_FAILURE_UNEXPECTED_TEAM:{unexpected_failures}")
-    failed = {str(team).upper() for team in team_failures}
+    # The journal rejects an empty official roster before it is retained;
+    # that is still an empty response, not a transport failure.
+    failed_empty = {str(team).upper() for team, detail in team_failures.items()
+                    if detail == "OFFICIAL_RESPONSE_ROSTER_EMPTY"}
+    failed = {str(team).upper() for team in team_failures} - failed_empty
     responded = {str(row["team"]).upper() for row in raw_rows}
     with_rows = {str(row["team"]).upper() for row in normalized}
     conflicted = {str(item["natural_key"][1]).upper() for item in conflicts}
@@ -1516,7 +1520,7 @@ def _roster_team_reasons(
         "TEAM_NATURAL_KEY_CONFLICT": conflicted,
         "TEAM_DIVERGENT_SNAPSHOTS": set(divergent_team_snapshots),
         "TEAM_RESPONSE_FAILED": failed,
-        "TEAM_RESPONSE_MISSING": expected_teams - responded - failed,
+        "TEAM_RESPONSE_MISSING": expected_teams - responded - failed - failed_empty,
         "TEAM_RESPONSE_EMPTY": expected_teams - with_rows,
     }
     reasons: dict[str, str] = {}

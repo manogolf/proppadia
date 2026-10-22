@@ -307,7 +307,7 @@ class DailyRunRecorder:
         allowed = {
             "lane", "command_identity", "exit_status", "duration_ms", "status",
             "schema_version", "normalizer_counts", "roster_observation",
-            "roster_manifest_sha256", "database_stage_summary",
+            "roster_manifest_sha256", "roster_coverage", "database_stage_summary",
             "database_write_capable", "database_write_status",
             "transaction_disposition", "database_row_counts",
             "database_row_counts_complete", "error_type",

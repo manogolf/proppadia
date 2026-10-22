@@ -67,6 +67,7 @@ from requests.adapters import HTTPAdapter
 from backend.nhl.official_request_journal import (
     ENV_REQUIRED,
     ROSTER_REDIRECT_POLICY,
+    OfficialTransportExhausted,
     RequestContext,
     official_get,
     official_season_id,
@@ -79,8 +80,8 @@ from backend.nhl.player_stage_normalizer import (
     normalize_position as _normalize_pos,
 )
 from backend.nhl.daily_capture import (
-    CanonicalGame, canonical_game_set_hash, iso_utc, sha256_file, utc_now,
-    write_roster_observation,
+    ROSTER_PARTIAL_CONTRACT, CanonicalGame, canonical_game_set_hash, iso_utc,
+    sha256_file, utc_now, write_roster_observation,
 )
 from backend.nhl.daily_orchestration import verify_roster_observation_reuse
 
@@ -123,6 +124,8 @@ def _session() -> requests.Session:
 S = _session()
 ROSTER_RESPONSE_VARIANT_BY_TEAM: dict[str, tuple[str, str]] = {}
 ROSTER_SOURCE_RESPONSES: list[dict] = []
+# Scheduled team -> provider failure after ordinary retries (governed capture only).
+ROSTER_TEAM_FAILURES: dict[str, str] = {}
 DATABASE_TRANSACTION_ENTERED = False
 
 # ---------------- Helpers ----------------
@@ -767,6 +770,32 @@ def fetch_roster(team_tri: str, when_iso: str) -> list[dict]:
 
     return []
 
+def per_team_roster_failure(error: BaseException) -> str | None:
+    """Name a single team's provider failure, or None when the whole child must stop.
+
+    Only a provider outcome for that one team qualifies: an HTTP error status,
+    exhausted transport retries, or an empty official roster. Journal,
+    identity, redirect and other integrity errors still stop the child.
+    """
+    if isinstance(error, requests.HTTPError):
+        return "HTTP_ERROR"
+    if isinstance(error, OfficialTransportExhausted):
+        return "TRANSPORT_EXHAUSTED"
+    if isinstance(error, RuntimeError) and str(error) == "OFFICIAL_RESPONSE_ROSTER_EMPTY":
+        return "OFFICIAL_RESPONSE_ROSTER_EMPTY"
+    return None
+
+
+def covered_team_ids(observation: Path, games: list[dict]) -> set[int] | None:
+    """Team IDs in a partial package's covered games; None for a full package."""
+    summary = json.loads((Path(observation) / "observation_summary.json").read_text())
+    if summary.get("schema_version") != ROSTER_PARTIAL_CONTRACT:
+        return None
+    covered = {int(game_id) for game_id in summary["covered_game_ids"]}
+    return {int(team_id) for game in games if int(game["game_id"]) in covered
+            for team_id in (game["home_team_id"], game["away_team_id"])}
+
+
 def _append_from_section(out: list[dict], section: list | None, default_pos: str) -> None:
     """
     Normalizes a roster "section" list into the api-web style items:
@@ -801,6 +830,7 @@ def main():
     roster_normalizer_counts: dict[str, int] = {}
     roster_status_upsert_rows = -1
     roster_observation_reference: dict | None = None
+    roster_coverage = "FULL"
     with psycopg.connect(DB_URL, prepare_threshold=None, row_factory=dict_row) as conn:
         try:
             conn.prepare_threshold = None  # type: ignore[attr-defined]
@@ -882,13 +912,24 @@ def main():
 
         # 2b) ONLINE PATH
         elif not FETCH_DISABLED:
+            # The governed current-slate capture records one team's provider
+            # failure and continues, so the package can exclude only that
+            # team's games (P2.13). Other callers keep their behavior.
+            governed_capture = bool(os.environ.get("NHL_ROSTER_OBSERVATION_ROOT", "").strip())
             try:
                 for g in games:
                     for tri, team_id in ((g["home_tri"], g["home_team_id"]),
                                          (g["away_tri"], g["away_team_id"])):
+                        if str(tri).upper() in ROSTER_TEAM_FAILURES:
+                            continue
                         try:
                             roster = fetch_roster(tri, SLATE_DATE) or []
                         except Exception as e:
+                            failure = per_team_roster_failure(e) if governed_capture else None
+                            if failure is not None:
+                                ROSTER_TEAM_FAILURES[str(tri).upper()] = failure
+                                print(f"[warn] roster fetch failed for {tri}: {failure}")
+                                continue
                             if os.environ.get(ENV_REQUIRED) == "1":
                                 raise
                             print(f"[warn] roster fetch failed for {tri}: {e}")
@@ -940,8 +981,16 @@ def main():
                 parent_daily_run_id=os.environ.get("NHL_PARENT_DAILY_RUN_ID", "UNBOUND_DAILY_RUN"),
                 canonical_games=canonical_games,
                 source_responses=ROSTER_SOURCE_RESPONSES,
+                team_failures=ROSTER_TEAM_FAILURES,
             )
             print(f"ROSTER_OBSERVATION={roster_observation}")
+            # A partial package covers only some games; write database rows
+            # only for the teams in those games.
+            covered_teams = covered_team_ids(roster_observation, games)
+            if covered_teams is not None:
+                roster_coverage = "PARTIAL"
+                players_stage = [row for row in players_stage if int(row["team_id"]) in covered_teams]
+                roster_rows = [row for row in roster_rows if int(row["team_id"]) in covered_teams]
             roster_observation_reference = {
                 "path": str(roster_observation.resolve()),
                 "manifest_sha256": sha256_file(roster_observation / "SHA256SUMS"),
@@ -1023,6 +1072,7 @@ def main():
                 roster_observation_reference.get("manifest_sha256")
                 if roster_observation_reference else None
             ),
+            "roster_coverage": roster_coverage,
             "database_stage_summary": {
                 "source": source,
                 "roster_status_rows_present": int(total_rs),

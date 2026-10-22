@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import csv
 import json
+import os
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -30,6 +31,9 @@ from backend.nhl.reconciliation_certificate import (
     require_slate_roster_observation,
     roster_covered_game_ids,
 )
+
+# The roster child resolves its database URL at import; tests never connect.
+os.environ.setdefault("SUPABASE_DB_URL", "postgresql://offline.invalid/test")
 
 UTC = timezone.utc
 SLATE = "2026-10-24"
@@ -282,6 +286,109 @@ class ObserverGateTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CURRENT_SLATE_ROSTER_OBSERVATION_INVALID") as caught:
                 self.gate(root)
             self.assertNotIsInstance(caught.exception, RosterObservationNotReady)
+
+
+class RosterChildTeamFailureTests(unittest.TestCase):
+    def test_only_single_team_provider_failures_are_recorded(self):
+        import requests
+        from backend.nhl.official_request_journal import OfficialTransportExhausted
+        from backend.nhl.scripts.refresh_players_and_roster_today import per_team_roster_failure
+        self.assertEqual(per_team_roster_failure(requests.HTTPError("HTTP 500")), "HTTP_ERROR")
+        self.assertEqual(per_team_roster_failure(OfficialTransportExhausted("ConnectionError:x")),
+                         "TRANSPORT_EXHAUSTED")
+        self.assertEqual(per_team_roster_failure(RuntimeError("OFFICIAL_RESPONSE_ROSTER_EMPTY")),
+                         "OFFICIAL_RESPONSE_ROSTER_EMPTY")
+        for integrity in ("OFFICIAL_REDIRECT_LOOP", "PRESERVED_RESPONSE_HASH_MISMATCH",
+                          "OFFICIAL_REQUEST_JOURNAL_CONFIG_INCOMPLETE:x"):
+            self.assertIsNone(per_team_roster_failure(RuntimeError(integrity)))
+        self.assertIsInstance(OfficialTransportExhausted("x"), RuntimeError)
+
+    def test_journal_rejected_empty_roster_is_recorded_as_empty(self):
+        with tempfile.TemporaryDirectory() as temp:
+            package = write(Path(temp), all_responses(skip=("MTL",)),
+                            team_failures={"MTL": "OFFICIAL_RESPONSE_ROSTER_EMPTY"})
+            summary = json.loads((package / "observation_summary.json").read_text())
+        self.assertEqual(summary["excluded_teams"], {"MTL": "TEAM_RESPONSE_EMPTY"})
+
+    def test_database_rows_are_limited_to_covered_games_teams(self):
+        from backend.nhl.scripts.refresh_players_and_roster_today import covered_team_ids
+        games = [{"game_id": game.game_id, "home_team_id": index * 2 + 1,
+                  "away_team_id": index * 2 + 2} for index, game in enumerate(GAMES)]
+        with tempfile.TemporaryDirectory() as temp:
+            partial = write(Path(temp) / "partial", all_responses(skip=("MTL",)))
+            full = write(Path(temp) / "full", all_responses())
+            self.assertEqual(covered_team_ids(partial, games), {1, 2, 5, 6})
+            self.assertIsNone(covered_team_ids(full, games))
+
+
+class DailyLaneRosterExclusionTests(unittest.TestCase):
+    CANONICAL = [
+        {"game_id": 2026020168, "start_time_utc": "2026-10-24T23:00:00Z",
+         "home_team_id": 1, "away_team_id": 2},
+        {"game_id": 2026020169, "start_time_utc": "2026-10-24T23:30:00Z",
+         "home_team_id": 3, "away_team_id": 4},
+    ]
+    EXCLUDED = {2026020169: "ROSTER_COVERAGE_EXCLUDED:MTL=TEAM_RESPONSE_MISSING"}
+
+    def prepare(self, root: Path, **kwargs) -> dict:
+        import pandas as pd
+        from backend.nhl.prediction_lineage import prepare_scoring_input
+        source = root / "source.csv"
+        pd.DataFrame([{"player_id": 11, "game_id": 2026020168},
+                      {"player_id": 12, "game_id": 2026020169}]).to_csv(source, index=False)
+        kwargs.setdefault("allow_partial_slate", True)
+        return prepare_scoring_input(
+            source_path=source, output_path=root / "input.csv", canonical_games=self.CANONICAL,
+            slate=SLATE, parent_daily_run_id="run", feature_input_cutoff_utc="2026-10-24T18:00:00Z",
+            expected_game_set_hash=canonical_game_set_hash([2026020168, 2026020169]), **kwargs)
+
+    def test_scoring_input_drops_and_records_roster_excluded_games(self):
+        import pandas as pd
+        with tempfile.TemporaryDirectory() as temp:
+            identity = self.prepare(Path(temp), roster_excluded_games=self.EXCLUDED)
+            rows = pd.read_csv(Path(temp) / "input.csv")
+        self.assertEqual(rows.game_id.tolist(), [2026020168])
+        self.assertEqual(identity["scored_game_ids"], [2026020168])
+        self.assertEqual(identity["input_excluded_games"], [])
+        self.assertEqual(identity["roster_excluded_games"], [
+            {"game_id": 2026020169, "reason": self.EXCLUDED[2026020169]}])
+
+    def test_full_roster_input_is_unchanged(self):
+        with tempfile.TemporaryDirectory() as temp:
+            identity = self.prepare(Path(temp))
+        self.assertNotIn("roster_excluded_games", identity)
+        self.assertEqual(identity["scored_game_ids"], [2026020168, 2026020169])
+
+    def test_whole_slate_callers_cannot_take_roster_exclusions(self):
+        with tempfile.TemporaryDirectory() as temp:
+            with self.assertRaisesRegex(RuntimeError, "REQUIRES_PARTIAL_SLATE"):
+                self.prepare(Path(temp), allow_partial_slate=False,
+                             roster_excluded_games=self.EXCLUDED)
+
+    def test_prediction_on_an_excluded_game_fails_validation(self):
+        import pandas as pd
+        from backend.nhl.prediction_lineage import POINTS_LINES, validate_prediction_output
+        with tempfile.TemporaryDirectory() as temp:
+            self.prepare(Path(temp))
+            frame = pd.read_csv(Path(temp) / "input.csv")
+            rows = pd.concat([frame.assign(line=line, prob_over=0.4) for line in POINTS_LINES])
+            rows.to_csv(Path(temp) / "pred.csv", index=False)
+            kwargs = dict(path=Path(temp) / "pred.csv", lane="points",
+                          canonical_games=self.CANONICAL, slate=SLATE, parent_daily_run_id="run",
+                          feature_input_cutoff_utc="2026-10-24T18:00:00Z",
+                          expected_game_set_hash=canonical_game_set_hash([2026020168, 2026020169]),
+                          expected_lines=POINTS_LINES)
+            validate_prediction_output(**kwargs)
+            with self.assertRaisesRegex(RuntimeError, "PREDICTION_ROSTER_EXCLUDED_GAME_INCLUDED"):
+                validate_prediction_output(**kwargs, roster_excluded_game_ids=self.EXCLUDED)
+
+    def test_daily_recorder_exposes_the_receipt_exclusions(self):
+        from types import SimpleNamespace
+        from backend.nhl.cli import _roster_excluded_games
+        recorder = SimpleNamespace(roster_observation={"roster_game_exclusions": [
+            {"game_id": 2026020169, "reason": "R"}]})
+        self.assertEqual(_roster_excluded_games(recorder), {2026020169: "R"})
+        self.assertEqual(_roster_excluded_games(SimpleNamespace(roster_observation=None)), {})
 
 
 if __name__ == "__main__":

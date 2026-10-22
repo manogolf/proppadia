@@ -23,6 +23,10 @@ import requests
 
 
 ENV_REQUIRED = "NHL_OFFICIAL_REQUEST_JOURNAL_REQUIRED"
+
+
+class OfficialTransportExhausted(RuntimeError):
+    """A journaled official request failed in transport after its ordinary retries."""
 ENV_RUN_ID = "NHL_RECONCILIATION_RUN_ID"
 ENV_JOURNAL = "NHL_OFFICIAL_REQUEST_JOURNAL"
 ENV_CACHE = "NHL_OFFICIAL_RESPONSE_CACHE"
@@ -648,7 +652,7 @@ def official_get(
         if not retryable:
             if response is not None:
                 return PreservedResponse(body, int(status))
-            raise RuntimeError(error_name or f"OFFICIAL_HTTP_STATUS_{status}")
+            raise OfficialTransportExhausted(error_name or f"OFFICIAL_HTTP_STATUS_{status}")
         retry_number += 1
         attempt_in_target += 1
         attempt_reason = "RETRY"
