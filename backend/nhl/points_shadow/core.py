@@ -181,7 +181,25 @@ def construct_coherent_ladders(predictions: pd.DataFrame) -> pd.DataFrame:
     P(points >= 3), respectively.  The frozen binary models remain untouched;
     their values are retained as ``raw_prob_over`` and the operational
     probability is the equal-weight least-squares non-increasing projection.
+    Any structurally invalid player-game ladder fails the whole batch; see
+    ``partition_coherent_ladders`` for the per-player-game variant.
     """
+    return _construct_coherent_ladders(predictions, partition=False)[0]
+
+
+def partition_coherent_ladders(predictions: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Project valid ladders and set aside structurally invalid player-games.
+
+    The same projection as ``construct_coherent_ladders``, but an incomplete,
+    duplicate-line, non-finite or out-of-range player-game ladder is returned
+    as an exclusion (game_id, player_id, reason) instead of failing every
+    other player (NHL Backlog P2.13). Valid ladders are identical.
+    """
+    return _construct_coherent_ladders(predictions, partition=True)
+
+
+def _construct_coherent_ladders(predictions: pd.DataFrame, *,
+                                partition: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
     required = {"game_id", "player_id", "line", "prob_over"}
     missing = required - set(predictions)
     if missing:
@@ -192,16 +210,26 @@ def construct_coherent_ladders(predictions: pd.DataFrame) -> pd.DataFrame:
     out["raw_prob_over"] = pd.to_numeric(out.prob_over, errors="coerce")
     out["probability_construction"] = "EQUAL_WEIGHT_ISOTONIC_EXCEEDANCE_V1"
     line_order = (0.5, 1.5, 2.5)
+    excluded: list[dict[str, Any]] = []
+    excluded_indices: list[Any] = []
     for (game_id, player_id), indices in out.groupby(["game_id", "player_id"], sort=False).groups.items():
         group = out.loc[indices]
+        reason = None
         if len(group) != 3 or set(pd.to_numeric(group.line, errors="coerce")) != set(line_order):
-            raise ValueError(f"POINTS_INCOMPLETE_LADDER:{game_id}:{player_id}")
-        if group.line.duplicated().any():
-            raise ValueError(f"POINTS_DUPLICATE_LADDER_LINE:{game_id}:{player_id}")
-        values_by_line = dict(zip(group.line.astype(float), group.raw_prob_over))
-        values = [float(values_by_line[line]) for line in line_order]
-        if not np.isfinite(values).all() or any(value < 0.0 or value > 1.0 for value in values):
-            raise ValueError(f"POINTS_INVALID_LADDER_PROBABILITY:{game_id}:{player_id}")
+            reason = "POINTS_INCOMPLETE_LADDER"
+        elif group.line.duplicated().any():
+            reason = "POINTS_DUPLICATE_LADDER_LINE"
+        else:
+            values_by_line = dict(zip(group.line.astype(float), group.raw_prob_over))
+            values = [float(values_by_line[line]) for line in line_order]
+            if not np.isfinite(values).all() or any(value < 0.0 or value > 1.0 for value in values):
+                reason = "POINTS_INVALID_LADDER_PROBABILITY"
+        if reason is not None:
+            if not partition:
+                raise ValueError(f"{reason}:{game_id}:{player_id}")
+            excluded.append({"game_id": int(game_id), "player_id": int(player_id), "reason": reason})
+            excluded_indices.extend(indices)
+            continue
         # PAVA for a non-increasing sequence, pooling adjacent violating blocks.
         blocks: list[list[float | int]] = []
         for value in values:
@@ -217,7 +245,8 @@ def construct_coherent_ladders(predictions: pd.DataFrame) -> pd.DataFrame:
         projected = [float(value) for mean, count in blocks for value in [mean] * int(count)]
         projected_by_line = dict(zip(line_order, projected))
         out.loc[indices, "prob_over"] = group.line.astype(float).map(projected_by_line).to_numpy()
-    return out
+    exclusions = pd.DataFrame(excluded, columns=["game_id", "player_id", "reason"])
+    return out.drop(index=excluded_indices), exclusions
 
 
 def verify_fixed_input_parity(

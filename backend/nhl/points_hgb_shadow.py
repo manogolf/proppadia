@@ -251,6 +251,33 @@ def filter_history_outcomes_to_expected_games(outcomes: pd.DataFrame,
     return outcomes.loc[game_ids.isin(expected_game_ids)].copy()
 
 
+HGB_PROBABILITY_COLUMNS = ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5")
+
+
+def partition_valid_hgb_predictions(scored: pd.DataFrame) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
+    """Split scored HGB rows into valid predictions and per-player exclusions.
+
+    A player-game whose expected count or probabilities are not finite, fall
+    outside their range, or cross (P(>=1) < P(>=2) or P(>=2) < P(>=3)) is set
+    aside with a reason instead of failing the capture (NHL Backlog P2.13).
+    """
+    probabilities = scored[list(HGB_PROBABILITY_COLUMNS)].apply(pd.to_numeric, errors="coerce")
+    expected = pd.to_numeric(scored.expected_points, errors="coerce")
+    valid_value = (np.isfinite(probabilities).all(axis=1) & np.isfinite(expected)
+                   & probabilities.ge(0).all(axis=1) & probabilities.le(1).all(axis=1)
+                   & expected.ge(0))
+    coherent = (probabilities.prob_over_0_5.ge(probabilities.prob_over_1_5)
+                & probabilities.prob_over_1_5.ge(probabilities.prob_over_2_5))
+    reasons = pd.Series(None, index=scored.index, dtype=object)
+    reasons[~valid_value] = "HGB_INVALID_PREDICTION_VALUE"
+    reasons[valid_value & ~coherent] = "HGB_LADDER_CROSSING"
+    excluded = reasons.notna()
+    exclusions = [{"game_id": int(row.game_id), "player_id": int(row.player_id), "reason": reason}
+                  for row, reason in zip(scored.loc[excluded].itertuples(index=False), reasons[excluded])]
+    return scored.loc[~excluded].reset_index(drop=True), sorted(
+        exclusions, key=lambda row: (row["game_id"], row["player_id"]))
+
+
 def capture_from_files(
     *, logs_path: Path, outcomes_paths: list[Path], slate_path: Path,
     phoenix_predictions_path: Path | None, phoenix_prediction_sha256: str | None,
@@ -340,11 +367,10 @@ def capture_from_files(
         scaler_sha = joblib.hash(fitted["scaler"]) if isinstance(fitted, dict) and "scaler" in fitted else None
         if not scaler_sha:
             raise ValueError("HGB_FROZEN_SCALER_IDENTITY_MISSING")
-        first = scorer.score(features, fitted)
-        crossings = int(((first.prob_over_0_5 < first.prob_over_1_5) |
-                         (first.prob_over_1_5 < first.prob_over_2_5)).sum())
-        if crossings:
-            raise ValueError("COHERENCE_FAILED")
+        first, player_exclusions = partition_valid_hgb_predictions(scorer.score(features, fitted))
+        if first.empty:
+            raise ValueError("COHERENCE_FAILED:NO_VALID_HGB_PREDICTIONS")
+        crossings = 0  # crossing player-games are excluded, never retained
         stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
         capture = output_root / f"season={season}" / f"slate_date={slate_date}" / f"run_id={parent_run_id}" / f"phase={capture_phase}" / f"captured_at={stamp}"
         capture.mkdir(parents=True, exist_ok=False)
@@ -456,7 +482,10 @@ def capture_from_files(
         if phoenix_available:
             shutil.copyfile(phoenix_predictions_path, phoenix_out)
         # Deterministic replay uses only the retained feature artifact and fitted model.
-        replay = scorer.score(pd.read_csv(feature_out), fitted)
+        replay, replay_exclusions = partition_valid_hgb_predictions(
+            scorer.score(pd.read_csv(feature_out), fitted))
+        if replay_exclusions != player_exclusions:
+            raise ValueError("DETERMINISTIC_REPLAY_FAILED:PLAYER_EXCLUSIONS")
         with tempfile.TemporaryDirectory(prefix="nhl_points_hgb_replay_") as replay_dir:
             replay_path = Path(replay_dir) / "predictions.csv"
             replay.to_csv(replay_path, index=False, float_format="%.17g")
@@ -510,6 +539,7 @@ def capture_from_files(
             "prediction_path": "predictions.csv", "prediction_sha256": sha(prediction_out),
             "identity_count": int(features[keycols].drop_duplicates().shape[0]),
             "prediction_count": int(len(first)), "coherence_crossing_count": crossings,
+            "player_exclusions": player_exclusions,
             "deterministic_replay": "DETERMINISTIC_REPLAY_PASS", "replay_prediction_sha256": replay_sha,
             "model_identity": identity,
             "phoenix_control": phoenix_control,
@@ -570,14 +600,22 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
         raise ValueError("HGB_PRODUCTION_IDENTITY_DUPLICATE")
     features = verify_features.merge(predictions, on=key, how="outer", validate="one_to_one",
                                      suffixes=("", "_prediction"), indicator=True)
-    if not features._merge.eq("both").all():
+    # Feature identities without a prediction must be exactly the capture's
+    # recorded per-player exclusions (P2.13); nothing else may be missing.
+    player_exclusions = capture_receipt.get("player_exclusions") or []
+    excluded_keys = {(int(row["game_id"]), int(row["player_id"])) for row in player_exclusions}
+    unpredicted = {(int(g), int(p)) for g, p in
+                   features.loc[features._merge.eq("left_only"), key].to_numpy()}
+    if features._merge.eq("right_only").any() or unpredicted != excluded_keys:
         raise ValueError("HGB_PRODUCTION_FEATURE_PREDICTION_IDENTITY_MISMATCH")
+    features = features.loc[features._merge.eq("both")].copy()
     canonical = build_canonical_game_map(canonical_games, slate=slate_date,
                                          expected_game_set_hash=canonical_game_set_sha256)
     eligibility = pregame_game_eligibility(canonical_games, feature_cutoff_utc)
     eligible_ids = set(eligibility["eligible_pregame_game_ids"])
     excluded_ids = set(eligibility["started_excluded_game_ids"])
-    feature_game_ids = set(features.game_id.astype(int))
+    # Game-level coverage counts every scored identity, excluded players included.
+    feature_game_ids = set(verify_features.game_id.astype(int))
     if feature_game_ids - set(canonical):
         raise ValueError("HGB_PRODUCTION_NONCANONICAL_GAME")
     if feature_game_ids & excluded_ids:
@@ -603,7 +641,7 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
     if capture_receipt.get("started_excluded_game_ids") is not None and sorted(map(
             int, capture_receipt["started_excluded_game_ids"])) != sorted(excluded_ids):
         raise ValueError("HGB_PRODUCTION_CAPTURE_EXCLUDED_GAME_MISMATCH")
-    if int(capture_receipt.get("identity_count", len(features))) != len(features):
+    if int(capture_receipt.get("identity_count", len(verify_features))) != len(verify_features):
         raise ValueError("HGB_PRODUCTION_CAPTURE_IDENTITY_COUNT_MISMATCH")
     if (capture_receipt.get("feature_sha256") is not None
             and capture_receipt["feature_sha256"] != sha(capture_path / "features.csv")):
@@ -636,7 +674,7 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
         if phoenix_game_ids & excluded_ids:
             raise ValueError("STARTED_GAME_PRESENT_IN_PHOENIX_CONTROL_OUTPUT")
         phoenix_keys = set(map(tuple, phoenix[key].drop_duplicates().astype("int64").to_numpy()))
-        hgb_keys = set(map(tuple, features[key].astype("int64").to_numpy()))
+        hgb_keys = set(map(tuple, verify_features[key].astype("int64").to_numpy()))
         if phoenix_keys != hgb_keys or phoenix_game_ids != feature_game_ids:
             raise ValueError("HGB_PRODUCTION_PHOENIX_ELIGIBLE_IDENTITY_MISMATCH")
         line_counts = phoenix.groupby(key).line.agg(list)
@@ -709,6 +747,7 @@ def build_production_prediction_artifact(*, capture_path: Path, output_path: Pat
         "source_hgb_capture_path": str(capture_path.resolve()),
         "source_hgb_capture_prediction_sha256": capture_receipt["prediction_sha256"],
         "phoenix_shadow": phoenix_shadow,
+        "player_exclusions": player_exclusions,
         "coherence_crossing_count": 0,
         "validated_prediction_identity": True,
     }

@@ -446,3 +446,54 @@ def test_hgb_shadow_failure_does_not_block_phoenix_points_lane():
     assert recorder.lane("points_hgb_shadow").status == "FAILED_NONBLOCKING"
     assert recorder.lane("points_hgb_shadow").blocking is False
     assert recorder.classification() == "READY_WITH_BOUNDED_LANE_WARNING"
+
+
+def test_capture_excludes_one_invalid_player_and_production_keeps_the_rest(tmp_path, monkeypatch):
+    # P2.13: player 12's score is forced invalid; the capture keeps player 11,
+    # records 12, replays deterministically, and production builds without 12.
+    from backend.nhl import points_hgb_shadow as module
+    from backend.nhl.points_hgb_shadow import validate_hgb_capture
+    logs = pd.DataFrame([{"game_id":2026020001,"player_id":pid,"team_id":1,"is_home":True,
+        "home_team_id":1,"away_team_id":2,"toi_minutes":20,"pp_toi_minutes":2,
+        "shots_on_goal":4,"shot_attempts":8} for pid in (11, 12)])
+    outcomes = pd.DataFrame([{"canonical_season":2026,"game_date":"2026-10-08","game_id":2026020001,
+        "player_id":pid,"team_id":1,"official_goals":1,"official_assists":0,"official_final":True,
+        "official_sog":4,"outcome_source_timestamp_utc":"2026-10-09T03:00:00Z"} for pid in (11, 12)])
+    slate = pd.DataFrame([{"game_id":2026020066,"player_id":pid,"game_date":"2026-10-09",
+        "game_start_utc":"2026-10-10T01:00:00Z","is_home":True,"home_team_id":1,"away_team_id":2}
+        for pid in (11, 12)])
+    paths = [tmp_path / name for name in ("logs.csv", "outcomes.csv", "slate.csv")]
+    for frame, path in zip((logs, outcomes, slate), paths):
+        frame.to_csv(path, index=False)
+    real_score = module.scorer.score
+
+    def score_with_invalid_player(features, fitted):
+        out = real_score(features, fitted)
+        bad = out.player_id.eq(12)
+        out.loc[bad, ["expected_points", "prob_over_0_5", "prob_over_1_5", "prob_over_2_5"]] = float("nan")
+        return out
+
+    monkeypatch.setattr(module.scorer, "score", score_with_invalid_player)
+    result = capture_from_files(logs_path=paths[0], outcomes_paths=[paths[1]], slate_path=paths[2],
+        phoenix_predictions_path=None, phoenix_prediction_sha256=None,
+        phoenix_model_identity_sha256=None, phoenix_feature_contract_sha256=None,
+        phoenix_feature_cutoff_utc=None, slate_date="2026-10-09", season=2026,
+        capture_phase="EARLY", parent_run_id="invalid-player-test",
+        feature_cutoff_utc="2026-10-09T15:00:00Z", output_root=tmp_path / "captures",
+        canonical_game_ids=[2026020066])
+    capture = Path(result["capture_path"])
+    receipt = validate_hgb_capture(capture)
+    assert receipt["player_exclusions"] == [
+        {"game_id": 2026020066, "player_id": 12, "reason": "HGB_INVALID_PREDICTION_VALUE"}]
+    assert receipt["identity_count"] == 2 and receipt["prediction_count"] == 1
+    assert receipt["coherence_crossing_count"] == 0
+    assert receipt["deterministic_replay"] == "DETERMINISTIC_REPLAY_PASS"
+    games = [SimpleNamespace(game_id=2026020066, start_time_utc="2026-10-10T01:00:00Z",
+                             home_team_id=1, away_team_id=2)]
+    identity = build_production_prediction_artifact(
+        capture_path=capture, output_path=tmp_path / "points_predictions.csv",
+        canonical_games=games, slate_date="2026-10-09", parent_run_id="invalid-player-test",
+        feature_cutoff_utc="2026-10-09T15:00:00Z",
+        canonical_game_set_sha256=receipt["canonical_game_set_hash"])
+    assert set(pd.read_csv(identity["path"]).player_id) == {11}
+    assert identity["player_exclusions"] == receipt["player_exclusions"]

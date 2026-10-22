@@ -313,6 +313,29 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
         self.assertEqual(json.loads((destination / "run_metadata.json").read_text())[
             "coverage_status"], "PARTIAL_GAME_OR_PLAYER_COVERAGE")
 
+    def test_points_invalid_ladder_excludes_one_player_without_failing_the_batch(self):
+        players = pd.concat([points_features(), points_features().assign(
+            player_id=102, player_name="Second Fixture Skater")], ignore_index=True)
+        scores = pd.concat([point_scores(), point_scores().assign(
+            player_id=102, prob_over=[0.7, float("nan"), 0.3])], ignore_index=True)
+        with self.points_patches():
+            with patch.object(core, "score_points", return_value=scores):
+                destination, _ = core.publish_points(
+                    games=games(), players=players, output_root=self.root / "invalid-ladder",
+                    season=2026, slate_date=SLATE, phase="MIDDAY",
+                    observation_timestamp_utc=OBSERVED, input_cutoff_timestamp_utc=OBSERVED,
+                    canonical_run_identifier="invalid-ladder",
+                )
+        predictions = pd.read_csv(destination / "immutable_predictions.csv")
+        exclusions = pd.read_csv(destination / "prediction_exclusions.csv")
+        self.assertEqual(set(predictions.player_id.astype(int)), {101})
+        self.assertEqual(exclusions[["player_id", "ladder_coherence_decision",
+                                     "ladder_coherence_reason"]].values.tolist(),
+                         [[102, "EXCLUDED_INVALID_LADDER", "POINTS_INVALID_LADDER_PROBABILITY"]])
+        metadata = json.loads((destination / "run_metadata.json").read_text())
+        self.assertEqual(metadata["coverage_status"], "PARTIAL_GAME_OR_PLAYER_COVERAGE")
+        self.assertEqual(metadata["ladder_excluded_player_games"], 1)
+
     def test_points_partial_capture_keeps_only_future_game_and_records_started_exclusion(self):
         slate = pd.concat([
             games("2026-09-21T21:00:00Z"),

@@ -24,7 +24,7 @@ from backend.nhl.points_shadow.core import (
     IDENTITY_PATH as POINTS_IDENTITY_PATH,
     PLAYER_IDENTITY_COLUMNS,
     _validate_inputs as validate_points_inputs,
-    construct_coherent_ladders,
+    partition_coherent_ladders,
     evaluate_ladder_coherence,
     score_frozen as score_points,
     verify_fixed_input_parity as verify_points_parity,
@@ -218,7 +218,10 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
         validate_points_inputs(eligible_games, players, slate_date, observation)
         parity = verify_points_parity(feature_contract_identity)
         identity = verify_points_identity(feature_contract_identity)
-        raw = construct_coherent_ladders(score_points(players, identity))
+        # One player-game's invalid ladder is excluded on its own (P2.13).
+        raw, invalid_ladders = partition_coherent_ladders(score_points(players, identity))
+        if raw.empty:
+            raise RuntimeError("NO_POINTS_ROWS_PASS_LADDER_COHERENCE")
         ladder = evaluate_ladder_coherence(raw, identity)
         predictions = raw.merge(players[PLAYER_IDENTITY_COLUMNS], on=["game_id", "player_id"], validate="many_to_one")
         predictions = predictions.merge(
@@ -242,6 +245,10 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
                                 "model_version": identity["model_version"],
                                 "probability_construction": row.probability_construction}), axis=1)
         exclusions = ladder.loc[~ladder.ladder_coherence_decision.isin(ELIGIBLE_LADDER_STATES)].copy()
+        if not invalid_ladders.empty:
+            exclusions = pd.concat([exclusions, invalid_ladders.rename(
+                columns={"reason": "ladder_coherence_reason"}).assign(
+                ladder_coherence_decision="EXCLUDED_INVALID_LADDER")], ignore_index=True)
         predictions = predictions.loc[predictions.prediction_eligible].copy()
         if predictions.empty:
             raise RuntimeError("NO_POINTS_ROWS_PASS_LADDER_COHERENCE")

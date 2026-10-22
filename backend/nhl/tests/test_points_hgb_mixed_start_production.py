@@ -198,3 +198,55 @@ class HgbMixedStartProductionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HgbPlayerExclusionTests(unittest.TestCase):
+    """P2.13: one invalid HGB player-game is excluded, not the whole capture."""
+
+    def test_partition_flags_invalid_and_crossing_rows(self):
+        from backend.nhl.points_hgb_shadow import partition_valid_hgb_predictions
+        scored = pd.DataFrame([
+            {"game_id": 1, "player_id": 1, "expected_points": 0.7,
+             "prob_over_0_5": 0.5, "prob_over_1_5": 0.2, "prob_over_2_5": 0.05},
+            {"game_id": 1, "player_id": 2, "expected_points": float("nan"),
+             "prob_over_0_5": float("nan"), "prob_over_1_5": float("nan"), "prob_over_2_5": float("nan")},
+            {"game_id": 1, "player_id": 3, "expected_points": 0.7,
+             "prob_over_0_5": 0.2, "prob_over_1_5": 0.5, "prob_over_2_5": 0.05},
+        ])
+        valid, exclusions = partition_valid_hgb_predictions(scored)
+        self.assertEqual(valid.player_id.tolist(), [1])
+        self.assertEqual(exclusions, [
+            {"game_id": 1, "player_id": 2, "reason": "HGB_INVALID_PREDICTION_VALUE"},
+            {"game_id": 1, "player_id": 3, "reason": "HGB_LADDER_CROSSING"}])
+
+    def _capture_with_excluded_player(self, *, record: bool):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        capture = _capture(Path(tmp.name), ELIGIBLE_IDS)
+        predictions = pd.read_csv(capture / "predictions.csv")
+        dropped = predictions.iloc[0]
+        predictions.iloc[1:].to_csv(capture / "predictions.csv", index=False)
+        receipt = json.loads((capture / "receipt.json").read_text())
+        receipt["prediction_sha256"] = hashlib.sha256(
+            (capture / "predictions.csv").read_bytes()).hexdigest()
+        if record:
+            receipt["player_exclusions"] = [{"game_id": int(dropped.game_id),
+                                             "player_id": int(dropped.player_id),
+                                             "reason": "HGB_INVALID_PREDICTION_VALUE"}]
+        (capture / "receipt.json").write_text(json.dumps(receipt))
+        return capture, Path(tmp.name), dropped
+
+    def test_recorded_excluded_player_is_left_out_and_the_rest_build(self):
+        capture, tmp, dropped = self._capture_with_excluded_player(record=True)
+        result = _build(capture, tmp / "out.csv")
+        output = pd.read_csv(tmp / "out.csv")
+        self.assertNotIn(int(dropped.player_id), set(output.player_id))
+        self.assertEqual(result["identity_count"], 630)
+        self.assertEqual(result["eligible_pregame_game_ids"], ELIGIBLE_IDS)
+        self.assertEqual(len(result["player_exclusions"]), 1)
+
+    def test_unrecorded_missing_player_is_still_rejected(self):
+        capture, tmp, _ = self._capture_with_excluded_player(record=False)
+        with self.assertRaisesRegex(ValueError, "HGB_PRODUCTION_FEATURE_PREDICTION_IDENTITY_MISMATCH"):
+            _build(capture, tmp / "out.csv")
+
