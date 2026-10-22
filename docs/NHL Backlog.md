@@ -553,7 +553,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.10 Repair mainline FINAL_PREGAME observer readiness
 
-- Status: **PRODUCER CORRECTED — natural verification reached a prior-day source blocker**.
+- Status: **CLOSED 2026-10-22 — natural evidence**: 10-20 and 10-21 each have exactly one FINAL_PREGAME state (`a4e98cf9…` 11/11 games, `40d12a26…` 2/2), both manifest-valid with `RUN_COMPLETE.json`, and the next morning's certificate grades from them. Original finding follows.
   October 17 had 95 active LaunchAgent polls, all blocked as
   `NOOP_MORNING_NOT_READY` with zero paid calls. The live observer's daily
   receipt gate required unrelated SOG, Points, and Saves outputs even though
@@ -604,7 +604,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.11 Link independent player-prop observer outcomes from the mainline receipt
 
-- Status: **IMPLEMENTED — natural LaunchAgent receipt verification pending**.
+- Status: **CLOSED 2026-10-22 — natural evidence**: all 254 mainline receipts from 10-20 to 10-22 carry POINTS, SAVES and SOG statuses with receipt paths under `NHL_PLAYER_PROP_OBSERVER_LINKS_V1`. Original finding follows.
   The 900-second LaunchAgent still invokes Points, Saves, and SOG observers
   before mainline capture. The parent receipt now records each child status
   and receipt path under `player_prop_observers`, using schema
@@ -629,7 +629,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.12 Preserve eligible Points and Saves games on staggered slates
 
-- Status: **IMPLEMENTED — natural observer and grading verification pending**.
+- Status: **IMPLEMENTED — partially verified 2026-10-22**: on 10-20 the Points/Saves observers ran with games partly started (6/5, 4/7, 3/8, 1/10 eligible/excluded) without a whole-slate refusal, but returned NOOP_ALREADY_CAPTURED because the 21:50Z FINAL_PREGAME package already covered all 11 games, so no package has yet been published with started games excluded. The NOOP status cites the package's empty `game_exclusions.csv` rather than its own exclusions (minor). Original finding follows.
   Points and Saves no longer reject a whole slate merely because one game has
   started. Each retains the full canonical schedule spine and publishes rows
   only for games still pregame at both observation and durable publication.
@@ -730,8 +730,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.15 Separate NHL roster acquisition failures from readiness timing
 
-- Status: **IMPLEMENTED LOCALLY — successful daily reconciliation-to-roster
-  ordering verified; natural FINAL_PREGAME observer acceptance remains pending**. The
+- Status: **IMPLEMENTED LOCALLY — still pending (checked 2026-10-22)**: no slate with
+  first puck before 10:00 PT has occurred since the fix; the first is 2026-10-24
+  (game 2026020168, 17:00Z). Defects against condition (4): overnight polls
+  before the morning schedule import fail with a raw `FileNotFoundError`
+  (`slates/<d>/slate_health.json`, 41 polls on 10-22), and the first poll each
+  night reports `PRIOR_DATE_EMPTY_SCHEDULE_CERTIFICATE_INVALID` although the
+  prior day was not empty, only not yet reconciled. Original finding follows. The
   roster producer and daily sequence are unchanged; the prior-day source
   handoff and observer readiness classifications are corrected below.
 - Confirmed incident A, slate 2026-09-30, games
@@ -973,7 +978,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.17 Resolve final-pregame evidence per game without rewriting captures
 
-- Status: **IMPLEMENTED — reconciliation source discovery, selection, and separate grading outputs added; bounded retained-slate acceptance found and corrected source-discovery defects; natural-run acceptance remains open**.
+- Status: **IMPLEMENTED — reconciliation source discovery, selection, and separate grading outputs added; bounded retained-slate acceptance found and corrected source-discovery defects; natural-run acceptance remains open**. Partially verified 2026-10-22: natural reconciliations on 10-19, 10-20 and 10-21 select per game and are proof-valid in every lane (10-20: Points 546 of 1,092 candidates, SOG 8,472 of 42,360), and cross-market selection drew from two sources on the staggered 10-20 slate. Not yet exercised: the prop MIDDAY fallback when FINAL_PREGAME is missing. Known limit: for Moneyline games 141–145 the later 21:50Z FINAL_PREGAME was excluded as `RESILIENT_CROSS_MARKET_FEATURE_CUTOFF_UNPROVEN`, so they graded from the 19:00Z REFRESH.
 - Implementation lineage reviewed here: `e4cdee47` establishes the prior-learning
   handoff and observer readiness gates; `e6a9f976` integrates the distinct
   `RESILIENT_PREGAME` reconciliation population; `41b66d64` tightens durable
@@ -1615,7 +1620,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.23 Reconcile slates that have several daily snapshots
 
-- Status: **FIXED LOCALLY 2026-10-20 — natural rerun pending**. The
+- Status: **CLOSED 2026-10-22 — natural evidence**: the scheduled 14:30Z run `nhldaily_20261020T143006820009Z_8c42901a` built the 2026-10-19 package (`b42188dd…`, CERTIFIED_FINAL) and finished READY; the four-run 10-20 and 10-21 slates reconciled (`01d6fdcf…`, `90c03e26…`, all five resilient lanes FULL); no `RESILIENT_SOG_SOURCE_READINESS_EVIDENCE_CONFLICT` since. Original finding follows. The
   2026-10-20 morning NHL daily run
   (`nhldaily_20261020T135818903703Z_5b530bdc`) failed blocking with
   `PRIOR_DATE_SCHEDULE_CERTIFICATE_INVALID`. No 2026-10-19 reconciliation
@@ -1652,7 +1657,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 ### P2.24 Remove slate-wide and single-snapshot assumptions added 2026-10-18
 
 - Status: **OPEN — all nine findings fixed 2026-10-20; the walk-forward
-  from 10-13 and three D follow-ups remain**. Fixed: `40ace9ff` (A),
+  from 10-13 and three D follow-ups remain**. Natural evidence (checked
+  2026-10-22): A — later polls used post-puck roster captures (10-20 23:09Z,
+  10-21 23:41Z) as VERIFIED with no failures; B — 10-20 Moneyline graded games
+  141–145 from the 19:00Z REFRESH and 146–151 from the 23:11Z partial REFRESH
+  (FULL, 22 rows); F — schedule snapshots kept per fetch. C, D and E (off day,
+  void games, postseason) have had no real case yet. Fixed: `40ace9ff` (A),
   `7afc7f07` (B), `efaaffb4` (F), `3151be95` (G, H, I), `4e11c95e` (E),
   `6e664567` (C), `cfaf2d6f` (D). Verification:
   - A, F, G, I and E have unit tests that fail on the old code.
@@ -1829,6 +1839,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   The Odds API plan refills 100,000 credits on the 1st of each month
   (operator, 2026-10-20). The current whole-key burn (~11,400 a month) plus
   CLOSING (~4,500) is about 16% of it.
+- 2026-10-21 (first full day on the 13-10 minute window): 2 of 2 games captured
+  at 12.8 minutes before puck, bound, 2,205 and 2,255 prop rows, later runs
+  `SKIPPED_ALREADY_CAPTURED`. Both games shared one start time, so the close
+  waits for a staggered slate (2026-10-22, 12 games).
 - Done when a live day shows every game with a CLOSING snapshot 10-13
   minutes before puck (`report_nhl_closing_odds.py`) and no unexplained
   `MISSED_NO_CLOSING_CAPTURE` or binding failure.
