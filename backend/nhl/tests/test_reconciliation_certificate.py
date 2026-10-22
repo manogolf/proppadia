@@ -94,6 +94,30 @@ class ReconciliationCertificateTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "CERTIFICATE_REQUIRED"):
                 require_prior_day_certificate("2026-10-17", reconciliation_root=Path(temp))
 
+    def test_unreconciled_day_with_games_reports_reconciliation_pending(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            day = root / "slates" / "2026-10-21"
+            day.mkdir(parents=True)
+            (day / "slate_health.json").write_text(json.dumps({
+                "slate_date": "2026-10-21", "completion_status": "READY",
+                "normalized_game_count": 2,
+            }))
+            with self.assertRaises(RuntimeError) as raised:
+                require_prior_day_certificate(
+                    "2026-10-21", reconciliation_root=root / "reconciliation",
+                    slate_root=root / "slates")
+        self.assertEqual(
+            str(raised.exception),
+            "PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED:PRIOR_DAY_RECONCILIATION_NOT_YET_CREATED")
+
+    def test_schedule_not_yet_imported_is_not_ready_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            with self.assertRaisesRegex(RosterObservationNotReady, "CURRENT_SLATE_SCHEDULE_NOT_IMPORTED"):
+                require_slate_roster_observation(
+                    "2026-10-22", slate_root=root / "slates", roster_root=root / "rosters")
+
     def test_verified_empty_official_schedule_allows_no_prior_games(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

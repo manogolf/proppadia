@@ -227,10 +227,23 @@ def require_prior_day_certificate(
     incomplete = list(day.glob(".reconciliation.incomplete.*")) if day.is_dir() else []
     if incomplete:
         raise RuntimeError("PARTIAL_RECONCILIATION_PACKAGE_REQUIRES_REVIEW")
+    if _schedule_has_games(Path(slate_root) / slate_date / "slate_health.json"):
+        # A day with games is certified only by its package; until the morning
+        # reconciliation creates it, say so instead of failing the empty-day check.
+        raise RuntimeError(
+            "PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED:PRIOR_DAY_RECONCILIATION_NOT_YET_CREATED")
     try:
         return verified_empty_schedule(slate_date, slate_root=slate_root)
     except RuntimeError as error:
         raise RuntimeError(f"PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED:{error}") from error
+
+
+def _schedule_has_games(health_path: Path) -> bool:
+    try:
+        health = json.loads(Path(health_path).read_text())
+        return int(health.get("normalized_game_count") or 0) > 0
+    except (OSError, ValueError, TypeError, AttributeError):
+        return False
 
 
 def require_slate_history_certificate(slate_date: str) -> dict[str, object]:
@@ -248,11 +261,17 @@ def require_slate_roster_observation(
     from backend.nhl.daily_orchestration import verify_roster_observation_reuse
 
     schedule_dir = Path(slate_root) / slate_date
-    games = load_canonical_slate(
-        slate_date=slate_date,
-        raw_schedule_path=schedule_dir / "raw_schedule_response.json",
-        slate_health_path=schedule_dir / "slate_health.json",
-    )
+    try:
+        games = load_canonical_slate(
+            slate_date=slate_date,
+            raw_schedule_path=schedule_dir / "raw_schedule_response.json",
+            slate_health_path=schedule_dir / "slate_health.json",
+        )
+    except FileNotFoundError as error:
+        if (schedule_dir / "slate_health.json").exists():
+            raise
+        # Overnight polls run before the morning schedule import; retry later.
+        raise RosterObservationNotReady("CURRENT_SLATE_SCHEDULE_NOT_IMPORTED") from error
     game_ids = [int(game.game_id) for game in games]
     game_hash = canonical_game_set_hash(game_ids)
     if not game_ids:

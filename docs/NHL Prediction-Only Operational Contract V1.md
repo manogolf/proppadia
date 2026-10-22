@@ -51,6 +51,12 @@ roster package and produces no prediction. A current roster package that has
 not been published yet is not a failure: Points, Saves, and SOG all report
 `ROSTER_NOT_READY` with `retry_eligible_on_later_poll`, no feature export, and
 no prediction attempt, and a later poll proceeds once a valid package exists.
+The same holds before the morning schedule import, when the current slate
+has no `slate_health.json` yet (`readiness_reason`
+`CURRENT_SLATE_SCHEDULE_NOT_IMPORTED`). A prior day that had games but has no
+reconciliation package yet fails with
+`PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED:PRIOR_DAY_RECONCILIATION_NOT_YET_CREATED`
+rather than the empty-schedule check's error.
 
 The installed 900-second observer continues to invoke these lane entry points
 before consulting the market-readiness gate. Each child enforces the
