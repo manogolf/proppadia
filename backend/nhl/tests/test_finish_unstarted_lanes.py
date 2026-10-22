@@ -14,8 +14,8 @@ class FinishUnstartedLanesTests(unittest.TestCase):
                                          cutoff_utc="2026-10-21T23:41:00Z")
         return recorder
 
-    def _labels(self, recorder):
-        finish_unstarted_lanes(recorder)
+    def _labels(self, recorder, morning_only=False):
+        finish_unstarted_lanes(recorder, morning_only=morning_only)
         return {(lane.status, lane.reason) for lane in recorder.lanes.values()}
 
     def test_all_started_slate_is_not_called_empty(self):
@@ -25,6 +25,14 @@ class FinishUnstartedLanesTests(unittest.TestCase):
 
     def test_off_day_is_still_an_empty_slate(self):
         labels = self._labels(self._recorder([], []))
+        self.assertIn(("SKIPPED_VALID_EMPTY_SLATE", "NO_CANONICAL_GAMES"), labels)
+
+    def test_morning_only_run_with_games_is_not_called_empty(self):
+        labels = self._labels(self._recorder([2026020160, 2026020161], [2026020160, 2026020161]), morning_only=True)
+        self.assertEqual({("SKIPPED_MORNING_ONLY", "MORNING_ONLY_SCORING_NOT_RUN")}, labels)
+
+    def test_morning_only_off_day_is_still_an_empty_slate(self):
+        labels = self._labels(self._recorder([], []), morning_only=True)
         self.assertIn(("SKIPPED_VALID_EMPTY_SLATE", "NO_CANONICAL_GAMES"), labels)
 
 

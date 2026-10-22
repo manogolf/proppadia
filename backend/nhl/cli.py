@@ -3498,18 +3498,23 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     return
 
 
-def finish_unstarted_lanes(recorder) -> None:
+def finish_unstarted_lanes(recorder, morning_only: bool = False) -> None:
     """Close lanes the run never reached, labelling why.
 
-    A slate whose games have all started is not an empty slate.
+    A slate whose games have all started is not an empty slate, and neither is
+    a morning-only run that stops before scoring a slate that has games.
     """
-    all_started = bool(recorder.canonical_game_ids) and not recorder.eligible_pregame_game_ids
+    if not recorder.canonical_game_ids:
+        status, reason = "SKIPPED_VALID_EMPTY_SLATE", "NO_CANONICAL_GAMES"
+    elif not recorder.eligible_pregame_game_ids:
+        status, reason = "SKIPPED_NO_PREGAME_GAMES", "ALL_CANONICAL_GAMES_ALREADY_STARTED"
+    elif morning_only:
+        status, reason = "SKIPPED_MORNING_ONLY", "MORNING_ONLY_SCORING_NOT_RUN"
+    else:
+        status, reason = "SKIPPED_VALID_EMPTY_SLATE", "NO_CANONICAL_GAMES"
     for lane in recorder.lanes.values():
         if lane.status == "NOT_STARTED":
-            recorder.finish_lane(
-                lane.name,
-                status="SKIPPED_NO_PREGAME_GAMES" if all_started else "SKIPPED_VALID_EMPTY_SLATE",
-                reason="ALL_CANONICAL_GAMES_ALREADY_STARTED" if all_started else "NO_CANONICAL_GAMES")
+            recorder.finish_lane(lane.name, status=status, reason=reason)
 
 
 def cmd_daily(with_odds: bool, morning_only: bool = False,
@@ -3555,7 +3560,7 @@ def cmd_daily(with_odds: bool, morning_only: bool = False,
         if recorder.lane("shared_prerequisites").status == "RUNNING":
             recorder.finish_lane("shared_prerequisites")
         if recorder.lane("shared_prerequisites").status == "COMPLETE":
-            finish_unstarted_lanes(recorder)
+            finish_unstarted_lanes(recorder, morning_only=morning_only)
     except BaseException as error:
         failed_lane = _ACTIVE_DAILY_LANE
         recorder.failure = {
