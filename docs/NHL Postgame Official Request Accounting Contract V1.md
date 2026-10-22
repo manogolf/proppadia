@@ -136,6 +136,18 @@ second schedule response shows different void games, it fails closed
 (`ACQUISITION_SCHEDULE_VOID_STATE_CHANGED`); a later poll retries. Days
 without a void game are acquired exactly as before, with one schedule request.
 
+Moved games (P2.24 D follow-up 2). A game in the local spine that the
+official schedule no longer lists on its date is checked with one request for
+its own official box score in the probe run. If that box score's `gameDate` is
+another date, the game is void with state `MOVED` and the probe and rebind
+follow as above; the later acquisition requests nothing for it. If the box
+score still gives the original date, the run fails closed
+(`ACQUISITION_OFFICIAL_GAME_SET_MISMATCH`). The binding re-verifies a `MOVED`
+game from the probe receipt it names (`schedule_state_probe`, by hash): absent
+from the preserved schedule, with a preserved box score on another date
+(`ACQUISITION_RECEIPT_MOVED_GAMES_UNPROVEN`). The execute run's official fetch
+expects the schedule to list the played games and the PPD/SUSP/CNCL games only.
+
 The execute run, and the local and database preflights, read the void games
 from that receipt and re-verify them against the preserved schedule
 (`ACQUISITION_RECEIPT_VOIDED_GAMES_MISMATCH`). The local source binding,
@@ -144,8 +156,19 @@ journal, official fetch and FINAL check all use the played set. The execute
 context names the void games in `NHL_SCHEDULE_VOIDED_GAME_IDS`; child
 collectors that list a date's games from `nhl.games` or the schedule skip
 exactly those games. A played game still in progress keeps the run
-`NOT_FINAL`. A day on which every scheduled game is void stops with
-`ALL_SCHEDULED_GAMES_VOID_REQUIRES_REVIEW` (deferred; P2.24 D follow-up).
+`NOT_FINAL`.
+
+All-void days (P2.24 D follow-up 1). When every scheduled game is void
+(any mix of PPD, SUSP, CNCL and MOVED), the probe receipt records
+`all_scheduled_games_void: true` and the acquisition returns
+`ALL_SCHEDULED_GAMES_VOID` without a rebind, box score or roster request. No
+reconciliation package is created; like an off day, the day is certified as
+`VERIFIED_ALL_GAMES_VOID` from the latest such probe, re-verified from its
+preserved responses (`reconciliation_certificate.verified_all_games_void`,
+identity = probe receipt hash). Prior learning reports `ALL_GAMES_VOID` and
+reuses an existing certificate without a new request; the daily run, the
+resilient source checks and the cross-market prior-day check accept it, and
+the daily history seeding skips its `voided_game_ids`.
 
 ## Expected September 19-shaped seven-game plan after reuse
 

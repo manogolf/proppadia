@@ -28,6 +28,7 @@ from backend.nhl.reconciliation_certificate import (
     require_prior_day_certificate,
     require_slate_history_certificate,
     require_slate_roster_observation,
+    verified_all_games_void,
     verify_reconciliation_certificate,
 )
 from backend.nhl.daily_capture import load_canonical_slate
@@ -267,6 +268,21 @@ def _parse_json_output(output: str, *, expected_status: str) -> dict:
     return payload
 
 
+def _all_games_void_certificate(outcome_root: Path, prior_slate: str,
+                                game_ids: list[int]) -> dict[str, object] | None:
+    """The all-void certificate when it covers exactly the date's games, else None."""
+    try:
+        certificate = verified_all_games_void(prior_slate, reconciliation_root=outcome_root)
+    except RuntimeError as error:
+        if "PRIOR_DATE_ALL_GAMES_VOID_PROBE_MISSING" in str(error):
+            return None
+        raise
+    if set(certificate["voided_game_ids"]) != set(map(int, game_ids)):
+        raise RuntimeError("CROSS_MARKET_PRIOR_DAY_ALL_VOID_GAME_SET_MISMATCH")
+    return {"status": "PRIOR_DAY_ALL_GAMES_VOID", "slate_date": prior_slate,
+            "game_ids": [], "certificate": certificate}
+
+
 def ensure_prior_day_official_outcomes(
     dsn: str, slate: str, *, outcome_root: Path = DEFAULT_OUTCOME_ROOT,
     now: datetime | None = None,
@@ -296,6 +312,10 @@ def ensure_prior_day_official_outcomes(
 
     day_root = outcome_root / prior_slate
     packages = sorted(day_root.glob("reconciliation=*") if day_root.is_dir() else [])
+    if not packages:
+        all_void = _all_games_void_certificate(outcome_root, prior_slate, game_ids)
+        if all_void is not None:
+            return all_void
     if packages:
         certificate = _verify_prior_day_package(outcome_root, prior_slate, game_ids)
         return {"status": "EXISTING_GOVERNED_PACKAGE_VALID", "slate_date": prior_slate,
@@ -308,6 +328,15 @@ def ensure_prior_day_official_outcomes(
         "authority_roster_acquisition",
         [*base, "--authority-roster-acquisition", "--prior-learning", prior_slate],
     )
+    try:
+        candidate = json.loads(acquisition.stdout)
+    except (TypeError, ValueError):
+        candidate = {}
+    if isinstance(candidate, dict) and candidate.get("status") == "ALL_SCHEDULED_GAMES_VOID":
+        all_void = _all_games_void_certificate(outcome_root, prior_slate, game_ids)
+        if all_void is None:
+            raise RuntimeError("CROSS_MARKET_PRIOR_DAY_ALL_GAMES_VOID_NOT_CERTIFIED")
+        return all_void
     try:
         acquisition_payload = _parse_json_output(
             acquisition.stdout, expected_status="COMPLETE")

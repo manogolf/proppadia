@@ -449,6 +449,10 @@ The daily run's prior-date history seeding (goalie and skater logs, roster
 refresh, shift charts) receives the certificate's `voided_game_ids` as
 `NHL_SCHEDULE_VOIDED_GAME_IDS` and skips those games, so a suspended game's
 partial box score does not reach history tables.
+A game the official schedule dropped from its date is void as `MOVED` when
+its own official box score gives another date; a day on which every scheduled
+game is void is certified as `VERIFIED_ALL_GAMES_VOID`, like an off day, with
+no package.
 Request-level detail is in the Postgame Official Request Accounting Contract.
 Official-outcome certification is independent of prediction grading. In
 prior-learning mode, a missing immutable lane prediction must remain ungraded

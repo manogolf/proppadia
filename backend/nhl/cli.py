@@ -2616,6 +2616,13 @@ def _require_daily_prior_certificate(prior_date: str, result: dict) -> dict:
                 or result.get("reconciliation_package") is not None):
             raise RuntimeError("PRIOR_DAY_EMPTY_SCHEDULE_NOT_CERTIFIED")
         return certificate
+    if status == "ALL_GAMES_VOID":
+        certificate = require_prior_day_certificate(prior_date)
+        if (result.get("official_outcomes_status") != "ALL_GAMES_VOID"
+                or certificate.get("status") != "VERIFIED_ALL_GAMES_VOID"
+                or result.get("reconciliation_package") is not None):
+            raise RuntimeError("PRIOR_DAY_ALL_GAMES_VOID_NOT_CERTIFIED")
+        return certificate
     if status not in {"CREATED", "REUSED_VALID_PACKAGE"}:
         raise RuntimeError(f"PRIOR_DAY_RECONCILIATION_BLOCKING:{status or 'MISSING_STATUS'}")
     if result.get("official_outcomes_status") != "FINAL":

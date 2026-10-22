@@ -31,7 +31,8 @@ from backend.nhl.sog_cold_start.core import (
 )
 from backend.nhl.prediction_only.core import digest as prediction_only_digest
 from backend.nhl.daily_capture import canonical_game_set_hash
-from backend.nhl.reconciliation_certificate import VOID_SCHEDULE_STATES, VOIDED_GAMES_FILE
+from backend.nhl.reconciliation_certificate import (
+    PRIOR_DAY_CERTIFICATE_STATUSES, VOID_GAME_STATES, VOID_SCHEDULE_STATES, VOIDED_GAMES_FILE)
 from backend.nhl.game_phase import authorized_season_for_date, phase_for_game_type, regular_season_evaluation_eligible
 from backend.nhl.postgame_reconcile.resilient_finalization import (
     canonical_atomic_identity, select_latest_atomic_sources, validate_atomic_group,
@@ -51,8 +52,9 @@ SEPTEMBER_20_REQUIRED_FAILED_ANCESTORS = [
 ]
 
 
-# A prior day is certified by a FINAL package, or as a verified off day.
-PRIOR_CERTIFICATE_STATUSES = frozenset({"CERTIFIED_FINAL", "VERIFIED_EMPTY_SCHEDULE"})
+# A prior day is certified by a FINAL package, a verified off day, or a
+# verified all-void day (reconciliation_certificate.PRIOR_DAY_CERTIFICATE_STATUSES).
+PRIOR_CERTIFICATE_STATUSES = PRIOR_DAY_CERTIFICATE_STATUSES
 
 
 def validate_request_lineage(lineage: dict[str, Any], *, slate_date: str) -> None:
@@ -1025,7 +1027,7 @@ def _played_schedule(schedule: pd.DataFrame, voided_games: dict[int, str],
                      slate_date: str) -> tuple[pd.DataFrame, list[dict[str, Any]]]:
     """Split the scheduled spine into played games and void (PPD/SUSP/CNCL) games."""
     voided = {int(game_id): str(state).upper() for game_id, state in voided_games.items()}
-    if any(state not in VOID_SCHEDULE_STATES for state in voided.values()):
+    if any(state not in VOID_GAME_STATES for state in voided.values()):
         raise RuntimeError("SCHEDULE_VOID_STATE_INVALID")
     scheduled = schedule.game_id.astype(int)
     if set(voided) - set(scheduled):

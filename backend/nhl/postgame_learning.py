@@ -35,6 +35,7 @@ from backend.nhl.points_hgb_shadow import (
 from backend.nhl.reconciliation_certificate import (
     verify_reconciliation_certificate,
     schedule_hash_matches,
+    verified_all_games_void,
     verified_empty_schedule,
 )
 
@@ -282,6 +283,17 @@ def _grade_final_capture(package: Path, slate_date: str, cross_root: Path) -> tu
     return ("COMPLETE" if challenger_present else "NO_CHALLENGER_ARTIFACT"), str(destination)
 
 
+def _all_games_void_result(slate_date: str, root: Path, provider_calls: int = 0) -> dict:
+    """Prior-learning result for a day on which every scheduled game was void."""
+    certificate = verified_all_games_void(slate_date, reconciliation_root=root)
+    return {"prior_slate_date": slate_date, "official_outcomes_status": "ALL_GAMES_VOID",
+            "reconciliation_status": "ALL_GAMES_VOID", "reconciliation_package": None,
+            "voided_game_ids": certificate["voided_game_ids"],
+            "moneyline_grade_status": "NOT_APPLICABLE", "puck_line_grade_status": "NOT_APPLICABLE",
+            "challenger_grade_status": "NOT_APPLICABLE", "provider_calls": provider_calls,
+            "credits_consumed": 0}
+
+
 def ensure_prior_learning(
     slate_date: str, *, reconciliation_root: Path = DEFAULT_RECONCILIATION_ROOT,
     cross_market_root: Path = DEFAULT_CROSS_MARKET_ROOT,
@@ -300,6 +312,12 @@ def ensure_prior_learning(
                     "moneyline_grade_status": "NOT_APPLICABLE", "puck_line_grade_status": "NOT_APPLICABLE",
                     "challenger_grade_status": "NOT_APPLICABLE", "provider_calls": 0,
                     "credits_consumed": 0}
+        try:
+            # A day already certified as all-void needs no new official request.
+            return _all_games_void_result(slate_date, root)
+        except RuntimeError as error:
+            if "PRIOR_DATE_ALL_GAMES_VOID_PROBE_MISSING" not in str(error):
+                raise
         python = ROOT / ".venv/bin/python"
         reconciler = str(ROOT / "backend/nhl/scripts/run_nhl_postgame_reconciliation.py")
         base = [str(python if python.is_file() else sys.executable), reconciler,
@@ -324,6 +342,9 @@ def ensure_prior_learning(
         try:
             acquisition = json.loads(acquired.stdout)
             run_id = str(acquisition["run_id"])
+            if acquisition.get("status") == "ALL_SCHEDULED_GAMES_VOID" and run_id:
+                return _all_games_void_result(slate_date, root, provider_calls=int(
+                    (acquisition.get("request_accounting") or {}).get("total_logical_requests", 1)))
             if acquisition.get("status") != "COMPLETE" or not run_id:
                 raise ValueError("acquisition receipt not complete")
         except (ValueError, KeyError, TypeError) as error:

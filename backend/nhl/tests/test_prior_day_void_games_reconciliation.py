@@ -57,8 +57,9 @@ class FakeResponse:
 class FakeNhl:
     """Official NHL endpoints served from memory; records each requested URL."""
 
-    def __init__(self, schedule: dict):
+    def __init__(self, schedule: dict, box_dates: dict[int, str] | None = None):
         self.schedule = schedule
+        self.box_dates = box_dates or {}
         self.urls: list[str] = []
 
     def session(self, *args, **kwargs):
@@ -72,7 +73,9 @@ class FakeNhl:
                 if "/schedule/" in url:
                     return FakeResponse(200, fake.schedule)
                 if "/boxscore" in url:
-                    return FakeResponse(200, {"id": int(url.split("/")[-2])})
+                    game_id = int(url.split("/")[-2])
+                    return FakeResponse(200, {"id": game_id,
+                                              "gameDate": fake.box_dates.get(game_id, DAY)})
                 team = url.split("/")[-2]
                 if url.endswith("/current"):
                     return FakeResponse(307, location=f"https://api-web.nhle.com/v1/roster/{team}/20262027")
@@ -286,6 +289,113 @@ class VoidGameCertificateTests(unittest.TestCase):
                 "slate_date": DAY, "game_id": C, "game_schedule_state": "SUSP", "reason": "VOID_SUSP"}])
             with self.assertRaisesRegex(RuntimeError, "VOIDED_GAMES_INVALID"):
                 verify_reconciliation_certificate(package, DAY)
+
+
+
+class AllVoidAndMovedGameTests(unittest.TestCase):
+    """P2.24 D follow-ups: an all-void day certifies like an off day, and a game
+    dropped from its original date is void only when its own box score moved."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        self.output = self.root / "postgame_reconciliation"
+        self.env = patch.dict(os.environ, {}, clear=False)
+        self.env.start()
+
+    def tearDown(self):
+        self.env.stop()
+        self.tmp.cleanup()
+
+    def acquire(self, listed: dict[int, tuple[str, str]], spine, box_dates=None):
+        nhl = FakeNhl(schedule_payload(listed), box_dates)
+        with patch.object(reconciler, "ROOT", self.root), \
+                patch.object(journal.requests, "Session", side_effect=nhl.session):
+            result = reconciler.authority_roster_acquisition(
+                slate_date=DAY, source_binding=binding(list(spine)),
+                output_root=self.output,
+                rebind=lambda voided: binding(list(spine), voided))
+        return result, nhl
+
+    def test_all_void_day_is_certified_like_an_off_day(self):
+        from backend.nhl.reconciliation_certificate import (
+            certificate_identity, require_prior_day_certificate,
+            verify_prior_day_certificate)
+        result, nhl = self.acquire(
+            {A: ("FUT", "PPD"), B: ("FUT", "CNCL"), C: ("FUT", "PPD")}, [A, B, C])
+        self.assertEqual(result["status"], "ALL_SCHEDULED_GAMES_VOID")
+        self.assertEqual(result["game_ids"], [])
+        self.assertFalse(any("/boxscore" in url or "/roster/" in url for url in nhl.urls))
+        certificate = require_prior_day_certificate(
+            DAY, reconciliation_root=self.output, slate_root=self.root / "slates")
+        self.assertEqual(certificate["status"], "VERIFIED_ALL_GAMES_VOID")
+        self.assertEqual(certificate["voided_game_ids"], [A, B, C])
+        again = verify_prior_day_certificate(certificate, DAY, reconciliation_root=self.output)
+        self.assertEqual(certificate_identity(again), certificate_identity(certificate))
+        self.assertEqual(certificate_identity(certificate), certificate["probe_receipt_sha256"])
+
+    def test_all_void_certificate_rejects_a_tampered_schedule(self):
+        from backend.nhl.reconciliation_certificate import verified_all_games_void
+        result, _ = self.acquire({A: ("FUT", "PPD"), C: ("FUT", "SUSP")}, [A, C])
+        objects = self.output / "request_runs" / DAY / result["run_id"] / "preserved_responses" / "objects"
+        for path in objects.glob("*.json"):
+            path.write_text(path.read_text().replace('"SUSP"', '"OK"'))
+        with self.assertRaisesRegex(RuntimeError, "HASH_MISMATCH"):
+            verified_all_games_void(DAY, reconciliation_root=self.output)
+
+    def test_daily_and_cross_market_accept_an_all_void_day(self):
+        from backend.nhl import cli, postgame_learning
+        self.acquire({A: ("FUT", "PPD"), C: ("FUT", "PPD")}, [A, C])
+        learning = postgame_learning.ensure_prior_learning(DAY, reconciliation_root=self.output)
+        self.assertEqual(learning["reconciliation_status"], "ALL_GAMES_VOID")
+        self.assertEqual(learning["provider_calls"], 0)
+        from backend.nhl.reconciliation_certificate import verified_all_games_void
+        certificate = verified_all_games_void(DAY, reconciliation_root=self.output)
+        with patch.object(cli, "require_prior_day_certificate", return_value=certificate):
+            self.assertEqual(cli._require_daily_prior_certificate(DAY, learning), certificate)
+        learning["certificate"] = certificate
+        self.assertEqual(cli.prior_day_voided_env(learning, DAY),
+                         {ENV_VOIDED_GAME_IDS: f"{A},{C}"})
+        checked = capture._all_games_void_certificate(self.output, DAY, [A, C])
+        self.assertEqual(checked["status"], "PRIOR_DAY_ALL_GAMES_VOID")
+        with self.assertRaisesRegex(RuntimeError, "ALL_VOID_GAME_SET_MISMATCH"):
+            capture._all_games_void_certificate(self.output, DAY, [A, B, C])
+
+    def test_game_dropped_from_its_date_is_void_when_its_box_score_moved(self):
+        result, nhl = self.acquire({A: ("OFF", "OK"), C: ("OFF", "OK")}, [A, B, C],
+                                   box_dates={B: "2027-01-15"})
+        self.assertEqual(result["status"], "COMPLETE")
+        self.assertEqual(result["game_ids"], [A, C])
+        self.assertEqual([(row["game_id"], row["game_schedule_state"])
+                          for row in result["schedule_voided_games"]], [(B, "MOVED")])
+        self.assertEqual(sum(f"/{B}/boxscore" in url for url in nhl.urls), 1)  # probe only
+        with patch.object(reconciler, "ROOT", self.root):
+            bound = reconciler._binding_from_acquisition(
+                output_root=self.output, run_id=result["run_id"],
+                role="AUTHORITY_RESPONSE_SOURCE", slate_date=DAY,
+                game_ids=[A, C], teams=["AAA", "BBB", "EEE", "FFF"])
+        self.assertEqual(bound["role"], "AUTHORITY_RESPONSE_SOURCE")
+        official, boxes, _ = VoidGameExecuteTests().fetch(
+            {A: ("OFF", "OK"), C: ("OFF", "OK")}, [A, C], {B: "MOVED"})
+        self.assertEqual(sorted(boxes), [A, C])
+
+    def test_dropped_game_still_on_its_date_fails_closed(self):
+        with self.assertRaisesRegex(RuntimeError, "ACQUISITION_OFFICIAL_GAME_SET_MISMATCH"):
+            self.acquire({A: ("OFF", "OK"), C: ("OFF", "OK")}, [A, B, C])
+
+    def test_moved_game_without_probe_evidence_fails_the_binding(self):
+        result, _ = self.acquire({A: ("OFF", "OK"), C: ("OFF", "OK")}, [A, B, C],
+                                 box_dates={B: "2027-01-15"})
+        probe = result["schedule_state_probe"]["run_id"]
+        objects = self.output / "request_runs" / DAY / probe / "preserved_responses" / "objects"
+        for path in objects.glob("*.json"):
+            path.write_text(path.read_text().replace("2027-01-15", DAY))
+        with patch.object(reconciler, "ROOT", self.root), \
+                self.assertRaisesRegex(RuntimeError, "HASH_MISMATCH"):
+            reconciler._binding_from_acquisition(
+                output_root=self.output, run_id=result["run_id"],
+                role="AUTHORITY_RESPONSE_SOURCE", slate_date=DAY,
+                game_ids=[A, C], teams=["AAA", "BBB", "EEE", "FFF"])
 
 
 if __name__ == "__main__":

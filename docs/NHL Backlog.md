@@ -1699,8 +1699,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.24 Remove slate-wide and single-snapshot assumptions added 2026-10-18
 
-- Status: **OPEN — all nine findings fixed 2026-10-20; the walk-forward
-  from 10-13 and three D follow-ups remain**. Natural evidence (checked
+- Status: **FIXED 2026-10-22 — all nine findings, the walk-forward and the
+  three D follow-ups are done; C, D and E await their first real case**. Natural evidence (checked
   2026-10-22): A — later polls used post-puck roster captures (10-20 23:09Z,
   10-21 23:41Z) as VERIFIED with no failures; B — 10-20 Moneyline graded games
   141–145 from the 19:00Z REFRESH and 146–151 from the 23:11Z partial REFRESH
@@ -1735,13 +1735,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     (`NHL_SCHEDULE_VOIDED_GAME_IDS`), package (`schedule_voided_games.csv`),
     certificate (`voided_game_ids`), cross-market prior-day checks and every
     grading lane.
-  - D follow-ups (deferred, not built):
-    1. A day on which every scheduled game is void stops with
-       `ALL_SCHEDULED_GAMES_VOID_REQUIRES_REVIEW`. It needs an empty-day
-       style certificate built from the probe receipt.
-    2. A spine game that is missing from the official schedule for its
-       date (if the NHL drops a postponed game from the original date
-       instead of marking it PPD) still fails closed as a game-set mismatch.
+  - D follow-ups:
+    1. **Fixed 2026-10-22.** A day on which every scheduled game is void
+       used to stop with `ALL_SCHEDULED_GAMES_VOID_REQUIRES_REVIEW`. The
+       probe receipt now records `all_scheduled_games_void`, the
+       acquisition returns `ALL_SCHEDULED_GAMES_VOID`, and the day is
+       certified as `VERIFIED_ALL_GAMES_VOID` from that probe, like an off
+       day with no package. Prior learning, the daily run, the resilient
+       source checks and the cross-market prior-day check accept it.
+    2. **Fixed 2026-10-22.** A spine game missing from the official schedule
+       for its date is void as `MOVED` only if its own official box score
+       (one probe request) gives another date; otherwise it still fails
+       closed. The binding re-verifies it from the hash-bound probe.
+       Tests (fixtures, both cases and their tamper checks):
+       `backend/nhl/tests/test_prior_day_void_games_reconciliation.py`
+       `AllVoidAndMovedGameTests`. The read-only replay of 10-20 to 10-22
+       is unchanged.
     3. **Fixed 2026-10-22 (`af834d39`).** The daily pipeline's prior-date
        seeding (`cli.py` phase A) now passes the certificate's
        `voided_game_ids` to the goalie and skater seeds, roster refresh and

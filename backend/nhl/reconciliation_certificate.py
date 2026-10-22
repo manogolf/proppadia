@@ -17,13 +17,24 @@ DEFAULT_ROSTER_ROOT = ROOT / "artifacts/operational/nhl/roster_observations"
 # suspended or cancelled. Its predictions are never graded, like a book
 # cancelling wagers; a rescheduled game gets new predictions on its new date.
 VOID_SCHEDULE_STATES = frozenset({"PPD", "SUSP", "CNCL"})
+# A game the official schedule no longer lists on its original date, whose own
+# official box score shows another date, is void the same way (P2.24 D).
+MOVED_GAME_STATE = "MOVED"
+VOID_GAME_STATES = VOID_SCHEDULE_STATES | {MOVED_GAME_STATE}
 VOIDED_GAMES_FILE = "schedule_voided_games.csv"
+SCHEDULE_STATE_PROBE_CONTRACT = "NHL_SCHEDULE_STATE_PROBE_V1"
 REQUIRED_PACKAGE_FILES = {
     "canonical_admitted_slate.csv",
     "canonical_game_outcomes.csv",
     "graded_moneyline.csv",
     "graded_puck_line.csv",
 }
+
+
+# A prior day is certified by a FINAL package, as a verified off day, or as a
+# verified day on which every scheduled game was void.
+PRIOR_DAY_CERTIFICATE_STATUSES = frozenset(
+    {"CERTIFIED_FINAL", "VERIFIED_EMPTY_SCHEDULE", "VERIFIED_ALL_GAMES_VOID"})
 
 
 class RosterObservationNotReady(RuntimeError):
@@ -127,7 +138,7 @@ def verify_reconciliation_certificate(
     }
     if VOIDED_GAMES_FILE in files:
         voided = _csv_rows(package / VOIDED_GAMES_FILE, slate_date=slate_date)
-        if (any(row.get("game_schedule_state") not in VOID_SCHEDULE_STATES for row in voided)
+        if (any(row.get("game_schedule_state") not in VOID_GAME_STATES for row in voided)
                 or {row["game_id"] for row in voided} & admitted_ids):
             raise RuntimeError("RECONCILIATION_PACKAGE_VOIDED_GAMES_INVALID")
         certificate["voided_game_ids"] = sorted(int(row["game_id"]) for row in voided)
@@ -181,6 +192,114 @@ def verified_empty_schedule(
     }
 
 
+def _preserved_object(cache: Path, family: str, identity: dict[str, object]) -> dict:
+    """Read one hash-verified preserved official response from a request run."""
+    token = hashlib.sha256(json.dumps(
+        {"endpoint_family": family, "identity": identity},
+        sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    metadata = json.loads((cache / "index" / f"{token}.json").read_text())
+    body = (cache / "objects" / str(metadata["object_name"])).read_bytes()
+    if (metadata.get("endpoint_family") != family or metadata.get("identity") != identity
+            or hashlib.sha256(body).hexdigest() != metadata.get("response_sha256")):
+        raise RuntimeError("SCHEDULE_STATE_PROBE_RESPONSE_HASH_MISMATCH")
+    return json.loads(body)
+
+
+def verify_schedule_state_probe(
+    reconciliation_root: Path, slate_date: str, run_id: str,
+) -> dict[str, object]:
+    """Re-verify a schedule-state probe's void games from its preserved responses.
+
+    PPD/SUSP/CNCL games must carry that state on the preserved official
+    schedule. A MOVED game must be absent from it, and its preserved official
+    box score must give another game date.
+    """
+    root = Path(reconciliation_root)
+    receipt_path = root / "acquisition_receipts" / slate_date / f"{run_id}.json"
+    request_root = root / "request_runs" / slate_date / run_id
+    try:
+        receipt = json.loads(receipt_path.read_text())
+        journal_sha = _sha256(request_root / "official_request_journal.jsonl")
+        cache = request_root / "preserved_responses"
+        schedule = _preserved_object(cache, "SCHEDULE", {"slate_date": slate_date})
+    except (OSError, KeyError, ValueError) as error:
+        raise RuntimeError("SCHEDULE_STATE_PROBE_EVIDENCE_MISSING_OR_INVALID") from error
+    if (receipt.get("contract_version") != SCHEDULE_STATE_PROBE_CONTRACT
+            or receipt.get("status") != "COMPLETE" or receipt.get("run_id") != run_id
+            or receipt.get("slate_date") != slate_date
+            or receipt.get("journal_sha256") != journal_sha):
+        raise RuntimeError("SCHEDULE_STATE_PROBE_RECEIPT_INVALID")
+    listed = {int(game["id"]): str(game.get("gameScheduleState") or "OK").upper()
+              for day in schedule.get("gameWeek") or [] if str(day.get("date")) == slate_date
+              for game in day.get("games") or []}
+    voided = {int(k): str(v) for k, v in (receipt.get("voided_games") or {}).items()}
+    game_ids = {int(value) for value in receipt.get("game_ids") or []}
+    if not voided or set(voided) - game_ids:
+        raise RuntimeError("SCHEDULE_STATE_PROBE_VOIDED_GAMES_INVALID")
+    moved = {game_id for game_id, state in voided.items() if state == MOVED_GAME_STATE}
+    if set(listed) | moved != game_ids or moved & set(listed):
+        raise RuntimeError("SCHEDULE_STATE_PROBE_GAME_SET_MISMATCH")
+    for game_id, state in voided.items():
+        if state in VOID_SCHEDULE_STATES:
+            if listed.get(game_id) != state:
+                raise RuntimeError(f"SCHEDULE_STATE_PROBE_STATE_MISMATCH:{game_id}")
+        elif state == MOVED_GAME_STATE:
+            try:
+                box = _preserved_object(
+                    cache, "BOXSCORE", {"slate_date": slate_date, "game_id": game_id})
+            except (OSError, KeyError, ValueError) as error:
+                raise RuntimeError(f"SCHEDULE_STATE_PROBE_MOVED_EVIDENCE_MISSING:{game_id}") from error
+            if int(box.get("id") or 0) != game_id or str(box.get("gameDate") or "") in {"", slate_date}:
+                raise RuntimeError(f"SCHEDULE_STATE_PROBE_MOVED_GAME_NOT_MOVED:{game_id}")
+        else:
+            raise RuntimeError(f"SCHEDULE_STATE_PROBE_STATE_INVALID:{game_id}")
+    if any(state != "OK" for game_id, state in listed.items() if game_id not in voided):
+        raise RuntimeError("SCHEDULE_STATE_PROBE_UNRECORDED_VOID_STATE")
+    return {"run_id": run_id, "receipt_sha256": _sha256(receipt_path),
+            "receipt": receipt, "voided_games": voided, "game_ids": sorted(game_ids)}
+
+
+def _all_void_probe_run_ids(reconciliation_root: Path, slate_date: str) -> list[str]:
+    day = Path(reconciliation_root) / "acquisition_receipts" / slate_date
+    run_ids = []
+    for path in sorted(day.glob("*.json") if day.is_dir() else []):
+        try:
+            receipt = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if (receipt.get("contract_version") == SCHEDULE_STATE_PROBE_CONTRACT
+                and receipt.get("all_scheduled_games_void") is True):
+            run_ids.append(path.stem)
+    return run_ids
+
+
+def verified_all_games_void(
+    slate_date: str, *, reconciliation_root: Path = DEFAULT_RECONCILIATION_ROOT,
+) -> dict[str, object]:
+    """Certify a day on which every scheduled game was void (P2.24 D).
+
+    Like an off day there is no reconciliation package; the certificate is the
+    latest schedule-state probe that found every scheduled game void, re-verified
+    from its preserved official responses.
+    """
+    run_ids = _all_void_probe_run_ids(reconciliation_root, slate_date)
+    if not run_ids:
+        raise RuntimeError("PRIOR_DATE_ALL_GAMES_VOID_PROBE_MISSING")
+    probe = verify_schedule_state_probe(reconciliation_root, slate_date, run_ids[-1])
+    if set(probe["voided_games"]) != set(probe["game_ids"]):
+        raise RuntimeError("PRIOR_DATE_NOT_ALL_GAMES_VOID")
+    return {
+        "status": "VERIFIED_ALL_GAMES_VOID",
+        "slate_date": slate_date,
+        "probe_run_id": probe["run_id"],
+        "probe_receipt_sha256": probe["receipt_sha256"],
+        "game_ids": [],
+        "game_count": 0,
+        "voided_game_ids": sorted(probe["voided_games"]),
+        "voided_games": {str(k): v for k, v in sorted(probe["voided_games"].items())},
+    }
+
+
 def certificate_identity(certificate: object) -> str | None:
     """Return the stable hash that identifies a prior-day certificate.
 
@@ -195,12 +314,16 @@ def certificate_identity(certificate: object) -> str | None:
     if (certificate.get("status") == "VERIFIED_EMPTY_SCHEDULE"
             and certificate.get("schedule_sha256")):
         return str(certificate["schedule_sha256"])
+    if (certificate.get("status") == "VERIFIED_ALL_GAMES_VOID"
+            and certificate.get("probe_receipt_sha256")):
+        return str(certificate["probe_receipt_sha256"])
     return None
 
 
 def verify_prior_day_certificate(
     certificate: dict[str, object], prior_date: str, *,
     slate_root: Path = DEFAULT_SLATE_ROOT, fallback_package: object = None,
+    reconciliation_root: Path = DEFAULT_RECONCILIATION_ROOT,
 ) -> dict[str, object]:
     """Re-verify a recorded prior-day certificate from its retained evidence.
 
@@ -210,6 +333,8 @@ def verify_prior_day_certificate(
     """
     if certificate.get("status") == "VERIFIED_EMPTY_SCHEDULE":
         return verified_empty_schedule(prior_date, slate_root=slate_root)
+    if certificate.get("status") == "VERIFIED_ALL_GAMES_VOID":
+        return verified_all_games_void(prior_date, reconciliation_root=reconciliation_root)
     package = certificate.get("package_path") or fallback_package or ""
     return verify_reconciliation_certificate(Path(str(package)), prior_date)
 
@@ -228,6 +353,8 @@ def require_prior_day_certificate(
     incomplete = list(day.glob(".reconciliation.incomplete.*")) if day.is_dir() else []
     if incomplete:
         raise RuntimeError("PARTIAL_RECONCILIATION_PACKAGE_REQUIRES_REVIEW")
+    if _all_void_probe_run_ids(reconciliation_root, slate_date):
+        return verified_all_games_void(slate_date, reconciliation_root=reconciliation_root)
     if _schedule_has_games(Path(slate_root) / slate_date / "slate_health.json"):
         # A day with games is certified only by its package; until the morning
         # reconciliation creates it, say so instead of failing the empty-day check.
@@ -333,7 +460,7 @@ def daily_receipt_source_proofs(
         certificate, prior_date, slate_root=slate_root,
         fallback_package=prior.get("reconciliation_package"))
     identity = certificate_identity(verified)
-    if (not identity or verified.get("status") not in {"CERTIFIED_FINAL", "VERIFIED_EMPTY_SCHEDULE"}
+    if (not identity or verified.get("status") not in PRIOR_DAY_CERTIFICATE_STATUSES
             or (certificate_identity(certificate) and certificate_identity(certificate) != identity)):
         raise RuntimeError("DAILY_RECEIPT_PRIOR_CERTIFICATE_UNVERIFIED")
     roster = receipt.get("roster_observation") or {}

@@ -52,7 +52,8 @@ from backend.nhl.official_request_journal import (
     verify_player_identity_response_run,
     verify_roster_response_run,
 )
-from backend.nhl.reconciliation_certificate import VOID_SCHEDULE_STATES
+from backend.nhl.reconciliation_certificate import (
+    MOVED_GAME_STATE, VOID_SCHEDULE_STATES, verify_schedule_state_probe)
 from backend.nhl.daily_orchestration import (
     redact_sensitive_text,
     safe_called_process_error,
@@ -310,9 +311,24 @@ def _binding_from_acquisition(
         official = official_games_for_slate(
             _preserved_schedule_payload(cache, slate_date), slate_date)
         recorded = _binding_voided_games(receipt)
-        if (official_voided_games(official) != recorded
-                or set(official.game_id.astype(int)) != set(map(int, game_ids)) | set(recorded)):
+        listed = {game_id: state for game_id, state in recorded.items()
+                  if state != MOVED_GAME_STATE}
+        moved = set(recorded) - set(listed)
+        official_ids = set(official.game_id.astype(int))
+        if (official_voided_games(official) != listed
+                or official_ids != set(map(int, game_ids)) | set(listed)
+                or official_ids & moved):
             raise RuntimeError("ACQUISITION_RECEIPT_VOIDED_GAMES_MISMATCH")
+        if moved:
+            # A MOVED game is proven by the schedule-state probe's preserved
+            # official box score, which the receipt binds by hash.
+            probe_ref = receipt.get("schedule_state_probe") or {}
+            probe = verify_schedule_state_probe(
+                output_root, slate_date, str(probe_ref.get("run_id") or ""))
+            if (probe["receipt_sha256"] != probe_ref.get("receipt_sha256")
+                    or any(probe["voided_games"].get(game_id) != MOVED_GAME_STATE
+                           for game_id in moved)):
+                raise RuntimeError("ACQUISITION_RECEIPT_MOVED_GAMES_UNPROVEN")
     for claim in claims:
         terminal = [row for row in records
                     if row.get("endpoint_family") == claim["endpoint_family"]
@@ -400,9 +416,27 @@ def authority_roster_acquisition(
         identity=schedule_identity, authority_boundary=True, preserve_response=True)
     response.raise_for_status()
     official = official_games_for_slate(response.json(), slate_date)
-    if set(official.game_id.astype(int)) != set(game_ids) | set(expected_voided):
+    official_ids = set(official.game_id.astype(int))
+    expected_moved = {game_id for game_id, state in expected_voided.items()
+                      if state == MOVED_GAME_STATE}
+    moved: dict[int, str] = {}
+    if not expected_voided and rebind is not None:
+        # A scheduled game the official schedule no longer lists on this date
+        # is void only if its own official box score gives another date.
+        for game_id in sorted(set(game_ids) - official_ids):
+            box = official_get(
+                f"https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore", timeout=30,
+                stage="AUTHORITY_ROSTER_ACQUISITION", endpoint_family="BOXSCORE",
+                identity={"slate_date": slate_date, "game_id": game_id},
+                authority_boundary=True, preserve_response=True)
+            box.raise_for_status()
+            if str(box.json().get("gameDate") or "") not in {"", slate_date}:
+                moved[game_id] = MOVED_GAME_STATE
+    if (official_ids | set(moved) | expected_moved != set(game_ids) | set(expected_voided)
+            or official_ids & (set(moved) | expected_moved)):
         raise RuntimeError("ACQUISITION_OFFICIAL_GAME_SET_MISMATCH")
-    voided = official_voided_games(official)
+    voided = {**official_voided_games(official), **moved,
+              **{game_id: MOVED_GAME_STATE for game_id in expected_moved}}
     if voided != expected_voided:
         if expected_voided or rebind is None:
             raise RuntimeError(
@@ -420,7 +454,18 @@ def authority_roster_acquisition(
             "tree_fingerprint": request_run_tree_fingerprint(request_root, repository_root=ROOT),
             "database_requests": 0, "database_writes": 0,
             "bookmaker_requests": 0, "paid_credits": 0,
+            "all_scheduled_games_void": set(voided) == set(game_ids),
         })
+        if set(voided) == set(game_ids):
+            # Nothing was played: like an off day, the probe is the evidence
+            # (reconciliation_certificate.verified_all_games_void).
+            return {"status": "ALL_SCHEDULED_GAMES_VOID", "run_id": run_id,
+                    "slate_date": slate_date, "receipt_path": str(probe_path),
+                    "request_accounting": json.loads(probe_path.read_text())["request_accounting"],
+                    "game_ids": [], "scheduled_game_ids": sorted(game_ids),
+                    "schedule_voided_games": [
+                        {"game_id": game_id, "game_schedule_state": state}
+                        for game_id, state in sorted(voided.items())]}
         return authority_roster_acquisition(
             slate_date=slate_date, source_binding=rebind(voided), output_root=output_root,
             schedule_state_probe={"run_id": run_id, "receipt_sha256": _sha256_file(probe_path),
@@ -1208,7 +1253,10 @@ def fetch_official(slate_date: str, canonical_game_ids: set[int], *, reuse_autho
     they must still be exactly those games, and get no box score request.
     """
     expected_ids = {int(value) for value in canonical_game_ids}
-    voided = {int(game_id): str(state) for game_id, state in (voided_games or {}).items()}
+    # MOVED games are absent from this date's schedule; the others are listed
+    # with their PPD/SUSP/CNCL state.
+    voided = {int(game_id): str(state) for game_id, state in (voided_games or {}).items()
+              if str(state) != MOVED_GAME_STATE}
     response = official_get(
         f"https://api-web.nhle.com/v1/schedule/{slate_date}", timeout=30,
         stage="POSTGAME_AUTHORITY", endpoint_family="SCHEDULE",
