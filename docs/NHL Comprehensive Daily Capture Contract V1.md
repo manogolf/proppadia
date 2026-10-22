@@ -497,18 +497,31 @@ Points probability ladders have two construction contracts.
 `NHL_POINTS_COUNT_HGB_V1` predicts one nonnegative expected count and derives
 the 0.5, 1.5, and 2.5 exceedance probabilities from the same Poisson count
 distribution. The thresholds are structurally ordered. Its capture validator
-requires exactly those three lines and non-increasing values; a failed ladder
-currently fails the HGB capture as a whole. Frozen Phoenix points scores the
+requires exactly those three lines and non-increasing values. A player-game
+whose expected count or probabilities are not finite, out of range, or crossing
+is excluded on its own (`HGB_INVALID_PREDICTION_VALUE`, `HGB_LADDER_CROSSING`;
+NHL Backlog P2.13): `features.csv` keeps every scored identity, `predictions.csv`
+only the valid ones, and the receipt records `player_exclusions`. The
+deterministic replay must reproduce the same exclusions. The production
+artifact accepts a feature identity without a prediction only when it is one
+of those recorded exclusions (otherwise
+`HGB_PRODUCTION_FEATURE_PREDICTION_IDENTITY_MISMATCH`), leaves it out of the
+graded rows, and carries `player_exclusions`; game coverage and the Phoenix
+control comparison still use every scored identity. A capture with no valid
+prediction still fails (`COHERENCE_FAILED:NO_VALID_HGB_PREDICTIONS`). Frozen Phoenix points scores the
 three thresholds with separate binary models, retains `raw_prob_over`, and
 applies equal-weight non-increasing isotonic projection
 (`EQUAL_WEIGHT_ISOTONIC_EXCEEDANCE_V1`) to published values. Missing/duplicate
 lines, non-finite or out-of-range raw probabilities, and model identity
 failures invalidate a player-game ladder. The prediction-only publisher
-records ladder exclusions per player-game and can retain other eligible
-predictions. However, the shared ladder constructor currently raises on an
-invalid player-game before that per-player exclusion stage, so malformed
-Phoenix input can still fail the batch. This is a known scope mismatch, not
-authorization to change model values or qualification. Raw threshold crossings
+records ladder exclusions per player-game and retains other eligible
+predictions. It uses `partition_coherent_ladders`, so a structurally invalid
+player-game is excluded in `prediction_exclusions.csv` with decision
+`EXCLUDED_INVALID_LADDER` and its reason (`POINTS_INCOMPLETE_LADDER`,
+`POINTS_DUPLICATE_LADDER_LINE`, `POINTS_INVALID_LADDER_PROBABILITY`) instead of
+failing the batch (P2.13). `construct_coherent_ladders` keeps its whole-batch
+failure for the frozen shadow and research callers. Model values and
+qualification are unchanged. Raw threshold crossings
 from the independent Phoenix models are repaired by the documented projection;
 they are not themselves invalid published probabilities. A ladder is valid
 only when the required three distinct lines and model identities are present,

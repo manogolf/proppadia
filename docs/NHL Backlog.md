@@ -681,7 +681,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.13 Resolve NHL roster coverage and Points ladder batch-scope gaps
 
-- Status: **OPEN — contract-preserving design and natural-run evidence pending**.
+- Status: **OPEN — ladder part fixed 2026-10-22; per-game roster coverage
+  approved 2026-10-22 and being designed in its own session (design before
+  code)**.
   Partial roster coverage remains a separate proposed capability. The October
   18 recurrence review below did not establish it as a correction for any
   confirmed acquisition failure; do not implement it as a workaround for
@@ -713,6 +715,29 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   its capture also fails as a whole if coherence fails. Preserve model and
   qualification rules; determine the smallest identity-scoped failure
   contract and add regression coverage before any code change.
+- **Ladder part fixed 2026-10-22 (operator-approved).** Neither failure had
+  occurred in retained artifacts.
+  - Phoenix: `partition_coherent_ladders` (same projection; an incomplete,
+    duplicate-line, non-finite or out-of-range player-game is returned as an
+    exclusion) is used by the prediction-only publisher, which records it in
+    `prediction_exclusions.csv` as `EXCLUDED_INVALID_LADDER` and publishes the
+    rest. `construct_coherent_ladders` still fails the whole batch for the
+    frozen shadow and research callers. The daily Phoenix lane outputs raw
+    per-line probabilities and never failed on one player.
+  - HGB: `partition_valid_hgb_predictions` excludes a player-game with a
+    non-finite, out-of-range or crossing ladder; the capture keeps every
+    identity in `features.csv`, writes only valid rows to `predictions.csv`,
+    records `player_exclusions`, and the replay must reproduce them. The
+    production artifact accepts only those recorded gaps and leaves them out of
+    the graded rows; game coverage and the Phoenix control check still use every
+    identity. The HGB scorer (part of each capture's model identity) is
+    unchanged, and the promotion gate still reads READY.
+  - Verification: fixture tests in `test_nhl_points_ladder_coherence.py`,
+    `test_nhl_prediction_only_entry_points_v1.py`,
+    `test_points_hgb_mixed_start_production.py` and an end-to-end capture test
+    in `test_nhl_points_hgb_shadow.py`; the 10-20 and 10-21 production HGB
+    artifacts rebuild byte-identical; the read-only replay of 10-20 to 10-22 is
+    unchanged.
 - Evidence: `backend/nhl/daily_capture.py` roster package writer,
   `backend/nhl/daily_orchestration.py` reuse validator,
   `backend/nhl/reconciliation_certificate.py` slate observer gate,
