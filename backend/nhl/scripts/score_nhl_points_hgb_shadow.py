@@ -17,6 +17,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from scipy.stats import poisson
+from backend.nhl.game_phase import authorized_season_for_date
 from backend.nhl.daily_capture import canonical_game_set_hash
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -113,7 +114,7 @@ def main() -> None:
         raise ValueError("FITTED_ARTIFACT_FEATURE_CONTRACT_MISMATCH")
     predictions = score(features, fitted)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
-    out = args.out_root / f"season=2026/slate_date={args.slate_date}/phase={args.capture_phase}/captured_at={stamp}"
+    out = args.out_root / f"season={authorized_season_for_date(args.slate_date)}/slate_date={args.slate_date}/phase={args.capture_phase}/captured_at={stamp}"
     out.mkdir(parents=True, exist_ok=False)
     feature_out = out / "features.csv"
     prediction_out = out / "predictions.csv"

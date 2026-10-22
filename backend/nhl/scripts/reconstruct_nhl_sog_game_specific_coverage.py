@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from backend.nhl.game_phase import season_for_date
 from backend.nhl.daily_capture import canonical_game_set_hash, load_canonical_slate, sha256_file, verify_package
 from backend.nhl.performance_summary import _write_immutable_package, render_markdown
 
@@ -35,7 +36,7 @@ def reconstruct() -> Path:
     predictions: pd.DataFrame | None = None
     prediction_sha: str | None = None
     for run_id in RUNS:
-        package = ROOT / "artifacts/operational/nhl/sog_market_attachments/season=2026" / f"slate_date={SLATE}" / f"run_id={run_id}"
+        package = ROOT / "artifacts/operational/nhl/sog_market_attachments" / f"season={season_for_date(SLATE)}" / f"slate_date={SLATE}" / f"run_id={run_id}"
         report_path = package / "sog_attachment_integrity.json"
         package_sha = verify_package(package)
         report = json.loads(report_path.read_text())
@@ -151,7 +152,7 @@ def reconstruct() -> Path:
         "sources": [{k: v for k, v in item.items() if k not in {"attachment", "report"}} for item in source_records],
     }
     reconstruction_id = hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    root = ROOT / "artifacts/operational/nhl/sog_market_coverage_reconstructions/season=2026" / f"slate_date={SLATE}" / f"reconstruction={reconstruction_id[:20]}"
+    root = ROOT / "artifacts/operational/nhl/sog_market_coverage_reconstructions" / f"season={season_for_date(SLATE)}" / f"slate_date={SLATE}" / f"reconstruction={reconstruction_id[:20]}"
     if root.exists():
         verify_package(root)
         _restate_summary(root)

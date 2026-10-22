@@ -6,6 +6,7 @@ import hashlib
 import json
 from datetime import date, timedelta
 from pathlib import Path
+from backend.nhl.game_phase import season_for_date
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -278,8 +279,7 @@ def require_slate_roster_observation(
         return {"status": "VERIFIED_EMPTY_CURRENT_SLATE", "slate_date": slate_date,
                 "canonical_game_set_hash": game_hash, "game_ids": []}
 
-    year, month = map(int, slate_date[:7].split("-"))
-    season = year if month >= 7 else year - 1
+    season = season_for_date(slate_date)
     day = Path(roster_root) / f"season={season}" / f"slate_date={slate_date}"
     observations = sorted(day.glob("observation=*") if day.is_dir() else [])
     if not observations:

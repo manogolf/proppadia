@@ -18,7 +18,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
-from backend.nhl.game_phase import GAME_TYPE_PHASE, phase_for_game_type, regular_season_evaluation_eligible
+from backend.nhl.game_phase import GAME_TYPE_PHASE, authorized_season_for_date, phase_for_game_type, regular_season_evaluation_eligible
 from backend.nhl.odds_regions import NHL_ODDS_REGIONS
 from sklearn.metrics import roc_auc_score
 from .shot_prior import (
@@ -40,7 +40,7 @@ ACTIVATION_PATH = HERE / "activation_v1.json"
 CONTROL_NAME = "NHL_MONEYLINE_TEAM_SCHEDULE_LOGIT_CONTROL_V2"
 PUCK_CONTROL_NAME = "NHL_STANDARD_PUCK_LINE_SIMPLE_BASELINE_V1"
 V1_DISPOSITION = "HISTORICAL_REFERENCE_NOT_FORWARD_REPLAYABLE"
-SEASON = 2026
+# Season comes from each slate date (game_phase.authorized_season_for_date).
 PRESEASON_START = "2026-09-19"
 REGULAR_SEASON_START = "2026-09-29"
 FEATURES = [
@@ -196,9 +196,10 @@ def load_verified_2025_shot_prior() -> tuple[pd.DataFrame, str, str]:
     return joined, source_hash, outcome_hash
 
 
-def load_activation() -> dict[str, Any]:
+def load_activation(season: int) -> dict[str, Any]:
+    """The activation record, which must be the one for this season."""
     activation = json.loads(ACTIVATION_PATH.read_text())
-    if activation.get("control_name") != CONTROL_NAME or activation.get("season") != SEASON:
+    if activation.get("control_name") != CONTROL_NAME or activation.get("season") != season:
         raise RuntimeError("ACTIVATION_IDENTITY_MISMATCH")
     return activation
 
@@ -255,8 +256,9 @@ def build_v2_predictions(schedule: pd.DataFrame, history: pd.DataFrame, predicti
     history["scheduled_start_time_utc"] = pd.to_datetime(history.scheduled_start_time_utc, utc=True, format="mixed")
     if schedule.duplicated(["canonical_season", "game_id"]).any():
         raise ValueError("DUPLICATE_GAME_IDENTITY")
-    if not schedule.canonical_season.eq(SEASON).all():
-        raise ValueError("CANONICAL_SEASON_MUST_EQUAL_2026")
+    expected = schedule.slate_date.astype(str).map(authorized_season_for_date)
+    if not schedule.canonical_season.astype(int).eq(expected).all():
+        raise ValueError("CANONICAL_SEASON_MISMATCH")
     rows, timing = [], []
     for _, target in schedule.sort_values(["scheduled_start_time_utc", "game_id"]).iterrows():
         if target.game_type_label == "UNKNOWN_GAME_TYPE":
@@ -899,7 +901,8 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
                           sog_csv: Path | None = None, points_csv: Path | None = None,
                           saves_csv: Path | None = None, canary_mode: bool = False,
                           readiness_evidence: dict[str, Any] | None = None) -> Path:
-    activation = load_activation()
+    season = authorized_season_for_date(slate_date)
+    activation = load_activation(season)
     if not canary_mode and not activation.get("capture_enabled"):
         raise RuntimeError("SHADOW_CAPTURE_READY_NOT_ACTIVATED")
     schedule = normalize_game_types(pd.read_csv(schedule_csv))
@@ -1048,13 +1051,13 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
         ledger["wager_recommendation"] = "NONE_SHADOW_ONLY"
     else:
         ledger = pd.DataFrame(columns=["game_id", "outcome_status"])
-    price_references = build_price_references(root, quotes, SEASON, slate_date)
+    price_references = build_price_references(root, quotes, season, slate_date)
     read_optional = lambda path: pd.read_csv(path) if path else None
     coverage = _coverage(
         schedule, predictions, quotes, read_optional(sog_csv), read_optional(points_csv),
         read_optional(saves_csv), envelope["capture_timestamp_utc"],
     )
-    coverage_history = build_coverage_history(root, coverage, SEASON, slate_date)
+    coverage_history = build_coverage_history(root, coverage, season, slate_date)
     substantive = {
         "schedule": schedule.sort_values("game_id")[["game_id", "scheduled_start_time_utc", "home_team", "away_team", "game_type_code"]].astype(str).to_dict("records"),
         "predictions": sorted(predictions.substantive_prediction_sha256.astype(str)),
@@ -1089,7 +1092,7 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     if run_type == "REFRESH":
         substantive["capture_identity_timestamp_utc"] = parse_utc(run_timestamp_utc).isoformat()
     substantive_hash = digest_value(substantive)
-    destination = root / f"season={SEASON}" / f"slate_date={slate_date}" / f"run_type={run_type}" / f"state={substantive_hash}"
+    destination = root / f"season={season}" / f"slate_date={slate_date}" / f"run_type={run_type}" / f"state={substantive_hash}"
     if destination.is_dir():
         verify_capture_package(destination)
         return destination
@@ -1182,7 +1185,7 @@ def _run_capture_unlocked(schedule_csv: Path, history_csv: Path, odds_json: Path
     marker = {
         "schema_version": "NHL_CROSS_MARKET_CAPTURE_COMPLETION_V1",
         "status": "COMPLETE",
-        "season": SEASON,
+        "season": season,
         "slate_date": slate_date,
         "run_type": run_type,
         "state_sha256": substantive_hash,
@@ -1653,7 +1656,7 @@ def grade_capture(run_dir: Path, outcomes_csv: Path, grade_root: Path, grading_t
 
 
 def daily_status(root: Path, slate_date: str) -> dict[str, Any]:
-    runs = sorted((root / f"season={SEASON}" / f"slate_date={slate_date}").glob("run_type=*/state=*"))
+    runs = sorted((root / f"season={authorized_season_for_date(slate_date)}" / f"slate_date={slate_date}").glob("run_type=*/state=*"))
     statuses = [json.loads((run / "daily_execution_status.json").read_text()) for run in runs]
     if not statuses:
         return {

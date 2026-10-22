@@ -25,6 +25,7 @@ Conventions:
 
 from __future__ import annotations
 
+from backend.nhl.game_phase import season_for_date
 from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
 from backend.nhl.odds_markets import NHL_COMPREHENSIVE_PROP_MARKETS_CSV
 from backend.nhl.database_access import (
@@ -372,9 +373,8 @@ def et_yesterday() -> str:
     return pt_yesterday()
     
 def infer_nhl_season_from_date_yyyy_mm_dd(date_str: str) -> int:
-    # NHL season naming is the single starting year.
-    y, m, d = (int(x) for x in date_str.split("-"))
-    return y if m >= 9 else (y - 1)
+    # NHL season naming is the single starting year (shared July rule).
+    return season_for_date(date_str)
 
 # ---------- guardrails: prevent repeating the same fix/step ----------
 def _guard_dir() -> Path:

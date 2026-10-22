@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import numpy as np
 import pandas as pd
 
+from backend.nhl.game_phase import authorized_season_for_date
 from backend.nhl.saves_quote_capture.core import QUALIFIED, iso, parse_utc, sha256_file, write_manifest
 from backend.nhl.scripts.score_nhl_props import interp_apply, prepare_X, prob_over_poisson
 
@@ -173,7 +174,7 @@ def _validate_inputs(games: pd.DataFrame, goalies: pd.DataFrame, slate_date: str
     if need_games-set(games) or set(IDENTITY_COLUMNS)-set(goalies): raise ValueError("SAVES_IDENTITY_SCHEMA_INCOMPLETE")
     leaked=ACTUAL_LEAKAGE_COLUMNS&set(goalies)
     if leaked: raise RuntimeError(f"ACTUAL_OR_STARTER_STATE_LEAKAGE:{','.join(sorted(leaked))}")
-    if games.empty or games.game_id.duplicated().any() or not games.canonical_season.eq(2026).all() or not games.slate_date.astype(str).eq(slate_date).all(): raise RuntimeError("GAME_SPINE_IDENTITY_FAILURE")
+    if games.empty or games.game_id.duplicated().any() or not games.canonical_season.eq(authorized_season_for_date(slate_date)).all() or not games.slate_date.astype(str).eq(slate_date).all(): raise RuntimeError("GAME_SPINE_IDENTITY_FAILURE")
     if not games.game_type_code.isin(GAME_TYPES).all(): raise RuntimeError("UNKNOWN_GAME_TYPE")
     run=parse_utc(run_timestamp_utc); starts=pd.to_datetime(games.scheduled_start_time_utc,utc=True,errors="coerce")
     if starts.isna().any() or (run>=starts).any(): raise RuntimeError("RUN_NOT_STRICTLY_PREGAME")
@@ -302,7 +303,8 @@ def qualify_starter_evidence(*, games: pd.DataFrame, goalies: pd.DataFrame,
     if not evidence.empty and missing:
         raise ValueError(f"STARTER_EVIDENCE_SCHEMA_INCOMPLETE:{sorted(missing)}")
     if not evidence.empty:
-        if not pd.to_numeric(evidence.canonical_season, errors="coerce").eq(2026).all():
+        if not pd.to_numeric(evidence.canonical_season, errors="coerce").eq(
+                authorized_season_for_date(games.slate_date.iloc[0])).all():
             raise RuntimeError("STARTER_EVIDENCE_SEASON_MISMATCH")
         if not evidence.slate_date.astype(str).eq(str(games.slate_date.iloc[0])).all():
             raise RuntimeError("STARTER_EVIDENCE_SLATE_MISMATCH")
@@ -477,7 +479,7 @@ def run_shadow(*, game_spine_csv: Path, game_spine_manifest: Path, goalie_inputs
     if pre_scoring_population!="COMPLETE_SCORER_ELIGIBLE": raise RuntimeError("PRE_SCORING_MARKET_FILTER_FORBIDDEN")
     if candidate_policy_json is not None: raise RuntimeError("SAVES_CANDIDATE_POLICY_UNAUTHORIZED")
     identity=verify_frozen_identity(); parity=verify_historical_parity(); amendment=verify_operational_amendment()
-    run_id=make_run_id(slate_date,run_timestamp_utc,run_type); dest=output_root/"2026"/slate_date/run_id; staging=dest.with_name(dest.name+".incomplete")
+    season=authorized_season_for_date(slate_date); run_id=make_run_id(slate_date,run_timestamp_utc,run_type); dest=output_root/str(season)/slate_date/run_id; staging=dest.with_name(dest.name+".incomplete")
     lock_dir=output_root/"locks";lock_dir.mkdir(parents=True,exist_ok=True);lock=(lock_dir/f"{slate_date}_{run_type}.lock").open("a+")
     try: fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
     except BlockingIOError as exc: raise RuntimeError("SAVES_SHADOW_ALREADY_RUNNING") from exc
@@ -488,7 +490,7 @@ def run_shadow(*, game_spine_csv: Path, game_spine_manifest: Path, goalie_inputs
     _verify_manifest(quote_run_dir)
     games,goalies=pd.read_csv(game_spine_csv),pd.read_csv(goalie_inputs_csv);_validate_inputs(games,goalies,slate_date,run_timestamp_utc)
     qmeta=json.loads((quote_run_dir/"run_metadata.json").read_text())
-    if qmeta.get("slate_date")!=slate_date or qmeta.get("run_type")!=run_type or qmeta.get("canonical_season")!=2026: raise RuntimeError("QUOTE_RUN_IDENTITY_CONFLICT")
+    if qmeta.get("slate_date")!=slate_date or qmeta.get("run_type")!=run_type or qmeta.get("canonical_season")!=season: raise RuntimeError("QUOTE_RUN_IDENTITY_CONFLICT")
     if parse_utc(qmeta["capture_timestamp_utc"])>parse_utc(run_timestamp_utc): raise RuntimeError("QUOTE_RUN_AFTER_SHADOW_RUN")
     quotes=pd.read_csv(quote_run_dir/"saves_quotes.csv")
     scoring_inputs=goalies.copy();scoring_inputs["player_id"]=scoring_inputs.goalie_id
@@ -522,7 +524,7 @@ def run_shadow(*, game_spine_csv: Path, game_spine_manifest: Path, goalie_inputs
     starter_ready=bool(starter_states.starter_identity_state.isin(ELIGIBLE_STARTER_STATES).all())
     sentinel={"schema_version":"nhl_saves_shadow_sentinel_v1","status":"PASS_SHADOW_ONLY_POLICY_GATES_CLOSED" if starter_ready else "BLOCKED_STARTER_PROVENANCE","checks":{"parent_hashes":"PASS","population_before_market_gate":"PASS","quote_coverage":"VISIBLE","multiple_goalies":"VISIBLE_IN_POLICY_LEDGER","multibook":"FAIL_CLOSED_BY_POLICY_C","alias_and_timing":"FAIL_CLOSED_BY_CAPTURE","batch_preprocessing_drift":"PASS_FULL_POPULATION","start_prob_constant_one":"PASS","actual_starter_leakage":"PASS","pregame_starter_provenance":"PASS" if starter_ready else "BLOCKED","mutable_dependency":"PASS","season_slate_game_type":"PASS"},"population":{"goalies":len(goalies),"predictions_P":len(predictions),"prediction_eligible":int(predictions.prediction_eligible.sum()),"market_rows_M":len(qualified),"team_games_selected":int(selected.decision.eq("SELECTED").sum())}}
     (staging/"saves_live_failure_sentinel.json").write_text(json.dumps(sentinel,indent=2,sort_keys=True)+"\n")
-    metadata={"schema_version":"nhl_saves_shadow_run_v1","run_id":run_id,"canonical_season":2026,"slate_date":slate_date,"run_type":run_type,"run_timestamp_utc":iso(parse_utc(run_timestamp_utc)),
+    metadata={"schema_version":"nhl_saves_shadow_run_v1","run_id":run_id,"canonical_season":season,"slate_date":slate_date,"run_type":run_type,"run_timestamp_utc":iso(parse_utc(run_timestamp_utc)),
               "scoring_order":["complete_scorer_eligible_population","identity_validation","constant_start_prob_1","complete_batch_preprocessing","score_all_predictions","policy_c_market_gate"],
               "prediction_semantics":identity["operational_amendment"]["semantic_contract"],"starter_state_label":STARTER_LABEL,"starter_readiness":"READY_PROJECTED_OR_CONFIRMED" if starter_ready else "BLOCKED_NO_AUTHORIZED_FRESH_PREGAME_STARTER_EVIDENCE","starter_evidence_max_age_hours":STARTER_EVIDENCE_MAX_AGE.total_seconds()/3600,"policy_status":POLICY_STATUS,
               "P":len(predictions),"P_eligible":int(predictions.prediction_eligible.sum()),"M":len(qualified),"C":0,"U":0,"E":0,"G":0,"historical_parity":parity,"operational_amendment":amendment,
@@ -537,7 +539,7 @@ def grade_shadow(*, shadow_run_dir: Path, outcomes_csv: Path, output_root: Path,
     if need-set(out): raise ValueError("SAVES_OUTCOME_SCHEMA_INCOMPLETE")
     allowed={"STARTED","RELIEF_APPEARANCE","DRESSED_DID_NOT_PARTICIPATE","SCRATCHED_INACTIVE","UNRESOLVED","POSTPONED"}
     if not set(out.goalie_participation_state).issubset(allowed): raise RuntimeError("UNKNOWN_GOALIE_PARTICIPATION_STATE")
-    if out.duplicated(["game_id","goalie_id"]).any() or not out.canonical_season.eq(2026).all() or not out.slate_date.astype(str).eq(meta["slate_date"]).all(): raise RuntimeError("OUTCOME_IDENTITY_CONFLICT")
+    if out.duplicated(["game_id","goalie_id"]).any() or not out.canonical_season.eq(authorized_season_for_date(meta["slate_date"])).all() or not out.slate_date.astype(str).eq(meta["slate_date"]).all(): raise RuntimeError("OUTCOME_IDENTITY_CONFLICT")
     started=out.goalie_participation_state.eq("STARTED");flags=out.actual_start_flag.map(lambda x:str(x).lower() in {"true","1"})
     if not flags.eq(started).all(): raise RuntimeError("ACTUAL_START_FLAG_PARTICIPATION_CONFLICT")
     merged=pred.merge(out,on=["game_id","goalie_id"],how="left",validate="many_to_one")

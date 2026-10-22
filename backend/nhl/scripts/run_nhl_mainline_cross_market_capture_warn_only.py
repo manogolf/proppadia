@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import psycopg
+from backend.nhl.game_phase import authorized_season_for_date, season_for_date
 from backend.nhl.database_access import database_url, owner_free_child_environment
 
 from backend.nhl.cross_market_shadow.core import PRESEASON_START, REGULAR_SEASON_START, fetch_markets, run_capture
@@ -136,7 +137,7 @@ def observe_prediction_only_lanes(slate: str, requested: str, dsn: str,
     for lane in ("POINTS", "SAVES"):
         try:
             path = observe_independent_prediction_only(
-                lane=lane, season=2026, slate_date=slate, requested_phase=requested,
+                lane=lane, season=authorized_season_for_date(slate), slate_date=slate, requested_phase=requested,
                 observation_timestamp=now, canonical_run_identifier=None, dsn=dsn,
                 output_root=ROOT / "artifacts/operational/nhl" / f"{lane.lower()}_prediction_only",
             )
@@ -236,8 +237,7 @@ def _prior_day_regular_season_game_ids(dsn: str, prior_slate: str) -> list[int]:
     the date, matching run_nhl_postgame_reconciliation.canonical_slate, so the
     certified package's game set compares equal on playoff and new-season days.
     """
-    year, month = int(prior_slate[:4]), int(prior_slate[5:7])
-    season = year if month >= 7 else year - 1
+    season = season_for_date(prior_slate)
     with psycopg.connect(dsn) as connection, connection.cursor() as cursor:
         cursor.execute(
             """
@@ -373,6 +373,7 @@ def ensure_prior_day_official_outcomes(
 def export_inputs(dsn: str, slate_date: str, directory: Path, *,
                   canonical_schedule: pd.DataFrame | None = None,
                   outcome_root: Path = DEFAULT_OUTCOME_ROOT) -> tuple[Path, Path, pd.DataFrame]:
+    season = authorized_season_for_date(slate_date)
     with psycopg.connect(dsn) as connection:
         if canonical_schedule is None:
             schedule = pd.read_sql_query("""
@@ -381,9 +382,9 @@ def export_inputs(dsn: str, slate_date: str, directory: Path, *,
                        home_team_id, home_team_code AS home_team, away_team_id,
                        away_team_code AS away_team, upper(coalesce(status,'SCHEDULED')) AS game_status,
                        game_type AS game_type_code
-                FROM nhl.games WHERE season=2026 AND game_date=%s::date
+                FROM nhl.games WHERE season=%s AND game_date=%s::date
                 ORDER BY start_time_utc,game_id
-            """, connection, params=(slate_date,))
+            """, connection, params=(season, slate_date))
         else:
             schedule = canonical_schedule.copy()
             if not schedule.slate_date.astype(str).eq(slate_date).all():
@@ -403,7 +404,7 @@ def export_inputs(dsn: str, slate_date: str, directory: Path, *,
                      count(DISTINCT l.player_id)::int AS distinct_skater_players,
                      sum(coalesce(l.shots_on_goal,0))::int AS shots
               FROM nhl.games g JOIN nhl.skater_game_logs_raw l USING(game_id)
-              WHERE g.season=2026 AND g.game_type=2 AND g.start_time_utc < %s::timestamptz
+              WHERE g.season=%s AND g.game_type=2 AND g.start_time_utc < %s::timestamptz
               GROUP BY g.season,g.game_id,g.game_date,g.start_time_utc,g.home_team_id,
                        g.home_team_code,g.away_team_id,g.away_team_code,g.status,g.game_type,l.team_id
             )
@@ -419,7 +420,7 @@ def export_inputs(dsn: str, slate_date: str, directory: Path, *,
             FROM team_totals h JOIN team_totals a USING(game_id)
             WHERE h.team_id=h.home_team_id AND a.team_id=a.away_team_id
             ORDER BY h.start_time_utc,h.game_id
-        """, connection, params=(history_cutoff,))
+        """, connection, params=(season, history_cutoff))
     if not history.empty:
         for side in ("home", "away"):
             rows = pd.to_numeric(history[f"final_{side}_skater_rows"], errors="coerce")
@@ -646,7 +647,7 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
             if phase is None:
                 result["status"] = "NOOP_READY"
             else:
-                existing = list((root / "season=2026" / f"slate_date={slate}" /
+                existing = list((root / f"season={authorized_season_for_date(slate)}" / f"slate_date={slate}" /
                                  f"run_type={phase}").glob("state=*"))
                 # File existence is sufficient: malformed/partial claims fail closed.
                 prior_claims = list(claims_dir.glob(f"{phase}_*.claim.json"))

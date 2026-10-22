@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pandas as pd
 import psycopg
+from backend.nhl.game_phase import authorized_season_for_date, season_for_date
 from backend.nhl.database_access import database_url, psql_command_without_password
 import requests
 
@@ -443,7 +444,7 @@ def authority_roster_acquisition(
                           "roster_variant": "current"},
                 max_attempts=1, retry_statuses=(), preserve_response=True,
                 redirect_policy={"policy": "NHL_ROSTER_CURRENT_TO_OFFICIAL_SEASON_V1",
-                                 "team": team, "repository_season": 2026})
+                                 "team": team, "repository_season": authorized_season_for_date(slate_date)})
             response.raise_for_status()
     finally:
         session.close()
@@ -631,8 +632,7 @@ def canonical_slate(dsn: str, slate_date: str) -> pd.DataFrame:
             FROM nhl.games
             WHERE season=%s AND game_date=%s::date
             ORDER BY start_time_utc, game_id
-        """, (int(slate_date[:4]) if int(slate_date[5:7]) >= 7 else int(slate_date[:4]) - 1,
-              slate_date))
+        """, (season_for_date(slate_date), slate_date))
         rows = cursor.fetchall()
         columns = [item.name for item in cursor.description]
         connection.rollback()
@@ -1550,7 +1550,7 @@ def governed_collectors(
     }, sort_keys=True))
     _promote_stage(dsn, slate_date)
     _run([python, str(SCRIPTS / "backfill_game_manpower_segments.py"), "--start-date", slate_date,
-          "--end-date", slate_date, "--season", "2026"], slate_date, dsn)
+          "--end-date", slate_date, "--season", str(authorized_season_for_date(slate_date))], slate_date, dsn)
     _run([python, str(SCRIPTS / "fill_pp_toi_minutes_for_date.py"), "--date", slate_date, "--commit"], slate_date, dsn)
     _run(["psql", dsn, "-v", "ON_ERROR_STOP=1", "-v", f"game_date={slate_date}",
           "-f", str(SQL / "shiftcharts_pairings_for_date.sql")], slate_date, dsn)

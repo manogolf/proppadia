@@ -100,10 +100,11 @@ class CanonicalSlateAdapterTest(unittest.TestCase):
             self.assertNotIn("l.goals", read_sql.call_args.args[0])
             self.assertNotIn("lower(g.status)='final'", read_sql.call_args.args[0])
             self.assertEqual(
-                read_sql.call_args.kwargs["params"][0],
-                pd.Timestamp("2026-09-25T23:00:00Z"),
+                read_sql.call_args.kwargs["params"],
+                (2026, pd.Timestamp("2026-09-25T23:00:00Z")),
             )
-            self.assertNotIn("FROM nhl.games WHERE season=2026 AND game_date", read_sql.call_args.args[0])
+            self.assertIn("g.season=%s", read_sql.call_args.args[0])
+            self.assertNotIn("FROM nhl.games WHERE season=%s AND game_date", read_sql.call_args.args[0])
             self.assertEqual(returned.to_dict("records"), schedule.to_dict("records"))
             self.assertTrue(schedule_path.exists())
             self.assertTrue(history_path.exists())

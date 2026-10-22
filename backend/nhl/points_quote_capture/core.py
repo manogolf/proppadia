@@ -6,6 +6,7 @@ import json
 import math
 import re
 from pathlib import Path
+from backend.nhl.game_phase import authorized_season_for_date
 from typing import Any
 
 import pandas as pd
@@ -60,7 +61,7 @@ def norm(value: Any) -> str:
 
 
 def make_run_id(season: int, slate_date: str, run_timestamp_utc: str, run_type: str) -> str:
-    if season != 2026:
+    if season != authorized_season_for_date(slate_date):
         raise ValueError("WRONG_CANONICAL_SEASON")
     if run_type not in ALLOWED_RUN_TYPES:
         raise ValueError("INVALID_RUN_TYPE")
@@ -206,7 +207,7 @@ def normalize_quotes(
                     label = GAME_TYPES.get(code, "UNKNOWN_GAME_TYPE")
                     evaluation = {1: "PRESEASON_NON_EVALUATION", 2: "REGULAR_SEASON_EVALUATION_ELIGIBILITY_PENDING_OUTCOME", 3: "POSTSEASON_NON_REGULAR_SEASON_EVALUATION"}.get(code, "UNKNOWN_GAME_TYPE_NON_EVALUATION")
                     row = {
-                        "canonical_season": 2026, "slate_date": slate_date, "run_id": run_id,
+                        "canonical_season": authorized_season_for_date(slate_date), "slate_date": slate_date, "run_id": run_id,
                         "run_type": run_type, "run_timestamp_utc": iso(run_stamp),
                         "game_id": game.game_id if game is not None else None,
                         "scheduled_start_time_utc": iso(start), "game_type_code": code,
@@ -255,8 +256,9 @@ def capture_run(
     output_root: Path, slate_date: str, run_timestamp_utc: str, run_type: str,
     source: str = "THE_ODDS_API",
 ) -> Path:
-    run_id = make_run_id(2026, slate_date, run_timestamp_utc, run_type)
-    destination = output_root / "2026" / slate_date / run_id
+    season = authorized_season_for_date(slate_date)
+    run_id = make_run_id(season, slate_date, run_timestamp_utc, run_type)
+    destination = output_root / str(season) / slate_date / run_id
     staging = destination.with_name(destination.name + ".incomplete")
     if destination.exists() or staging.exists():
         raise FileExistsError("OVERWRITE_ATTEMPT_BLOCKED")
@@ -283,7 +285,7 @@ def capture_run(
     raw_output = (json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=False) + "\n").encode()
     raw_hash = sha256_bytes(raw_output)
     games, players = pd.read_csv(games_csv), pd.read_csv(players_csv)
-    if games.empty or not games.canonical_season.eq(2026).all() or not games.slate_date.astype(str).eq(slate_date).all():
+    if games.empty or not games.canonical_season.eq(season).all() or not games.slate_date.astype(str).eq(slate_date).all():
         raise RuntimeError("GAME_SPINE_IDENTITY_MISMATCH")
     if games.game_id.duplicated().any() or not games.game_type_code.isin(GAME_TYPES).all():
         raise RuntimeError("GAME_SPINE_DUPLICATE_OR_UNKNOWN_GAME_TYPE")
@@ -302,7 +304,7 @@ def capture_run(
         quotes.groupby("quote_qualification_status", dropna=False).size().reset_index(name="rows").to_csv(staging / "quote_qualification_audit.csv", index=False)
         metadata = {
             "schema_version": "nhl_points_quote_capture_v1", "run_id": run_id,
-            "canonical_season": 2026, "slate_date": slate_date, "run_type": run_type,
+            "canonical_season": season, "slate_date": slate_date, "run_type": run_type,
             "run_timestamp_utc": iso(parse_utc(run_timestamp_utc)), "capture_timestamp_utc": iso(parse_utc(capture_text)),
             "source": source, "raw_payload_sha256": raw_hash,
             "parent_game_spine_sha256": sha256_file(games_csv), "parent_manifest_sha256": sha256_file(parent_manifest),

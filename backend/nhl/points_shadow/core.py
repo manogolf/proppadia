@@ -13,6 +13,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from backend.nhl.game_phase import authorized_season_for_date
 from backend.nhl.points_quote_capture.core import QUALIFIED, parse_utc, sha256_file, write_manifest
 from backend.nhl.scripts.score_points_phoenix import load_line_model
 
@@ -319,7 +320,7 @@ def _validate_inputs(games: pd.DataFrame, players: pd.DataFrame, slate_date: str
     missing_player = set(PLAYER_IDENTITY_COLUMNS) - set(players)
     if missing_game or missing_player:
         raise ValueError(f"IDENTITY_SCHEMA_INCOMPLETE:games={sorted(missing_game)}:players={sorted(missing_player)}")
-    if games.empty or games.game_id.duplicated().any() or not games.canonical_season.eq(2026).all():
+    if games.empty or games.game_id.duplicated().any() or not games.canonical_season.eq(authorized_season_for_date(slate_date)).all():
         raise RuntimeError("GAME_SPINE_IDENTITY_FAILURE")
     if not games.slate_date.astype(str).eq(slate_date).all() or not games.game_type_code.isin(GAME_TYPES).all():
         raise RuntimeError("WRONG_SLATE_SEASON_OR_GAME_TYPE")
@@ -395,8 +396,9 @@ def run_shadow(
     if effective_policy_json is not None:
         raise RuntimeError("UNCERTIFIED_POINTS_POLICY_CONFIG_NOT_ACCEPTED")
     parity, identity = verify_fixed_input_parity(), verify_frozen_identity()
+    season = authorized_season_for_date(slate_date)
     run_id = make_run_id(slate_date, run_timestamp_utc, run_type)
-    destination = output_root / "2026" / slate_date / run_id
+    destination = output_root / str(season) / slate_date / run_id
     staging = destination.with_name(destination.name + ".incomplete")
     if destination.exists() or staging.exists():
         raise FileExistsError("OVERWRITE_ATTEMPT_BLOCKED")
@@ -416,7 +418,7 @@ def run_shadow(
     _validate_inputs(games, players, slate_date, run_timestamp_utc)
     _verify_manifest(quote_run_dir)
     quote_meta = json.loads((quote_run_dir / "run_metadata.json").read_text())
-    if quote_meta.get("canonical_season") != 2026 or str(quote_meta.get("slate_date")) != slate_date or quote_meta.get("run_type") != run_type:
+    if quote_meta.get("canonical_season") != season or str(quote_meta.get("slate_date")) != slate_date or quote_meta.get("run_type") != run_type:
         raise RuntimeError("QUOTE_RUN_SLATE_OR_PHASE_MISMATCH")
     quotes = pd.read_csv(quote_run_dir / "points_quotes.csv")
     quote_capture = pd.to_datetime(quotes.capture_timestamp_utc, utc=True, errors="coerce")
@@ -437,7 +439,7 @@ def run_shadow(
     predictions["scaler_sha256"] = predictions.line.map(lambda x: identity["models"][str(float(x))]["scaler_sha256"])
     predictions["coefficient_sha256"] = predictions.line.map(lambda x: identity["models"][str(float(x))]["coefficient_sha256"])
     predictions["feature_order_sha256"] = predictions.line.map(lambda x: identity["models"][str(float(x))]["feature_order_sha256"])
-    predictions["player_game_identity"] = predictions.apply(lambda r: digest({"season": 2026, "slate_date": slate_date, "game_id": int(r.game_id), "player_id": int(r.player_id), "run_id": run_id}), axis=1)
+    predictions["player_game_identity"] = predictions.apply(lambda r: digest({"season": season, "slate_date": slate_date, "game_id": int(r.game_id), "player_id": int(r.player_id), "run_id": run_id}), axis=1)
     predictions["prediction_identity"] = predictions.apply(lambda r: digest({"player_game_identity": r.player_game_identity, "line": float(r.line), "side": "OVER", "model_hash": r.model_joblib_sha256, "probability_construction": r.probability_construction}), axis=1)
     market = _market_view(quotes, run_id)
     eligible_decisions = {"PASS_LADDER_COHERENCE", "WARNING_MINOR_LADDER_INCOHERENCE"}
@@ -498,7 +500,7 @@ def run_shadow(
         (staging / "points_live_failure_sentinel.json").write_text(json.dumps(sentinel, indent=2, sort_keys=True) + "\n")
         metadata = {
             "schema_version": "nhl_points_immutable_shadow_v1", "run_id": run_id,
-            "canonical_season": 2026, "slate_date": slate_date, "run_type": run_type,
+            "canonical_season": season, "slate_date": slate_date, "run_type": run_type,
             "run_timestamp_utc": parse_utc(run_timestamp_utc).isoformat(), "mode": "PRESEASON_SHADOW_OBSERVATION_ONLY",
             "game_spine_sha256": sha256_file(game_spine_csv), "game_spine_manifest_sha256": sha256_file(game_spine_manifest),
             "player_input_sha256": sha256_file(player_inputs_csv), "player_input_manifest_sha256": sha256_file(player_inputs_manifest),

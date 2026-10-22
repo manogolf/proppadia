@@ -28,6 +28,7 @@ import psycopg
 
 from backend.nhl.official_request_journal import RequestContext, official_get
 from backend.nhl.database_access import database_url
+from backend.nhl.game_phase import season_for_date
 
 EASTERN = ZoneInfo("America/New_York")
 DATE = os.getenv("SLATE_DATE") or dt.datetime.now(EASTERN).date().isoformat()
@@ -182,7 +183,7 @@ def _write_slate_health(date_str: str, games: list[dict], completion_status: str
         (json.dumps(normalized, sort_keys=True, separators=(",", ":")) + "\n").encode()
     ).hexdigest()
     health = {
-        "canonical_season": int(date_str[:4]) if int(date_str[5:7]) >= 7 else int(date_str[:4]) - 1,
+        "canonical_season": season_for_date(date_str),
         "slate_date": date_str,
         "fetch_timestamp_utc": LAST_FETCH_EVIDENCE.get("fetch_timestamp_utc"),
         "source": LAST_FETCH_EVIDENCE.get("source_url"),
@@ -589,8 +590,7 @@ def main():
                 # Fallback: derive from start/game date if id parsing fails
                 gd = g.get("startTimeUTC") or g.get("gameDate")
                 if isinstance(gd, str) and len(gd) >= 10:
-                    y, m, _ = map(int, gd[:10].split("-"))
-                    season = y if m >= 7 else y - 1
+                    season = season_for_date(gd)
 
             if season is None:
                 raise RuntimeError(f"Could not derive 4-digit season for game_id={gid}")

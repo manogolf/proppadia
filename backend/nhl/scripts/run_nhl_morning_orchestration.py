@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 
 ROOT=Path(__file__).resolve().parents[3]
 sys.path.insert(0,str(ROOT))
+from backend.nhl.game_phase import AUTHORIZED_SEASONS, season_for_date
 from backend.nhl.database_access import (
  database_url, owner_free_child_environment, owner_login_guard, owner_login_keys, owner_login_keys_in_file,
  require_no_owner_application_alias, restricted_mode)
@@ -59,8 +60,8 @@ def resolve_date(v):
 
 def main():
  ap=argparse.ArgumentParser();ap.add_argument("--slate-date",required=True);ap.add_argument("--dry-run",action="store_true");ap.add_argument("--env-file",type=Path,default=ROOT/"backend/.env");ap.add_argument("--output-root",type=Path,default=OPS);ap.add_argument("--fixture-scenario",choices=["valid_empty","nonempty","sog_cold_start","schedule_failure","partial_slate","export_failure","db_failure","roster_failure","preparation_failure","reconciliation_failure","shadow_failure","finalization_failure","interrupted"]);ap.add_argument("--hold-lock-seconds",type=float,default=0);ap.add_argument("--recovery-authorization",choices=[SECOND_RECOVERY_AUTHORIZATION])
- a=ap.parse_args(); slate=resolve_date(a.slate_date); season=int(slate[:4]) if int(slate[5:7])>=7 else int(slate[:4])-1
- if season not in {2025,2026}: raise SystemExit(f"WRONG_CANONICAL_SEASON_FOR_SEASON_2026_ORCHESTRATION:{season}")
+ a=ap.parse_args(); slate=resolve_date(a.slate_date); season=season_for_date(slate)
+ if season not in AUTHORIZED_SEASONS: raise SystemExit(f"NHL_SEASON_NOT_AUTHORIZED:{season}")
  outroot=a.output_root.resolve(); lockdir=outroot/"locks";lockdir.mkdir(parents=True,exist_ok=True);lockpath=lockdir/f"{slate}.lock"
  lock=lockpath.open("a+")
  try:fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)

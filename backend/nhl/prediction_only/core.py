@@ -19,6 +19,7 @@ from typing import Any
 
 import pandas as pd
 
+from backend.nhl.game_phase import authorized_season_for_date
 from backend.nhl.points_shadow.core import (
     IDENTITY_PATH as POINTS_IDENTITY_PATH,
     PLAYER_IDENTITY_COLUMNS,
@@ -104,7 +105,7 @@ def game_level_eligibility(games: pd.DataFrame, observation_timestamp_utc: str
 def _validate_common(*, games: pd.DataFrame, season: int, slate_date: str, phase: str,
                      observation_timestamp_utc: str, input_cutoff_timestamp_utc: str,
                      canonical_run_identifier: str) -> tuple[str, str, list[int], list[dict[str, Any]]]:
-    if season != 2026:
+    if season != authorized_season_for_date(slate_date):
         raise RuntimeError("FROZEN_MODEL_SEASON_MISMATCH")
     if slate_date < PROSPECTIVE_NOT_BEFORE:
         raise RuntimeError(f"RETROSPECTIVE_PREDICTION_FORBIDDEN:NOT_BEFORE_{PROSPECTIVE_NOT_BEFORE}")

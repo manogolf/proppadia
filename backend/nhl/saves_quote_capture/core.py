@@ -8,6 +8,7 @@ import math
 import re
 import unicodedata
 from pathlib import Path
+from backend.nhl.game_phase import authorized_season_for_date
 from typing import Any
 
 import pandas as pd
@@ -64,7 +65,7 @@ def norm(value: Any) -> str:
 
 
 def make_run_id(season: int, slate_date: str, run_timestamp_utc: str, run_type: str) -> str:
-    if season != 2026:
+    if season != authorized_season_for_date(slate_date):
         raise ValueError("WRONG_CANONICAL_SEASON")
     if run_type not in RUN_TYPES:
         raise ValueError("INVALID_RUN_TYPE")
@@ -200,7 +201,7 @@ def normalize_quotes(
                     if game is not None and goalie is not None:
                         opponent = game.away_team if norm(goalie.team) == norm(game.home_team) else game.home_team
                     row = {
-                        "canonical_season":2026,"slate_date":slate_date,"run_id":run_id,"run_type":run_type,
+                        "canonical_season":authorized_season_for_date(slate_date),"slate_date":slate_date,"run_id":run_id,"run_type":run_type,
                         "run_timestamp_utc":iso(run_stamp),"game_id":None if game is None else game.game_id,
                         "scheduled_start_time_utc":iso(start),"game_type_code":code,"game_type_label":GAME_TYPES.get(code,"UNKNOWN"),
                         "market_evaluation_status":evaluation,"source":source,"goalie_id":None if goalie is None else goalie.goalie_id,
@@ -243,8 +244,9 @@ def _verify_parent(path: Path, required: list[Path]) -> None:
 def capture_run(*, payload_json: Path, games_csv: Path, goalies_csv: Path, parent_manifest: Path,
                 output_root: Path, slate_date: str, run_timestamp_utc: str, run_type: str,
                 source: str = "THE_ODDS_API") -> Path:
-    run_id = make_run_id(2026, slate_date, run_timestamp_utc, run_type)
-    destination = output_root/"2026"/slate_date/run_id
+    season = authorized_season_for_date(slate_date)
+    run_id = make_run_id(season, slate_date, run_timestamp_utc, run_type)
+    destination = output_root/str(season)/slate_date/run_id
     staging = destination.with_name(destination.name+".incomplete")
     lock_dir = output_root/"locks"; lock_dir.mkdir(parents=True, exist_ok=True)
     lock = (lock_dir/f"{slate_date}_{run_type}.lock").open("a+")
@@ -261,7 +263,7 @@ def capture_run(*, payload_json: Path, games_csv: Path, goalies_csv: Path, paren
               "requested_market_families":["player_total_saves"],"provider_response":raw.get("provider_response",[])}
     raw_bytes=(json.dumps(envelope,sort_keys=True,separators=(",",":"),ensure_ascii=False)+"\n").encode(); raw_hash=sha256_bytes(raw_bytes)
     games,goalies=pd.read_csv(games_csv),pd.read_csv(goalies_csv)
-    if games.empty or games.game_id.duplicated().any() or not games.canonical_season.eq(2026).all() or not games.slate_date.astype(str).eq(slate_date).all(): raise RuntimeError("GAME_SPINE_IDENTITY_MISMATCH")
+    if games.empty or games.game_id.duplicated().any() or not games.canonical_season.eq(season).all() or not games.slate_date.astype(str).eq(slate_date).all(): raise RuntimeError("GAME_SPINE_IDENTITY_MISMATCH")
     if not games.game_type_code.isin(GAME_TYPES).all(): raise RuntimeError("UNKNOWN_GAME_TYPE")
     staging.mkdir(parents=True,exist_ok=False)
     (staging/"raw_odds_response.json").write_bytes(raw_bytes)
@@ -270,7 +272,7 @@ def capture_run(*, payload_json: Path, games_csv: Path, goalies_csv: Path, paren
     quotes.groupby("quote_qualification_status",dropna=False).size().reset_index(name="rows").to_csv(staging/"quote_qualification_audit.csv",index=False)
     timing=["run_id","game_id","goalie_id","sportsbook","provider_quote_timestamp_utc","provider_market_timestamp_utc","source_timestamp_utc","capture_timestamp_utc","scheduled_start_time_utc","quote_qualification_status"]
     quotes[timing].to_csv(staging/"quote_timing_audit.csv",index=False)
-    metadata={"schema_version":"nhl_saves_quote_capture_v1","run_id":run_id,"canonical_season":2026,"slate_date":slate_date,"run_type":run_type,
+    metadata={"schema_version":"nhl_saves_quote_capture_v1","run_id":run_id,"canonical_season":season,"slate_date":slate_date,"run_type":run_type,
               "run_timestamp_utc":iso(parse_utc(run_timestamp_utc)),"capture_timestamp_utc":iso(parse_utc(capture_text)),"source":source,
               "raw_payload_sha256":raw_hash,"parent_game_spine_sha256":sha256_file(games_csv),"parent_goalie_spine_sha256":sha256_file(goalies_csv),
               "parent_manifest_sha256":sha256_file(parent_manifest),"normalized_quote_rows":len(quotes),"qualified_quote_rows":int(quotes.quote_qualification_status.isin(QUALIFIED).sum()),

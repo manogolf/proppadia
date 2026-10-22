@@ -18,6 +18,19 @@ Operational NHL dates use `America/Los_Angeles`; durable timestamps use UTC
 and, where useful for review, their Pacific representation. The season is
 identified by its single starting year, such as season `2026`.
 
+Season derivation and authorization (`backend/nhl/game_phase.py`): a game's
+season is the first four digits of its game ID; a date belongs to the season
+starting that year from July onward, so January–June 2027 is season 2026
+(`season_for_date`, `season_for_game_id`). Production lanes derive every
+`season=<s>` path, season query, canonical-season gate and metadata value from
+the slate date, and require it to be in `AUTHORIZED_SEASONS` (currently
+`{2026}`). A date in any other season fails with
+`NHL_SEASON_NOT_AUTHORIZED:<s>` instead of silently finding no artifacts.
+Rolling over to a new season is a deliberate change: decide which models carry
+over or requalify, record the new season's cross-market activation, and add the
+season to `AUTHORIZED_SEASONS`. Frozen model artifacts and their training data
+(for example `evaluation_season=2025` paths) stay pinned by design.
+
 The comprehensive graph is:
 
 1. database sanity;

@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from backend.nhl.cross_market_shadow.core import grade_capture, verify_manifest
-from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluation_eligible
+from backend.nhl.game_phase import authorized_season_for_date, phase_for_game_type, regular_season_evaluation_eligible
 from backend.nhl.postgame_reconcile.core import (
     OFFICIAL_LINEUP_ABSENCE, _official_lineup_absences, _sog_outcomes,
 )
@@ -248,7 +248,7 @@ def _write_phase_restatement(package: Path, root: Path) -> Path:
 
 
 def _grade_final_capture(package: Path, slate_date: str, cross_root: Path) -> tuple[str, str | None]:
-    final_root = cross_root / "season=2026" / f"slate_date={slate_date}" / "run_type=FINAL_PREGAME"
+    final_root = cross_root / f"season={authorized_season_for_date(slate_date)}" / f"slate_date={slate_date}" / "run_type=FINAL_PREGAME"
     runs = sorted(final_root.glob("state=*")) if final_root.exists() else []
     if not runs:
         return "NOT_AVAILABLE", None

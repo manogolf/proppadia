@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+from backend.nhl.game_phase import authorized_season_for_date
 from backend.nhl.sog_attachment_integrity import verify_sog_integrity_package
 from backend.nhl.sog_coverage_annotations import validate_annotation
 from backend.nhl.daily_capture import verify_package
@@ -847,7 +848,7 @@ def discover_daily_market_coverage(
     # It selects the latest strictly prestart snapshot independently per game.
     reconstruction_root = (Path(daily_run_root).parent
                            / "sog_market_coverage_reconstructions"
-                           / "season=2026" / f"slate_date={slate_date}")
+                           / f"season={authorized_season_for_date(slate_date)}" / f"slate_date={slate_date}")
     annotation_reconstruction_ids: set[str] = set()
     for annotation_dir in reconstruction_root.glob("coverage_gap_annotation=*"):
         try:
@@ -1117,7 +1118,7 @@ def discover_daily_market_coverage(
             continue
     reconstruction_root = (Path(daily_run_root).parent
                            / "sog_market_coverage_reconstructions"
-                           / "season=2026" / f"slate_date={slate_date}")
+                           / f"season={authorized_season_for_date(slate_date)}" / f"slate_date={slate_date}")
     reconstruction_reports = sorted(
         reconstruction_root.glob("reconstruction=*/sog_attachment_integrity.json"),
         reverse=True,

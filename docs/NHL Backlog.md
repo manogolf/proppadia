@@ -1843,30 +1843,48 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.25 Review NHL season rollover before the 2027-28 season
 
-- Status: **OPEN — found 2026-10-20 while fixing P2.24 E**. About a dozen
-  places pin `season=2026` / `season=2026/` paths. Examples:
-  - `postgame_reconcile/core.py` artifact globs (650, 771, 945-955);
-  - `validate_final_slate` (`canonical_season == 2026`);
-  - cross-market observer launches, queries and paths
-    (`run_nhl_mainline_cross_market_capture_warn_only.py` 136, 378, 400, 643).
-
-  The two prior-day game-set queries were fixed in P2.24 E. Not urgent
-  until October 2027, but each would silently find nothing in a new season.
-- Scope recount (2026-10-22): about 217 pinned-2026 sites in about 60 files
-  under `backend/nhl` (tests and research excluded). Most are in the
-  prospective lanes, not only artifact globs: `postgame_reconcile/core.py`
-  (15), the quote-capture and shadow cores for SOG, Points and Saves
-  (`canonical_season.eq(2026)` gates, `output_root/"2026"` writers,
-  `canonical_season: 2026` metadata), `prediction_only/core.py`,
-  `cross_market_shadow` (`SEASON = 2026`), `mainline_shadow/core.py` and the
-  all-candidate export. Many are deliberate season-2026 governance pins tied
-  to qualified model identities, so the rollover is a season-transition
-  change (which models carry over and requalify), not a find-and-replace.
-  Two season rules also coexist: `cli.infer_nhl_season_from_date_yyyy_mm_dd`
-  (September onward) and the P2.24 E queries (July onward); they agree for
-  every game date. Plan: one change in summer 2027 with a single shared
-  helper (game ID first, July date rule otherwise) and a replay of a 2026
-  slate and a synthetic 2027 slate. Left unchanged 2026-10-22.
+- Status: **CLOSED 2026-10-22 — one season rule and an authorized-season
+  list** (operator-chosen option B). Found 2026-10-20 while fixing P2.24 E:
+  production code pinned season 2026 in paths, queries, gates and metadata,
+  so a new season would silently find nothing.
+- Fix: `backend/nhl/game_phase.py` now holds `season_for_date` (July rule),
+  `season_for_game_id`, `AUTHORIZED_SEASONS = {2026}` and
+  `authorized_season_for_date`. Every production site derives its season
+  from the slate date and requires it to be authorized; anything else fails
+  with `NHL_SEASON_NOT_AUTHORIZED:<s>`. The P2.24 E inline rule and five
+  other copies (`cli.infer_nhl_season_from_date_yyyy_mm_dd`, which used
+  September, `reconciliation_certificate`, `import_schedule_today`,
+  `refresh_players_and_roster_today`, `import_roster_today`) now call the
+  shared helper.
+- Scope: the 60 pinned sites in the 16 files the scheduled jobs reach (traced
+  by imports from the three NHL LaunchAgent entry points, `backend.nhl.cli`
+  and the reconciliation script), plus four prior-season pins found on the way
+  (SOG cold-start observer's 2025/2024 history, now season−1/season−2).
+  Converted: `postgame_reconcile/core.py`, `cross_market_shadow/core.py`
+  (`SEASON` constant removed; the activation record must match the run's
+  season), the Points and Saves quote-capture and shadow cores,
+  `prediction_only/core.py`, `performance_summary.py`,
+  `postgame_learning.py`, `sog_attachment_integrity.py`, and the mainline
+  observer, morning orchestration (allowed `{2025, 2026}`, now the
+  authorized list), reconciliation, SOG observer, HGB scorer and coverage
+  reconstruction scripts.
+- Deliberately unchanged: frozen model artifacts and training data
+  (`evaluation_season=2025` paths, the pinned 2025 cross-market spine), two
+  module docstrings, a recorded 2026 redirect diagnostic, `--season`
+  defaults of manual backfill scripts (the daily graph always passes the
+  season), and about 157 sites in dated one-off validators, rehearsals,
+  research and analysis scripts that are not on the production path
+  (including the unused `sog_shadow` and `sog_quote_capture` cores).
+- Verification: `backend/nhl/tests/test_season_naming.py` (date and game-ID
+  rules, 2027-04/06 stay 2026, a 2027-10 slate fails loudly in reconciliation
+  and cross-market status, this season's paths unchanged); 599 NHL package
+  tests and 659 `backend/tests/test_nhl_*` tests pass. Read-only replay on
+  old and new code of sources, FINAL_PREGAME run paths, production SOG
+  grades (10-20, 10-21), cross-market status (10-21, 10-22), the 10-21
+  certificate and the 10-22 roster check: identical.
+- Rollover procedure (summer 2027): decide which models carry over or
+  requalify, record the new season's cross-market activation, add the season
+  to `AUTHORIZED_SEASONS`. Documented in the comprehensive capture contract.
 - Convention (operator, 2026-10-20): an NHL season is named by its start
   year. A game's season is the first four digits of its game ID (for
   example `2026020141` is season 2026, type 02, game 0141). Games played

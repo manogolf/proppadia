@@ -12,6 +12,7 @@ from typing import Any
 
 import pandas as pd
 
+from backend.nhl.game_phase import authorized_season_for_date
 from backend.nhl.daily_capture import canonical_game_set_hash, sha256_file, verify_package
 from backend.nhl.attachment_integrity import validate_odds_observation
 
@@ -332,7 +333,7 @@ def verify_sog_integrity_package(report_path: Path, slate_date: str) -> tuple[di
         expected_manifest_sha256=odds_manifest_sha,
         expected_parent_daily_run_id=str(report["parent_daily_run_id"]),
         expected_slate_date=slate_date,
-        expected_season=int(report.get("odds_observation_season", 2026)),
+        expected_season=int(report.get("odds_observation_season") or authorized_season_for_date(slate_date)),
         expected_phase=report.get("odds_observation_phase"),
         expected_game_set_hash=report.get("canonical_game_set_hash"),
         replayed=bool(report.get("odds_observation_replayed", False)),

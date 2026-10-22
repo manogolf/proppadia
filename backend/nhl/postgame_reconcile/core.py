@@ -32,7 +32,7 @@ from backend.nhl.sog_cold_start.core import (
 from backend.nhl.prediction_only.core import digest as prediction_only_digest
 from backend.nhl.daily_capture import canonical_game_set_hash
 from backend.nhl.reconciliation_certificate import VOID_SCHEDULE_STATES, VOIDED_GAMES_FILE
-from backend.nhl.game_phase import phase_for_game_type, regular_season_evaluation_eligible
+from backend.nhl.game_phase import authorized_season_for_date, phase_for_game_type, regular_season_evaluation_eligible
 from backend.nhl.postgame_reconcile.resilient_finalization import (
     canonical_atomic_identity, select_latest_atomic_sources, validate_atomic_group,
 )
@@ -248,7 +248,7 @@ def _retained_schedule_spine(*, operational_root: Path, slate_date: str) -> tupl
     for game in rows:
         try:
             spine.append({
-                "canonical_season": 2026, "slate_date": slate_date,
+                "canonical_season": authorized_season_for_date(slate_date), "slate_date": slate_date,
                 "game_id": int(game["id"]),
                 "scheduled_start_time_utc": pd.to_datetime(game["startTimeUTC"], utc=True),
                 "home_team_id": int(game["homeTeam"]["id"]),
@@ -645,14 +645,14 @@ def _local_spine(schedule: pd.DataFrame, slate_date: str) -> pd.DataFrame:
         raise RuntimeError("IMMUTABLE_CANONICAL_GAME_IDENTITY_INVALID")
     if not schedule.slate_date.astype(str).eq(slate_date).all():
         raise RuntimeError("IMMUTABLE_CANONICAL_SLATE_DATE_MISMATCH")
-    if not schedule.canonical_season.astype(int).eq(2026).all():
+    if not schedule.canonical_season.astype(int).eq(authorized_season_for_date(slate_date)).all():
         raise RuntimeError("IMMUTABLE_CANONICAL_SEASON_MISMATCH")
     return schedule
 
 
 def _cross_market_final_runs(operational_root: Path, slate_date: str) -> list[Path]:
     """Return only FINAL_PREGAME states explicitly retained for this slate."""
-    pattern = (Path(operational_root) / "cross_market_shadow" / "season=2026" /
+    pattern = (Path(operational_root) / "cross_market_shadow" / f"season={authorized_season_for_date(slate_date)}" /
                f"slate_date={slate_date}" / "run_type=FINAL_PREGAME" / "state=*")
     return sorted(pattern.parent.glob(pattern.name))
 
@@ -779,7 +779,8 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path,
     # Preserve the established validation order for an existing card: its
     # manifest is checked before any other source cardinality is considered.
     cross_manifest = _verify_manifest(cross_runs[0]) if cross_runs else {}
-    sog_runs = sorted((operational_root / "sog_prediction_only" / "season=2026" /
+    season_dir = f"season={authorized_season_for_date(slate_date)}"
+    sog_runs = sorted((operational_root / "sog_prediction_only" / season_dir /
                        f"slate_date={slate_date}" / "phase=FINAL_PREGAME").glob("run_id=*"))
     if len(sog_runs) > 1:
         raise RuntimeError(f"IMMUTABLE_SOG_FINAL_PREGAME_RUN_CARDINALITY:{len(sog_runs)}")
@@ -953,17 +954,17 @@ def resolve_operational_sources(*, slate_date: str, operational_root: Path,
         raise RuntimeError("SEPTEMBER_20_IMMUTABLE_SOURCE_CARDINALITY_MISMATCH")
 
     if slate_date < PROSPECTIVE_PROP_NOT_BEFORE:
-        early_points = list((operational_root / "points_prediction_only" / "season=2026" /
+        early_points = list((operational_root / "points_prediction_only" / season_dir /
                              f"slate_date={slate_date}" / "phase=FINAL_PREGAME").glob("run_id=*"))
-        early_saves = list((operational_root / "saves_prediction_only" / "season=2026" /
+        early_saves = list((operational_root / "saves_prediction_only" / season_dir /
                             f"slate_date={slate_date}" / "phase=FINAL_PREGAME").glob("run_id=*"))
         if early_points or early_saves:
             raise RuntimeError("RETROSPECTIVE_POINTS_OR_SAVES_SOURCE_FORBIDDEN")
         points = {"status": "NO_PROSPECTIVE_POINTS_PREDICTIONS", "reason": "PROSPECTIVE_NOT_BEFORE_2026-09-21"}
         saves = {"status": "NO_PROSPECTIVE_SAVES_PREDICTIONS", "reason": "PROSPECTIVE_NOT_BEFORE_2026-09-21"}
     else:
-        points_runs = list((operational_root / "points_prediction_only" / "season=2026" / f"slate_date={slate_date}" / "phase=FINAL_PREGAME").glob("run_id=*"))
-        saves_runs = list((operational_root / "saves_prediction_only" / "season=2026" / f"slate_date={slate_date}" / "phase=FINAL_PREGAME").glob("run_id=*"))
+        points_runs = list((operational_root / "points_prediction_only" / season_dir / f"slate_date={slate_date}" / "phase=FINAL_PREGAME").glob("run_id=*"))
+        saves_runs = list((operational_root / "saves_prediction_only" / season_dir / f"slate_date={slate_date}" / "phase=FINAL_PREGAME").glob("run_id=*"))
         points = _resolve_prop_prediction_source(
             runs=points_runs, lane="POINTS", slate_date=slate_date,
             schedule=schedule)
@@ -1099,7 +1100,7 @@ def validate_final_slate(canonical: pd.DataFrame, official: pd.DataFrame, slate_
         raise RuntimeError("DUPLICATE_GAME_IDENTITY")
     if not canonical.slate_date.astype(str).eq(slate_date).all():
         raise RuntimeError("CANONICAL_SLATE_DATE_MISMATCH")
-    if not canonical.canonical_season.astype(int).eq(2026).all():
+    if not canonical.canonical_season.astype(int).eq(authorized_season_for_date(slate_date)).all():
         raise RuntimeError("CANONICAL_SEASON_MISMATCH")
     if not canonical.game_type_code.astype(int).isin(SUPPORTED_GAME_TYPES).all():
         raise RuntimeError("UNSUPPORTED_GAME_TYPE")
@@ -1129,7 +1130,7 @@ def build_outcomes(validated: pd.DataFrame, boxscores: dict[int, dict], observed
             raise RuntimeError(f"OFFICIAL_BOXSCORE_MISSING:{gid}")
         home_score, away_score = int(game.home_score), int(game.away_score)
         games.append({
-            "canonical_season": 2026, "slate_date": str(game.slate_date), "game_id": gid,
+            "canonical_season": authorized_season_for_date(game.slate_date), "slate_date": str(game.slate_date), "game_id": gid,
             "game_type_code": int(game.game_type_code), "home_team_id": int(game.home_team_id_canonical),
             "away_team_id": int(game.away_team_id_canonical), "official_final_home_goals": home_score,
             "official_final_away_goals": away_score,
@@ -1147,7 +1148,7 @@ def build_outcomes(validated: pd.DataFrame, boxscores: dict[int, dict], observed
                     if player_id is None:
                         raise RuntimeError(f"SKATER_IDENTITY_MISSING:{gid}")
                     skaters.append({
-                        "canonical_season": 2026, "slate_date": str(game.slate_date), "game_id": gid,
+                        "canonical_season": authorized_season_for_date(game.slate_date), "slate_date": str(game.slate_date), "game_id": gid,
                         "player_id": int(player_id), "team_id": team_id,
                         "official_goals": int(row.get("goals") or 0),
                         "official_assists": int(row.get("assists") or 0),
@@ -1167,7 +1168,7 @@ def build_outcomes(validated: pd.DataFrame, boxscores: dict[int, dict], observed
                 if saves is None and isinstance(row.get("savesToShots"), str) and "/" in row["savesToShots"]:
                     saves, shots = row["savesToShots"].split("/", 1)
                 team_goalies.append({
-                    "canonical_season": 2026, "slate_date": str(game.slate_date), "game_id": gid,
+                    "canonical_season": authorized_season_for_date(game.slate_date), "slate_date": str(game.slate_date), "game_id": gid,
                     "goalie_id": int(player_id), "team_id": team_id,
                     "official_saves": None if saves is None else int(saves),
                     "official_shots_faced": None if shots is None else int(shots),
@@ -1307,7 +1308,7 @@ def _grade_game_lines(moneyline: pd.DataFrame, puck: pd.DataFrame) -> tuple[pd.D
 
 def grade_catchup(prediction_root: Path, schedule: pd.DataFrame, games: pd.DataFrame,
                   skaters: pd.DataFrame, goalies: pd.DataFrame) -> dict[str, pd.DataFrame]:
-    main_runs = list((prediction_root / "constructed/mainline").glob("season=2026/slate_date=*/run_type=*/state=*"))
+    main_runs = list((prediction_root / "constructed/mainline").glob(f"season={authorized_season_for_date(schedule.slate_date.iloc[0])}/slate_date=*/run_type=*/state=*"))
     if len(main_runs) != 1:
         raise RuntimeError(f"IMMUTABLE_MAINLINE_RUN_CARDINALITY:{len(main_runs)}")
     main = main_runs[0]
@@ -1811,11 +1812,11 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         raise RuntimeError("RESILIENT_CROSS_MARKET_GAME_IDENTITY_INVALID")
                     if (("slate_date" in frame and not frame.slate_date.astype(str).eq(slate_date).all())
                             or ("canonical_season" in frame
-                                and not frame.canonical_season.astype(int).eq(2026).all())):
+                                and not frame.canonical_season.astype(int).eq(authorized_season_for_date(slate_date)).all())):
                         raise RuntimeError("RESILIENT_CROSS_MARKET_SLATE_IDENTITY_MISMATCH")
                     if ("slate_date" in frame and not frame.slate_date.astype(str).eq(slate_date).all()
                             or "canonical_season" in frame
-                            and not frame.canonical_season.astype(int).eq(2026).all()):
+                            and not frame.canonical_season.astype(int).eq(authorized_season_for_date(slate_date)).all()):
                         raise RuntimeError("RESILIENT_CROSS_MARKET_SLATE_IDENTITY_MISMATCH")
                     for row in frame.to_dict(orient="records"):
                         game_id = int(row["game_id"])

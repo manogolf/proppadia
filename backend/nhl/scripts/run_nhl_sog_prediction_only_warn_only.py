@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 import psycopg
+from backend.nhl.game_phase import authorized_season_for_date
 from backend.nhl.database_access import database_url
 from backend.nhl.reconciliation_certificate import (
     RosterObservationNotReady,
@@ -62,10 +63,12 @@ def lock(root:Path,slate:str,phase:str):
 def _read(cur,query:str,params:tuple=())->pd.DataFrame:
     cur.execute(query,params);return pd.DataFrame(cur.fetchall(),columns=[c.name for c in cur.description])
 def export_features(dsn:str,slate:str,cutoff:datetime)->tuple[pd.DataFrame,pd.DataFrame]:
+    # Seasons relative to the slate: current, prior (season-1) and older (season-2).
+    season=authorized_season_for_date(slate);prior_season,older_season=season-1,season-2
     with psycopg.connect(dsn) as con:
       with con.cursor() as cur:
         cur.execute("BEGIN READ ONLY")
-        schedule=_read(cur,"""SELECT season AS canonical_season,game_date::text AS slate_date,game_id,start_time_utc AS scheduled_start_time_utc,home_team_id,away_team_id,game_type,status FROM nhl.games WHERE season=2026 AND game_date=%s::date ORDER BY start_time_utc,game_id""",(slate,))
+        schedule=_read(cur,"""SELECT season AS canonical_season,game_date::text AS slate_date,game_id,start_time_utc AS scheduled_start_time_utc,home_team_id,away_team_id,game_type,status FROM nhl.games WHERE season=%s AND game_date=%s::date ORDER BY start_time_utc,game_id""",(season,slate))
         if schedule.empty:con.rollback();return schedule,pd.DataFrame()
         games=schedule.game_id.astype(int).tolist();teams=sorted(set(schedule.home_team_id.astype(int))|set(schedule.away_team_id.astype(int)))
         roster=_read(cur,"""WITH latest AS (SELECT DISTINCT ON (r.game_id,r.player_id) r.game_id,r.player_id,r.team_id,r.active_flag,r.asof_ts FROM nhl.roster_status r WHERE r.game_id=ANY(%s) AND r.asof_ts<=%s ORDER BY r.game_id,r.player_id,r.asof_ts DESC) SELECT l.game_id,l.player_id,l.team_id,p.full_name AS player_name,p.position,l.active_flag,l.asof_ts FROM latest l JOIN nhl.players p USING(player_id)""",(games,cutoff))
@@ -77,13 +80,13 @@ def export_features(dsn:str,slate:str,cutoff:datetime)->tuple[pd.DataFrame,pd.Da
         else:roster_source="GAME_ROSTER_STATUS"
         ids=roster.player_id.astype(int).unique().tolist()
         hist=_read(cur,"""SELECT g.season,g.game_type,g.game_date,g.start_time_utc,g.game_id,l.player_id,l.team_id,l.shots_on_goal,l.toi_minutes FROM nhl.skater_game_logs_raw l JOIN nhl.games g USING(game_id) WHERE l.player_id=ANY(%s) AND g.start_time_utc<%s AND lower(g.status)='final' ORDER BY g.start_time_utc,g.game_id""",(ids,cutoff))
-        pos=_read(cur,"""SELECT CASE WHEN upper(position)='D' THEN 'D' ELSE 'F' END AS position_group,sum(l.shots_on_goal)::float8*60/nullif(sum(l.toi_minutes),0) AS position_sog_per60,avg(l.toi_minutes)::float8 AS position_toi_per_game FROM nhl.skater_game_logs_raw l JOIN nhl.games g USING(game_id) JOIN nhl.players p USING(player_id) WHERE g.season=2025 GROUP BY 1 UNION ALL SELECT 'ALL',sum(l.shots_on_goal)::float8*60/nullif(sum(l.toi_minutes),0),avg(l.toi_minutes)::float8 FROM nhl.skater_game_logs_raw l JOIN nhl.games g USING(game_id) WHERE g.season=2025""")
+        pos=_read(cur,"""SELECT CASE WHEN upper(position)='D' THEN 'D' ELSE 'F' END AS position_group,sum(l.shots_on_goal)::float8*60/nullif(sum(l.toi_minutes),0) AS position_sog_per60,avg(l.toi_minutes)::float8 AS position_toi_per_game FROM nhl.skater_game_logs_raw l JOIN nhl.games g USING(game_id) JOIN nhl.players p USING(player_id) WHERE g.season=%s GROUP BY 1 UNION ALL SELECT 'ALL',sum(l.shots_on_goal)::float8*60/nullif(sum(l.toi_minutes),0),avg(l.toi_minutes)::float8 FROM nhl.skater_game_logs_raw l JOIN nhl.games g USING(game_id) WHERE g.season=%s""",(prior_season,prior_season))
         con.rollback()
     rows=[]
     posmap=pos.set_index("position_group").to_dict("index")
     for rr in roster.itertuples(index=False):
         game=schedule[schedule.game_id.eq(rr.game_id)].iloc[0];opponent=int(game.away_team_id if int(rr.team_id)==int(game.home_team_id) else game.home_team_id)
-        ph=hist[hist.player_id.eq(rr.player_id)].copy();prior=ph[ph.season.eq(2025)];older=ph[ph.season.eq(2024)];pre=ph[(ph.season.eq(2026))&ph.game_type.eq(1)];reg=ph[(ph.season.eq(2026))&ph.game_type.eq(2)]
+        ph=hist[hist.player_id.eq(rr.player_id)].copy();prior=ph[ph.season.eq(prior_season)];older=ph[ph.season.eq(older_season)];pre=ph[(ph.season.eq(season))&ph.game_type.eq(1)];reg=ph[(ph.season.eq(season))&ph.game_type.eq(2)]
         def stats(x):
             minutes=pd.to_numeric(x.toi_minutes,errors="coerce").sum();shots=pd.to_numeric(x.shots_on_goal,errors="coerce").sum();games=x.game_id.nunique()
             return minutes,(shots*60/minutes if minutes>0 else None),(pd.to_numeric(x.toi_minutes,errors="coerce").mean() if games else None),games
@@ -114,7 +117,7 @@ def observe(*,slate:str,requested:str,dsn:str,root:Path,now:datetime|None=None)-
         schedule,features=export_features(dsn,slate,now);phase,reason=phase_for(schedule,now,requested);result.update(phase=phase,phase_gate=reason)
         if phase is None:result["status"]="NOOP_OUTSIDE_WINDOW";durable_json(status_path,result);return status_path
         with lock(root,slate,phase):
-            phase_root=root/"season=2026"/f"slate_date={slate}"/f"phase={phase}"
+            phase_root=root/f"season={authorized_season_for_date(slate)}"/f"slate_date={slate}"/f"phase={phase}"
             existing=list(phase_root.glob("run_id=*"))
             if existing:result.update(status="NOOP_ALREADY_CAPTURED",existing_run=str(existing[0]));durable_json(status_path,result);return status_path
             prestart=pd.to_datetime(features.scheduled_start_time_utc,utc=True,errors="coerce")>pd.Timestamp(now)

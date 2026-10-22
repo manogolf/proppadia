@@ -32,6 +32,7 @@ import os
 os.environ.setdefault("PSYCOPG_DISABLE_PREPARES", "1")
 
 import psycopg
+from backend.nhl.game_phase import season_for_date
 from backend.nhl.database_access import database_url
 from psycopg.rows import dict_row
 
@@ -139,9 +140,7 @@ def season_start_year_from_date(iso_date: str) -> int:
       2025-12-23 -> 2025
       2026-01-15 -> 2025
     """
-    y, m, _ = map(int, iso_date.split("-"))
-    start = y if m >= 7 else y - 1
-    return int(start)
+    return season_for_date(iso_date)
 
 def _safe_str(v):
     return localized_text(v)
