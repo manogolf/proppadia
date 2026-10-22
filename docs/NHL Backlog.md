@@ -83,6 +83,19 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P1.3 Observe protected-source NULL fills and new-row inserts in normal use
 
+- 2026-10-22 check: all 25 daily parent receipts from 10-17 to 10-22 record
+  `inserted_known_values`=0, `fillable_nulls`=0 and PP-TOI `filled_nulls`=0
+  with `populated_zero_preserved`=true, and 72–432 preserved populated values
+  per slate (10-20: 396 promoted, 360 preserved, run
+  `nhldaily_20261021T143007254494Z_6ab45043`). No positive fill occurred,
+  and none could have been proven: the protected function's return count was
+  only printed, and the receipt showed `POSSIBLE_UNQUANTIFIED`;
+  `unknown_before_protected_null_fill` was also dropped from the receipt.
+  Fixed 2026-10-22 (`fd72a124`):
+  the call now emits `NHL_PROTECTED_SOURCE_NULL_FILL_SUMMARY_V1` with
+  `filled_nulls` and complete `database_row_counts`, so the child reads
+  `COMMITTED` with the count or a quantified `NONE`; the unknown-before count
+  is kept. Still waiting for a natural positive fill.
 - Status: **OPEN** — disposable fixture tests passed new insert, NULL-fill,
   preservation, and replay assertions. The October 16 production promotion
   reported zero fills, and the October 17 receipt does not quantify positive
@@ -191,6 +204,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.2 Verify the target-specific Moneyline chronology correction
 
+- 2026-10-22 check: started-target exclusion works in natural runs
+  (`started_excluded_game_ids` on the 10-17 23:29Z, 10-19 23:24Z and 10-20
+  23:11Z REFRESH captures; 10-20 kept games 146–151). The
+  include-for-later/exclude-for-earlier case was not observed: every 10-20
+  contributing final was observed at 14:30:11Z, before every puck drop, and
+  teams do not play twice in a day, so same-day finals cannot feed same-day
+  targets. It needs a prior-day final qualified after an early puck drop (a
+  matinee slate), and receipts do not record which finals fed which target.
+  The 10-17 stop below is superseded: a 10-17 REFRESH completed.
 - Status: **OPEN** — commit `cde03a47` implements per-target strict chronology.
   The October 17 Moneyline lane stopped with
   `CROSS_MARKET_FINAL_SCORE_NOT_OBSERVED_BEFORE_TARGET`, so it did not verify a
@@ -736,7 +758,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   before the morning schedule import fail with a raw `FileNotFoundError`
   (`slates/<d>/slate_health.json`, 41 polls on 10-22), and the first poll each
   night reports `PRIOR_DATE_EMPTY_SCHEDULE_CERTIFICATE_INVALID` although the
-  prior day was not empty, only not yet reconciled. Original finding follows. The
+  prior day was not empty, only not yet reconciled. Both fixed 2026-10-22
+  (`ea4e8bc7`): a missing current-slate schedule is now `ROSTER_NOT_READY`
+  (`CURRENT_SLATE_SCHEDULE_NOT_IMPORTED`, retry on a later poll), and a prior
+  day with games but no package fails with
+  `PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED:PRIOR_DAY_RECONCILIATION_NOT_YET_CREATED`.
+  Original finding follows. The
   roster producer and daily sequence are unchanged; the prior-day source
   handoff and observer readiness classifications are corrected below.
 - Confirmed incident A, slate 2026-09-30, games
@@ -1243,7 +1270,23 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.4 Validate bounded preseason total-TOI NULL population
 
-- Status: **OPEN — source validation required; no repair authorized**. A
+- Status: **CLOSED 2026-10-22 — faithful to source; no correction**. All
+  140 NULL `toi_minutes` rows in `nhl.skater_game_logs_raw` belong to skaters
+  who appear in the official FINAL boxscores. All four games are
+  `limitedScoring=true`, with no skater `toi`, `shifts: 0` and no shift-chart
+  shift records (goal events only); goalies have TOI. Shots on goal and blocks
+  match the boxscores on all 140 rows. These are the only preseason games
+  since 2026-09-15 with NULL TOI. The before/after proposal is all
+  `OFFICIAL_UNAVAILABLE`, so nothing is repaired; keep the rows NULL and never
+  impute zero. Read-only evidence (research login, git-ignored):
+  `artifacts/analysis/nhl/p2_4_preseason_toi_validation/` (raw responses,
+  comparison, proposal; sha256 of `SHA256SUMS`
+  `32dffe90d70a9f47c511eed7e0a1bd409dde9dc270b0388363b7de7a7ff406b4`). Side
+  check: `goals`, `assists`, `points` and `hits` are NULL on nearly every row
+  of that table since 2026-09-15. That is by design: the daily stage-to-raw
+  promotion does not carry those columns, no production reader uses them, and
+  Points outcomes come from the reconciliation packages. Original finding
+  follows. A
   bounded read-only 30-day diagnostic found 140 NULL `toi_minutes` across
   four completed game-type-1 games: `2026010002` (2026-09-19, 32 rows),
   `2026010020` and `2026010022` (2026-09-21, 36 rows each), and
@@ -1699,9 +1742,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     2. A spine game that is missing from the official schedule for its
        date (if the NHL drops a postponed game from the original date
        instead of marking it PPD) still fails closed as a game-set mismatch.
-    3. The daily pipeline's later prior-date seeding (`cli.py` phase A)
-       does not skip void games, so a suspended game's partial box score
-       can reach history tables. Grading is unaffected.
+    3. **Fixed 2026-10-22 (`af834d39`).** The daily pipeline's prior-date
+       seeding (`cli.py` phase A) now passes the certificate's
+       `voided_game_ids` to the goalie and skater seeds, roster refresh and
+       shift charts as `NHL_SCHEDULE_VOIDED_GAME_IDS`, so a suspended game's
+       partial box score does not reach history tables. Test:
+       `backend/nhl/tests/test_prior_day_voided_env.py`.
   - Operator decision for D (2026-10-20): predictions for postponed,
     suspended or cancelled games are void and never graded, the way books
     cancel wagers placed on them. The rescheduled game gets fresh
@@ -1806,6 +1852,21 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
   The two prior-day game-set queries were fixed in P2.24 E. Not urgent
   until October 2027, but each would silently find nothing in a new season.
+- Scope recount (2026-10-22): about 217 pinned-2026 sites in about 60 files
+  under `backend/nhl` (tests and research excluded). Most are in the
+  prospective lanes, not only artifact globs: `postgame_reconcile/core.py`
+  (15), the quote-capture and shadow cores for SOG, Points and Saves
+  (`canonical_season.eq(2026)` gates, `output_root/"2026"` writers,
+  `canonical_season: 2026` metadata), `prediction_only/core.py`,
+  `cross_market_shadow` (`SEASON = 2026`), `mainline_shadow/core.py` and the
+  all-candidate export. Many are deliberate season-2026 governance pins tied
+  to qualified model identities, so the rollover is a season-transition
+  change (which models carry over and requalify), not a find-and-replace.
+  Two season rules also coexist: `cli.infer_nhl_season_from_date_yyyy_mm_dd`
+  (September onward) and the P2.24 E queries (July onward); they agree for
+  every game date. Plan: one change in summer 2027 with a single shared
+  helper (game ID first, July date rule otherwise) and a replay of a 2026
+  slate and a synthetic 2027 slate. Left unchanged 2026-10-22.
 - Convention (operator, 2026-10-20): an NHL season is named by its start
   year. A game's season is the first four digits of its game ID (for
   example `2026020141` is season 2026, type 02, game 0141). Games played
