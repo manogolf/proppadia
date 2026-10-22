@@ -22,6 +22,7 @@ from backend.nhl.reconciliation_certificate import (
     RosterObservationNotReady,
     require_slate_history_certificate,
     require_slate_roster_observation,
+    roster_coverage_exclusions,
 )
 
 from backend.nhl.sog_cold_start.core import build_predictions, sha256_file
@@ -122,10 +123,19 @@ def observe(*,slate:str,requested:str,dsn:str,root:Path,now:datetime|None=None)-
             if existing:result.update(status="NOOP_ALREADY_CAPTURED",existing_run=str(existing[0]));durable_json(status_path,result);return status_path
             prestart=pd.to_datetime(features.scheduled_start_time_utc,utc=True,errors="coerce")>pd.Timestamp(now)
             poststart=features.loc[~prestart].copy();features=features.loc[prestart].copy()
+            # A partial roster package covers only some games (P2.13); rows for
+            # the other games are excluded with the package's reason.
+            roster_exclusions=roster_coverage_exclusions(roster)
+            roster_out=pd.DataFrame()
+            if roster_exclusions:
+                roster_out=features.loc[features.game_id.astype(int).isin(roster_exclusions)].copy();features=features.loc[~features.game_id.astype(int).isin(roster_exclusions)].copy()
+                if features.empty:raise RuntimeError("SOG_NO_ROSTER_COVERED_PREGAME_FEATURE_ROWS")
             pred,inputs,excluded=build_predictions(features,slate_date=slate,phase=phase,prediction_timestamp_utc=now.isoformat(),input_cutoff_utc=now.isoformat())
-            if not poststart.empty:
-                poststart=poststart[["canonical_season","slate_date","game_id","player_id","player_name","team_id","opponent_id","position","roster_status","lineup_status","scheduled_start_time_utc","feature_cutoff_utc"]].assign(phase=phase,exclusion_reason="POST_START_NOT_ELIGIBLE",contract_version="NHL_SOG_COLD_START_PREDICTION_V1")
-                excluded=pd.concat([excluded,poststart],ignore_index=True)
+            for frame,reason in ((poststart,None),(roster_out,"ROSTER")):
+                if frame.empty:continue
+                frame=frame[["canonical_season","slate_date","game_id","player_id","player_name","team_id","opponent_id","position","roster_status","lineup_status","scheduled_start_time_utc","feature_cutoff_utc"]].assign(phase=phase,contract_version="NHL_SOG_COLD_START_PREDICTION_V1")
+                frame["exclusion_reason"]="POST_START_NOT_ELIGIBLE" if reason is None else frame.game_id.astype(int).map(roster_exclusions)
+                excluded=pd.concat([excluded,frame],ignore_index=True)
             run_id=f"nhlsogprediction_s2026_d{slate.replace('-','')}_t{now.strftime('%Y%m%dT%H%M%S%fZ')}_{phase}_v1";dest=phase_root/f"run_id={run_id}";dest.mkdir(parents=True,exist_ok=False)
             schedule.to_csv(dest/"canonical_game_spine.csv",index=False);features.to_csv(dest/"feature_source_snapshot.csv",index=False);inputs.to_csv(dest/"prediction_inputs.csv",index=False);pred.to_csv(dest/"immutable_predictions.csv",index=False);excluded.to_csv(dest/"excluded_players.csv",index=False)
             meta={"run_id":run_id,"slate_date":slate,"phase":phase,"prediction_timestamp_utc":now.isoformat(),"actual_write_timestamp_utc":utc_now().isoformat(),"status":"COMPLETE_PREDICTION_ONLY_SHADOW","prediction_rows":len(pred),"admitted_players":int(inputs.player_id.nunique()) if not inputs.empty else 0,"prediction_arms":sorted(inputs.contract_arm.unique().tolist()) if not inputs.empty else [],"excluded_players":len(excluded),"market_attachment":"UNAVAILABLE_NOT_REQUIRED","market_requests":0,"paid_credits":0,"publication":False,"wagering":False,"readiness_evidence":{"prior_day_reconciliation_certificate":certificate,"current_slate_roster_observation":roster}};(dest/"run_metadata.json").write_text(json.dumps(meta,indent=2,sort_keys=True)+"\n");write_manifest(dest);(dest/"RUN_COMPLETE.json").write_text(json.dumps({"run_id":run_id,"status":"COMPLETE","completed_at_utc":utc_now().isoformat()},sort_keys=True)+"\n");write_manifest(dest);published_at=utc_now().isoformat().replace("+00:00","Z");result.update(status="CAPTURED",run_dir=str(dest),prediction_rows=len(pred),excluded_players=len(excluded),durable_publication_timestamp_utc=published_at)

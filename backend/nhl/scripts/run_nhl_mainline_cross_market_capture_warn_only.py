@@ -25,6 +25,7 @@ from backend.nhl.cross_market_shadow.canonical_slate_adapter import adapt_canoni
 from backend.nhl.cross_market_shadow.official_outcomes import load_official_outcomes
 from backend.nhl.reconciliation_certificate import (
     RosterObservationNotReady,
+    require_full_roster_coverage,
     require_prior_day_certificate,
     require_slate_history_certificate,
     require_slate_roster_observation,
@@ -652,6 +653,9 @@ def observe(root: Path, slate: str, requested: str, force: bool, dsn: str,
                 require_slate_history_certificate(slate)
             )
             result["current_slate_roster_observation"] = require_slate_roster_observation(slate)
+            # Moneyline/puck line have no per-game roster exclusion surface, so a
+            # partial roster package blocks them with a distinct reason (P2.13).
+            require_full_roster_coverage(result["current_slate_roster_observation"])
             input_dir = root / "runtime_inputs" / slate / stamp
             if (canonical_raw_path is None) != (canonical_health_path is None):
                 raise ValueError("BOTH_CANONICAL_SLATE_PATHS_REQUIRED")

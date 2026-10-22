@@ -391,5 +391,130 @@ class DailyLaneRosterExclusionTests(unittest.TestCase):
         self.assertEqual(_roster_excluded_games(SimpleNamespace(roster_observation=None)), {})
 
 
+PARTIAL_ROSTER = {
+    "status": PARTIAL_ROSTER_STATUS, "package_path": "/roster/partial",
+    "package_manifest_sha256": "roster-hash", "covered_game_ids": [2026020001],
+    "excluded_game_ids": [2026020002],
+    "roster_game_exclusions": [{"game_id": 2026020002,
+                                "reason": "ROSTER_COVERAGE_EXCLUDED:MTL=TEAM_RESPONSE_MISSING"}],
+}
+CERTIFICATE = {"status": "CERTIFIED_FINAL", "slate_date": "2026-10-17",
+               "package_manifest_sha256": "verified-hash", "game_ids": [2026020000]}
+OBSERVED = datetime(2026, 10, 18, 16, 0, tzinfo=UTC)
+
+
+class ObserverPartialRosterTests(unittest.TestCase):
+    def test_points_observer_excludes_uncovered_games_with_the_roster_reason(self):
+        import pandas as pd
+        from backend.nhl.scripts import nhl_prediction_only_common as common
+        games = pd.DataFrame({"game_id": [2026020001, 2026020002],
+                              "scheduled_start_time_utc": ["2026-10-18T20:00:00Z"] * 2})
+        features = pd.DataFrame({"game_id": [2026020001, 2026020002], "player_id": [7, 8]})
+        with tempfile.TemporaryDirectory() as temp:
+            run_dir = Path(temp) / "run"
+            run_dir.mkdir()
+            (run_dir / "run_metadata.json").write_text(json.dumps({"prediction_rows": 3}))
+            with patch.object(common, "require_slate_history_certificate", return_value=CERTIFICATE), \
+                    patch.object(common, "require_slate_roster_observation", return_value=PARTIAL_ROSTER), \
+                    patch.object(common, "export_lane_inputs", return_value=(games, features)), \
+                    patch.object(common, "publish_points",
+                                 return_value=(run_dir, "COMPLETE_NEW_APPEND_ONLY")) as publish:
+                path = common.observe(
+                    lane="POINTS", season=2026, slate_date="2026-10-18",
+                    requested_phase="MIDDAY", observation_timestamp=OBSERVED,
+                    canonical_run_identifier="test", dsn="research-dsn",
+                    output_root=Path(temp) / "observer")
+                result = json.loads(path.read_text())
+        self.assertEqual(result["status"], "CAPTURED")
+        self.assertIn({"game_id": 2026020002,
+                       "reason": "ROSTER_COVERAGE_EXCLUDED:MTL=TEAM_RESPONSE_MISSING"},
+                      result["game_exclusions"])
+        published = publish.call_args.kwargs
+        self.assertEqual(published["players"].game_id.tolist(), [2026020001])
+        self.assertEqual(published["readiness_evidence"]["current_slate_roster_observation"],
+                         PARTIAL_ROSTER)
+
+    def test_points_observer_noops_when_every_game_is_roster_excluded(self):
+        import pandas as pd
+        from backend.nhl.scripts import nhl_prediction_only_common as common
+        games = pd.DataFrame({"game_id": [2026020002],
+                              "scheduled_start_time_utc": ["2026-10-18T20:00:00Z"]})
+        features = pd.DataFrame({"game_id": [2026020002], "player_id": [8]})
+        with tempfile.TemporaryDirectory() as temp, \
+                patch.object(common, "require_slate_history_certificate", return_value=CERTIFICATE), \
+                patch.object(common, "require_slate_roster_observation", return_value=PARTIAL_ROSTER), \
+                patch.object(common, "export_lane_inputs", return_value=(games, features)), \
+                patch.object(common, "publish_points") as publish:
+            path = common.observe(
+                lane="POINTS", season=2026, slate_date="2026-10-18", requested_phase="MIDDAY",
+                observation_timestamp=OBSERVED, canonical_run_identifier="test",
+                dsn="research-dsn", output_root=Path(temp) / "observer")
+            result = json.loads(path.read_text())
+        self.assertEqual(result["status"], "NOOP_NO_QUALIFIED_FEATURE_INPUTS")
+        publish.assert_not_called()
+
+    def test_publisher_game_exclusions_use_the_roster_reason(self):
+        import pandas as pd
+        from backend.nhl.prediction_only.core import _game_exclusion_rows, _readiness_roster_exclusions
+        roster = _readiness_roster_exclusions({"current_slate_roster_observation": PARTIAL_ROSTER})
+        games = pd.DataFrame({"game_id": [2026020001, 2026020002]})
+        rows = _game_exclusion_rows(games, [2026020001, 2026020002], [], {2026020001},
+                                    empty_reason="EMPTY", roster_exclusions=roster)
+        self.assertEqual(rows.to_dict("records"), [
+            {"game_id": 2026020002, "reason": "ROSTER_COVERAGE_EXCLUDED:MTL=TEAM_RESPONSE_MISSING"}])
+        with self.assertRaisesRegex(RuntimeError, "ROSTER_EXCLUDED_GAME_REPRESENTED"):
+            _game_exclusion_rows(games, [2026020001, 2026020002], [], {2026020002},
+                                 empty_reason="EMPTY", roster_exclusions=roster)
+        self.assertEqual(_readiness_roster_exclusions({"current_slate_roster_observation": {
+            "status": "VERIFIED_CURRENT_SLATE_ROSTER"}}), {})
+
+    def test_sog_observer_predicts_only_covered_games(self):
+        import pandas as pd
+        from backend.nhl.scripts import run_nhl_sog_prediction_only_warn_only as sog
+        columns = ["canonical_season", "slate_date", "game_id", "player_id", "player_name",
+                   "team_id", "opponent_id", "position", "roster_status", "lineup_status",
+                   "scheduled_start_time_utc", "feature_cutoff_utc"]
+        features = pd.DataFrame([
+            [2026, "2026-10-18", game_id, player, "P", 1, 2, "F", "ACTIVE_ROSTER",
+             "ACTIVE_ROSTER_UNCONFIRMED", "2026-10-18T20:00:00Z", "2026-10-18T16:00:00Z"]
+            for game_id, player in ((2026020001, 7), (2026020002, 8))], columns=columns)
+        schedule = pd.DataFrame({"game_id": [2026020001, 2026020002],
+                                 "scheduled_start_time_utc": ["2026-10-18T20:00:00Z"] * 2})
+        empty = pd.DataFrame(columns=[*columns, "phase", "exclusion_reason", "contract_version"])
+        with tempfile.TemporaryDirectory() as temp, \
+                patch.object(sog, "require_slate_history_certificate", return_value=CERTIFICATE), \
+                patch.object(sog, "require_slate_roster_observation", return_value=PARTIAL_ROSTER), \
+                patch.object(sog, "export_features", return_value=(schedule, features)), \
+                patch.object(sog, "build_predictions",
+                             return_value=(pd.DataFrame(), pd.DataFrame(), empty)) as build:
+            path = sog.observe(slate="2026-10-18", requested="MIDDAY", dsn="research-dsn",
+                               root=Path(temp), now=OBSERVED)
+            result = json.loads(path.read_text())
+            excluded = pd.read_csv(Path(result["run_dir"]) / "excluded_players.csv")
+        self.assertEqual(result["status"], "CAPTURED")
+        self.assertEqual(build.call_args.args[0].game_id.tolist(), [2026020001])
+        self.assertEqual(excluded.to_dict("records")[0]["exclusion_reason"],
+                         "ROSTER_COVERAGE_EXCLUDED:MTL=TEAM_RESPONSE_MISSING")
+        self.assertEqual(excluded.game_id.tolist(), [2026020002])
+
+    def test_mainline_blocks_on_partial_roster_before_export_or_odds(self):
+        from backend.nhl.scripts import run_nhl_mainline_cross_market_capture_warn_only as mainline
+        with tempfile.TemporaryDirectory() as temp, \
+                patch.object(mainline, "utc_now", return_value=OBSERVED), \
+                patch.object(mainline, "ensure_prior_day_official_outcomes",
+                             return_value={"status": "EXISTING_GOVERNED_PACKAGE_VALID"}), \
+                patch.object(mainline, "require_slate_history_certificate", return_value=CERTIFICATE), \
+                patch.object(mainline, "require_slate_roster_observation", return_value=PARTIAL_ROSTER), \
+                patch.object(mainline, "export_inputs") as export, \
+                patch.object(mainline, "fetch_markets") as markets:
+            path = mainline.observe(Path(temp), "2026-10-18", "AUTO", False, "research-dsn")
+            result = json.loads(path.read_text())
+        self.assertEqual(result["status"], "FAILED_WARN_ONLY")
+        self.assertIn(PARTIAL_ROSTER_NOT_SUPPORTED, result["failure"])
+        self.assertNotIn("retry_eligible_on_later_poll", result)
+        export.assert_not_called()
+        markets.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -40,6 +40,7 @@ from backend.nhl.saves_shadow.core import (
     verify_frozen_identity as verify_saves_identity,
 )
 from backend.nhl.daily_capture import canonical_game_set_hash
+from backend.nhl.reconciliation_certificate import roster_coverage_exclusions
 
 
 CONTRACT = "NHL_GENERAL_PREDICTION_ONLY_V1"
@@ -131,17 +132,28 @@ def _validate_common(*, games: pd.DataFrame, season: int, slate_date: str, phase
     return observation, cutoff, eligible, exclusions
 
 
+def _readiness_roster_exclusions(readiness_evidence: dict[str, Any] | None) -> dict[int, str]:
+    """Games the observer's partial roster package excluded (P2.13)."""
+    return roster_coverage_exclusions(
+        (readiness_evidence or {}).get("current_slate_roster_observation"))
+
+
 def _game_exclusion_rows(games: pd.DataFrame, eligible_game_ids: list[int],
                          temporal_exclusions: list[dict[str, Any]],
-                         represented_game_ids: set[int], *, empty_reason: str
+                         represented_game_ids: set[int], *, empty_reason: str,
+                         roster_exclusions: dict[int, str] | None = None,
                          ) -> pd.DataFrame:
     rows = list(temporal_exclusions)
     already_excluded = {int(row["game_id"]) for row in rows}
     roster_game_ids = set(map(int, games.attrs.get("roster_identity_game_ids", [])))
     roster_scope_known = games.attrs.get("roster_identity_scope_known") is True
+    roster_exclusions = roster_exclusions or {}
+    if set(roster_exclusions) & represented_game_ids:
+        raise RuntimeError("ROSTER_EXCLUDED_GAME_REPRESENTED")
     for game_id in eligible_game_ids:
         if game_id not in represented_game_ids and game_id not in already_excluded:
-            reason = ("NO_ACTIVE_CUTOFF_BOUNDED_ROSTER_IDENTITIES"
+            reason = (roster_exclusions[game_id] if game_id in roster_exclusions
+                      else "NO_ACTIVE_CUTOFF_BOUNDED_ROSTER_IDENTITIES"
                       if roster_scope_known and game_id not in roster_game_ids
                       else empty_reason)
             rows.append({"game_id": game_id, "reason": reason})
@@ -213,6 +225,8 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
             return old, disposition or "IDEMPOTENT_EXISTING_ZERO_INSERTS"
         eligible_games = games[games.game_id.astype(int).isin(eligible_game_ids)].copy()
         players = players[players.game_id.astype(int).isin(eligible_game_ids)].copy()
+        roster_exclusions = _readiness_roster_exclusions(readiness_evidence)
+        players = players[~players.game_id.astype(int).isin(roster_exclusions)].copy()
         if players.empty:
             raise RuntimeError("NO_QUALIFIED_POINTS_FEATURE_INPUTS")
         validate_points_inputs(eligible_games, players, slate_date, observation)
@@ -287,6 +301,7 @@ def publish_points(*, games: pd.DataFrame, players: pd.DataFrame, output_root: P
             game_exclusions = _game_exclusion_rows(
                 games, eligible_game_ids, temporal_exclusions, represented_game_ids,
                 empty_reason="NO_POINTS_ROWS_PASS_LADDER_COHERENCE_OR_FEATURE_INPUTS",
+                roster_exclusions=roster_exclusions,
             )
             game_exclusions.to_csv(staging / "game_exclusions.csv", index=False)
             for name in ("market_qualified_population.csv", "candidate_population.csv", "upload_population.csv", "execution_population.csv"):
@@ -362,6 +377,8 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
             return old, disposition or "IDEMPOTENT_EXISTING_ZERO_INSERTS"
         eligible_games = games[games.game_id.astype(int).isin(eligible_game_ids)].copy()
         goalies = goalies[goalies.game_id.astype(int).isin(eligible_game_ids)].copy()
+        roster_exclusions = _readiness_roster_exclusions(readiness_evidence)
+        goalies = goalies[~goalies.game_id.astype(int).isin(roster_exclusions)].copy()
         if goalies.empty:
             raise RuntimeError("NO_QUALIFIED_SAVES_FEATURE_INPUTS")
         goalies["expected_complete_population_rows"] = len(goalies)
@@ -425,6 +442,7 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
             game_exclusions = _game_exclusion_rows(
                 games, eligible_game_ids, temporal_exclusions, represented_game_ids,
                 empty_reason="NO_QUALIFIED_SAVES_FEATURE_INPUTS",
+                roster_exclusions=roster_exclusions,
             )
             game_exclusions.to_csv(staging / "game_exclusions.csv", index=False)
             pd.DataFrame(columns=["game_id", "team", "selected_goalie_id", "reason"]).to_csv(staging / "starter_selections.csv", index=False)

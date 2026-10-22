@@ -27,6 +27,7 @@ from backend.nhl.prediction_only.core import (
 )
 from backend.nhl.reconciliation_certificate import (
     RosterObservationNotReady,
+    roster_coverage_exclusions,
     require_slate_history_certificate,
     require_slate_roster_observation,
 )
@@ -220,11 +221,20 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
         eligible_game_ids, started_exclusions = game_level_eligibility(
             games, observation_timestamp.isoformat())
         started_ids = {int(row["game_id"]) for row in started_exclusions}
+        # A partial roster package covers only some games; the others are
+        # excluded with the package's reason, never predicted (P2.13).
+        roster_exclusions = roster_coverage_exclusions(roster)
+        if roster_exclusions and not features.empty:
+            attrs = dict(features.attrs)
+            features = features.loc[~features.game_id.astype(int).isin(roster_exclusions)].copy()
+            features.attrs.update(attrs)
         feature_game_ids = (set(features.game_id.astype(int)) if not features.empty else set())
         roster_ids = set(map(int, games.attrs.get("roster_identity_game_ids", [])))
         game_exclusions = list(started_exclusions)
         for game_id in eligible_game_ids:
-            if game_id not in feature_game_ids:
+            if game_id in roster_exclusions:
+                game_exclusions.append({"game_id": game_id, "reason": roster_exclusions[game_id]})
+            elif game_id not in feature_game_ids:
                 reason = ("NO_ACTIVE_CUTOFF_BOUNDED_ROSTER_IDENTITIES"
                           if games.attrs.get("roster_identity_scope_known") is True
                           and game_id not in roster_ids

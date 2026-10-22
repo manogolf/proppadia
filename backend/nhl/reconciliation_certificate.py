@@ -466,6 +466,15 @@ def roster_covered_game_ids(roster: Mapping[str, Any]) -> set[int] | None:
     raise RuntimeError(f"CURRENT_SLATE_ROSTER_STATUS_UNKNOWN:{status}")
 
 
+def roster_coverage_exclusions(roster: Mapping[str, Any] | None) -> dict[int, str]:
+    """Games a partial current-slate roster excluded, with reasons; empty when full."""
+    roster = roster or {}
+    if roster.get("status") != PARTIAL_ROSTER_STATUS:
+        return {}
+    return {int(row["game_id"]): str(row["reason"])
+            for row in roster.get("roster_game_exclusions") or []}
+
+
 def require_full_roster_coverage(roster: Mapping[str, Any]) -> None:
     """Block a lane that has no per-game exclusion surface on a partial roster."""
     if roster.get("status") == PARTIAL_ROSTER_STATUS:
