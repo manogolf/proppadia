@@ -11,7 +11,7 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 import pandas as pd
@@ -532,9 +532,20 @@ def _verify_prop_source(*, run: Path, lane: str, slate_date: str,
             ("NO_POINTS_ROWS_PASS_LADDER_COHERENCE_OR_FEATURE_INPUTS"
              if lane == "POINTS" else "NO_QUALIFIED_SAVES_FEATURE_INPUTS"),
         }
+        # A partial roster package (P2.13) excludes games with its own reason;
+        # accept exactly the reason the package's bound roster names.
+        readiness_roster = (metadata.get("readiness_evidence") or {}).get(
+            "current_slate_roster_observation") or {}
+        roster_reasons = (
+            {int(row["game_id"]): str(row["reason"])
+             for row in readiness_roster.get("roster_game_exclusions") or []}
+            if readiness_roster.get("status") == "VERIFIED_PARTIAL_CURRENT_SLATE_ROSTER" else {})
+        if set(roster_reasons) & prediction_games:
+            raise RuntimeError(f"IMMUTABLE_{lane}_ROSTER_EXCLUDED_GAME_PREDICTED")
         if (any(reason_by_game.get(game_id) != "GAME_ALREADY_STARTED"
                 for game_id in started_ids)
                 or any(reason_by_game.get(game_id) not in allowed_reasons
+                       and reason_by_game.get(game_id) != roster_reasons.get(game_id)
                        for game_id in eligible_without_predictions)):
             raise RuntimeError(f"IMMUTABLE_{lane}_GAME_LEVEL_EXCLUSION_REASON_INVALID")
         expected_coverage = (
@@ -1541,7 +1552,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
     """
     from backend.nhl.reconciliation_certificate import (
         certificate_identity, verify_prior_day_certificate, verify_reconciliation_certificate)
-    from backend.nhl.daily_orchestration import verify_roster_observation_reuse
+    from backend.nhl.daily_orchestration import verify_slate_roster_coverage
 
     daily_root = operational_root / "daily_runs"
     # An off-day prior certificate is verified against the retained schedule.
@@ -1566,6 +1577,21 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
     # may be listed by a later run, so accept any capture verified for this
     # slate rather than only the listing run's.
     verified_slate_rosters: set[str] = set()
+    # A partial roster package (P2.13) supports only its covered games; None
+    # marks a full package.
+    roster_coverage_by_hash: dict[str, set[int] | None] = {}
+
+    def _note_roster_coverage(verified: Mapping[str, Any]) -> None:
+        roster_coverage_by_hash[str(verified["manifest_sha256"])] = (
+            {int(game_id) for game_id in verified["covered_game_ids"]}
+            if verified.get("roster_coverage") == "PARTIAL" else None)
+
+    def _roster_uncovered_games(roster_sha256: str, frame_game_ids: Iterable[int]) -> list[int]:
+        covered = roster_coverage_by_hash.get(str(roster_sha256))
+        if covered is None:
+            return []
+        return sorted({int(game_id) for game_id in frame_game_ids} - covered)
+
     for receipt_path in sorted(daily_root.glob("run_id=*/parent_receipt.json")):
         try:
             parent = json.loads(receipt_path.read_text())
@@ -1579,13 +1605,14 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             if roster.get("manifest_sha256") != roster_hash:
                 continue
             roster_summary = json.loads((roster_path / "observation_summary.json").read_text())
-            verified_roster = verify_roster_observation_reuse(
+            verified_roster = verify_slate_roster_coverage(
                 roster_path, season=int(roster_summary["season"]), slate_date=slate_date,
                 phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
                 canonical_game_set_hash=canonical_game_set_hash(game_ids),
                 require_strictly_prestart=False)
             if verified_roster["manifest_sha256"] == roster_hash:
                 verified_slate_rosters.add(roster_hash)
+                _note_roster_coverage(verified_roster)
         except (OSError, ValueError, KeyError, json.JSONDecodeError, RuntimeError):
             continue
     for receipt_path in sorted(daily_root.glob("run_id=*/parent_receipt.json")):
@@ -1632,13 +1659,14 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                 continue
             roster_summary = json.loads((roster_path / "observation_summary.json").read_text())
             roster_season = int(roster_summary["season"])
-            verified_roster = verify_roster_observation_reuse(
+            verified_roster = verify_slate_roster_coverage(
                 roster_path, season=roster_season, slate_date=slate_date,
                 phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
                 canonical_game_set_hash=canonical_game_set_hash(game_ids),
                 require_strictly_prestart=False)
             if verified_roster["manifest_sha256"] != roster_hash:
                 continue
+            _note_roster_coverage(verified_roster)
             for lane_name, lane in (parent.get("lanes") or {}).items():
                 if lane_name not in {"moneyline", "cold_start_sog_reference"}:
                     continue
@@ -1820,6 +1848,17 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                             or "canonical_season" in frame
                             and not frame.canonical_season.astype(int).eq(authorized_season_for_date(slate_date)).all()):
                         raise RuntimeError("RESILIENT_CROSS_MARKET_SLATE_IDENTITY_MISMATCH")
+                    uncovered = _roster_uncovered_games(source_roster_hash, frame.game_id.astype(int))
+                    if uncovered:
+                        # A package bound to a partial roster may only hold rows
+                        # for that roster's covered games.
+                        proof_notes.append({
+                            "source_path": str(source_run), "parent_receipt": str(receipt_path),
+                            "roster_source_sha256": source_roster_hash,
+                            "uncovered_game_ids": uncovered,
+                            "excluded_reason": "RESILIENT_ROSTER_GAME_NOT_COVERED",
+                        })
+                        continue
                     for row in frame.to_dict(orient="records"):
                         game_id = int(row["game_id"])
                         if game_id not in starts:
@@ -1951,12 +1990,17 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             roster_hash = _sha(roster_path / "SHA256SUMS")
             if roster.get("manifest_sha256") != roster_hash:
                 continue
-            verified_roster = verify_roster_observation_reuse(
+            verified_roster = verify_slate_roster_coverage(
                 roster_path, season=int(roster_summary["season"]), slate_date=slate_date,
                 phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
                 canonical_game_set_hash=canonical_game_set_hash(game_ids),
                 require_strictly_prestart=False)
             if verified_roster.get("manifest_sha256") != roster_hash:
+                continue
+            if verified_roster.get("roster_coverage") == "PARTIAL":
+                # Moneyline/puck line are not captured on a partial roster.
+                proof_notes.append({"source_path": str(receipt_path),
+                                    "excluded_reason": "RESILIENT_PUCK_LINE_PARTIAL_ROSTER_UNSUPPORTED"})
                 continue
             for source_run in sorted(linked_packages):
                 manifest = _verify_manifest(source_run)
@@ -2104,15 +2148,19 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
             roster = parent.get("current_slate_roster_observation") or {}
             roster_path = Path(str(roster.get("package_path") or ""))
             roster_summary = json.loads((roster_path / "observation_summary.json").read_text())
-            roster_verified = verify_roster_observation_reuse(
+            roster_verified = verify_slate_roster_coverage(
                 roster_path, season=int(roster_summary["season"]), slate_date=slate_date,
                 phase=str(roster_summary["phase"]), canonical_game_ids=game_ids,
                 canonical_game_set_hash=canonical_game_set_hash(game_ids),
                 require_strictly_prestart=False)
             roster_hash = str(roster_verified["manifest_sha256"])
-            if (roster.get("status") != "VERIFIED_CURRENT_SLATE_ROSTER"
+            expected_status = ("VERIFIED_PARTIAL_CURRENT_SLATE_ROSTER"
+                               if roster_verified.get("roster_coverage") == "PARTIAL"
+                               else "VERIFIED_CURRENT_SLATE_ROSTER")
+            if (roster.get("status") != expected_status
                     or roster.get("package_manifest_sha256") != roster_hash):
                 continue
+            _note_roster_coverage(roster_verified)
             for lane, lane_name in (("POINTS", "POINTS"), ("SAVES", "SAVES"),
                                     ("SOG", "SOG")):
                 child_path = Path(str((links.get(lane) or {}).get("receipt_path") or ""))
@@ -2141,6 +2189,7 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                         or source_run.name != f"run_id={metadata.get('run_id')}"):
                     raise RuntimeError(f"RESILIENT_{lane}_SOURCE_IDENTITY_MISMATCH")
                 readiness = metadata.get("readiness_evidence")
+                package_roster_hash = roster_hash
                 if readiness is not None:
                     source_cert = readiness.get("prior_day_reconciliation_certificate") or {}
                     source_roster = readiness.get("current_slate_roster_observation") or {}
@@ -2149,6 +2198,15 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                     if (certificate_identity(source_cert) != verified_cert_identity
                             or source_roster.get("package_manifest_sha256") not in verified_slate_rosters):
                         raise RuntimeError(f"RESILIENT_{lane}_SOURCE_READINESS_CONFLICT")
+                    package_roster_hash = str(source_roster["package_manifest_sha256"])
+                    covered = roster_coverage_by_hash.get(package_roster_hash)
+                    declared = source_roster.get("covered_game_ids")
+                    # The package's copy of a partial roster must match the
+                    # verified roster package exactly (P2.13).
+                    if (covered is not None or declared is not None) and (
+                            covered is None or declared is None
+                            or {int(game_id) for game_id in declared} != covered):
+                        raise RuntimeError(f"RESILIENT_{lane}_SOURCE_ROSTER_COVERAGE_CONFLICT")
                 expected_file = ("immutable_conditional_predictions.csv" if lane == "SAVES"
                                  else "immutable_predictions.csv")
                 if expected_file not in manifest:
@@ -2159,6 +2217,15 @@ def _resilient_cross_market_grades(*, slate_date: str, operational_root: Path,
                     run=source_run, lane=lane, slate_date=slate_date, schedule=schedule,
                     durable_publication_timestamp_utc=durable or None)
                 if frame.empty:
+                    continue
+                uncovered = _roster_uncovered_games(package_roster_hash, frame.game_id.astype(int))
+                if uncovered:
+                    proof_notes.append({
+                        "source_path": str(source_run), "observer_receipt_path": str(child_path),
+                        "roster_source_sha256": package_roster_hash,
+                        "uncovered_game_ids": uncovered,
+                        "excluded_reason": "RESILIENT_ROSTER_GAME_NOT_COVERED",
+                    })
                     continue
                 marker = json.loads((source_run / "RUN_COMPLETE.json").read_text())
                 if marker.get("status") != "COMPLETE":

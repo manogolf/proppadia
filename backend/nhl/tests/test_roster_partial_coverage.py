@@ -516,5 +516,109 @@ class ObserverPartialRosterTests(unittest.TestCase):
         markets.assert_not_called()
 
 
+class ResilientGradingPartialRosterTests(unittest.TestCase):
+    """A prediction package bound to a partial roster grades only covered games."""
+
+    def _grade(self, prediction_game_id: int):
+        import hashlib
+        import pandas as pd
+        from backend.nhl.postgame_reconcile import core
+
+        def sha(path: Path) -> str:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp) / "operational"
+            slate_date = "2026-10-19"
+            roster = root / "roster/observation=partial"
+            roster.mkdir(parents=True)
+            (roster / "SHA256SUMS").write_text("partial manifest\n")
+            (roster / "observation_summary.json").write_text(json.dumps({
+                "season": 2026, "phase": "MIDDAY", "schema_version": ROSTER_PARTIAL_CONTRACT}))
+            roster_hash = sha(roster / "SHA256SUMS")
+            package = root / "sog_prediction_only/run_id=sog-midday"
+            package.mkdir(parents=True)
+            (package / "run_metadata.json").write_text(json.dumps({
+                "slate_date": slate_date, "phase": "MIDDAY",
+                "readiness_evidence": {
+                    "prior_day_reconciliation_certificate": {"package_manifest_sha256": "cert-hash"},
+                    "current_slate_roster_observation": {"package_manifest_sha256": roster_hash},
+                },
+            }))
+            (package / "RUN_COMPLETE.json").write_text(json.dumps({"status": "COMPLETE"}))
+            (package / "immutable_predictions.csv").write_text("game_id\n")
+            (package / "SHA256SUMS").write_text("".join(
+                f"{sha(path)}  {path.name}\n" for path in sorted(package.iterdir())))
+            status = root / f"sog_prediction_only/status/{slate_date}/prediction_captured.json"
+            status.parent.mkdir(parents=True)
+            status.write_text(json.dumps({
+                "status": "CAPTURED", "run_dir": str(package),
+                "durable_publication_timestamp_utc": "2026-10-19T16:06:00Z"}))
+            receipt = root / "daily_runs/run_id=midday/parent_receipt.json"
+            receipt.parent.mkdir(parents=True)
+            receipt.write_text(json.dumps({
+                "slate_date": slate_date,
+                "prior_day_learning": {"certificate": {
+                    "status": "CERTIFIED_FINAL", "package_path": "/verified/cert",
+                    "package_manifest_sha256": "cert-hash"}},
+                "roster_observation": {"path": str(roster), "manifest_sha256": roster_hash},
+                "lanes": {"cold_start_sog_reference": {"outputs": [{"path": str(package)}]}},
+            }))
+            schedule = pd.DataFrame([
+                {"game_id": 2026020139, "scheduled_start_time_utc": "2026-10-19T23:00:00Z",
+                 "game_type_code": 2},
+                {"game_id": 2026020140, "scheduled_start_time_utc": "2026-10-19T23:30:00Z",
+                 "game_type_code": 2}])
+            partial = {"manifest_sha256": roster_hash, "roster_coverage": "PARTIAL",
+                       "covered_game_ids": [2026020139], "excluded_game_ids": [2026020140],
+                       "roster_game_exclusions": []}
+            empty = pd.DataFrame()
+            with patch("backend.nhl.reconciliation_certificate.verify_reconciliation_certificate",
+                       return_value={"package_manifest_sha256": "cert-hash", "status": "CERTIFIED_FINAL"}), \
+                    patch("backend.nhl.daily_orchestration.verify_partial_roster_observation",
+                          return_value=partial), \
+                    patch.object(core, "_verify_resilient_prop_package",
+                                 return_value=pd.DataFrame({"game_id": [prediction_game_id]})):
+                return core._resilient_cross_market_grades(
+                    slate_date=slate_date, operational_root=root, schedule=schedule,
+                    games=empty, skaters=empty, goalies=empty)
+
+    def test_package_with_a_row_on_an_uncovered_game_is_excluded(self):
+        _, index = self._grade(2026020140)
+        notes = [item for item in index["proof_receipts"]
+                 if item.get("excluded_reason") == "RESILIENT_ROSTER_GAME_NOT_COVERED"]
+        self.assertEqual(len(notes), 1)
+        self.assertEqual(notes[0]["uncovered_game_ids"], [2026020140])
+
+    def test_package_on_covered_games_passes_the_roster_check(self):
+        _, index = self._grade(2026020139)
+        reasons = {item.get("excluded_reason") for item in index["proof_receipts"]}
+        self.assertNotIn("RESILIENT_ROSTER_GAME_NOT_COVERED", reasons)
+        # It proceeds to the next proof (this fixture has no feature cutoff).
+        self.assertIn("RESILIENT_CROSS_MARKET_FEATURE_CUTOFF_UNPROVEN", reasons)
+
+    def test_daily_receipt_proofs_reject_partial_unless_opted_in(self):
+        from backend.nhl import reconciliation_certificate as certificates
+        with tempfile.TemporaryDirectory() as temp:
+            roster = write(Path(temp) / "roster", all_responses(skip=("MTL",)))
+            receipt = {
+                "slate_date": SLATE, "canonical_game_ids": GAME_IDS,
+                "canonical_game_set_hash": GAME_HASH,
+                "prior_day_learning": {"certificate": {"status": "CERTIFIED_FINAL"}},
+                "roster_observation": {
+                    "path": str(roster),
+                    "manifest_sha256": __import__("hashlib").sha256(
+                        (roster / "SHA256SUMS").read_bytes()).hexdigest()},
+            }
+            verified_cert = {"status": "CERTIFIED_FINAL", "package_manifest_sha256": "c"}
+            with patch.object(certificates, "verify_prior_day_certificate", return_value=verified_cert), \
+                    patch.object(certificates, "certificate_identity", return_value="c"):
+                with self.assertRaisesRegex(RuntimeError, PARTIAL_ROSTER_NOT_SUPPORTED):
+                    certificates.daily_receipt_source_proofs(receipt)
+                proofs = certificates.daily_receipt_source_proofs(receipt, accept_partial=True)
+        self.assertEqual(proofs["roster_coverage"], "PARTIAL")
+        self.assertEqual(proofs["covered_game_ids"], [2026020168, 2026020170])
+
+
 if __name__ == "__main__":
     unittest.main()

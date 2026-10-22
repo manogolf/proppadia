@@ -379,6 +379,49 @@ class PredictionOnlyEntryPointTest(unittest.TestCase):
             "reason": "NO_ACTIVE_CUTOFF_BOUNDED_ROSTER_IDENTITIES",
         }])
 
+    def test_partial_roster_game_is_excluded_and_accepted_by_reconciliation(self):
+        """P2.13: a partial roster package excludes its games with its own reason."""
+        from backend.nhl.postgame_reconcile import core as reconcile
+        slate = pd.concat([
+            games(),
+            games("2026-09-21T21:00:00Z").assign(game_id=2026010011),
+        ], ignore_index=True)
+        reason = "ROSTER_COVERAGE_EXCLUDED:BBB=TEAM_RESPONSE_MISSING"
+        partial = {"status": "VERIFIED_PARTIAL_CURRENT_SLATE_ROSTER",
+                   "package_manifest_sha256": "roster-hash",
+                   "covered_game_ids": [2026010010], "excluded_game_ids": [2026010011],
+                   "roster_game_exclusions": [{"game_id": 2026010011, "reason": reason}]}
+        players = pd.concat([points_features(),
+                             points_features().assign(
+            game_id=2026010011, player_id=999, scheduled_start_time_utc="2026-09-21T21:00:00Z")])
+        with self.points_patches():
+            destination, _ = core.publish_points(
+                games=slate, players=players, output_root=self.root / "partial-roster",
+                season=2026, slate_date=SLATE, phase="FINAL_PREGAME",
+                observation_timestamp_utc=OBSERVED, input_cutoff_timestamp_utc=OBSERVED,
+                canonical_run_identifier="partial-roster",
+                readiness_evidence={"current_slate_roster_observation": partial})
+        metadata = json.loads((destination / "run_metadata.json").read_text())
+        self.assertEqual(metadata["prediction_game_ids"], [2026010010])
+        self.assertEqual(metadata["coverage_status"], "PARTIAL_GAME_OR_PLAYER_COVERAGE")
+        self.assertNotIn(999, set(pd.read_csv(destination / "feature_input_snapshot.csv").player_id))
+        self.assertEqual(pd.read_csv(destination / "game_exclusions.csv").to_dict("records"),
+                         [{"game_id": 2026010011, "reason": reason}])
+        schedule = slate[["game_id", "scheduled_start_time_utc", "game_type_code"]]
+        reconcile._verify_prop_source(run=destination, lane="POINTS", slate_date=SLATE,
+                                      schedule=schedule)
+        # Without the partial roster in the bound evidence the reason is not accepted.
+        metadata["readiness_evidence"] = {"current_slate_roster_observation": {
+            "status": "VERIFIED_CURRENT_SLATE_ROSTER"}}
+        (destination / "run_metadata.json").write_text(json.dumps(metadata))
+        (destination / "SHA256SUMS").write_text("".join(
+            f"{reconcile._sha(destination / name)}  {name}\n"
+            for name in [line.split("  ", 1)[1] for line in
+                         (destination / "SHA256SUMS").read_text().splitlines()]))
+        with self.assertRaisesRegex(RuntimeError, "GAME_LEVEL_EXCLUSION_REASON_INVALID"):
+            reconcile._verify_prop_source(run=destination, lane="POINTS", slate_date=SLATE,
+                                          schedule=schedule)
+
     def test_saves_snapshot_preserves_unknown_starter_and_conditional_semantics(self):
         with self.saves_patches(), patch("socket.socket", side_effect=AssertionError("NETWORK_FORBIDDEN")), \
              patch.dict(os.environ, {}, clear=True):
