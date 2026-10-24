@@ -2326,7 +2326,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   167 rows neither matching nor flipped; 2024: 683 rows, 105 / 158 vs 120 / 23,
   220 neither. A column swap would not fix these seasons; only per-game
   replacement from play-by-play (about 2,500 more requests) would.
-- Season-2025 shift-chart correction prepared 2026-10-24, **not applied**:
+- **Season-2025 shift-chart correction applied 2026-10-24 21:00 UTC**
+  (operator-approved) as the ingestion login in one transaction: 208,283
+  rows updated, committed only at the exact count (receipt
+  `artifacts/analysis/nhl/shiftchart_2025_correction_2026-10-24/apply_receipt.json`).
+  Read-only verify: still_fixable 0, whole-game seconds 0, null seconds 0,
+  null team 0, other conflicts 0; no season-2025 game has whole-game
+  seconds, missing shift seconds or missing team IDs. The shift-chart item
+  is closed; the teams 28/54 rows under 2025020565 remain as the official
+  payload filed them.
+- Season-2025 shift-chart correction prepared 2026-10-24 (history):
   every defect is recoverable from the official payload stored on the same
   row (`raw_json`: period-relative startTime/endTime/duration, teamId; payload
   gameId equals game_id on all 783,643 rows; 0 conflicting values). 208,283
