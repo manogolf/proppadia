@@ -3,7 +3,10 @@
 Status: **applied 2026-10-24** (migration by the operator as `postgres`;
 backfill of 9,472 rows committed through the fixer; receipts in
 `artifacts/analysis/nhl/pp_toi_2026_backfill_preview/2026-10-24_pre_commit/`).
-The SQL fixture was not run. Never print connection strings.
+The full-role SQL fixture was not run; the function's exact body was later
+exercised against the rollback-only test database (`NHL_PP_TOI_TEST_DSN`,
+`ZeroFillFunctionDatabaseTests`), covering every guard. Never print
+connection strings.
 
 ## Why
 
@@ -46,8 +49,10 @@ order with `psql --no-psqlrc --set=ON_ERROR_STOP=1 --file`:
 7. `backend/nhl/sql/tests/nhl_safe_promotion_fixture_cleanup.sql` (after the
    20261017 rollback, as in that runbook)
 
-Both fixture tests roll back their rows and raise on any failed guard. They
-have not been run yet: no PostgreSQL server is available in this checkout.
+Both fixture tests roll back their rows and raise on any failed guard. The
+role-level fixture has not been run; the function logic is covered by
+`backend/nhl/tests/test_pp_toi_verified_zero_fill.py` against the
+rollback-only test database (`NHL_PP_TOI_TEST_DSN`).
 
 ## 2. Apply the migration (operator, approved administrative path)
 

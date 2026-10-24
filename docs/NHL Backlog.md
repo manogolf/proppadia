@@ -2244,9 +2244,32 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (`backfill_commit_receipts.csv` SHA-256 `ad3283d6…`, console log
   `d010d642…`); data rollback `rollback_nhl_pp_toi_2026_backfill.sql`
   (SHA-256 `446aad3d…`). Daily runs now write verified zeros for new slates.
-- Open: review the VAN 2025020822 populated zeros (source correction path);
-  rerun the HGB research refit on the corrected live PP feature before any
-  shadow candidate.
+- Team-swap correction prepared 2026-10-24, **not applied**. The VAN
+  2025020822 zeros belong to a class: read-only audit of season 2025 found
+  team-games whose PP time sits on the team with no power play. Retained
+  official play-by-play (penalty records and situation codes, rebuilt with
+  `backfill_game_manpower_segments`; identical to the stored segments)
+  confirms the stored values are on the wrong team. Five games pass every
+  check (complete shifts for all skaters, reconstruction within 4.5-5.5x
+  five skaters times the window): 2025020493, 2025020605, 2025020619,
+  2025020822, 2025020831; 119 rows to correct (proposal SHA-256
+  `62d44116…`, evidence `artifacts/analysis/nhl/pp_toi_team_swap_correction_2026-10-24/`).
+  Prepared: `backend/nhl/sql/repairs/repair_nhl_pp_toi_team_swap_2025.sql`,
+  rollback, read-only verify (2026-10-24: original 119, corrected 0) and the
+  SQL-editor block `operator_sql_editor_pp_toi_team_swap_2025.sql` (grants
+  and revokes the correction role in one transaction). Tests
+  `backend/nhl/tests/test_pp_toi_team_swap_correction_sql.py` pass, including
+  the real repair/rollback/guard/editor run on the rollback-only test
+  database. Not correctable yet: 2025020386 and 2025020559 (no shift charts),
+  2025020565 (reconstruction implausible), 2025020841 (one skater's shifts
+  incomplete). The stored `pp_sog` in these games appears swapped the same
+  way (follow-up; not read by the HGB or SOG PP-role features).
+- HGB research refit rerun on the corrected database (2026-10-24,
+  `.../points_hgb_pp_corrected_refit/2026-10-24_post_backfill/`): the research
+  NULL-as-zero rule now touches 14 rows (was 6,033); results unchanged (2025
+  holdout R2 Brier 0.2056; 2026 market subset R2 0.2311 vs market 0.2249).
+  The live source fix reproduces the research rule. Before a shadow
+  candidate: apply the team-swap correction and decide on a shadow run.
 - Research refit (`backend/nhl/scripts/run_nhl_points_hgb_pp_corrected_refit.py`,
   output `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/2026-10-24/`,
   git-ignored): read-only pull as the research login; features rebuilt with

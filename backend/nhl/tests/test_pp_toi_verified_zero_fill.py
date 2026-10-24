@@ -2,12 +2,17 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import unittest
+import uuid
+from decimal import Decimal
 from contextlib import redirect_stdout, redirect_stderr
 from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
+
+import psycopg
 
 from backend.nhl.scripts import fill_pp_toi_minutes_for_date as fill
 
@@ -16,6 +21,10 @@ MIGRATION = ROOT / "backend/nhl/sql/migrations/20261024_pp_toi_verified_zero_fil
 ROLLBACK = ROOT / "backend/nhl/sql/migrations/20261024_pp_toi_verified_zero_fill_rollback.sql"
 FIXTURE = ROOT / "backend/nhl/sql/tests/nhl_pp_toi_zero_fill_fixture_test.sql"
 EDITOR = ROOT / "backend/nhl/sql/repairs/operator_sql_editor_pp_toi_verified_zero_fill.sql"
+if (ROOT / "backend/.env").is_file():
+    from dotenv import load_dotenv
+    load_dotenv(ROOT / "backend/.env", override=False)
+DSN = os.environ.get("NHL_PP_TOI_TEST_DSN")
 
 
 class FakeCursor:
@@ -163,6 +172,60 @@ class MigrationContractTests(unittest.TestCase):
             "fixture_direct_pp_toi_update_was_allowed", "set local role proppadia_nhl_daily_login",
         ):
             self.assertIn(expected, sql)
+
+
+@unittest.skipUnless(DSN, "set NHL_PP_TOI_TEST_DSN for the rollback-only PostgreSQL exercise")
+class ZeroFillFunctionDatabaseTests(unittest.TestCase):
+    """Runs the migration's exact function body in a throwaway schema; always rolled back."""
+
+    def setUp(self):
+        self.schema = "pp_zero_" + uuid.uuid4().hex[:12]
+        self.conn = psycopg.connect(DSN)
+        self.conn.execute("BEGIN")
+        q = f'"{self.schema}"'
+        self.conn.execute(f"CREATE SCHEMA {q}")
+        self.conn.execute(f"""CREATE TABLE {q}.skater_game_logs_raw(game_id bigint, player_id bigint, team_id bigint,
+            toi_minutes numeric(5,2), pp_toi_minutes numeric(5,2), pp_sog integer, PRIMARY KEY(player_id, game_id))""")
+        self.conn.execute(f"CREATE TABLE {q}.game_manpower_segments(game_id bigint, period int, start_sec int, end_sec int, pp_team_id bigint)")
+        self.conn.execute(f"CREATE TABLE {q}.shiftcharts_raw(game_id bigint, player_id bigint, team_id bigint, period int, start_sec int, end_sec int)")
+        sql = MIGRATION.read_text()
+        function = sql[sql.index("CREATE OR REPLACE FUNCTION"):sql.index("$$;", sql.index("CREATE OR REPLACE FUNCTION")) + 3]
+        function = function.replace("nhl.", f"{q}.").replace("SET search_path = pg_catalog, nhl", f"SET search_path = pg_catalog, {q}")
+        self.conn.execute(function)
+        self.conn.execute(f"INSERT INTO {q}.game_manpower_segments VALUES (101,1,0,120,18)")
+        rows = [(101, 10, 18, 10, None, 0), (101, 11, 18, 10, None, 0), (101, 12, 18, 10, None, 0),
+                (101, 13, 18, 10, None, 0), (101, 14, 18, 10, Decimal("1.25"), 0), (101, 15, 18, 10, None, 1),
+                (101, 16, 19, 10, None, 0), (102, 20, 18, 10, None, 0)]
+        shifts = [(101, 10, 18, 1, 300, 900), (101, 11, 18, 1, 0, 600), (101, 13, 18, 1, 300, 600),
+                  (101, 14, 18, 1, 300, 900), (101, 15, 18, 1, 300, 900), (101, 16, 19, 1, 0, 600),
+                  (101, 16, 19, 1, 0, 600), (102, 20, 18, 1, 300, 900)]
+        with self.conn.cursor() as cur:
+            cur.executemany(f"INSERT INTO {q}.skater_game_logs_raw VALUES (%s,%s,%s,%s,%s,%s)", rows)
+            cur.executemany(f"INSERT INTO {q}.shiftcharts_raw VALUES (%s,%s,%s,%s,%s,%s)", shifts)
+
+    def tearDown(self):
+        self.conn.rollback()
+        self.conn.close()
+
+    def fill(self, game):
+        return self.conn.execute(f'SELECT "{self.schema}".fill_pp_toi_zero_from_shift_overlap(%s)', (game,)).fetchone()[0]
+
+    def values(self):
+        return {p: v for p, v in self.conn.execute(f'SELECT player_id, pp_toi_minutes FROM "{self.schema}".skater_game_logs_raw')}
+
+    def test_zero_written_only_with_complete_evidence(self):
+        self.assertEqual(self.fill(101), 2)
+        v = self.values()
+        self.assertEqual(v[10], Decimal("0.00"))    # complete shifts, no PP overlap
+        self.assertEqual(v[16], Decimal("0.00"))    # opponent with no PP windows; duplicate shift counted once
+        self.assertIsNone(v[11])                     # overlaps the PP window
+        self.assertIsNone(v[12])                     # no shift rows
+        self.assertIsNone(v[13])                     # shifts cover 5 of 10 minutes
+        self.assertEqual(v[14], Decimal("1.25"))     # populated value untouched
+        self.assertIsNone(v[15])                     # recorded a PP shot on goal
+        self.assertEqual(self.fill(102), 0)          # game without manpower segments
+        self.assertIsNone(self.values()[20])
+        self.assertEqual(self.fill(101), 0)          # replay is idempotent
 
 
 if __name__ == "__main__":
