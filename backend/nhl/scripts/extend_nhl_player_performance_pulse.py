@@ -3,6 +3,12 @@
 
 This reads the established pulse and retained NHL artifacts. It performs no
 database writes, provider calls, scoring, or model training.
+
+Revisions are cumulative: each one adds every same-player transition whose next
+state falls after the base package and on or before --as-of-date, so a missed
+day is never lost. Lanes: sog, saves, points (Phoenix history, then the Phoenix
+shadow file after HGB promotion) and points_hgb (production HGB Points, whose
+identity is checked against its validated HGB capture).
 """
 from __future__ import annotations
 
@@ -28,14 +34,17 @@ DIRECT_FEATURES = {
     "sog": ["d5_sog_per60", "d10_sog_per60", "d20_sog_per60", "d5_toi_min_avg", "d10_toi_min_avg", "d20_toi_min_avg", "szn_toi_per_game_5on5", "szn_toi_per_game_pp", "season_5on5_icetime_per_game", "season_5on4_icetime_per_game"],
     "points": ["is_home", *pulse.LANES["points"]["model_state_features"]],
     "saves": list(pulse.LANES["saves"]["model_state_features"]),
+    "points_hgb": list(pulse.HGB_POINTS_FEATURES),
 }
 DYNAMIC_PRODUCTION_FEATURES = {
     "sog": DIRECT_FEATURES["sog"],
     "points": [x for x in DIRECT_FEATURES["points"] if x != "is_home"],
     "saves": ["rest_days", "b2b_flag", "d5_saves_per60", "d10_saves_per60", "d5_shots_faced_per60", "season_save_pct"],
+    "points_hgb": [x for x in DIRECT_FEATURES["points_hgb"] if x != "is_home"],
 }
-PRIMARY_FEATURE = {"sog": "d10_sog_per60", "points": "d10_sog_per60", "saves": "d5_saves_per60"}
-EXPECTED_DIRECTION = {"sog": {"d5_sog_per60": 1, "d10_sog_per60": 1, "d20_sog_per60": 1, "d5_toi_min_avg": 1, "d10_toi_min_avg": 1, "d20_toi_min_avg": 1}, "points": {}, "saves": {"d5_saves_per60": 1, "d10_saves_per60": 1, "d5_shots_faced_per60": 1}}
+PRIMARY_FEATURE = {"sog": "d10_sog_per60", "points": "d10_sog_per60", "saves": "d5_saves_per60",
+                   "points_hgb": "player_points_last10"}
+EXPECTED_DIRECTION = {"sog": {"d5_sog_per60": 1, "d10_sog_per60": 1, "d20_sog_per60": 1, "d5_toi_min_avg": 1, "d10_toi_min_avg": 1, "d20_toi_min_avg": 1}, "points": {}, "saves": {"d5_saves_per60": 1, "d10_saves_per60": 1, "d5_shots_faced_per60": 1}, "points_hgb": {}}
 _ARTIFACT_HASH_CACHE: dict[str, tuple[int, int, str]] = {}
 
 
@@ -93,40 +102,66 @@ def _load_transitions(as_of: str) -> tuple[pd.DataFrame, dict[str, Any]]:
             base.fitted_model_identity_prior, base.fitted_model_identity_current)]
     all_records = pulse.run_records()
     base = pulse.enrich_transition_player_names(base, pulse.roster_identity_names(all_records))
-    # Add only transitions made newly observable by the requested as-of state.
-    prior_date = (pd.Timestamp(as_of) - pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-    recs = [(p, r) for p, r in all_records if str(r.get("slate_date")) in {prior_date, as_of}]
+    # Cumulative: every same-player transition whose next state falls after the
+    # base package and on or before the as-of date, paired exactly as the base
+    # builder pairs them (consecutive retained states per player).
+    base_through = str(base.game_n1_date.astype(str).max()) if not base.empty else pulse.START_DATE
+    recs = [(p, r) for p, r in all_records if str(r.get("slate_date")) <= as_of]
     audit = {"missing_artifacts": 0, "hash_mismatches": 0, "eligible_state_rows": 0, "invalid_new_model_identity": 0}
     states = {lane: pulse.collect_states(lane, recs, audit) for lane in pulse.LANES}
     added = []
     for lane, frame in states.items():
-        if frame.empty: continue
-        prev = frame[frame.slate_date.astype(str) == prior_date]
-        cur = frame[frame.slate_date.astype(str) == as_of]
-        if prev.empty or cur.empty: continue
-        outcomes = pulse.load_outcomes(prior_date, lane, audit)
-        if outcomes.empty: continue
-        outcomes = outcomes.sort_values("outcome_source_timestamp_utc").drop_duplicates(["game_id", "player_id"], keep="last")
-        prev = prev.merge(outcomes[[c for c in ["game_id", "player_id", "outcome_value", "outcome_source_timestamp_utc", "outcome_path", "outcome_sha256"] if c in outcomes]], on=["game_id", "player_id"], how="left")
-        for _, a in prev.iterrows():
-            bset = cur[cur.player_id == a.player_id]
-            for _, b in bset.iterrows():
-                realized_at = pd.to_datetime(a.get("outcome_source_timestamp_utc"), utc=True, errors="coerce")
-                cutoff = pd.to_datetime(b.get("feature_cutoff_utc"), utc=True, errors="coerce")
-                if pd.isna(a.get("outcome_value")) or pd.isna(realized_at) or pd.isna(cutoff) or realized_at >= cutoff:
-                    continue
-                added.append(_transition_from_states(lane, a, b))
+        added.extend(new_transitions(lane, frame, base_through, as_of, audit))
+    new_count = 0
     if added:
         new = pd.DataFrame(added)
         base_keys = set(zip(base.lane, base.game_n_id.astype(str), base.game_n1_id.astype(str), base.player_id.astype(str)))
         new = new[[ (r.lane, str(r.game_n_id), str(r.game_n1_id), str(r.player_id)) not in base_keys for r in new.itertuples() ]]
+        new_count = len(new)
         if not new.empty: base = pd.concat([base, new], ignore_index=True, sort=False)
     base = base.sort_values(["lane", "player_id", "game_n_date", "game_n1_date", "game_n_id"]).reset_index(drop=True)
     evidence = [classify_transition_evidence(row) for row in base.to_dict("records")]
     base["production_evidence_status"] = [item[0] for item in evidence]
     base["production_evidence_reason"] = [item[1] for item in evidence]
     audit["invalid_transition_evidence"] = int(base.production_evidence_status.eq("INVALID_PRODUCTION_TRANSITION_EVIDENCE").sum())
-    return base, {**audit, "new_transition_rows": len(added)}
+    return base, {**audit, "new_transition_rows": new_count}
+
+
+def new_transitions(lane: str, frame: pd.DataFrame, base_through: str, as_of: str,
+                    audit: dict[str, Any], outcome_loader=None) -> list[dict[str, Any]]:
+    """Consecutive same-player transitions with base_through < next date <= as_of.
+
+    Same rule as the base builder: the prior game's official outcome must be
+    observed before the next state's feature cutoff, which must precede the
+    next game's start.
+    """
+    if frame.empty:
+        return []
+    outcome_loader = outcome_loader or (lambda date: pulse.load_outcomes(date, lane, audit))
+    parts = [outcome_loader(date) for date in sorted(frame.slate_date.astype(str).unique())]
+    parts = [part for part in parts if not part.empty]
+    if not parts:
+        return []
+    outcomes = pd.concat(parts, ignore_index=True).sort_values(
+        "outcome_source_timestamp_utc").drop_duplicates(["game_id", "player_id"], keep="last")
+    columns = [c for c in ["game_id", "player_id", "outcome_value", "outcome_source_timestamp_utc",
+                           "outcome_path", "outcome_sha256"] if c in outcomes]
+    frame = frame.merge(outcomes[columns], on=["game_id", "player_id"], how="left")
+    frame["_start"] = pd.to_datetime(frame.game_start_utc, utc=True, errors="coerce")
+    frame["_cutoff"] = pd.to_datetime(frame.feature_cutoff_utc, utc=True, errors="coerce")
+    frame = frame.sort_values(["player_id", "_start", "game_id"])
+    added = []
+    for _, group in frame.groupby("player_id", sort=False):
+        rows = [row for _, row in group.iterrows()]
+        for a, b in zip(rows, rows[1:]):
+            if not (base_through < str(b.slate_date) <= as_of):
+                continue
+            realized_at = pd.to_datetime(a.get("outcome_source_timestamp_utc"), utc=True, errors="coerce")
+            if (pd.isna(a.get("outcome_value")) or pd.isna(realized_at) or pd.isna(b._cutoff)
+                    or pd.isna(b._start) or realized_at >= b._cutoff or b._cutoff >= b._start):
+                continue
+            added.append(_transition_from_states(lane, a, b))
+    return added
 
 
 def _transition_from_states(lane: str, a: pd.Series, b: pd.Series) -> dict[str, Any]:
@@ -566,14 +601,14 @@ def main() -> int:
     relation.to_csv(out/"feature_prediction_relationships.csv",index=False)
     stale.to_csv(out/"stale_state_pulse.csv",index=False)
     window.to_csv(out/"prospective_window_lineage.csv",index=False)
-    inventory={"schema_version":"NHL_PLAYER_PERFORMANCE_FEATURE_INVENTORY_V1","model_version_comparability":"Scoring-time identities are bound in daily prediction receipts; older rows without those hashes are HISTORICAL_MODEL_IDENTITY_UNAVAILABLE.","lanes":{"sog":{"model":"Poisson baseline or retained ordinal scorer","direct_model_input_features":DIRECT_FEATURES["sog"],"direct_dynamic_production_feature_count":len(DYNAMIC_PRODUCTION_FEATURES["sog"]),"selection":"rate coalesce d10→d20→d5; TOI coalesce d10→d20→d5 then season TOI fallback","context_only_or_unused_in_baseline":["role_pp_share","pairings","team_context","attempts_d10_per60"],"calibration":"When segmented calibration runs, its exact fitted isotonic thresholds and configuration are retained."},"points":{"model":"phoenix/phoenix_v2 per-line logistic","direct_fitted_features":DIRECT_FEATURES["points"],"dynamic_production_features":DYNAMIC_PRODUCTION_FEATURES["points"],"dynamic_context_feature":["is_home"],"direct_dynamic_production_feature_count":len(DYNAMIC_PRODUCTION_FEATURES["points"])},"saves":{"model":"Phoenix V2 goalie_saves Poisson with eligible per-line calibration","direct_fitted_features":DIRECT_FEATURES["saves"],"dynamic_production_features":DYNAMIC_PRODUCTION_FEATURES["saves"],"direct_dynamic_production_feature_count":len(DYNAMIC_PRODUCTION_FEATURES["saves"]),"conditional_start":"start_prob=1.0 is conditional-on-start flag, not a starter probability; actual start is postgame-only."}},"static_identity_fields":["player_id"],"model_and_calibration_parameters":"Artifact bytes and material scoring configuration are SHA-256 bound at scoring time."}
+    inventory={"schema_version":"NHL_PLAYER_PERFORMANCE_FEATURE_INVENTORY_V1","model_version_comparability":"Scoring-time identities are bound in daily prediction receipts; older rows without those hashes are HISTORICAL_MODEL_IDENTITY_UNAVAILABLE.","lanes":{"sog":{"model":"Poisson baseline or retained ordinal scorer","direct_model_input_features":DIRECT_FEATURES["sog"],"direct_dynamic_production_feature_count":len(DYNAMIC_PRODUCTION_FEATURES["sog"]),"selection":"rate coalesce d10→d20→d5; TOI coalesce d10→d20→d5 then season TOI fallback","context_only_or_unused_in_baseline":["role_pp_share","pairings","team_context","attempts_d10_per60"],"calibration":"When segmented calibration runs, its exact fitted isotonic thresholds and configuration are retained."},"points":{"model":"phoenix/phoenix_v2 per-line logistic","direct_fitted_features":DIRECT_FEATURES["points"],"dynamic_production_features":DYNAMIC_PRODUCTION_FEATURES["points"],"dynamic_context_feature":["is_home"],"direct_dynamic_production_feature_count":len(DYNAMIC_PRODUCTION_FEATURES["points"])},"saves":{"model":"Phoenix V2 goalie_saves Poisson with eligible per-line calibration","direct_fitted_features":DIRECT_FEATURES["saves"],"dynamic_production_features":DYNAMIC_PRODUCTION_FEATURES["saves"],"direct_dynamic_production_feature_count":len(DYNAMIC_PRODUCTION_FEATURES["saves"]),"conditional_start":"start_prob=1.0 is conditional-on-start flag, not a starter probability; actual start is postgame-only."},"points_hgb":{"model":"hist_gradient_boosting/NHL_POINTS_COUNT_HGB_V1 (production Points since HGB promotion; Phoenix history stays in the points lane)","direct_fitted_features":DIRECT_FEATURES["points_hgb"],"dynamic_production_features":DYNAMIC_PRODUCTION_FEATURES["points_hgb"],"dynamic_context_feature":["is_home"],"direct_dynamic_production_feature_count":len(DYNAMIC_PRODUCTION_FEATURES["points_hgb"])}},"static_identity_fields":["player_id"],"model_and_calibration_parameters":"Artifact bytes and material scoring configuration are SHA-256 bound at scoring time."}
     pulse.write_json(out/"feature_inventory.json", inventory, indent=2, sort_keys=True)
     unresolved_base=0
     checkp=BASE/"independent_rolling_checks.csv"
     if checkp.exists():
         chk=pd.read_csv(checkp)
         unresolved_base=int(chk.status.astype(str).eq("UNRESOLVED_SOURCE_COVERAGE").sum())
-    classification={"sog":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED","points":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED","saves":"DYNAMIC_FEATURE_EVOLUTION_VERIFIED"}
+    classification={lane:"DYNAMIC_FEATURE_EVOLUTION_VERIFIED" for lane in pulse.LANES}
     for lane in classification:
         lane_changes=all_mov[(all_mov.lane==lane)&all_mov.feature.isin(DIRECT_FEATURES[lane])]
         prediction_rows=pred[(pred.lane==lane)&(pred.production_evidence_status!="INVALID_PRODUCTION_TRANSITION_EVIDENCE")]

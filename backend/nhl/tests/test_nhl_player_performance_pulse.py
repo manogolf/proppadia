@@ -348,3 +348,81 @@ class PlayerPerformancePulseTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PulseCumulativeAndHgbLaneTests(unittest.TestCase):
+    """Revisions add every day since the base; HGB Points is its own lane."""
+
+    @staticmethod
+    def _state(player, game, date, start, cutoff, value):
+        return {"lane": "sog", "slate_date": date, "game_id": game, "player_id": player,
+                "player_name": "P", "team_id": 1, "game_start_utc": start, "feature_cutoff_utc": cutoff,
+                "feature_values": {"d10_sog_per60": value}, "prediction_ladder": "[]",
+                "feature_path": "f", "feature_sha256": "a" * 64, "prediction_path": "p",
+                "prediction_sha256": "b" * 64, "fitted_model_identity_sha256": None,
+                "model_family_version": "m", "feature_hash_bound_by_receipt": True}
+
+    def test_transitions_span_every_day_after_the_base_not_just_yesterday(self):
+        frame = pd.DataFrame([
+            self._state(7, 101, "2026-10-07", "2026-10-07T23:00:00Z", "2026-10-07T18:00:00Z", 8.0),
+            self._state(7, 102, "2026-10-12", "2026-10-12T23:00:00Z", "2026-10-12T18:00:00Z", 9.0),
+            self._state(7, 103, "2026-10-20", "2026-10-20T23:00:00Z", "2026-10-20T18:00:00Z", 7.0),
+        ])
+        outcomes = {d: pd.DataFrame([{"game_id": g, "player_id": 7, "outcome_value": 2,
+                                      "outcome_source_timestamp_utc": f"{t}T10:00:00Z",
+                                      "outcome_path": "o", "outcome_sha256": "c" * 64}])
+                    for d, g, t in (("2026-10-07", 101, "2026-10-08"), ("2026-10-12", 102, "2026-10-13"),
+                                    ("2026-10-20", 103, "2026-10-21"))}
+        added = pulse.new_transitions("sog", frame, "2026-10-07", "2026-10-24", {},
+                                      outcome_loader=lambda d: outcomes.get(d, pd.DataFrame()))
+        self.assertEqual([(t["game_n_id"], t["game_n1_id"]) for t in added], [(101, 102), (102, 103)])
+        none_after = pulse.new_transitions("sog", frame, "2026-10-20", "2026-10-24", {},
+                                           outcome_loader=lambda d: outcomes.get(d, pd.DataFrame()))
+        self.assertEqual(none_after, [])
+
+    def test_outcome_after_next_cutoff_is_not_a_transition(self):
+        frame = pd.DataFrame([
+            self._state(7, 101, "2026-10-10", "2026-10-10T23:00:00Z", "2026-10-10T18:00:00Z", 8.0),
+            self._state(7, 102, "2026-10-11", "2026-10-11T23:00:00Z", "2026-10-11T09:00:00Z", 9.0),
+        ])
+        late = pd.DataFrame([{"game_id": 101, "player_id": 7, "outcome_value": 2,
+                              "outcome_source_timestamp_utc": "2026-10-11T10:00:00Z",
+                              "outcome_path": "o", "outcome_sha256": "c" * 64}])
+        self.assertEqual(pulse.new_transitions("sog", frame, "2026-10-07", "2026-10-24", {},
+                                               outcome_loader=lambda d: late if d == "2026-10-10" else pd.DataFrame()), [])
+
+    def test_points_lanes_keep_phoenix_and_hgb_sources_apart(self):
+        build = pulse.pulse
+        hgb = {"path": "/x/points_predictions.csv", "fitted_model_evidence": {"model_family": "hist_gradient_boosting"}}
+        phoenix_prod = {"path": "/x/points_predictions.csv", "fitted_model_evidence": {"model_family": "phoenix"}}
+        shadow = {"path": "/x/points_phoenix_shadow_predictions.csv", "fitted_model_evidence": {"model_family": "phoenix"}}
+        receipt = {"lanes": {"points_hgb_shadow": {"outputs": [shadow]}}}
+        cfg = build.LANES["points"]
+        # HGB era: Phoenix reads its shadow file; HGB reads the production artifact.
+        self.assertIs(build._prediction_entry("points", receipt, [hgb], cfg), shadow)
+        self.assertIs(build._prediction_entry("points_hgb", receipt, [hgb], build.LANES["points_hgb"]), hgb)
+        # Phoenix era: Phoenix reads its production file; there is no HGB state.
+        self.assertIs(build._prediction_entry("points", receipt, [phoenix_prod], cfg), phoenix_prod)
+        self.assertIsNone(build._prediction_entry("points_hgb", receipt, [phoenix_prod], build.LANES["points_hgb"]))
+        self.assertIn("player_points_last10", build.LANES["points_hgb"]["model_state_features"])
+
+    def test_hgb_identity_convention_requires_the_validated_capture(self):
+        build = pulse.pulse
+        with tempfile.TemporaryDirectory() as temp:
+            prediction = Path(temp) / "points_predictions.csv"
+            prediction.write_text("game_id,player_id,line,prob_over\n")
+            evidence = {"model_version": "NHL_POINTS_COUNT_HGB_V1", "prediction_artifact_path": str(prediction),
+                        "prediction_artifact_sha256": build.sha256(prediction),
+                        "fitted_model_identity_sha256": "d" * 64, "source_hgb_capture_prediction_sha256": "e" * 64}
+            capture = {"model_identity": {"model_identity_sha256": "d" * 64}, "prediction_sha256": "e" * 64}
+            with patch("backend.nhl.points_hgb_shadow.validate_hgb_capture", return_value=capture):
+                self.assertTrue(build.validate_hgb_production_evidence(
+                    evidence, prediction_path=prediction, prediction_sha256=build.sha256(prediction),
+                    hgb_capture_path=temp))
+                self.assertFalse(build.validate_hgb_production_evidence(
+                    {**evidence, "fitted_model_identity_sha256": "f" * 64}, prediction_path=prediction,
+                    prediction_sha256=build.sha256(prediction), hgb_capture_path=temp))
+            with patch("backend.nhl.points_hgb_shadow.validate_hgb_capture", side_effect=RuntimeError("bad")):
+                self.assertFalse(build.validate_hgb_production_evidence(
+                    evidence, prediction_path=prediction, prediction_sha256=build.sha256(prediction),
+                    hgb_capture_path=temp))

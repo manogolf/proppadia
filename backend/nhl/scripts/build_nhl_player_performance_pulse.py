@@ -19,6 +19,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 from backend.nhl.model_identity import validate_fitted_model_evidence
+from backend.nhl.scripts.score_nhl_points_hgb_shadow import FEATURES as HGB_POINTS_FEATURES
 
 ROOT = Path(__file__).resolve().parents[3]
 START_DATE = "2026-09-29"
@@ -67,6 +68,18 @@ LANES = {
             "num_event_shot_season_to_date", "team_num_event_shot_for_last10",
             "team_num_shotwasongoal_for_last10", "hot_last5_flag",
         ],
+        "outcome_aliases": ["official_points", "points"],
+    },
+    # Production Points since HGB promotion. Features come from the HGB capture
+    # (features.csv); predictions from the receipt-bound production artifact.
+    "points_hgb": {
+        "outcome_file": "canonical_skater_outcomes.csv",
+        "outcome_col": "official_points",
+        "input_file": "features.csv",
+        "prediction_file": "points_predictions.csv",
+        "prediction_line_cols": [],
+        "feature_candidates": list(HGB_POINTS_FEATURES),
+        "model_state_features": [x for x in HGB_POINTS_FEATURES if x != "is_home"],
         "outcome_aliases": ["official_points", "points"],
     },
     "saves": {
@@ -299,13 +312,79 @@ def load_outcomes(date: str, lane: str, audit: dict[str, Any]) -> pd.DataFrame:
     return d.dropna(subset=["game_id", "player_id", "outcome_value"])
 
 
+RECEIPT_LANE = {"sog": "legacy_sog", "points": "points", "points_hgb": "points", "saves": "saves"}
+
+
+def _evidence_family(entry: dict[str, Any]) -> str | None:
+    return (entry.get("fitted_model_evidence") or {}).get("model_family")
+
+
+def _prediction_entry(lane: str, receipt: dict[str, Any], outputs: list[dict[str, Any]],
+                      cfg: dict[str, Any]) -> dict[str, Any] | None:
+    """The lane's receipt-bound prediction artifact.
+
+    Phoenix Points keeps its own history: its production file before HGB
+    promotion, then the Phoenix shadow predictions. HGB Points reads the HGB
+    production artifact only.
+    """
+    if lane == "points":
+        own = next((x for x in outputs if str(x.get("path", "")).endswith("points_predictions.csv")
+                    and _evidence_family(x) in (None, "phoenix")), None)
+        if own is not None:
+            return own
+        shadow = receipt.get("lanes", {}).get("points_hgb_shadow", {}).get("outputs", [])
+        return next((x for x in shadow
+                     if str(x.get("path", "")).endswith("points_phoenix_shadow_predictions.csv")), None)
+    if lane == "points_hgb":
+        return next((x for x in outputs if str(x.get("path", "")).endswith("points_predictions.csv")
+                     and _evidence_family(x) == "hist_gradient_boosting"), None)
+    return next((x for x in outputs if str(x.get("path", "")).endswith(cfg["prediction_file"])), None)
+
+
+def _hgb_feature_entry(prediction_entry: dict[str, Any]) -> dict[str, Any] | None:
+    """The HGB capture's features.csv that produced a production artifact."""
+    capture = prediction_entry.get("hgb_capture_path")
+    if not capture:
+        return None
+    capture = resolve(str(capture))
+    try:
+        capture_receipt = json.loads((capture / "receipt.json").read_text())
+    except (OSError, ValueError):
+        return None
+    return {"path": str(capture / "features.csv"), "sha256": capture_receipt.get("feature_sha256"),
+            "feature_input_cutoff_utc": prediction_entry.get("feature_input_cutoff_utc"),
+            "hgb_capture_path": str(capture)}
+
+
+def validate_hgb_production_evidence(evidence: dict[str, Any], *, prediction_path: Path,
+                                     prediction_sha256: str, hgb_capture_path: str) -> bool:
+    """HGB's identity convention: the capture's model identity, not a component hash.
+
+    The production artifact's fitted identity is the HGB capture's
+    ``model_identity_sha256`` and the capture's prediction hash, so it is
+    checked against the validated capture rather than recomputed from
+    components (which the generic validator does).
+    """
+    try:
+        from backend.nhl.points_hgb_shadow import validate_hgb_capture
+        capture_receipt = validate_hgb_capture(Path(hgb_capture_path))
+        return (evidence.get("model_version") == "NHL_POINTS_COUNT_HGB_V1"
+                and evidence.get("prediction_artifact_sha256") == prediction_sha256
+                and Path(str(evidence.get("prediction_artifact_path", ""))).resolve() == Path(prediction_path).resolve()
+                and evidence.get("fitted_model_identity_sha256")
+                == (capture_receipt.get("model_identity") or {}).get("model_identity_sha256")
+                and evidence.get("source_hgb_capture_prediction_sha256") == capture_receipt.get("prediction_sha256"))
+    except Exception:
+        return False
+
+
 def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit: dict[str, Any]) -> pd.DataFrame:
     cfg = LANES[lane]
     grouped: dict[tuple[str, int, int], dict[str, Any]] = {}
     for receipt_path, receipt in records:
         date = str(receipt["slate_date"])
         roster_names = roster_identity_names([(receipt_path, receipt)])
-        lane_rec = receipt.get("lanes", {}).get("points" if lane == "points" else "saves" if lane == "saves" else "legacy_sog", {})
+        lane_rec = receipt.get("lanes", {}).get(RECEIPT_LANE[lane], {})
         if lane_rec.get("status") != "COMPLETE":
             continue
         inputs = lane_rec.get("inputs", [])
@@ -328,7 +407,9 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
                     if p.exists():
                         input_entry = {"path": str(p), "receipt_input_hash_bound": False}
                         break
-        prediction_entry = next((x for x in outputs if str(x.get("path", "")).endswith(cfg["prediction_file"])), None)
+        prediction_entry = _prediction_entry(lane, receipt, outputs, cfg)
+        if lane == "points_hgb" and prediction_entry is not None:
+            input_entry = _hgb_feature_entry(prediction_entry)
         if not input_entry or not prediction_entry:
             continue
         inp = resolve(str(input_entry["path"]))
@@ -344,8 +425,13 @@ def collect_states(lane: str, records: list[tuple[Path, dict[str, Any]]], audit:
             audit["hash_mismatches"] += 1
             continue
         fitted_evidence = prediction_entry.get("fitted_model_evidence") or {}
-        evidence_bound = validate_fitted_model_evidence(
-            fitted_evidence, prediction_path=str(pred.relative_to(ROOT)), prediction_sha256=pred_hash)
+        if lane == "points_hgb":
+            evidence_bound = validate_hgb_production_evidence(
+                fitted_evidence, prediction_path=pred, prediction_sha256=pred_hash,
+                hgb_capture_path=input_entry["hgb_capture_path"])
+        else:
+            evidence_bound = validate_fitted_model_evidence(
+                fitted_evidence, prediction_path=str(pred.relative_to(ROOT)), prediction_sha256=pred_hash)
         if receipt.get("fitted_model_identity_contract") == "NHL_FITTED_MODEL_IDENTITY_V1" and not evidence_bound:
             audit["invalid_new_model_identity"] = audit.get("invalid_new_model_identity", 0) + 1
             continue
@@ -433,6 +519,7 @@ def _model_identity(lane: str, fitted_evidence: dict[str, Any] | None = None) ->
             return f"{family}/{version}"
     if lane == "sog": return "poisson_baseline/baseline_v1"
     if lane == "points": return "phoenix/phoenix_v2 (per-line logistic)"
+    if lane == "points_hgb": return "hist_gradient_boosting/NHL_POINTS_COUNT_HGB_V1"
     return "phoenix_v2 goalie_saves (Poisson + eligible line calibration)"
 
 

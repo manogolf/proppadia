@@ -101,6 +101,7 @@ If the question is “what is the active runtime path right now?”:
 
 ## NHL UX and Validation
 
+- NHL player performance pulse: `backend/nhl/scripts/extend_nhl_player_performance_pulse.py --as-of-date YYYY-MM-DD` writes a cumulative revision under `artifacts/analysis/nhl/player_performance_pulse/2026-10-07_final/revisions/`; lanes sog, saves, points (Phoenix) and points_hgb (production HGB).
 - `docs/NHL Backlog.md`: prioritized outstanding NHL access, source-integrity, and operational-validation work.
 - NHL season naming and the production season allow-list (`AUTHORIZED_SEASONS` in `backend/nhl/game_phase.py`; rollover procedure) are in the comprehensive capture contract's opening section (NHL Backlog P2.25).
 - `docs/NHL Comprehensive Daily Capture Contract V1.md`: authoritative daily execution order and readiness gates, including prior-day reconciliation certification, void (PPD/SUSP/CNCL) prior-day games and off-day certificates.
