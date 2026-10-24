@@ -261,6 +261,9 @@ class PlayerPerformancePulseTests(unittest.TestCase):
                 json.loads(summary_text, parse_constant=lambda token: self.fail(f"invalid JSON token: {token}"))
                 self.assertNotIn("NaN", summary_text)
                 self.assertNotIn("Infinity", summary_text)
+                note = json.loads(summary_text)["prospective_forward_validation"]["current_as_of_note"]
+                self.assertIn("2026-10-08", note)
+                self.assertNotIn("Oct. 6", note)
 
                 summary_before = (out / "summary.json").read_bytes()
                 refusal_output = io.StringIO()
@@ -426,3 +429,14 @@ class PulseCumulativeAndHgbLaneTests(unittest.TestCase):
                 self.assertFalse(build.validate_hgb_production_evidence(
                     evidence, prediction_path=prediction, prediction_sha256=build.sha256(prediction),
                     hgb_capture_path=temp))
+
+    def test_prospective_note_reports_captured_lineage(self):
+        window = pd.DataFrame([
+            {"lane": "sog", "player_id": 1, "next_game_id": 10, "feature": f}
+            for f in ("d5_sog_per60", "d10_sog_per60")
+        ] + [{"lane": "points", "player_id": 2, "next_game_id": 11, "feature": "num_sog_last5"}])
+        note = pulse.prospective_window_note("2026-10-24", window)
+        self.assertIn("2026-10-24", note)
+        self.assertIn("sog: 1 player transitions, 2 window rows", note)
+        self.assertIn("points: 1 player transitions, 1 window rows", note)
+        self.assertIn("No same-player", pulse.prospective_window_note("2026-10-24", window.iloc[0:0]))
