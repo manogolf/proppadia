@@ -2206,6 +2206,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   averages only PP games (inflated) and is NULL, then 0, for non-PP players.
   Fixing the source (write verified zero when the game's PP reconstruction
   completed) is a production source change and needs operator approval.
+- Source-fix scope (read-only, 2026-10-24,
+  `backend/nhl/sql/repairs/verify_nhl_pp_toi_2026_null_scope.sql`): of the
+  NULL PP rows since 2026-01-01, 7,414 are verified-zero candidates (shift
+  charts complete within 1 minute of TOI, manpower segments present, zero
+  overlap with own-team PP windows); 2,101 on 12 dates 2026-01-09..01-25 have
+  positive overlap the existing fixer never filled; 1,949 lack shift charts
+  (59 games), 107 lack segments (3 games), 4 lack TOI or match it badly. The
+  official boxscore no longer carries per-player PP time, so shift overlap is
+  the only source. The SOG PP-role features read `NULLIF(pp_toi_minutes, 0)`
+  and are unaffected by zeros. Fix plan awaiting operator approval.
 - Research refit (`backend/nhl/scripts/run_nhl_points_hgb_pp_corrected_refit.py`,
   output `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/2026-10-24/`,
   git-ignored): read-only pull as the research login; features rebuilt with
