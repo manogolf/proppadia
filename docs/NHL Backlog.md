@@ -2252,7 +2252,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   0), as do the other corrected dates. The season-2025 audit now shows only
   the four uncorrectable games (2025020386, 2025020559, 2025020565,
   2025020841).
-- Round 2 prepared 2026-10-24, **not applied**: 88 rows in 2025020559,
+- **Round 2 applied 2026-10-24 19:23 UTC** by the operator as `postgres`
+  (before: original 88, corrected 0; receipt: original 0, corrected 88,
+  missing 0, other 0). Read-only verify as the research login matches; the
+  correction role is revoked; the season-2025 audit now shows only
+  2025020386 (PP time without a window, no shift data).
+- Round 2 prepared 2026-10-24 (history): 88 rows in 2025020559,
   2025020565 and 2025020841, rebuilt from each shift row's official payload
   (`shiftcharts_raw.raw_json`: gameId, teamId, period-relative times,
   typeCode 517) because the derived columns are unusable there; all 36
