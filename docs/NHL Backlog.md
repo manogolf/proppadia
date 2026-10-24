@@ -2215,7 +2215,19 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (59 games), 107 lack segments (3 games), 4 lack TOI or match it badly. The
   official boxscore no longer carries per-player PP time, so shift overlap is
   the only source. The SOG PP-role features read `NULLIF(pp_toi_minutes, 0)`
-  and are unaffected by zeros. Fix plan awaiting operator approval.
+  and are unaffected by zeros.
+- Source fix prepared 2026-10-24, **not applied** (operator-approved to build,
+  commit and stop before any write): migration
+  `backend/nhl/sql/migrations/20261024_pp_toi_verified_zero_fill.sql` (+
+  rollback and runbook), guarded call in `fill_pp_toi_minutes_for_date.py`
+  (no-op until the function exists), receipt fields `verified_zero_fills` and
+  `zero_fill_function_available`, tests
+  `backend/nhl/tests/test_pp_toi_verified_zero_fill.py` and SQL fixture
+  `backend/nhl/sql/tests/nhl_pp_toi_zero_fill_fixture_test.sql` (not run: no
+  local PostgreSQL). Backfill preview receipt: 9,472 of 11,575 NULL rows would
+  fill (7,371 zero, 2,101 positive) across 91 dates; 2,103 stay NULL. Next:
+  operator runs the fixture, applies the migration, then the dated backfill
+  per the runbook.
 - Research refit (`backend/nhl/scripts/run_nhl_points_hgb_pp_corrected_refit.py`,
   output `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/2026-10-24/`,
   git-ignored): read-only pull as the research login; features rebuilt with

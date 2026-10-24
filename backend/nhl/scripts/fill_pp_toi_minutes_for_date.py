@@ -9,6 +9,8 @@ Canonical daily fixer for nhl.skater_game_logs_raw.pp_toi_minutes.
 - For each game, reconstructs positive PP overlap from official-derived
   manpower segments and player shiftcharts
 - Fills skater_game_logs_raw.pp_toi_minutes only where current value is NULL
+- Once the verified-zero migration is applied, also writes 0.00 for NULL rows
+  whose complete shifts overlap no own-team PP window (P2.31)
 - Preserves populated values, including verified zero, and records disagreements
 - Then enforces an invariant:
     For each (game_id, team_id) on that date, if SUM(toi_minutes)>0 and SUM(pp_toi_minutes)=0 -> FAIL
@@ -263,6 +265,27 @@ def update_game(
     return (len(db_players), len(overlap), updated)
 
 
+ZERO_FILL_FUNCTION = "nhl.fill_pp_toi_zero_from_shift_overlap(bigint)"
+
+
+def zero_fill_available(cur) -> bool:
+    """True once the operator has applied the verified-zero migration."""
+    cur.execute("SELECT to_regprocedure(%s) IS NOT NULL;", (ZERO_FILL_FUNCTION,))
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def fill_verified_zero(cur, game_id: int) -> int:
+    """Write 0.00 for NULL rows whose shifts prove no PP time (P2.31).
+
+    The database function checks complete shift coverage, ingested manpower
+    windows and zero own-team PP overlap, and only fills NULL values.
+    """
+    cur.execute("SELECT nhl.fill_pp_toi_zero_from_shift_overlap(%s)", (game_id,))
+    row = cur.fetchone()
+    return int(row[0]) if row else 0
+
+
 def assert_no_bad_team_games(cur, slate_date: str) -> int:
     """
     Returns count of (game_id, team_id) where:
@@ -409,6 +432,10 @@ def main() -> None:
     print(f"PP TOI canonical fill for {slate_date}: games={len(game_ids)} mode={'COMMIT' if commit else 'DRY-RUN'}")
 
     total_updated_rows = 0
+    total_zero_rows = 0
+    zero_available = zero_fill_available(cur)
+    if not zero_available:
+        print("verified-zero fill function not installed; positive fill only", file=sys.stderr)
     conflicts: list[dict[str, Any]] = []
     source_values: list[tuple[int, int, float]] = []
     for game_id in game_ids:
@@ -484,7 +511,16 @@ def main() -> None:
             continue
 
         total_updated_rows += upd
-        print(f"game_id={game_id}: db_rows={db_rows} overlap={overlap} update_statements={upd}")
+        zero = 0
+        if zero_available:
+            try:
+                zero = fill_verified_zero(cur, game_id)
+            except Exception as e:
+                print(f"game_id={game_id}: verified-zero fill failed: {e}", file=sys.stderr)
+                conn.rollback()
+                continue
+        total_zero_rows += zero
+        print(f"game_id={game_id}: db_rows={db_rows} overlap={overlap} update_statements={upd} verified_zero={zero}")
 
         if commit:
             conn.commit()
@@ -524,12 +560,14 @@ def main() -> None:
         "slate_date": slate_date,
         "source_reconstructed_positive_count": len(source_values),
         "filled_nulls": total_updated_rows,
+        "verified_zero_fills": total_zero_rows,
+        "zero_fill_function_available": zero_available,
         "confirmed_discrepancy_count": len(conflicts),
         "diagnostic_artifact": diagnostic,
         "unknown_source_remains_null": True,
         "populated_zero_preserved": True,
     }, sort_keys=True))
-    print(f"DONE. total_updated_rows={total_updated_rows} bad_team_games={bad} mode={'COMMIT' if commit else 'DRY-RUN'}")
+    print(f"DONE. total_updated_rows={total_updated_rows} verified_zero_rows={total_zero_rows} bad_team_games={bad} mode={'COMMIT' if commit else 'DRY-RUN'}")
 
 
 if __name__ == "__main__":
