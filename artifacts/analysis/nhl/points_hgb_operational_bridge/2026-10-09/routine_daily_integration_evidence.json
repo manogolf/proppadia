@@ -1,21 +1,22 @@
 {
   "classification": "HGB_ROUTINE_DAILY_INTEGRATION_PASS",
   "coherence_crossing_count": 0,
-  "daily_cli_integration_sha256": "1d185d9d0745b1dea1ae831938a0a7f5c7403024fa5dc01b0c2bf5427de9dc2c",
+  "daily_cli_integration_sha256": "f73358482ce45cf3617ec9a4786724ce971f2a446ad2387c97473f61fc74a25f",
   "database_mutations": 0,
   "deterministic_replay": "DETERMINISTIC_REPLAY_PASS",
   "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V1",
-  "feature_exporter_sha256": "0c2e319508da5c03c57b4bf87c3ea7ea46952cf35f9412b1b425b8336fe617f6",
+  "feature_exporter_sha256": "43d8b4678af9a080c1d973a773ff8c1e42479831d6742cf5b33d4380b014e49a",
   "history_contract": "120_DAY_LEGACY_BOUND",
-  "model_artifact_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+  "model_artifact_sha256": "94e75216d278d99dd54193b448476e43884c8170115e7e787df4b8d4d9da8533",
+  "model_identity_sha256": "fb701c671f24acc894ec8195c5f951136f2b521036f0f37e966b85ba726fa4ca",
   "normal_daily_entrypoint": "python -m backend.nhl.cli daily --with-odds",
   "paid_credits": 0,
   "phoenix_control_prediction_sha256": "730cb908bac956b090683dce15d9e24631920231a3933c2101e60e7041396cf4",
-  "prediction_sha256": "ced771f9db3f67a1cc09db17bc6b310dce17980b54e1dc6d0751cb086fe3763d",
+  "prediction_sha256": "746390d7e138b8d29382bdc00e70bd07aef4d6b88d33569a6c2a6c32dde8cbaa",
   "production_orchestration_helper": "backend/nhl/points_hgb_shadow.py:capture_from_files",
-  "production_orchestration_helper_sha256": "6bfca5d72b30e87917cd7bde564766f375a0e710df58fd3c66c3ea67236e6532",
+  "production_orchestration_helper_sha256": "02380bbfdec1f2e6fbf0939b55ec15644bd83654793adc8649059f67f5fcb950",
   "proof_scope": "BOUNDED_DRY_RUN_SHARED_PRODUCTION_CAPTURE_HELPER",
   "provider_calls": 0,
   "schema_version": "NHL_POINTS_HGB_ROUTINE_DAILY_INTEGRATION_EVIDENCE_V1",
-  "scorer_sha256": "3f0aadf2d28fce2790c7a7f89d8bfd57cb8fbf80e04bc15be44d7863918d6697"
+  "scorer_sha256": "85b38b3206ffaf428591048a72d3c6d7f215ace80a84244fc695ad7651ef2771"
 }

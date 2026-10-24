@@ -2283,10 +2283,14 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `capture_from_files` on the day's retained inputs: deterministic replay
   pass, 0 crossings, new identity stamped. `points_hgb_promotion` gate J and
   the integration verifier now read the scorer's production artifact instead
-  of a hard-coded V1 path. Open: the integration verifier's synthetic fixture
-  predates the exporter's current input schema (missing official SOG and
-  outcome timestamps) and fails before scoring, on V1 as well; the stored
-  integration evidence is from 2026-10-10.
+  of a hard-coded V1 path. The integration verifier's synthetic fixture,
+  which predated the exporter's input schema (no official SOG, outcome
+  timestamps or home/away binding) and failed before scoring, was updated
+  2026-10-24; `build_evidence()` now runs it without writing, and the stored
+  evidence was refreshed (PASS, deterministic replay, 0 crossings, artifact
+  `94e75216…`, identity `fb701c67…`, helper/CLI/exporter/scorer checksums
+  current), so gate J passes on the evidence itself. Test:
+  `test_verify_points_hgb_routine_daily_integration.py`.
 - Strength-split SOG audit (read-only, 2026-10-24): the swapped `pp_sog` is
   not limited to the nine games. Per-skater SOG by strength rebuilt from the
   retained official play-by-play (situation code from the shooter's side;
