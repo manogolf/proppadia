@@ -497,3 +497,19 @@ def test_capture_excludes_one_invalid_player_and_production_keeps_the_rest(tmp_p
         canonical_game_set_sha256=receipt["canonical_game_set_hash"])
     assert set(pd.read_csv(identity["path"]).player_id) == {11}
     assert identity["player_exclusions"] == receipt["player_exclusions"]
+
+
+def test_grader_counts_official_lineup_absences_as_nonparticipants():
+    predictions = pd.DataFrame([{"game_id": 1, "player_id": pid, "expected_points": 0.5,
+                                 "prob_over_0_5": 0.4, "prob_over_1_5": 0.1, "prob_over_2_5": 0.02}
+                                for pid in (1, 2, 3)])
+    outcomes = pd.DataFrame([
+        {"game_id": 1, "player_id": 1, "official_points": 1, "official_final": True,
+         "participation_state": "PARTICIPATED"},
+        {"game_id": 1, "player_id": 2, "official_points": 0, "official_final": True,
+         "participation_state": "PARTICIPATED"},
+        {"game_id": 1, "player_id": 3, "official_points": None, "official_final": True,
+         "participation_state": "NOT_IN_OFFICIAL_LINEUP"}])
+    report = grade(predictions, outcomes)
+    assert report["nonparticipant_count"] == 1
+    assert report["unresolved_count"] == 0

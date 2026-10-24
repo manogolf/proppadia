@@ -656,8 +656,11 @@ def build_production_sog_reference(
         raise ValueError("PRODUCTION_SOG_OFFICIAL_OUTCOME_SCHEMA_MISSING")
     if not outcomes.slate_date.astype(str).eq(slate_date).all():
         raise ValueError("PRODUCTION_SOG_OUTCOME_SLATE_MISMATCH")
-    outcomes = outcomes.rename(columns={"participation_state": "participation_status"})
-    outcomes["participation_status"] = outcomes.participation_status.replace({"PARTICIPATED": "APPEARED"})
+    # Same outcome rule as reconciliation (P2.21): a predicted skater missing
+    # from a complete official box score did not play (NO_APPEARANCE), so it
+    # is not counted as unresolved.
+    from backend.nhl.postgame_reconcile.core import _sog_outcomes
+    outcomes = _sog_outcomes(outcomes, predictions)
     outcomes["canonical_season"] = pd.to_numeric(outcomes.canonical_season, errors="raise").astype(int)
     # Started games remain in the canonical slate and outcome package, but are
     # outside this run's prospective prediction population.

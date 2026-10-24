@@ -138,3 +138,37 @@ def test_a_run_whose_proofs_do_not_verify_contributes_nothing(tmp_path):
         slate_date=SLATE, package=_outcomes(tmp_path), daily_run_root=tmp_path / "daily_runs")
     assert display["model_identity"]["parent_daily_run_id"] == "midday"
     assert (display["overall"]["wins"], display["overall"]["losses"]) == (12, 0)
+
+
+def _outcomes_with_absence(root: Path, *, both_teams_listed: bool) -> Path:
+    # Player <game>2 did not dress: he is missing from the official box score.
+    package = _outcomes(root)
+    rows = [{"canonical_season": 2026, "slate_date": SLATE, "game_id": game,
+             "player_id": player, "team_id": team, "official_final": True, "official_sog": 0,
+             "participation_state": "PARTICIPATED", "outcome_source": "NHL_OFFICIAL",
+             "outcome_source_timestamp_utc": "2026-10-21T05:00:00Z"}
+            for game in GAMES for player, team in ((game * 10 + 1, 1), (game * 100, 2))
+            if both_teams_listed or team == 1]
+    pd.DataFrame(rows).to_csv(package / "canonical_skater_outcomes.csv", index=False)
+    return package
+
+
+def test_a_predicted_skater_absent_from_a_complete_box_score_did_not_play(tmp_path):
+    # Same rule as reconciliation (P2.21): not graded and not unresolved.
+    _daily_run(tmp_path, "midday", "2026-10-20T19:00:00Z", GAMES, p_over=0.2)
+    display, _ = build_production_sog_reference(
+        slate_date=SLATE, package=_outcomes_with_absence(tmp_path, both_teams_listed=True),
+        daily_run_root=tmp_path / "daily_runs")
+    overall = display["overall"]
+    assert (overall["wins"], overall["losses"], overall["settled"]) == (6, 0, 6)
+    assert overall["unresolved"] == 0
+    assert overall["not_gradeable"] == 6  # two absent skaters x three lines
+
+
+def test_an_absence_without_a_complete_box_score_stays_unresolved(tmp_path):
+    _daily_run(tmp_path, "midday", "2026-10-20T19:00:00Z", GAMES, p_over=0.2)
+    display, _ = build_production_sog_reference(
+        slate_date=SLATE, package=_outcomes_with_absence(tmp_path, both_teams_listed=False),
+        daily_run_root=tmp_path / "daily_runs")
+    assert display["overall"]["unresolved"] == 6
+    assert display["overall"]["not_gradeable"] == 0

@@ -1034,6 +1034,14 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
     outcomes = outcomes.loc[outcomes.game_id.astype(int).isin(game_ids)].copy()
     if outcomes.empty or not outcomes.get("official_final", pd.Series(True, index=outcomes.index)).astype(str).str.lower().isin({"true", "t", "1"}).all():
         return {"status": "OUTCOMES_NOT_FINAL", "capture_path": str(capture)}
+    # Same rule as reconciliation (P2.21): a predicted skater missing from a
+    # complete official box score did not play; grade it as a non-participant,
+    # not as unresolved.
+    from backend.nhl.postgame_reconcile.core import OFFICIAL_LINEUP_ABSENCE, _official_lineup_absences
+    absent = _official_lineup_absences(pred, outcomes)
+    if not absent.empty:
+        outcomes = pd.concat([outcomes, absent.assign(
+            participation_state=OFFICIAL_LINEUP_ABSENCE, official_final=True)], ignore_index=True)
     report = grade(pred, outcomes)
     phoenix_thresholds = {}
     phoenix_selected_side = None

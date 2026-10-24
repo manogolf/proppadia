@@ -35,7 +35,8 @@ def grade(predictions: pd.DataFrame, outcomes: pd.DataFrame) -> dict:
     else:
         final = pd.Series(True, index=df.index)
     participated = state.eq("PARTICIPATED") & points.notna() & final & df._merge.eq("both")
-    nonparticipant = state.isin({"SCRATCHED", "NONPARTICIPANT", "POSTPONED"})
+    # NOT_IN_OFFICIAL_LINEUP: absent from a complete official box score (P2.21).
+    nonparticipant = state.isin({"SCRATCHED", "NONPARTICIPANT", "POSTPONED", "NOT_IN_OFFICIAL_LINEUP"})
     unresolved = ~(participated | nonparticipant)
     if participated.sum() == 0:
         raise ValueError("NO_SETTLED_PARTICIPANTS")
