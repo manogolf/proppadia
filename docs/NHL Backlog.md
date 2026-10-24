@@ -2285,7 +2285,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   Read-only verify: original 0, corrected 2,860, missing 0, other 0. Season
   2025 stored totals are now 2,861 PP / 573 SH / 16,296 EV shots (were 656 /
   3,476).
-- Seasons 2023-24 correction prepared 2026-10-24, **not applied**
+- **Seasons 2023-24 correction applied 2026-10-24 20:53 UTC**
+  (operator-approved) as the ingestion login, one transaction per season,
+  committed only at the exact count: 2023 11,845 rows, 2024 13,950 rows
+  (receipt `.../strength_sog_correction_2026-10-24/apply_receipt_2023_2024.json`).
+  Read-only verify: 2023 corrected 11,845, 2024 corrected 13,950, original,
+  missing and other 0. Stored totals now 2023 11,225 PP / 2,053 SH, 2024
+  9,174 / 1,775, 2025 2,861 / 573. The strength-split SOG item is closed;
+  rows left alone: 36 (2025) and 87 (2023-24) whose stored total SOG
+  disagrees with the play-by-play.
+- Seasons 2023-24 correction prepared 2026-10-24 (history)
   (operator-approved download): official play-by-play for all 2,542 games
   with a stored split (2,502 requests to api-web.nhle.com plus the 40-game
   sample, 0 failures, 323 MB, manifest with per-file SHA-256 under
