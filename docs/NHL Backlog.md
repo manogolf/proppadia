@@ -909,8 +909,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 ### P2.15 Separate NHL roster acquisition failures from readiness timing
 
 - Status: **IMPLEMENTED LOCALLY — still pending (checked 2026-10-22)**: no slate with
-  first puck before 10:00 PT has occurred since the fix; the first is 2026-10-24
-  (game 2026020168, 17:00Z). Defects against condition (4): overnight polls
+  first puck before 10:00 PT has occurred since the fix. Corrected 2026-10-22
+  (operator): 2026-10-24's first puck (game 2026020168, 17:00Z) is exactly
+  10:00 PT, so it is an early slate but does not meet the condition. From the
+  official schedule, the first qualifying slates are 2026-11-07 (09:30 PT),
+  2026-11-12 (09:00 PT) and 2026-11-22 (09:30 PT). Defects against condition (4): overnight polls
   before the morning schedule import fail with a raw `FileNotFoundError`
   (`slates/<d>/slate_health.json`, 41 polls on 10-22), and the first poll each
   night reports `PRIOR_DATE_EMPTY_SCHEDULE_CERTIFICATE_INVALID` although the
@@ -1761,6 +1764,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   Games without that evidence stay unresolved. The performance summary keeps
   confirmed non-participants out of `unresolved`, as it already did for Saves
   non-starters.
+- 2026-10-23 follow-up: the production SOG reference and the HGB Points grade
+  rebuilt for P2.27 grade the latest pregame run directly against the official
+  skater outcomes, and had not reused this rule, so the 10-22 summary showed
+  342 SOG and 173 HGB "unresolved" rows that were players who did not dress
+  (W/L unaffected). Both now apply `_official_lineup_absences`: SOG through
+  `_sog_outcomes` (`NO_APPEARANCE`, counted as `not_gradeable`), HGB by
+  appending the absences as `NOT_IN_OFFICIAL_LINEUP`, which the HGB grader
+  counts as non-participants. Tests in
+  `test_nhl_production_sog_per_game_source.py` and
+  `test_nhl_points_hgb_shadow.py`.
 - `34d189d2`: the resilient SOG population had never graded a row. Its path
   passed `PARTICIPATED` outcomes to a grader that grades only `APPEARED`, so
   all 1,587 resilient SOG rows on 10-18 were unresolved. It now matches the
@@ -2061,8 +2074,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.26 Scheduled per-game closing player-prop odds for CLV
 
-- Status: **LIVE 2026-10-20 (LaunchAgent installed 17:13 PT); first full day
-  pending**. On 2026-10-20, the 4 games still ahead after install
+- Status: **CLOSED 2026-10-22 (operator-approved) — staggered-slate evidence
+  below**. LaunchAgent installed 2026-10-20 17:13 PT. On 2026-10-20, the 4 games still ahead after install
   (2026020148–151) each got one CLOSING snapshot 26.5–26.6 minutes before
   puck. Every event bound, with 2,229–2,360 prop rows each and 21 credits
   each. There were no binding failures, no stderr output, and no repeat
@@ -2087,9 +2100,41 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   at 12.8 minutes before puck, bound, 2,205 and 2,255 prop rows, later runs
   `SKIPPED_ALREADY_CAPTURED`. Both games shared one start time, so the close
   waits for a staggered slate (2026-10-22, 12 games).
+- 2026-10-22 (first staggered slate, 12 games): checked at 00:33 UTC with
+  `report_nhl_closing_odds.py --date 2026-10-22`, every game already due had
+  exactly one CLOSING snapshot inside 10-13 minutes, across three separate
+  start times: 2026020154–158 (23:00Z) at 12.6 minutes, 2026020159 (23:30Z)
+  at 12.4, and 2026020160–161 (00:00Z) at 12.3. All 8 were bound
+  (`CAPTURED_NONEMPTY`, 1,850–2,455 prop rows), and the LaunchAgent stderr
+  log was empty. The remaining 4 games (01:00Z and 02:00Z) were not yet due;
+  the operator closed the item on the 8 of 8.
 - Done when a live day shows every game with a CLOSING snapshot 10-13
   minutes before puck (`report_nhl_closing_odds.py`) and no unexplained
-  `MISSED_NO_CLOSING_CAPTURE` or binding failure.
+  `MISSED_NO_CLOSING_CAPTURE` or binding failure. Met on 2026-10-22 for every
+  game due at the check.
+
+### P2.28 One-week 06:00 PT player-prop odds trial
+
+- Status: **RUNNING — slates 2026-10-23 to 2026-10-29** (operator-approved
+  2026-10-22). Question: is there an early-morning price advantage, or do
+  later prices win, so automation can run at the best times for the
+  operator's schedule?
+- Retained evidence before the trial (87 snapshots, 10-01 to 10-22, only 4 at
+  06:xx): 06:00 coverage was about 80% of midday SOG and Points, the same as
+  07:00, with no saves market until about 09:45 PT. Only about 5% of early
+  offers disappeared later. Matched prices were slightly better later
+  (all books, mean −0.2pp implied); on Kalshi, Novig and ProphetX early prices
+  were worse on 55–65% of matched offers, consistent with spreads narrowing
+  toward game time. Snapshots carry only the best price, not the size behind
+  it, and the comparison averaged both sides of each line.
+- Capture: `run_nhl_early_prop_odds_trial.py`, phase `EARLY_TRIAL` (see the
+  capture contract). Budget about 21 credits per game, roughly 1,100–1,700 for
+  the week.
+- Done when the week is analysed: coverage and prices at 06:00 vs the morning,
+  midday, late and CLOSING snapshots, per book group (sportsbooks, prediction
+  markets, BetOnline), and on the model-picked side separately (whether the
+  side the model likes moves against it later). Then uninstall the LaunchAgent
+  (`launchctl bootout gui/$UID/com.proppadia.nhl.early-prop-odds-trial`).
 
 ### P2.27 Grade production SOG and Points from each game's latest pregame run
 
