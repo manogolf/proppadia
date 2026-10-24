@@ -2197,6 +2197,44 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   propose an upload exclusion for the operator) or shows it fading. Rerun the
   export with `--price-both-sides` and repeat the same method.
 
+- Live source defect found during the refit: since 2026-01 the database
+  stores "no PP time" as NULL. Reconciliation staging inserts
+  `pp_toi_minutes = NULL` (`postgame_reconcile/staging_sync.py`) and
+  `fill_pp_toi_minutes_for_date.py` fills only positive PP overlaps, so zero
+  is never written (2023-24: about 10-12k zeros per season; 2026: none; 1,622
+  NULLs, mostly low-TOI skaters). Live `mean_pp_toi_last10` therefore
+  averages only PP games (inflated) and is NULL, then 0, for non-PP players.
+  Fixing the source (write verified zero when the game's PP reconstruction
+  completed) is a production source change and needs operator approval.
+- Research refit (`backend/nhl/scripts/run_nhl_points_hgb_pp_corrected_refit.py`,
+  output `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/2026-10-24/`,
+  git-ignored): read-only pull as the research login; features rebuilt with
+  the live `build_features`; labels from the restored official outcome frame
+  (database log goals/assists are empty) and 2026 reconciliation outcomes;
+  2023-24 legacy team IDs bound to the canonical side through `is_home`
+  (85,440 rows; agrees with the 2026-10-15 reconstruction on 90,246/90,246);
+  2023-24 start times are missing, so a 23:00 UTC placeholder (features use
+  game date only); NULL PP read as 0 when the skater played, had no PP SOG and
+  the team-game has PP time (6,033 rows, 2025-26 only); 17 unknown SOG read as
+  0; 216 2025 targets dropped (games with no database logs). Unchanged features
+  reproduce the frozen matrix on about 99% of rows. Candidates: R1 (frozen
+  recipe, fill-zero) and R2 (NaN-native), both reproducible.
+- Results. 2025 holdout (47,023): V1 Brier/log loss 0.2068/0.6017; R1
+  0.2064/0.6007; R2 0.2062/0.6003. 2026 retrospective, all settled 0.5
+  (3,399): V1 as captured 0.2134/0.6163; V1 on corrected features
+  0.2086/0.6055; R1 0.2060/0.5997; R2 0.2057/0.5990. With a two-sided market
+  (1,709): market 0.2249, R2 0.2311, V1 captured 0.2392; selected-side records
+  market 1,093-616, R2 1,054-655, V1 1,045-664. P2.29 cohort (312, market
+  disagrees with V1): V1 129-183, R2 151-161, market 183-129. By PP time the
+  refit fixes most of the 3+ minute under-prediction (4+ min: actual over 59%,
+  V1 48%, R2 57%, market 59%).
+- Reading: correcting PP inputs and refitting closes about half of V1's gap to
+  the market and most of the P2.29 damage, but the market still leads. The
+  2026 rows use today's database values, which may include later source
+  corrections, so they are retrospective. Before any promotion: fix the live
+  NULL-PP source, run a candidate prospectively in shadow, and apply the
+  existing promotion gate.
+
 ### P2.30 All-candidate export writes the stat count into outcome_side
 
 - Status: **FIXED 2026-10-24** (operator-approved). `_emit` in
@@ -2216,7 +2254,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.31 HGB Points was trained on a PP-TOI feature that did not measure PP time
 
-- Status: **AUDITED 2026-10-24 (read-only); refit not authorized yet**. This
+- Status: **AUDITED AND RESEARCH REFIT EVALUATED 2026-10-24; no production
+  change** (refit authorized as research only). This
   is the likely cause of the P2.29 plus-money-against-model losses after the
   10-15 input repairs.
 - Definition and units match: live and training both use
