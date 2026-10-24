@@ -1359,6 +1359,17 @@ def grade_catchup(prediction_root: Path, schedule: pd.DataFrame, games: pd.DataF
     return {"moneyline": moneyline, "puck_line": puck, "points": points, "saves": saves, "sog_outcomes_only": sog}
 
 
+def _sog_evaluation_populations(graded_sog: pd.DataFrame) -> dict[str, int]:
+    """Rows per SOG evaluation lane; empty when there was no FINAL_PREGAME card.
+
+    Without a card the main SOG grade is the zero-evidence surface, which has
+    no evaluation lanes (2026-10-23, after an observer outage).
+    """
+    if "evaluation_lane" not in graded_sog:
+        return {}
+    return {str(key): int(value) for key, value in graded_sog.evaluation_lane.value_counts().items()}
+
+
 def _zero_evidence_surface(status: str, reason: str) -> pd.DataFrame:
     frame = pd.DataFrame(columns=[
         "canonical_season", "slate_date", "game_id", "player_id", "goalie_id",
@@ -2793,9 +2804,7 @@ def publish_reconciliation(*, canonical: pd.DataFrame, official: pd.DataFrame,
                     for name, frame in grades.items() if name.startswith("resilient_")
                 },
             }
-            summary["sog_evaluation_populations"] = {
-                str(key): int(value) for key, value in grades["sog"].evaluation_lane.value_counts().items()
-            }
+            summary["sog_evaluation_populations"] = _sog_evaluation_populations(grades["sog"])
             summary["sog_missing_prospective_participants"] = len(grades["sog_missing_predictions"])
         if request_lineage is not None:
             lineage = json.loads(json.dumps(request_lineage))

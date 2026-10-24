@@ -1202,3 +1202,12 @@ class PostgameReconciliationTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_sog_evaluation_populations_tolerate_a_missing_final_pregame_card():
+    # 2026-10-23: no FINAL_PREGAME SOG card after an observer outage; the
+    # zero-evidence surface has no evaluation lanes and must not crash the summary.
+    from backend.nhl.postgame_reconcile.core import _sog_evaluation_populations, _zero_evidence_surface
+    assert _sog_evaluation_populations(_zero_evidence_surface("NOT_GRADEABLE_NO_PREDICTION", "fixture")) == {}
+    graded = pd.DataFrame({"evaluation_lane": ["CHAMPION_D", "CHAMPION_D", "OPERATIONAL_SHADOW_A"]})
+    assert _sog_evaluation_populations(graded) == {"CHAMPION_D": 2, "OPERATIONAL_SHADOW_A": 1}
