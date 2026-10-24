@@ -2257,7 +2257,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   missing 0, other 0). Read-only verify as the research login matches; the
   correction role is revoked; the season-2025 audit now shows only
   2025020386 (PP time without a window, no shift data).
-- Round 3 prepared 2026-10-24, **not applied** (operator-approved fetch):
+- **Round 3 applied 2026-10-24 19:29 UTC** by the operator as `postgres`
+  (before: original 36; receipt: original 0, corrected 36, missing 0, other
+  0). Read-only verify matches; the correction role is revoked. The PP
+  team-swap audit is now clean for every season (0 team-games with PP time
+  but no window, 0 with a window but no PP time); all 243 rows across nine
+  games corrected. Remaining P2.31 work: swapped `pp_sog` in these games, the
+  season-2025 shift-chart storage defects, and a decision on an HGB shadow
+  candidate.
+- Round 3 prepared 2026-10-24 (history; operator-approved fetch):
   one official shiftcharts request for 2025020386 (792 rows, SHA-256
   `c26b9a08…`, saved under `.../pp_toi_team_swap_correction_2026-10-24/round3/`,
   no database write). Both penalties were on team 10, so team 15 had the
