@@ -66,7 +66,7 @@ API host (with a storage backup), activated by symlink swap
 | Layer | Technology | Where |
 |---|---|---|
 | Backend / pipelines | Python 3.11, FastAPI, uvicorn, psycopg 3, pandas, numpy, scipy, scikit-learn 1.6.1, httpx, pybaseball | `requirements.txt`, `backend/` |
-| Database | Supabase Postgres 15 (plus Supabase auth/storage) | schema dump `pre_pa_schema.sql` |
+| Database | Supabase Postgres 15 (plus Supabase auth/storage) | schema dump `backups/pre_pa_schema.sql` |
 | Frontend | React 19, Vite 7, react-router, Tailwind 3, Recharts, supabase-js | `frontend/` (deployed on Vercel) |
 | API hosting | Render web service with persistent model disk | `docs/MLB Prod12 Runbook.md` |
 | Scheduling | macOS launchd on the operator's Mac; hosted GitHub cron is **retired** | `docs/README.md`, `backend/*/launchagents/` |
