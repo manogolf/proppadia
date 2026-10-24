@@ -21,8 +21,14 @@ from backend.nhl.game_phase import authorized_season_for_date
 from backend.nhl.daily_capture import canonical_game_set_hash
 
 ROOT = Path(__file__).resolve().parents[3]
-CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/shadow_contract.json"
-MODEL_PATH = CONTRACT_PATH.parent / "nhl_points_count_hgb_v1.joblib"
+# Frozen HGB fitted artifacts. Both use the NHL_POINTS_COUNT_HGB_V1 recipe and
+# features; the PP-corrected revision is refit on source-corrected history
+# (P2.31). Each contract carries its own model_identity_sha256.
+V1_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/shadow_contract.json"
+PP_CORRECTED_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-10-24/shadow_contract.json"
+# Production artifact. One-step rollback: set CONTRACT_PATH = V1_CONTRACT_PATH.
+CONTRACT_PATH = PP_CORRECTED_CONTRACT_PATH
+MODEL_PATH = CONTRACT_PATH.parent / json.loads(CONTRACT_PATH.read_text())["fitted_artifact"]
 FEATURES = [
     "is_home", "d10_sog_per60", "attempts_d10_per60", "player_points_last10",
     "current_season_points_prior", "current_season_games_prior",

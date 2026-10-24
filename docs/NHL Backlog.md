@@ -2265,6 +2265,28 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   games corrected. Remaining P2.31 work: swapped `pp_sog` in these games, the
   season-2025 shift-chart storage defects, and a decision on an HGB shadow
   candidate.
+- **HGB Points baseline switched 2026-10-24** (operator decision: a source
+  correction, not a challenger, so no shadow period). Production now scores
+  with the R1 refit (frozen V1 recipe, fill-zero), frozen under
+  `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-10-24/`
+  and force-added to git as V1's artifact was: artifact SHA-256 `94e75216…`,
+  model identity `fb701c67…` (supersedes `a53f43d5…`). Reproducibility: two
+  fresh refits from the saved training matrix match each other and the frozen
+  artifact exactly on the 47,023-row holdout (the matrix must be read with
+  `float_precision="round_trip"`; pandas' default parser shifts last digits
+  enough to move tree bin edges). Evidence: 2025 holdout Brier 0.2058 vs V1
+  0.2068; 2026 settled 0.5 lines 0.2060 vs V1-as-captured 0.2134. Parity on
+  the 2026-10-24 slate (607 players): mean P(over 0.5) 0.331 to 0.315, 27
+  side flips (18 over-to-under), 0 invalid predictions; with features rebuilt
+  from the corrected database, 28 flips and mean 0.329 to 0.306, mostly lower
+  over-probabilities for low-PP players. Smoke test through
+  `capture_from_files` on the day's retained inputs: deterministic replay
+  pass, 0 crossings, new identity stamped. `points_hgb_promotion` gate J and
+  the integration verifier now read the scorer's production artifact instead
+  of a hard-coded V1 path. Open: the integration verifier's synthetic fixture
+  predates the exporter's current input schema (missing official SOG and
+  outcome timestamps) and fails before scoring, on V1 as well; the stored
+  integration evidence is from 2026-10-10.
 - Strength-split SOG audit (read-only, 2026-10-24): the swapped `pp_sog` is
   not limited to the nine games. Per-skater SOG by strength rebuilt from the
   retained official play-by-play (situation code from the shooter's side;

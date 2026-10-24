@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
+
 ROOT = Path(__file__).resolve().parents[2]
 GATE_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_operational_bridge/2026-10-09/operational_promotion_gates.json"
 AUTHORITY_PATH = ROOT / "artifacts/operational/nhl/points_model_authority/authority_v1.json"
@@ -77,7 +79,7 @@ def evaluate_promotion(*, gate_path: Path = GATE_PATH,
                 and proof.get("daily_cli_integration_sha256") == sha(ROOT / "backend/nhl/cli.py")
                 and proof.get("feature_exporter_sha256") == sha(ROOT / "backend/nhl/scripts/export_nhl_points_hgb_features.py")
                 and proof.get("scorer_sha256") == sha(ROOT / "backend/nhl/scripts/score_nhl_points_hgb_shadow.py")
-                and proof.get("model_artifact_sha256") == sha(ROOT / "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/nhl_points_count_hgb_v1.joblib")):
+                and proof.get("model_artifact_sha256") == sha(scorer.MODEL_PATH)):
             statuses["J"] = "PASS"
     grade_evidence = []
     for path in Path(shadow_root).glob("grades/season=*/slate_date=*/capture=*/grade=*/grade.json"):

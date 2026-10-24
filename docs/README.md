@@ -101,6 +101,7 @@ If the question is “what is the active runtime path right now?”:
 
 ## NHL UX and Validation
 
+- NHL Points HGB production artifact: the PP-corrected refit (2026-10-24, model identity `fb701c67…`), selected by `CONTRACT_PATH` in `backend/nhl/scripts/score_nhl_points_hgb_shadow.py` with V1 as the one-step rollback; see the capture contract's "HGB Points fitted artifact" paragraph and NHL Backlog P2.31.
 - NHL player performance pulse: `backend/nhl/scripts/extend_nhl_player_performance_pulse.py --as-of-date YYYY-MM-DD` writes a cumulative revision under `artifacts/analysis/nhl/player_performance_pulse/2026-10-07_final/revisions/`; lanes sog, saves, points (Phoenix) and points_hgb (production HGB). It prints a one-line PASS/FAIL integrity verdict (lane status, invalid evidence, invalid model identities, hash mismatches, missing files); the revision files hold the detail. Run it weekly or after a model or feature change, not after every daily run.
 - `docs/NHL Backlog.md`: prioritized outstanding NHL access, source-integrity, and operational-validation work.
 - NHL season naming and the production season allow-list (`AUTHORIZED_SEASONS` in `backend/nhl/game_phase.py`; rollover procedure) are in the comprehensive capture contract's opening section (NHL Backlog P2.25).

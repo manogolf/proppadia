@@ -1,0 +1,65 @@
+{
+  "schema_version": "NHL_POINTS_RESEARCH_SHADOW_CONTRACT_V1",
+  "research_model_id": "NHL_POINTS_COUNT_HGB_V1",
+  "authority": "PRODUCTION_BASELINE_PP_CORRECTED_REFIT",
+  "training_seasons": [
+    2023,
+    2024
+  ],
+  "training_rows": 90486,
+  "evaluation_season_confirmation": 2025,
+  "training_source_frame_sha256": "9dba0ef7606c1c21ad83d58722610c9de829fa5b10a583d6a87ec587652aea2e",
+  "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V1",
+  "feature_columns": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share"
+  ],
+  "history_contract": "120_DAY_LEGACY_BOUND",
+  "history_semantics": "strict prior game_date; same-day excluded; 120-day bound; last 10 player games",
+  "target": "official goals + official assists",
+  "distribution": "Poisson observation distribution",
+  "thresholds": {
+    "over_0_5": "P(X >= 1)",
+    "over_1_5": "P(X >= 2)",
+    "over_2_5": "P(X >= 3)"
+  },
+  "hyperparameters": {
+    "loss": "poisson",
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "l2_regularization": 1.0,
+    "early_stopping": false,
+    "random_state": 42
+  },
+  "fitted_artifact": "nhl_points_count_hgb_v1_pp_corrected.joblib",
+  "fitted_artifact_sha256": "94e75216d278d99dd54193b448476e43884c8170115e7e787df4b8d4d9da8533",
+  "scorer": "backend/nhl/scripts/run_nhl_points_hgb_pp_corrected_refit.py",
+  "scorer_sha256": "e3ef01e2208b2c9451e708d4e0261491beb3d1fb7ae29c9824f3f743de4053e9",
+  "prospective_only": false,
+  "production_replacement": true,
+  "initial_shadow_prediction": "NOT_APPLICABLE",
+  "fitted_revision": "PP_CORRECTED_2026_10_24",
+  "revision_reason": "Same recipe and features refit on source-corrected history (P2.31): PP-TOI official shift-chart corrections, verified zeros, corrected attempts and official team shots; live and training features built by export_nhl_points_hgb_features.build_features.",
+  "training_source_frame": "rebuilt_training_matrix_2023_2024.csv.gz (points_hgb_pp_corrected_refit/2026-10-24_post_backfill)",
+  "missing_value_policy": "fill zero before scaling (frozen V1 recipe)",
+  "supersedes_model_identity_sha256": "a53f43d5caea9a64ee8e6d48daf8072e0332b629998242639b2ba15be743e5c2",
+  "supersedes_fitted_artifact_sha256": "e65c5c4085c93d0a351bc129c3cff4382482e27580e47eddbf6d21dee167f7d9",
+  "reproducibility": {
+    "refit_runs": 2,
+    "csv_parsing": "float_precision=round_trip",
+    "max_abs_diff_between_refits": 0.0,
+    "max_abs_diff_vs_frozen": 0.0,
+    "holdout_rows": 47023,
+    "frozen_prediction_sha256": "d0dbf7a3e092eccb94526329465c5f67c32f058cf0650785c79f61387a5b5e3b",
+    "status": "PASS"
+  },
+  "model_identity_sha256": "fb701c671f24acc894ec8195c5f951136f2b521036f0f37e966b85ba726fa4ca"
+}

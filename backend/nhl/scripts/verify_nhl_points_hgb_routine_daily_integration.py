@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
 from backend.nhl.points_hgb_shadow import ROOT, capture_from_files, sha
 
 
@@ -45,7 +46,8 @@ def main() -> None:
             "daily_cli_integration_sha256":sha(ROOT/"backend/nhl/cli.py"),
             "feature_exporter_sha256":sha(ROOT/"backend/nhl/scripts/export_nhl_points_hgb_features.py"),
             "scorer_sha256":sha(ROOT/"backend/nhl/scripts/score_nhl_points_hgb_shadow.py"),
-            "model_artifact_sha256":sha(ROOT/"artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/nhl_points_count_hgb_v1.joblib"),
+            "model_artifact_sha256":sha(scorer.MODEL_PATH),
+            "model_identity_sha256":json.loads(scorer.CONTRACT_PATH.read_text())["model_identity_sha256"],
             "feature_contract":"NHL_POINTS_LEADER_CORE_FEATURES_V1",
             "history_contract":"120_DAY_LEGACY_BOUND",
             "deterministic_replay":capture["deterministic_replay"],

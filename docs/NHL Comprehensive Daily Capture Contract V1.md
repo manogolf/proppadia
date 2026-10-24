@@ -516,6 +516,21 @@ outcomes. In prior-learning mode an absent Saves card is ungradeable, while a
 present invalid or duplicate card still blocks; direct reconciliation keeps
 its exact-one-card contract.
 
+HGB Points fitted artifact (2026-10-24, P2.31). Production scores with the
+PP-corrected refit of the `NHL_POINTS_COUNT_HGB_V1` recipe:
+`artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-10-24/`
+(`nhl_points_count_hgb_v1_pp_corrected.joblib`, artifact SHA-256 `94e75216…`;
+`shadow_contract.json`, model identity `fb701c67…`, superseding V1 identity
+`a53f43d5…`). Same ten features, recipe and Poisson ladder; trained on the
+2023-24 history rebuilt from the corrected database with
+`export_nhl_points_hgb_features.build_features`. The model name stays
+`NHL_POINTS_COUNT_HGB_V1`, so authority, grading and export are unchanged; the
+capture's `model_identity.model_identity_sha256` and `model_artifact_sha256`
+record which fitted artifact produced each prediction. Selection is
+`CONTRACT_PATH` in `backend/nhl/scripts/score_nhl_points_hgb_shadow.py`;
+one-step rollback sets it to `V1_CONTRACT_PATH` (V1 artifact unchanged under
+`artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/`).
+
 Points probability ladders have two construction contracts.
 `NHL_POINTS_COUNT_HGB_V1` predicts one nonnegative expected count and derives
 the 0.5, 1.5, and 2.5 exceedance probabilities from the same Poisson count
