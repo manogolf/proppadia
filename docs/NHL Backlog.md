@@ -2265,6 +2265,19 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   games corrected. Remaining P2.31 work: swapped `pp_sog` in these games, the
   season-2025 shift-chart storage defects, and a decision on an HGB shadow
   candidate.
+- Strength-split SOG audit (read-only, 2026-10-24): the swapped `pp_sog` is
+  not limited to the nine games. Per-skater SOG by strength rebuilt from the
+  retained official play-by-play (situation code from the shooter's side;
+  total SOG reproduced on 1,426/1,428 control rows) shows stored `pp_sog` and
+  `sh_sog` reversed: season 2025, 352 games with retained PBP, 12,672 rows,
+  11,981 exact pp/sh flips, 0 games matching, 691 rows also differing on even
+  strength; stored totals 654 PP / 3,455 SH vs official 2,866 / 522. Seasons
+  2023-24 have the same lopsided totals (3,061/3,966 and 7,016/8,843 across
+  about 85k rows) but no retained PBP to confirm. Season 2026 never writes
+  these columns. Readers: only the zero-fill guard `COALESCE(pp_sog,0)=0`
+  (conservative under the flip; season 2026 unaffected); the HGB and SOG
+  PP-role features do not read them. `pp_sog` is an ordinary ingest-updatable
+  column, not a protected one. Correction approach awaiting operator decision.
 - Round 3 prepared 2026-10-24 (history; operator-approved fetch):
   one official shiftcharts request for 2025020386 (792 rows, SHA-256
   `c26b9a08…`, saved under `.../pp_toi_team_swap_correction_2026-10-24/round3/`,
