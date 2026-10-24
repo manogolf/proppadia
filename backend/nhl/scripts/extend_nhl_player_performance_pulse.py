@@ -491,6 +491,25 @@ def prospective_window_lineage(as_of: str, transitions: pd.DataFrame) -> pd.Data
     return pd.DataFrame(rows,columns=columns)
 
 
+def verdict_line(summary: dict[str, Any], invalid_evidence: int) -> str:
+    """One-line integrity verdict; the revision files hold the detail."""
+    audit = summary["artifact_audit"]
+    lanes = summary["lane_classification"]
+    blocked = sorted(lane for lane, status in lanes.items() if status != "DYNAMIC_FEATURE_EVOLUTION_VERIFIED")
+    counts = {
+        "invalid evidence": int(invalid_evidence),
+        "invalid identities": int(audit.get("invalid_new_model_identity", 0)),
+        "hash mismatches": int(audit.get("hash_mismatches", 0)),
+        "missing files": int(audit.get("missing_artifacts", 0)),
+    }
+    verdict = "FAIL" if blocked or any(counts.values()) else "PASS"
+    lane_text = f"blocked lanes {','.join(blocked)}" if blocked else f"{len(lanes)} lanes verified"
+    parts = [f"NHL PULSE {summary['as_of_date']}: {verdict}", lane_text,
+             f"new transitions {int(summary['new_transition_rows'])}"]
+    parts += [f"{name} {value}" for name, value in counts.items()]
+    return " | ".join(parts)
+
+
 def prospective_window_note(as_of: str, window: pd.DataFrame) -> str:
     """Describe the lineage actually captured for this as-of date."""
     if window.empty:
@@ -647,14 +666,9 @@ def main() -> int:
     summary["population_comparison"]=population_comparison
     pulse.write_json(out/"summary.json", summary, indent=2, sort_keys=True)
     pulse.write_json(out/"revision_metadata.json", {"revision":3,"base_summary_sha256":hashlib.sha256((BASE/"summary.json").read_bytes()).hexdigest(),"as_of_date":args.as_of_date,"source_revision_files":["player_state_transitions.csv","feature_movements.csv","rolling_state_audit.csv","independent_rolling_checks.csv"],"created_deterministically":True,"provider_calls":0,"paid_credits":0}, indent=2, sort_keys=True)
-    (out/"README.md").write_text(f"""# NHL Dynamic Player Performance Pulse — Revision 3\n\nAs-of date: `{args.as_of_date}`. This immutable revision preserves all integrity-valid production transitions as learning evidence and reports a separate proven-same-model population for controlled attribution.\n\n`ALL_VALID_PRODUCTION_TRANSITIONS` includes source-unbound historical rows and proven model-change rows when their retained prediction, state, outcome, and temporal evidence is valid. `PROVEN_SAME_FITTED_MODEL_TRANSITIONS` requires matching receipt-bound fitted identities. Source-unbound observations support descriptive production behavior, movement distributions, and outcome analysis; they do not support a claim that state change alone caused probability movement under an identical model. Missing newer metadata does not retroactively invalidate otherwise valid observations.\n\nDynamic-state health and exact model-identity coverage are reported independently. Population comparisons are descriptive and use no acceptance threshold. The prospective fitted-model identity contract remains in force.\n\nNo provider calls, paid credits, training, rescoring, or database mutation are performed.\n\nFiles include `summary.json`, transition and movement CSVs, both population analyses, rolling audits, and prospective lineage.\n\nReusable command: `.venv/bin/python backend/nhl/scripts/extend_nhl_player_performance_pulse.py --as-of-date YYYY-MM-DD`\n""")
-    print("NHL PLAYER PERFORMANCE PULSE: COMPLETE")
-    print(f"As-of: {args.as_of_date}")
-    print(f"New transitions: {audit['new_transition_rows']}")
-    print(f"Classification: {summary['overall_classification']}")
-    print(f"Package: {out}")
-    print(f"Summary: {out / 'summary.json'}")
-    print(f"Report: {out / 'README.md'}")
+    (out/"README.md").write_text(f"""# NHL Dynamic Player Performance Pulse — Revision 3\n\n`{verdict_line(summary, invalid_total)}`\n\nAs-of date: `{args.as_of_date}`. This immutable revision preserves all integrity-valid production transitions as learning evidence and reports a separate proven-same-model population for controlled attribution.\n\n`ALL_VALID_PRODUCTION_TRANSITIONS` includes source-unbound historical rows and proven model-change rows when their retained prediction, state, outcome, and temporal evidence is valid. `PROVEN_SAME_FITTED_MODEL_TRANSITIONS` requires matching receipt-bound fitted identities. Source-unbound observations support descriptive production behavior, movement distributions, and outcome analysis; they do not support a claim that state change alone caused probability movement under an identical model. Missing newer metadata does not retroactively invalidate otherwise valid observations.\n\nDynamic-state health and exact model-identity coverage are reported independently. Population comparisons are descriptive and use no acceptance threshold. The prospective fitted-model identity contract remains in force.\n\nNo provider calls, paid credits, training, rescoring, or database mutation are performed.\n\nFiles include `summary.json`, transition and movement CSVs, both population analyses, rolling audits, and prospective lineage.\n\nReusable command: `.venv/bin/python backend/nhl/scripts/extend_nhl_player_performance_pulse.py --as-of-date YYYY-MM-DD`\n""")
+    print(verdict_line(summary, invalid_total))
+    print(f"Details: {out}")
     return 0
 
 

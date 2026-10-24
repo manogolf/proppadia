@@ -248,13 +248,12 @@ class PlayerPerformancePulseTests(unittest.TestCase):
                     self.assertEqual(pulse.main(), 0)
 
                 report = output.getvalue()
-                self.assertIn("NHL PLAYER PERFORMANCE PULSE: COMPLETE", report)
-                self.assertIn("As-of: 2026-10-08", report)
-                self.assertIn("New transitions: 7", report)
-                self.assertIn("Classification: DYNAMIC_FEATURE_EVOLUTION_BLOCKED_BY_EVIDENCE", report)
-                self.assertIn(f"Package: {out}", report)
-                self.assertIn(f"Summary: {out / 'summary.json'}", report)
-                self.assertIn(f"Report: {out / 'README.md'}", report)
+                lines = report.strip().splitlines()
+                self.assertEqual(len(lines), 2)
+                self.assertTrue(lines[0].startswith("NHL PULSE 2026-10-08: FAIL | blocked lanes "))
+                self.assertIn("new transitions 7", lines[0])
+                self.assertEqual(lines[1], f"Details: {out}")
+                self.assertIn(lines[0], (out / "README.md").read_text())
                 self.assertTrue((out / "summary.json").is_file())
                 self.assertTrue((out / "README.md").is_file())
                 summary_text = (out / "summary.json").read_text()
@@ -440,3 +439,15 @@ class PulseCumulativeAndHgbLaneTests(unittest.TestCase):
         self.assertIn("sog: 1 player transitions, 2 window rows", note)
         self.assertIn("points: 1 player transitions, 1 window rows", note)
         self.assertIn("No same-player", pulse.prospective_window_note("2026-10-24", window.iloc[0:0]))
+
+    def test_verdict_line_passes_only_when_every_check_is_clean(self):
+        summary = {"as_of_date": "2026-10-24", "new_transition_rows": 11003,
+                   "lane_classification": {lane: "DYNAMIC_FEATURE_EVOLUTION_VERIFIED" for lane in ("sog", "saves", "points", "points_hgb")},
+                   "artifact_audit": {"invalid_new_model_identity": 0, "hash_mismatches": 0, "missing_artifacts": 0}}
+        self.assertEqual(
+            pulse.verdict_line(summary, 0),
+            "NHL PULSE 2026-10-24: PASS | 4 lanes verified | new transitions 11003 | invalid evidence 0 | "
+            "invalid identities 0 | hash mismatches 0 | missing files 0")
+        summary["artifact_audit"]["invalid_new_model_identity"] = 3
+        self.assertIn(": FAIL |", pulse.verdict_line(summary, 0))
+        self.assertIn("invalid identities 3", pulse.verdict_line(summary, 0))
