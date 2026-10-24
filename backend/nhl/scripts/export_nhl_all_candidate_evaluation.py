@@ -242,6 +242,14 @@ def _base(package: Path, row: dict[str, str], market: str, family: str,
     }
 
 
+def _outcome_side(outcome: Any, line: Any) -> str:
+    """OVER/UNDER for count props; moneyline and puck-line outcomes are already labels."""
+    value, threshold = _num(outcome), _num(line)
+    if value is not None and threshold is not None:
+        return "OVER" if value > threshold else "UNDER"
+    return str(outcome)
+
+
 def _emit(rows: list[dict[str, Any]], base: dict[str, Any], p_over: Any,
           p_under: Any, side: str, expected: Any = "", outcome: Any = "",
           outcome_source: str = "") -> None:
@@ -252,7 +260,7 @@ def _emit(rows: list[dict[str, Any]], base: dict[str, Any], p_over: Any,
     if outcome not in (None, ""):
         base["outcome_status"] = "SETTLED"
         base["outcome_value"] = outcome
-        base["outcome_side"] = str(outcome)
+        base["outcome_side"] = _outcome_side(outcome, base.get("market_line"))
         base["outcome_source"] = outcome_source or base["outcome_source"]
     base.pop("model_role_tmp", None)
     base["candidate_key"] = candidate_key(base)

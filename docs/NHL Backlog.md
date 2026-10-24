@@ -2181,7 +2181,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (`--price-both-sides`): the last pregame prediction per player, line and day
   with model P(selected) > 50%; market = median across books of the same-book
   no-vig P(selected) and the median selected-side price. Graded from
-  `outcome_value` against the line (see P2.30).
+  `outcome_value` against the line (the export's `outcome_side` was wrong for
+  SOG and saves until P2.30).
   - New data, 10-15 to 10-23: plus money on our side 98-144 (40.5%; model
     expected 55.5%, market 41.7%) vs market agreeing 2,608-999 (72.3%). Market
     leaning the other way with our side still minus money: 106-108 (49.5%).
@@ -2198,16 +2199,20 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.30 All-candidate export writes the stat count into outcome_side
 
-- Status: **OPEN** (found 2026-10-24). In
-  `export_nhl_all_candidate_evaluation.py`, one outcome path sets
-  `outcome_side = str(outcome)` (around line 255; check also `"outcome_side":
-  actual` near line 745). In the 10-24 export about 78k settled SOG rows, all
-  goalie-saves rows and the puck-line rows carry a number instead of a side;
-  Points rows are correct. `outcome_value` against the line agrees with every
-  correctly labelled row, so analyses can grade from it meanwhile.
-- Done when the export writes OVER/UNDER (and the correct puck-line label),
-  with a regression test in `test_all_candidate_evaluation_export.py`, and any
-  reader of `outcome_side` is checked.
+- Status: **FIXED 2026-10-24** (operator-approved). `_emit` in
+  `export_nhl_all_candidate_evaluation.py` had set `outcome_side =
+  str(outcome)` since the exporter was added, so SOG and goalie-saves rows
+  carried the stat count (about 78k settled SOG rows and all saves rows in
+  the 10-24 export). Points rows use their own path and were correct.
+  Moneyline (HOME/AWAY) and puck-line (margin-class) labels were correct and
+  are unchanged.
+- Fix: new `_outcome_side` returns OVER/UNDER when the outcome and line are
+  numeric, otherwise the existing label. Test:
+  `test_count_prop_outcome_side_is_the_side_not_the_stat`. Existing export
+  directories are not rewritten; regenerate an export to get corrected
+  sides, or grade older exports from `outcome_value` against the line. No
+  repository reader used this export's `outcome_side` for props (the
+  Moneyline favorites analysis reads HOME/AWAY, unaffected).
 
 ## Verified Complete — Do Not Reopen
 

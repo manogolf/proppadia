@@ -1,6 +1,7 @@
 import unittest
 
 from backend.nhl.scripts.export_nhl_all_candidate_evaluation import (
+    _emit,
     canonical_moneyline_quote_side,
     candidate_key,
     deduplicate_candidates,
@@ -337,3 +338,17 @@ class UnreconciledSlateTests(unittest.TestCase):
             self.assertEqual(unreconciled_slate(root), "2026-10-18")
             (root / "postgame_reconciliation/2026-10-18/reconciliation=y").mkdir(parents=True)
             self.assertIsNone(unreconciled_slate(root))
+
+    def test_count_prop_outcome_side_is_the_side_not_the_stat(self):
+        rows = []
+        for market, line, outcome in (("shots_on_goal", "1.5", 3), ("shots_on_goal", "2.5", "1.0"), ("goalie_saves", "24.5", 22)):
+            _emit(rows, {"market_key": market, "market_line": line, "outcome_source": "", "game_id": "1", "player_id": "2"},
+                  0.4, 0.6, "UNDER", outcome=outcome)
+        self.assertEqual([r["outcome_side"] for r in rows], ["OVER", "UNDER", "UNDER"])
+        self.assertEqual([r["outcome_value"] for r in rows], [3, "1.0", 22])
+        labelled = []
+        _emit(labelled, {"market_key": "moneyline_home", "market_line": "", "outcome_source": "", "game_id": "1"},
+              0.6, 0.4, "HOME", outcome="AWAY")
+        _emit(labelled, {"market_key": "puck_line_full_game", "market_line": "-1.5/+1.5", "outcome_source": "", "game_id": "1"},
+              0.3, 0.2, "MULTICLASS", outcome="HOME_BY_2_PLUS")
+        self.assertEqual([r["outcome_side"] for r in labelled], ["AWAY", "HOME_BY_2_PLUS"])
