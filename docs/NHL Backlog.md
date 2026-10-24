@@ -2244,7 +2244,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (`backfill_commit_receipts.csv` SHA-256 `ad3283d6…`, console log
   `d010d642…`); data rollback `rollback_nhl_pp_toi_2026_backfill.sql`
   (SHA-256 `446aad3d…`). Daily runs now write verified zeros for new slates.
-- Team-swap correction prepared 2026-10-24, **not applied**. The VAN
+- **Team-swap correction applied 2026-10-24 19:10 UTC** by the operator as
+  `postgres` through `operator_sql_editor_pp_toi_team_swap_2025.sql`
+  (receipt: original 0, corrected 119, missing 0, other 0). Read-only verify
+  as the research login matches; the correction role was revoked from
+  `postgres`. The 2026-01-25 invariant now passes (VAN 10.27 PP minutes, PIT
+  0), as do the other corrected dates. The season-2025 audit now shows only
+  the four uncorrectable games (2025020386, 2025020559, 2025020565,
+  2025020841). Open: those four games (need shift charts or a closer
+  source review) and the swapped `pp_sog` values.
+- Team-swap correction prepared 2026-10-24 (history). The VAN
   2025020822 zeros belong to a class: read-only audit of season 2025 found
   team-games whose PP time sits on the team with no power play. Retained
   official play-by-play (penalty records and situation codes, rebuilt with
