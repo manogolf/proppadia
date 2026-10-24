@@ -2214,6 +2214,47 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   repository reader used this export's `outcome_side` for props (the
   Moneyline favorites analysis reads HOME/AWAY, unaffected).
 
+### P2.31 HGB Points was trained on a PP-TOI feature that did not measure PP time
+
+- Status: **AUDITED 2026-10-24 (read-only); refit not authorized yet**. This
+  is the likely cause of the P2.29 plus-money-against-model losses after the
+  10-15 input repairs.
+- Definition and units match: live and training both use
+  `export_nhl_points_hgb_features.build_features`, mean of
+  `pp_toi_minutes` over the latest ten strict-prior games within 120 days
+  (minutes; NULL games skipped). TOI units agree (median 16.6 training, 15.9
+  live).
+- Values do not match. The frozen 2023-24 training feature (90,486 rows) is
+  nearly constant: median 0.31 min, p99 0.82, PP share of TOI about 2%. The
+  later official shift-chart corrections (71,627 rows, applied to the
+  database; plus the 32 in P1.2) give median 0.96, p99 4.13, mean 1.22, and
+  correlate only 0.22 with the frozen values, so the training feature was
+  wrong source data, not a unit scale. The 2025 holdout was evaluated on
+  near-correct values (median 0.96), already outside the fit range. Live
+  2026 (10-15 on): median 1.48, p99 4.93; 48% of live rows exceed the
+  training p99.
+- Effect: on live regular skaters (TOI 17+), the frozen model gives the same
+  P(over 0.5) for PP 0.8 through 5.0 minutes (0.452); the whole PP effect is
+  under 2pp. Graded 0.5 Unders since 10-15 by PP time: 2-3 min model 62% vs
+  won 55%; 3-4 min 60% vs 52.5%; 4+ min 56% vs 48% (market 47%). Half of the
+  4+ min Under picks are plus money against the model.
+- NULL handling: training had 2,038 NULL PP rows and no zeros; the fit and
+  live scorer both fill NULL with 0 before scaling, so 0 is outside the
+  training range. Live: 21% of rows have NULL PP; 536 have no history at all
+  and 217 (6%) have TOI history but NULL PP minutes, a current-season source
+  gap still to trace.
+- A corrected refit would need: (1) rebuild the 2023-24 training matrix and
+  2025 holdout from the corrected database with the live `build_features`,
+  so training and live share one code path; (2) the corrected
+  `attempts_d10_per60` source (46,379 rows committed 2026-10-16; 7,829
+  unresolved rows stay NULL) and official team shots (V2 repair); (3) an
+  explicit missing-value rule instead of fill-zero (HistGradientBoosting
+  accepts NaN natively), applied identically live; (4) the 326 unreconciled
+  and 2,038 NULL PP rows kept NULL; (5) trace the live NULL-PP rows; (6)
+  evaluate on the 2025 holdout and the graded 2026 rows against V1 and the
+  market (including the P2.29 cohort) under the existing promotion gate
+  before any production change.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** the 32 verified 2023–25 PP-TOI corrections
