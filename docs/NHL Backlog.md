@@ -2251,8 +2251,28 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `postgres`. The 2026-01-25 invariant now passes (VAN 10.27 PP minutes, PIT
   0), as do the other corrected dates. The season-2025 audit now shows only
   the four uncorrectable games (2025020386, 2025020559, 2025020565,
-  2025020841). Open: those four games (need shift charts or a closer
-  source review) and the swapped `pp_sog` values.
+  2025020841).
+- Round 2 prepared 2026-10-24, **not applied**: 88 rows in 2025020559,
+  2025020565 and 2025020841, rebuilt from each shift row's official payload
+  (`shiftcharts_raw.raw_json`: gameId, teamId, period-relative times,
+  typeCode 517) because the derived columns are unusable there; all 36
+  skaters complete per game, reconstruction 12.19/10.35/33.17 skater-minutes
+  for 146/124/398-second windows. Files
+  `backend/nhl/sql/repairs/*_pp_toi_team_swap_2025_round2.sql` (repair,
+  rollback, verify, SQL-editor block), proposal SHA-256 `85736bf6…`, evidence
+  `.../pp_toi_team_swap_correction_2026-10-24/round2/`; tests
+  `test_pp_toi_team_swap_round2_correction_sql.py` pass on the rollback-only
+  test database; verify before: original 88, corrected 0. 2025020386 has no
+  shift data at all and needs an official shift-chart download.
+- Season-2025 shift-chart integrity (read-only audit, 1,036 games): 260 games
+  store `start_sec`/`end_sec` as whole-game seconds instead of
+  period-relative; 102 have NULL seconds; 74 have NULL `team_id` rows;
+  2025020565 also holds another game's shifts (teams 28 and 54). Season 2026
+  is clean. None of the 683 games in today's backfill had whole-game seconds
+  or mixed games, and no zero-filled player had team-less shift rows, so
+  today's fills are unaffected. Any future shift-based work on season 2025
+  must read the payload or repair these columns first. Open: the swapped
+  `pp_sog` values and the 2025020386 download.
 - Team-swap correction prepared 2026-10-24 (history). The VAN
   2025020822 zeros belong to a class: read-only audit of season 2025 found
   team-games whose PP time sits on the team with no power play. Retained
