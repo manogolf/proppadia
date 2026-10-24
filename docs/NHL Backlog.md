@@ -2257,6 +2257,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   missing 0, other 0). Read-only verify as the research login matches; the
   correction role is revoked; the season-2025 audit now shows only
   2025020386 (PP time without a window, no shift data).
+- Round 3 prepared 2026-10-24, **not applied** (operator-approved fetch):
+  one official shiftcharts request for 2025020386 (792 rows, SHA-256
+  `c26b9a08…`, saved under `.../pp_toi_team_swap_correction_2026-10-24/round3/`,
+  no database write). Both penalties were on team 10, so team 15 had the
+  power play (281 s of official situation codes, matching the stored
+  segments); all 36 skaters complete; reconstruction 23.42 skater-minutes.
+  36 rows to correct (proposal SHA-256 `1abb26a5…`); files
+  `backend/nhl/sql/repairs/*_pp_toi_team_swap_2025_round3.sql`; tests pass on
+  the rollback-only test database; verify before: original 36, corrected 0.
+  The shift chart itself is not loaded into `nhl.shiftcharts_raw`.
 - Round 2 prepared 2026-10-24 (history): 88 rows in 2025020559,
   2025020565 and 2025020841, rebuilt from each shift row's official payload
   (`shiftcharts_raw.raw_json`: gameId, teamId, period-relative times,
