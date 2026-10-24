@@ -124,3 +124,6 @@ nhl/site/data/saves_attachment_integrity.json
 nhl/site/data/sog_attachment_integrity.json
 nhl_daily_LAST_FAIL.txt
 nhl_daily_STATUS.txt
+
+# Offline Python wheel store for rebuilding .venv (see AGENTS.md)
+/vendor/python-wheels/

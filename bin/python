@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-project_python="/Users/jerrystrain/Projects/.proppadia-py311-scipy1152-macos12-arm64-candidate/bin/python"
+project_python="$(cd "$(dirname "$0")/.." && pwd)/.venv/bin/python"
 
 if [ ! -x "$project_python" ]; then
     printf 'Project Python is missing or not executable: %s\n' "$project_python" >&2
