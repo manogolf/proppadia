@@ -49,7 +49,14 @@ have not been run yet: no PostgreSQL server is available in this checkout.
 
 ## 2. Apply the migration (operator, approved administrative path)
 
+Run `backend/nhl/sql/repairs/verify_nhl_pp_toi_verified_zero_fill.sql` first
+(read-only; 2026-10-24 result: installed=false). Then either paste
+`backend/nhl/sql/repairs/operator_sql_editor_pp_toi_verified_zero_fill.sql`
+into the Supabase SQL editor as `postgres` (it is the migration body
+unchanged, plus a session check and a receipt SELECT), or run
 `psql --no-psqlrc --set=ON_ERROR_STOP=1 --file backend/nhl/sql/migrations/20261024_pp_toi_verified_zero_fill.sql`
+through the approved administrative path. Save the receipt, then run the
+verify file again.
 
 Verify:
 

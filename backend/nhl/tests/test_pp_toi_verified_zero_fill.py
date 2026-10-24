@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[3]
 MIGRATION = ROOT / "backend/nhl/sql/migrations/20261024_pp_toi_verified_zero_fill.sql"
 ROLLBACK = ROOT / "backend/nhl/sql/migrations/20261024_pp_toi_verified_zero_fill_rollback.sql"
 FIXTURE = ROOT / "backend/nhl/sql/tests/nhl_pp_toi_zero_fill_fixture_test.sql"
+EDITOR = ROOT / "backend/nhl/sql/repairs/operator_sql_editor_pp_toi_verified_zero_fill.sql"
 
 
 class FakeCursor:
@@ -139,6 +140,17 @@ class MigrationContractTests(unittest.TestCase):
         self.assertIn("drop function nhl.fill_pp_toi_zero_from_shift_overlap(bigint)", sql)
         self.assertNotIn("update nhl.skater_game_logs_raw", sql)
         self.assertNotIn("grant update", sql)
+
+    def test_operator_editor_block_applies_the_migration_unchanged(self):
+        def body(sql: str) -> str:
+            return sql[sql.index("BEGIN;\n") + len("BEGIN;\n"):sql.rindex("COMMIT;")]
+        migration_body = body(MIGRATION.read_text())
+        editor = EDITOR.read_text()
+        self.assertIn(migration_body, editor)
+        self.assertIn("RUN_AS_POSTGRES_IN_SQL_EDITOR", editor)
+        self.assertEqual(editor.count("BEGIN;"), 1)
+        self.assertEqual(editor.count("COMMIT;"), 1)
+        self.assertNotIn("update nhl.skater_game_logs_raw", editor.lower().split("as $$", 1)[0])
 
     def test_fixture_covers_every_guard(self):
         sql = FIXTURE.read_text().lower()
