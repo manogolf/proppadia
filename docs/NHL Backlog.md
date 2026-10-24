@@ -2326,6 +2326,25 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   167 rows neither matching nor flipped; 2024: 683 rows, 105 / 158 vs 120 / 23,
   220 neither. A column swap would not fix these seasons; only per-game
   replacement from play-by-play (about 2,500 more requests) would.
+- Season-2025 shift-chart correction prepared 2026-10-24, **not applied**:
+  every defect is recoverable from the official payload stored on the same
+  row (`raw_json`: period-relative startTime/endTime/duration, teamId; payload
+  gameId equals game_id on all 783,643 rows; 0 conflicting values). 208,283
+  rows in 383 games: 130,918 whole-game-second times, 77,098 missing times,
+  76,438 missing durations, 13,915 missing team IDs. Compact payload-driven
+  UPDATE run as the ingestion login (which already holds UPDATE on
+  `nhl.shiftcharts_raw`), guarded by the exact count:
+  `backend/nhl/sql/repairs/repair_nhl_shiftcharts_2025_from_payload.sql`
+  (`:expected_rows` = 208283) and `verify_nhl_shiftcharts_2025_from_payload.sql`
+  (before: still_fixable 208,283, other_conflicts 0). Rollback generated from
+  the preview snapshot by `backend/nhl/scripts/build_nhl_shiftcharts_rollback_sql.py`
+  (11 MB, SHA-256 `376fe8dd…`, in
+  `artifacts/analysis/nhl/shiftchart_2025_correction_2026-10-24/` with the
+  snapshot, SHA-256 `56dfe23e…`). Tests
+  `test_shiftcharts_2025_payload_correction_sql.py` pass on the rollback-only
+  test database. Not changed: the teams 28/54 rows filed under 2025020565 (the
+  official payload itself carries gameId 2025020565; ingest cannot delete).
+  Already-populated PP values are unaffected (the fixer only fills NULLs).
 - Round 3 prepared 2026-10-24 (history; operator-approved fetch):
   one official shiftcharts request for 2025020386 (792 rows, SHA-256
   `c26b9a08…`, saved under `.../pp_toi_team_swap_correction_2026-10-24/round3/`,
