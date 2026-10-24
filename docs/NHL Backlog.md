@@ -2169,6 +2169,46 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   no Phoenix control); 10-16 89-16 → 184-29; 10-17 376-56 → 1,216-185; 10-19
   182-34 → 360-69; 10-20 563-85 → 1,013-169.
 
+### P2.29 Recheck plus-money-against-model picks before excluding them
+
+- Status: **OBSERVING — recheck later** (operator decision 2026-10-24: not yet
+  excluded from the 8rain uploads). Question: do picks where our fair price is
+  minus money but the book's price on our side is plus money (market favors
+  the other side) keep underperforming? This is the provisional Stage 3
+  "opposite-side" region from `analyze_nhl_points_consideration_funnel.py`
+  (HGB Points 0.5, 10-10 to 10-14: 77-115).
+- Evidence 2026-10-24, from the `full_window_2026-10-24_both_sides` export
+  (`--price-both-sides`): the last pregame prediction per player, line and day
+  with model P(selected) > 50%; market = median across books of the same-book
+  no-vig P(selected) and the median selected-side price. Graded from
+  `outcome_value` against the line (see P2.30).
+  - New data, 10-15 to 10-23: plus money on our side 98-144 (40.5%; model
+    expected 55.5%, market 41.7%) vs market agreeing 2,608-999 (72.3%). Market
+    leaning the other way with our side still minus money: 106-108 (49.5%).
+  - By market since 10-14: Points HGB 25-47 (34.7%), SOG 72-97 (42.6%), Saves
+    too few. Through 10-14: Points 62-91, SOG 147-186.
+  - A wider model-market gap does not help: Points plus-money picks with a
+    20pp+ gap went 36-71 (33.6%). Possible exception, small: SOG 1.5 Under
+    78-62.
+  - The 8rain filter (fair -500 to -133, edge 10%) admits these picks, since a
+    plus-money price creates a large apparent edge.
+- Done when a later recheck on new slates either confirms the pattern (then
+  propose an upload exclusion for the operator) or shows it fading. Rerun the
+  export with `--price-both-sides` and repeat the same method.
+
+### P2.30 All-candidate export writes the stat count into outcome_side
+
+- Status: **OPEN** (found 2026-10-24). In
+  `export_nhl_all_candidate_evaluation.py`, one outcome path sets
+  `outcome_side = str(outcome)` (around line 255; check also `"outcome_side":
+  actual` near line 745). In the 10-24 export about 78k settled SOG rows, all
+  goalie-saves rows and the puck-line rows carry a number instead of a side;
+  Points rows are correct. `outcome_value` against the line agrees with every
+  correctly labelled row, so analyses can grade from it meanwhile.
+- Done when the export writes OVER/UNDER (and the correct puck-line label),
+  with a regression test in `test_all_candidate_evaluation_export.py`, and any
+  reader of `outcome_side` is checked.
+
 ## Verified Complete — Do Not Reopen
 
 - **VERIFIED COMPLETE:** the 32 verified 2023–25 PP-TOI corrections
