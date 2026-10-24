@@ -162,10 +162,31 @@ put captures about 26.6 minutes out):
   that leaves its window uncaptured is logged as
   `MISSED_NO_CLOSING_CAPTURE`.
 - Readers that take a day's latest snapshot or pool all snapshots skip
-  CLOSING (`daily_capture.is_closing_observation`): the 8rain export, the
-  all-candidate research export, and the monthly SOG/BetOnline quote pool.
+  side captures, CLOSING and EARLY_TRIAL
+  (`daily_capture.is_side_capture_observation`): the 8rain export and the
+  monthly SOG/BetOnline quote pool. The all-candidate research export reads
+  only EARLY and FINAL_PREGAME snapshots.
 - Verification: `report_nhl_closing_odds.py --date <d>` lists, per game, the
   minutes between the closing snapshot and puck drop.
+
+06:00 PT odds-only trial (operator-approved 2026-10-22; slates 2026-10-23 to
+2026-10-29). `backend/nhl/scripts/run_nhl_early_prop_odds_trial.py`
+(LaunchAgent `com.proppadia.nhl.early-prop-odds-trial`, 06:00 and 06:15 PT,
+run under `caffeinate -i`; launchd does not wake a sleeping Mac, so the
+operator schedules a 05:58 wake with `pmset` for each trial day)
+captures the day's player-prop odds once, for games not yet started, to
+measure early coverage and prices against later snapshots and CLOSING:
+- Same markets, books and regions as the daily run; phase `EARLY_TRIAL`, one
+  snapshot per slate. No predictions, database access or daily-run change.
+- The morning run imports the schedule at 07:30, so the trial fetches the
+  official schedule itself into `early_trial_schedule/` in the day's odds
+  folder (the import's `NHL_SLATE_HEALTH_ROOT` redirect), never the shared
+  slate folder.
+- It captures only between 05:55 and 06:30 PT (a missed job run on wake is
+  logged `OUTSIDE_CAPTURE_WINDOW`), skips once a snapshot exists, and does
+  nothing outside the trial dates (`TRIAL_INACTIVE`), so it stops spending
+  after the week even if left installed. Decisions go to
+  `early_trial_capture_log.jsonl` in the day folder. About 21 credits per game.
 
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has

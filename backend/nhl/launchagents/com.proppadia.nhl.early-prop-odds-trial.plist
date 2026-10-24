@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.proppadia.nhl.early-prop-odds-trial</string>
+  <key>ProgramArguments</key>
+  <!-- caffeinate -i keeps the Mac from sleeping while the capture runs; the
+       operator schedules a 05:58 wake (pmset) so the 06:00 job fires. -->
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-i</string>
+    <string>/Users/jerrystrain/Projects/proppadia/.venv/bin/python</string>
+    <string>/Users/jerrystrain/Projects/proppadia/backend/nhl/scripts/run_nhl_early_prop_odds_trial.py</string>
+    <string>--env-file</string><string>/Users/jerrystrain/Projects/proppadia/backend/.env</string>
+  </array>
+  <key>WorkingDirectory</key><string>/Users/jerrystrain/Projects/proppadia</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key><string>/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+  </dict>
+  <!-- One-week trial (slates 2026-10-23 to 10-29; the script stops itself
+       after that). 06:00 PT, with a 06:15 retry that skips once captured. -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>15</integer></dict>
+  </array>
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>StandardOutPath</key><string>/Users/jerrystrain/Projects/proppadia/artifacts/operational/nhl/odds_observations/early_trial_launchagent.stdout.log</string>
+  <key>StandardErrorPath</key><string>/Users/jerrystrain/Projects/proppadia/artifacts/operational/nhl/odds_observations/early_trial_launchagent.stderr.log</string>
+</dict>
+</plist>

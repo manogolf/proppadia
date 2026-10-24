@@ -71,7 +71,12 @@ PHASES = ("EARLY", "REFRESH", "FINAL_PREGAME")
 # game's own start) for closing-line evaluation. It is accepted by the capture
 # function only; the daily run's --odds-phase choices stay PHASES.
 CLOSING_PHASE = "CLOSING"
-CAPTURE_PHASES = (*PHASES, CLOSING_PHASE)
+# EARLY_TRIAL is a one-week odds-only capture at 06:00 PT (operator-approved
+# 2026-10-22) to measure early player-prop coverage and prices. Like CLOSING it
+# is accepted by the capture function only and kept out of daily readers.
+EARLY_TRIAL_PHASE = "EARLY_TRIAL"
+SIDE_CAPTURE_PHASES = (CLOSING_PHASE, EARLY_TRIAL_PHASE)
+CAPTURE_PHASES = (*PHASES, *SIDE_CAPTURE_PHASES)
 SENSITIVE_KEY = re.compile(
     r"(?:^|_)(?:api_?key|authorization|password|secret|token|signature|credential)(?:$|_)",
     re.IGNORECASE,
@@ -88,6 +93,20 @@ def is_closing_observation(observation_dir: Path) -> bool:
     summary = Path(observation_dir) / "observation_summary.json"
     try:
         return str(json.loads(summary.read_text()).get("phase", "")).upper() == CLOSING_PHASE
+    except (OSError, ValueError):
+        return False
+
+
+def is_side_capture_observation(observation_dir: Path) -> bool:
+    """True for a scheduled side capture (CLOSING or EARLY_TRIAL).
+
+    Readers that pick a day's latest daily snapshot or pool every daily
+    snapshot's quotes skip these; closing-line and trial analyses read them
+    explicitly by phase.
+    """
+    summary = Path(observation_dir) / "observation_summary.json"
+    try:
+        return str(json.loads(summary.read_text()).get("phase", "")).upper() in SIDE_CAPTURE_PHASES
     except (OSError, ValueError):
         return False
 
