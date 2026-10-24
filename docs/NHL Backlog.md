@@ -2277,7 +2277,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   these columns. Readers: only the zero-fill guard `COALESCE(pp_sog,0)=0`
   (conservative under the flip; season 2026 unaffected); the HGB and SOG
   PP-role features do not read them. `pp_sog` is an ordinary ingest-updatable
-  column, not a protected one. Correction approach awaiting operator decision.
+  column, not a protected one.
+- Season-2025 strength-SOG correction prepared 2026-10-24, **not applied**:
+  2,860 rows in 352 games where the stored (ev, pp, sh) split differs from the
+  official play-by-play; 9,776 rows already match; 36 rows whose stored total
+  SOG disagrees with the play-by-play are left alone. 171 corrected rows were
+  internally inconsistent (stored split did not sum to stored SOG); every
+  corrected split sums to the row's total. Files
+  `backend/nhl/sql/repairs/{repair,rollback,verify}_nhl_strength_sog_2025.sql`
+  (run as the ingestion login, all-or-nothing guard), evidence
+  `artifacts/analysis/nhl/strength_sog_correction_2026-10-24/`; tests
+  `test_strength_sog_2025_correction_sql.py` pass on the rollback-only test
+  database; verify before: original 2,860, corrected 0.
+- Seasons 2023-24 sample (operator-approved, 40 official PBP requests, saved
+  under `.../strength_sog_correction_2026-10-24/pbp_sample_2023_2024/`): not a
+  clean pp/sh swap. 2023: 637 rows, stored 42 PP / 58 SH vs official 182 / 41,
+  167 rows neither matching nor flipped; 2024: 683 rows, 105 / 158 vs 120 / 23,
+  220 neither. A column swap would not fix these seasons; only per-game
+  replacement from play-by-play (about 2,500 more requests) would.
 - Round 3 prepared 2026-10-24 (history; operator-approved fetch):
   one official shiftcharts request for 2025020386 (792 rows, SHA-256
   `c26b9a08…`, saved under `.../pp_toi_team_swap_correction_2026-10-24/round3/`,
