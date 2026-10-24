@@ -1,7 +1,9 @@
 # PP-TOI verified-zero fill and 2026 backfill (P2.31)
 
-Status: **prepared, not applied** (2026-10-24). Every step that writes needs
-separate operator approval. Never print connection strings.
+Status: **applied 2026-10-24** (migration by the operator as `postgres`;
+backfill of 9,472 rows committed through the fixer; receipts in
+`artifacts/analysis/nhl/pp_toi_2026_backfill_preview/2026-10-24_pre_commit/`).
+The SQL fixture was not run. Never print connection strings.
 
 ## Why
 

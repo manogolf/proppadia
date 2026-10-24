@@ -2225,9 +2225,28 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `backend/nhl/tests/test_pp_toi_verified_zero_fill.py` and SQL fixture
   `backend/nhl/sql/tests/nhl_pp_toi_zero_fill_fixture_test.sql` (not run: no
   local PostgreSQL). Backfill preview receipt: 9,472 of 11,575 NULL rows would
-  fill (7,371 zero, 2,101 positive) across 91 dates; 2,103 stay NULL. Next:
-  operator runs the fixture, applies the migration, then the dated backfill
-  per the runbook.
+  fill (7,371 zero, 2,101 positive) across 91 dates; 2,103 stay NULL.
+- **Applied 2026-10-24.** The operator applied the migration as `postgres`
+  through `operator_sql_editor_pp_toi_verified_zero_fill.sql` (receipt:
+  installed, daily execute, no anon execute, SECURITY DEFINER); the SQL
+  fixture was not run (no disposable PostgreSQL available). Read-only verify:
+  all seven checks pass. The pre-commit preview matched the morning preview
+  (rows SHA-256 `6332d783…`). Committed backfill through the governed fixer
+  as the ingestion login, 91 dates: all 9,472 rows filled (2,101 positive,
+  7,371 verified zero); the preview now returns no rows. 90 dates exited 0.
+  2026-01-25 exited 2 on its invariant after its fills committed: game
+  2025020822 (VAN-PIT), untouched by the backfill, has populated 0.00 PP for
+  every VAN skater despite a 123-second VAN PP window (values ingested
+  2026-01-26) — a pre-existing source error left for source review.
+  Remaining NULLs: 2,101 in season 2025 (no shift charts 1,949; no segments
+  107; PP SOG or multi-team guards 43; TOI mismatch 2) and 2 in season 2026.
+  Receipts: `artifacts/analysis/nhl/pp_toi_2026_backfill_preview/2026-10-24_pre_commit/`
+  (`backfill_commit_receipts.csv` SHA-256 `ad3283d6…`, console log
+  `d010d642…`); data rollback `rollback_nhl_pp_toi_2026_backfill.sql`
+  (SHA-256 `446aad3d…`). Daily runs now write verified zeros for new slates.
+- Open: review the VAN 2025020822 populated zeros (source correction path);
+  rerun the HGB research refit on the corrected live PP feature before any
+  shadow candidate.
 - Research refit (`backend/nhl/scripts/run_nhl_points_hgb_pp_corrected_refit.py`,
   output `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/2026-10-24/`,
   git-ignored): read-only pull as the research login; features rebuilt with
