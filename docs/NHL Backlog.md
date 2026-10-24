@@ -2278,7 +2278,14 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (conservative under the flip; season 2026 unaffected); the HGB and SOG
   PP-role features do not read them. `pp_sog` is an ordinary ingest-updatable
   column, not a protected one.
-- Season-2025 strength-SOG correction prepared 2026-10-24, **not applied**:
+- **Season-2025 strength-SOG correction applied 2026-10-24 19:43 UTC**
+  (operator-approved) as the ingestion login (`proppadia_nhl_daily_login`)
+  in one transaction: 2,860 rows updated, committed only at the exact count
+  (receipt `artifacts/analysis/nhl/strength_sog_correction_2026-10-24/apply_receipt.json`).
+  Read-only verify: original 0, corrected 2,860, missing 0, other 0. Season
+  2025 stored totals are now 2,861 PP / 573 SH / 16,296 EV shots (were 656 /
+  3,476). Open: seasons 2023-24 (needs per-game PBP, about 2,500 requests).
+- Season-2025 strength-SOG correction prepared 2026-10-24 (history):
   2,860 rows in 352 games where the stored (ev, pp, sh) split differs from the
   official play-by-play; 9,776 rows already match; 36 rows whose stored total
   SOG disagrees with the play-by-play are left alone. 171 corrected rows were
