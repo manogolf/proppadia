@@ -50,6 +50,7 @@ LANE_NAMES = (
     "sog_d10_structural_correction_shadow",
     "sog_shrunk_rate_k180_shadow",
     "sog_count_hgb_shadow",
+    "sog_poisson_formula_shadow",
     "points",
     "points_hgb_shadow",
     "saves",

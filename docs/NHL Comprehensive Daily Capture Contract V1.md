@@ -536,6 +536,32 @@ record which fitted artifact produced each prediction. Selection is
 one-step rollback sets it to `V1_CONTRACT_PATH` (V1 artifact unchanged under
 `artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/`).
 
+Production SOG scorer (2026-10-25, P2.33). Production SOG is the frozen HGB
+Poisson count model `NHL_SOG_COUNT_HGB_V1` (receipt identity `hgb_count /
+NHL_SOG_COUNT_HGB_V1`, scorer `backend/nhl/sog_hgb_count_model.py`, artifact
+`artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-10-25/nhl_sog_count_hgb_v1.joblib`,
+SHA-256 `f7bf625d…`, pinned in the scorer). The daily run still scores the
+Poisson formula (`score_sog_poisson_baseline.py`) first, into
+`sog_predictions_wide_formula.csv`; the formula's scored rows define the
+population, and the HGB model rescores them from strict-prior skater logs
+(read-only) into `sog_predictions_wide_calibrated.csv` with the formula's
+exact column layout (`poisson_source` = `hgb_count`, or `formula_fallback`
+where a player has no qualifying history). The `legacy_sog` lane, its fitted
+model evidence, `nhl.predictions`, the 8rain export and governed grading read
+that production file as before; the lane output also records the HGB history
+SHA, artifact SHA, the formula file and the per-row feature file
+`sog_hgb_features.csv`. The retained SOG feature package binds the formula's
+inputs to the formula's own output. The formula is a shadow
+(`NHL_SOG_POISSON_FORMULA_V1`, lane `sog_poisson_formula_shadow`, captures
+under `artifacts/operational/nhl/sog_formula_shadows/`). Formula-variant
+research shadows (fixed blends, D10/D20 divergence, structural correction,
+defense surprise) keep reading the formula file; the SHRUNK_180 shadow pairs
+with production. Grading accepts either identity
+(`PRODUCTION_SOG_SCORERS` in `performance_summary.py`), so slates before the
+cutover keep the formula as production. One-step rollback:
+`NHL_SOG_SCORER=poisson_baseline` (the formula writes the production file and
+the HGB model returns to its shadow lane).
+
 Points probability ladders have two construction contracts.
 `NHL_POINTS_COUNT_HGB_V1` predicts one nonnegative expected count and derives
 the 0.5, 1.5, and 2.5 exceedance probabilities from the same Poisson count

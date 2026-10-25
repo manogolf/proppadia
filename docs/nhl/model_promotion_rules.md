@@ -76,3 +76,18 @@ Used when training or live data were wrong, as with the PP-TOI refit
 - Market comparison on two-sided lines and closing-line value.
 - A promotion check that applies these rules and reports which candidates
   qualify.
+
+## Operator decisions outside these routes
+- **2026-10-25, SOG: `NHL_SOG_COUNT_HGB_V1` promoted to production without
+  route A's 4-week shadow.** Operator decision: a new model that beats
+  production on held-out and live data becomes the baseline once tested.
+  Evidence (NHL Backlog P2.33): out of sample 2026-01..04 (24,213 rows) paired
+  log loss vs the formula -0.051 (95% interval -0.056 to -0.046), Brier better
+  at all three lines; 2026 slates 10-08..10-24 (4,395 rows) -0.039 (-0.050 to
+  -0.028). A5 and A6 hold: reproducible refit, frozen artifact with its own
+  identity, one-step rollback (`NHL_SOG_SCORER=poisson_baseline`), and a live
+  parity dry run on 10-24 (no invalid probabilities or ladder crossings; side
+  flips vs the formula 77/26/7 of 548 at 1.5/2.5/3.5, mostly to UNDER).
+  A1-A4 were not run. The formula and SHRUNK_180 continue as shadows; the
+  weekly evaluation tracks them against production.
+

@@ -97,8 +97,14 @@ from backend.nhl.sog_divergence_shadow import capture as capture_sog_divergence_
 from backend.nhl.sog_structural_correction_shadow import capture as capture_sog_structural_correction_shadow
 from backend.nhl.sog_shrunk_rate_shadow import capture as capture_sog_shrunk_rate_shadow
 from backend.nhl.sog_shrunk_rate_shadow import load_history as load_sog_shrunk_rate_history
-from backend.nhl.sog_hgb_count_shadow import capture as capture_sog_count_hgb_shadow
-from backend.nhl.sog_hgb_count_shadow import load_history as load_sog_count_hgb_history
+from backend.nhl.sog_hgb_count_model import capture as capture_sog_count_hgb_shadow
+from backend.nhl.sog_hgb_count_model import CONTRACT_PATH as SOG_HGB_CONTRACT_PATH
+from backend.nhl.sog_hgb_count_model import MODEL_IDENTITY as SOG_HGB_MODEL_IDENTITY
+from backend.nhl.sog_hgb_count_model import build_production_predictions as build_sog_hgb_production
+from backend.nhl.sog_hgb_count_model import history_sha256 as sog_hgb_history_sha256
+from backend.nhl.sog_hgb_count_model import load_model as load_sog_hgb_model
+from backend.nhl.sog_formula_shadow import capture as capture_sog_formula_shadow
+from backend.nhl.sog_hgb_count_model import load_history as load_sog_count_hgb_history
 from backend.nhl.points_hgb_shadow import capture_from_files as capture_points_hgb_shadow
 from backend.nhl.points_hgb_shadow import prepare_authoritative_inputs as prepare_points_hgb_inputs
 from backend.nhl.points_hgb_shadow import build_production_prediction_artifact
@@ -165,6 +171,7 @@ EXPORTS_DIR = NHL_DIR / "exports"
 PROC_DIR    = NHL_DIR / "data" / "processed"
 SQL_DIR     = NHL_DIR / "sql"
 SCRIPTS_DIR = NHL_DIR / "scripts"
+SOG_FORMULA_SCORERS = ("poisson_baseline", "hgb_count")  # scorers that run the Poisson formula
 MODELS_DIR  = NHL_DIR / "models"
 
 # Daily artifact organization
@@ -3039,7 +3046,10 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     # The Poisson scorer has per-row rate/exposure fallbacks and writes an
     # unscored ledger for rows that lack every valid source. A slate-wide
     # threshold must not discard other scoreable players.
-    sog_scorer = (os.environ.get("NHL_SOG_SCORER") or "poisson_baseline").strip().lower()
+    # Production SOG scorer. hgb_count (default since 2026-10-25) runs the
+    # Poisson formula first, then the frozen HGB count model on the same
+    # player-games; poisson_baseline is the one-step rollback.
+    sog_scorer = (os.environ.get("NHL_SOG_SCORER") or "hgb_count").strip().lower()
     recorder.start_lane("legacy_sog", inputs=[{
         "slate_date": slate,
         "population_rows": n,
@@ -3093,7 +3103,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         sog_features = sog_features[sog_features.game_id.isin(sog_eligibility["eligible_pregame_game_ids"])]
         if not sog_features.empty:
             sog_features.to_csv(sog_scoring_path, index=False)
-    if sog_scorer == "poisson_baseline":
+    if sog_scorer in SOG_FORMULA_SCORERS:
         if not sog_eligibility["eligible_pregame_game_ids"]:
             sog_feature_capture = None
         else:
@@ -3214,12 +3224,15 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         recorder.independent_context["legacy_sog_prediction"] = None
         _run_independent_daily_lanes(recorder=recorder, **recorder.independent_context)
         return
-    if sog_scorer == "poisson_baseline":
+    formula_pred_path = (prediction_run_dir / "sog_predictions_wide_formula.csv"
+                         if sog_scorer == "hgb_count" else calibrated_pred_path)
+    sog_hgb_run: dict[str, Any] | None = None
+    if sog_scorer in SOG_FORMULA_SCORERS:
         sog_score_command = [
             PY,
             SCRIPTS_DIR / "score_sog_poisson_baseline.py",
             "--in", str(sog_scoring_path),
-            "--out", str(calibrated_pred_path),
+            "--out", str(formula_pred_path),
             "--unscored-out", str(unscored_pred_path),
         ]
         if names_path is not None and names_path.is_file():
@@ -3228,6 +3241,28 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         sog_model_family = "poisson_baseline"
         sog_model_version = "baseline_v1"
         sog_feature_hash = "poisson_baseline_v1"
+        if sog_scorer == "hgb_count":
+            hgb_model, _hgb_contract, hgb_artifact_sha = load_sog_hgb_model()
+            hgb_season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
+            hgb_game_ids = [int(game.game_id) for game in canonical_games]
+            hgb_history, hgb_positions, hgb_games = load_sog_count_hgb_history(
+                db, slate_date=slate, season=hgb_season, game_ids=hgb_game_ids)
+            hgb_predictions, hgb_features = build_sog_hgb_production(
+                hgb_history, hgb_positions, hgb_games, pd.read_csv(formula_pred_path), hgb_model,
+                slate_date=slate, season=hgb_season, canonical_game_ids=hgb_game_ids)
+            hgb_predictions.to_csv(calibrated_pred_path, index=False)
+            hgb_feature_path = prediction_run_dir / "sog_hgb_features.csv"
+            hgb_features.to_csv(hgb_feature_path, index=False, float_format="%.17g")
+            sog_hgb_run = {
+                "feature_rows_path": hgb_feature_path, "artifact_sha256": hgb_artifact_sha,
+                "history_row_count": int(len(hgb_history)),
+                "history_sha256": sog_hgb_history_sha256(hgb_history),
+                "model_rows": int(hgb_features.poisson_source.eq("hgb_count").sum()),
+                "formula_fallback_rows": int(hgb_features.poisson_source.ne("hgb_count").sum()),
+            }
+            sog_model_family = "hgb_count"
+            sog_model_version = SOG_HGB_MODEL_IDENTITY
+            sog_feature_hash = "sog_hgb_features_v1"
     elif sog_scorer == "ordinal_lgbm":
         ordinal_root = (
             ROOT
@@ -3261,10 +3296,10 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     else:
         raise SystemExit(f"Unsupported NHL_SOG_SCORER={sog_scorer!r}")
 
-    shadow_default = sog_scorer == "poisson_baseline"
+    shadow_default = sog_scorer in SOG_FORMULA_SCORERS
     shadow_enabled = _env_bool("NHL_SOG_DEFENSE_SHADOW_ENABLED", default=shadow_default)
     shadow_required = _env_bool("NHL_SOG_DEFENSE_SHADOW_REQUIRED", default=False)
-    if shadow_enabled and sog_scorer == "poisson_baseline":
+    if shadow_enabled and sog_scorer in SOG_FORMULA_SCORERS:
         shadow_pred_path = prediction_run_dir / "sog_predictions_wide_defense_surprise_shadow.csv"
         shadow_cmd = [
             PY,
@@ -3422,7 +3457,14 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     legacy_sog_identity.update(sog_scored_metadata)
     legacy_sog_identity["eligible_pregame_game_ids"] = list(
         sog_eligibility["eligible_pregame_game_ids"])
-    sog_components = [("scorer", SCRIPTS_DIR / ("score_sog_poisson_baseline.py" if sog_scorer == "poisson_baseline" else "score_sog_denali_pairings_ordinal_lgbm.py"))]
+    if sog_scorer == "hgb_count":
+        sog_components = [("scorer", ROOT / "backend/nhl/sog_hgb_count_model.py"),
+                          ("feature_module", ROOT / "backend/nhl/sog_hgb_features.py"),
+                          ("fitted_artifact", SOG_HGB_CONTRACT_PATH.parent / "nhl_sog_count_hgb_v1.joblib"),
+                          ("shadow_contract", SOG_HGB_CONTRACT_PATH),
+                          ("formula_scorer", SCRIPTS_DIR / "score_sog_poisson_baseline.py")]
+    else:
+        sog_components = [("scorer", SCRIPTS_DIR / ("score_sog_poisson_baseline.py" if sog_scorer == "poisson_baseline" else "score_sog_denali_pairings_ordinal_lgbm.py"))]
     if sog_scorer == "ordinal_lgbm":
         sog_components.extend((f"ordinal_model:{path.relative_to(ordinal_root).as_posix()}", path)
                               for path in sorted(ordinal_root.rglob("*")) if path.is_file())
@@ -3437,19 +3479,43 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         scoring_configuration={"scorer": sog_scorer,
                                "segmented_calibration_applied": sog_segmented_calibration_applied})
     legacy_sog_identity["fitted_model_evidence"] = sog_evidence
+    formula_evidence = sog_evidence
+    if sog_scorer == "hgb_count":
+        formula_evidence = fitted_model_identity(
+            model_family="poisson_baseline", model_version="baseline_v1",
+            components=[("scorer", SCRIPTS_DIR / "score_sog_poisson_baseline.py")],
+            prediction_path=formula_pred_path, scoring_run_id=daily_run_id,
+            scoring_configuration={"scorer": "poisson_baseline", "role": "FORMULA_SHADOW_AND_HGB_FALLBACK"})
     sog_feature_binding = None
     if sog_feature_capture is not None:
+        # The retained feature package binds the formula's inputs to the
+        # formula's own output (replayed byte for byte).
         sog_feature_binding = finalize_sog_feature_capture(
             sog_feature_capture,
             scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py",
-            model_family=sog_model_family,
-            model_version=sog_model_version,
-            fitted_model_identity_sha256=str(sog_evidence["fitted_model_identity_sha256"]),
-            prediction_path=calibrated_pred_path,
+            model_family="poisson_baseline",
+            model_version="baseline_v1",
+            fitted_model_identity_sha256=str(formula_evidence["fitted_model_identity_sha256"]),
+            prediction_path=formula_pred_path,
             python_executable=str(PY), names_path=names_path,
         )
-        legacy_sog_identity.update(sog_feature_binding)
+        if sog_scorer == "poisson_baseline":
+            legacy_sog_identity.update(sog_feature_binding)
+    if sog_hgb_run is not None:
+        legacy_sog_identity.update({
+            "feature_cutoff_utc": sog_cutoff_text,
+            "feature_contract": "NHL_SOG_COUNT_HGB_STRICT_PRIOR_LOGS_V1",
+            "hgb_artifact_sha256": sog_hgb_run["artifact_sha256"],
+            "hgb_history_row_count": sog_hgb_run["history_row_count"],
+            "hgb_history_sha256": sog_hgb_run["history_sha256"],
+            "hgb_model_rows": sog_hgb_run["model_rows"],
+            "hgb_formula_fallback_rows": sog_hgb_run["formula_fallback_rows"],
+            "formula_prediction_path": str(formula_pred_path),
+            "formula_prediction_sha256": artifact_identity(formula_pred_path)["sha256"],
+        })
     sog_outputs = [legacy_sog_identity]
+    if sog_hgb_run is not None:
+        sog_outputs.append(artifact_identity(sog_hgb_run["feature_rows_path"]))
     if sog_segmented_calibration_applied:
         sog_outputs.append(artifact_identity(sog_calibration_artifact_path))
     if unscored_pred_path.is_file() and sog_unscored_metadata is not None:
@@ -3467,11 +3533,11 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "parent_daily_run_id": daily_run_id,
         "production_model_identity": "poisson_baseline/baseline_v1",
     }])
-    if sog_scorer == "poisson_baseline" and sog_feature_capture is not None:
+    if sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
         try:
             shadow_packages = capture_sog_fixed_blends(
                 feature_path=Path(sog_feature_binding["feature_input_path"]),
-                production_path=calibrated_pred_path,
+                production_path=formula_pred_path,
                 output_root=ROOT / "artifacts" / "operational" / "nhl" / "sog_fixed_blend_shadows",
                 run_id=daily_run_id, slate_date=slate,
                 season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
@@ -3497,11 +3563,11 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "provider_requests": 0,
         "credits_consumed": 0,
     }])
-    if sog_scorer == "poisson_baseline" and sog_feature_capture is not None:
+    if sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
         try:
             divergence_package = capture_sog_divergence_shadow(
                 feature_path=Path(sog_feature_binding["feature_input_path"]),
-                production_path=calibrated_pred_path,
+                production_path=formula_pred_path,
                 output_root=ROOT / "artifacts" / "operational" / "nhl" / "sog_divergence_shadows",
                 run_id=daily_run_id, slate_date=slate,
                 season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
@@ -3536,10 +3602,10 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "stage2_threshold": 9.0, "stage2_compression_factor": 0.5,
         "provider_requests": 0, "credits_consumed": 0,
     }])
-    if sog_scorer == "poisson_baseline" and sog_feature_capture is not None:
+    if sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
         try:
             structural_package = capture_sog_structural_correction_shadow(
-                feature_path=Path(sog_feature_binding["feature_input_path"]), production_path=calibrated_pred_path,
+                feature_path=Path(sog_feature_binding["feature_input_path"]), production_path=formula_pred_path,
                 output_root=ROOT / "artifacts" / "operational" / "nhl" / "sog_structural_correction_shadows",
                 run_id=daily_run_id, slate_date=slate, season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
                 feature_sha256=str(sog_feature_capture["retained_sha256"]),
@@ -3561,18 +3627,19 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     recorder.start_lane("sog_shrunk_rate_k180_shadow", inputs=[{
         "model_identity": "NHL_SOG_SHRUNK_RATE_K180_V1",
         "parent_daily_run_id": daily_run_id,
-        "production_model_identity": "poisson_baseline/baseline_v1",
+        "production_model_identity": f"{sog_model_family}/{sog_model_version}",
         "prior_minutes": 180, "rate_window_games": 20, "toi_window_games": 10,
         "history_source": "nhl.skater_game_logs_raw (read-only)",
         "provider_requests": 0, "credits_consumed": 0,
     }])
-    if sog_scorer == "poisson_baseline" and sog_feature_capture is not None:
+    if sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
         try:
             shrunk_season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
             shrunk_history, shrunk_positions = load_sog_shrunk_rate_history(
                 db, slate_date=slate, season=shrunk_season)
             shrunk_package = capture_sog_shrunk_rate_shadow(
                 history=shrunk_history, positions=shrunk_positions, production_path=calibrated_pred_path,
+                production_identity=(sog_model_family, sog_model_version),
                 output_root=ROOT / "artifacts" / "operational" / "nhl" / "sog_shrunk_rate_shadows",
                 run_id=daily_run_id, slate_date=slate, season=shrunk_season,
                 feature_cutoff_utc=str(sog_feature_capture["cutoff_utc"]),
@@ -3597,7 +3664,11 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "history_source": "nhl.skater_game_logs_raw (read-only)",
         "provider_requests": 0, "credits_consumed": 0,
     }])
-    if sog_scorer == "poisson_baseline" and sog_feature_capture is not None:
+    if sog_scorer == "hgb_count":
+        recorder.finish_lane("sog_count_hgb_shadow", status="SKIPPED_PROMOTED_TO_PRODUCTION",
+            reason="HGB_COUNT_MODEL_IS_PRODUCTION_SOG", database_rows_written=False,
+            provider_requests=0, credits_consumed=0)
+    elif sog_scorer == "poisson_baseline" and sog_feature_capture is not None:
         try:
             hgb_sog_season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
             hgb_sog_games = [int(game.game_id) for game in canonical_games]
@@ -3621,6 +3692,36 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     else:
         recorder.finish_lane("sog_count_hgb_shadow", status="SKIPPED_UNSUPPORTED_PRODUCTION_SCORER",
             reason="HGB_COUNT_SHADOW_REQUIRES_POISSON_BASELINE", database_rows_written=False,
+            provider_requests=0, credits_consumed=0)
+
+    recorder.start_lane("sog_poisson_formula_shadow", inputs=[{
+        "model_identity": "NHL_SOG_POISSON_FORMULA_V1",
+        "formula_model_identity": "poisson_baseline/baseline_v1",
+        "parent_daily_run_id": daily_run_id,
+        "production_model_identity": f"{sog_model_family}/{sog_model_version}",
+        "provider_requests": 0, "credits_consumed": 0,
+    }])
+    if sog_scorer == "hgb_count":
+        try:
+            formula_package = capture_sog_formula_shadow(
+                formula_path=formula_pred_path, production_path=calibrated_pred_path,
+                output_root=ROOT / "artifacts" / "operational" / "nhl" / "sog_formula_shadows",
+                run_id=daily_run_id, slate_date=slate, season=infer_nhl_season_from_date_yyyy_mm_dd(slate),
+                feature_cutoff_utc=sog_cutoff_text,
+                canonical_game_ids=[int(game.game_id) for game in canonical_games],
+                scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py",
+                production_identity=(sog_model_family, sog_model_version),
+                feature_binding=sog_feature_binding,
+                formula_fitted_identity_sha256=str(formula_evidence["fitted_model_identity_sha256"]))
+            recorder.finish_lane("sog_poisson_formula_shadow", outputs=[formula_package],
+                reason="PROSPECTIVE_SHADOW_IMMUTABLE_CAPTURE_COMPLETE", database_rows_written=False,
+                provider_requests=0, credits_consumed=0)
+        except Exception as error:
+            recorder.fail_lane("sog_poisson_formula_shadow", error, blocking=False)
+            print(f"⚠️ Poisson formula SOG shadow failed; production continues: {error}")
+    else:
+        recorder.finish_lane("sog_poisson_formula_shadow", status="SKIPPED_FORMULA_IS_PRODUCTION",
+            reason="FORMULA_SHADOW_RUNS_ONLY_WHEN_HGB_IS_PRODUCTION", database_rows_written=False,
             provider_requests=0, credits_consumed=0)
 
     # 5b) Load SOG into nhl.predictions

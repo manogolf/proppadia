@@ -619,7 +619,9 @@ def select_raw_sog(
         market[["player_id", "game_id", "line"] + market_extras],
         on=["player_id", "game_id", "line"], how="left", validate="one_to_one",
     )
-    if "poisson_source" in long:
+    if "poisson_source" in long and long.poisson_source.isin(["hgb_count", "formula_fallback"]).any():
+        long["model_identity"] = "NHL_SOG_COUNT_HGB_V1"  # production SOG from 2026-10-25
+    elif "poisson_source" in long:
         long["model_identity"] = "NHL_SOG_POISSON_BASELINE_V1_REFERENCE"
     else:
         long["model_identity"] = "NHL_SOG_REFERENCE_PREDICTION"

@@ -1,11 +1,13 @@
-"""Immutable prospective SOG shadow: frozen HGB Poisson count model (P2.33).
+"""Frozen HGB Poisson SOG count model `NHL_SOG_COUNT_HGB_V1` (P2.33).
 
-Scores the exact production-scored player-games with the frozen
-`NHL_SOG_COUNT_HGB_V1` artifact. Features come from
+Production SOG scorer since 2026-10-25 (`NHL_SOG_SCORER=hgb_count`, the
+default; rollback: `NHL_SOG_SCORER=poisson_baseline`). It scores the exact
+player-games the Poisson formula scored, with features from
 `backend/nhl/sog_hgb_features.py` over strict-prior skater logs read
 read-only from the database. A player without qualifying history (no recent
-TOI or no prior-season league rate) keeps the production expected shots.
-Production SOG is unchanged; this module only writes its own capture package.
+TOI or no prior-season league rate) keeps the formula's expected shots.
+`capture` also keeps the model available as a shadow when the formula is
+production (rollback mode).
 """
 from __future__ import annotations
 
@@ -24,7 +26,7 @@ from backend.nhl.sog_feature_input import sha256_file
 from backend.nhl.sog_hgb_features import FEATURES, HISTORY_SQL, build, normalize_logs, position_groups
 from backend.nhl.sog_shrunk_rate_shadow import _write_sums
 from backend.nhl.sog_shrunk_rate_shadow import grade_slate as _grade_count_shadow
-from backend.nhl.scripts.score_sog_poisson_baseline import _poisson_tail
+from backend.nhl.scripts.score_sog_poisson_baseline import _bucket_series, _poisson_tail
 
 ROOT = Path(__file__).resolve().parents[2]
 MODEL_IDENTITY = "NHL_SOG_COUNT_HGB_V1"
@@ -68,9 +70,15 @@ def history_sha256(history: pd.DataFrame) -> str:
     return hashlib.sha256(frame.to_csv(index=False, float_format="%.17g").encode()).hexdigest()
 
 
-def build_predictions(history: pd.DataFrame, positions: pd.DataFrame, games: pd.DataFrame, production: pd.DataFrame,
-                      model, *, slate_date: str, season: int, run_id: str, feature_cutoff_utc: str,
-                      canonical_game_ids: list[int], started_excluded_game_ids: list[int] | None = None) -> pd.DataFrame:
+def model_lambdas(history: pd.DataFrame, positions: pd.DataFrame, games: pd.DataFrame, production: pd.DataFrame,
+                  model, *, slate_date: str, season: int, canonical_game_ids: list[int]
+                  ) -> tuple[pd.DataFrame, pd.Series, pd.Series, pd.Series, list[str]]:
+    """Model expected shots for the reference-scored player-games.
+
+    Returns the reference rows joined with `feature_*` columns, the reference
+    lambda, the model lambda (reference lambda where history is missing), the
+    eligibility mask and the feature column names.
+    """
     keys = ["game_id", "player_id"]
     if {"game_id", "player_id", "expected_sog", "is_home"} - set(production.columns):
         raise ValueError("SOG_HGB_PRODUCTION_SCHEMA_INVALID")
@@ -109,14 +117,52 @@ def build_predictions(history: pd.DataFrame, positions: pd.DataFrame, games: pd.
     shadow_lambda = model_lambda.where(eligible, production_lambda)
     if not np.isfinite(shadow_lambda).all() or shadow_lambda.lt(0).any():
         raise ValueError("SOG_HGB_SHADOW_LAMBDA_INVALID")
+    return joined, production_lambda, shadow_lambda, eligible, fcols
+
+
+def build_production_predictions(history: pd.DataFrame, positions: pd.DataFrame, games: pd.DataFrame,
+                                 formula: pd.DataFrame, model, *, slate_date: str, season: int,
+                                 canonical_game_ids: list[int]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Production wide SOG file in the formula scorer's exact column layout.
+
+    Returns (predictions, feature_rows). `poisson_source` is `hgb_count` for
+    model rows and `formula_fallback` where the player lacks history.
+    """
+    joined, formula_lambda, lam, eligible, fcols = model_lambdas(
+        history, positions, games, formula, model, slate_date=slate_date, season=season,
+        canonical_game_ids=canonical_game_ids)
+    out = formula.copy()
+    out["expected_sog"] = lam.to_numpy(dtype=float)
+    out["expected_sog_bucket"] = _bucket_series(out["expected_sog"])
+    out["poisson_source"] = np.where(eligible.to_numpy(), "hgb_count", "formula_fallback")
+    for column, threshold in (("p_over_1_5", 2), ("p_over_2_5", 3), ("p_over_3_5", 4)):
+        out[column] = out["expected_sog"].apply(lambda value: _poisson_tail(float(value), threshold)).astype(float)
+    out["p_0_1"] = (1.0 - out["p_over_1_5"]).clip(0, 1)
+    out["p_2"] = (out["p_over_1_5"] - out["p_over_2_5"]).clip(0, 1)
+    out["p_3"] = (out["p_over_2_5"] - out["p_over_3_5"]).clip(0, 1)
+    out["p_4p"] = out["p_over_3_5"].clip(0, 1)
+    if list(out.columns) != list(formula.columns) or len(out) != len(formula):
+        raise ValueError("SOG_HGB_PRODUCTION_LAYOUT_MISMATCH")
+    features = joined[["game_id", "player_id"] + fcols].assign(
+        formula_expected_sog=formula_lambda.to_numpy(), hgb_expected_sog=lam.to_numpy(),
+        poisson_source=out["poisson_source"].to_numpy())
+    return out, features
+
+
+def build_predictions(history: pd.DataFrame, positions: pd.DataFrame, games: pd.DataFrame, production: pd.DataFrame,
+                      model, *, slate_date: str, season: int, run_id: str, feature_cutoff_utc: str,
+                      canonical_game_ids: list[int], started_excluded_game_ids: list[int] | None = None,
+                      production_identity: tuple[str, str] = ("poisson_baseline", "baseline_v1")) -> pd.DataFrame:
+    joined, production_lambda, shadow_lambda, eligible, fcols = model_lambdas(
+        history, positions, games, production, model, slate_date=slate_date, season=season,
+        canonical_game_ids=canonical_game_ids)
     out = joined[[c for c in ("game_id", "player_id", "team_id", "opponent_id", "is_home", "game_date") if c in joined]].copy()
     out.insert(0, "slate_date", slate_date)
     out["season"] = season
     out["parent_daily_run_id"] = run_id
     out["started_excluded_game_ids"] = json.dumps(sorted(set(map(int, started_excluded_game_ids or []))))
     out["feature_cutoff_utc"] = feature_cutoff_utc
-    out["production_model_family"] = "poisson_baseline"
-    out["production_model_version"] = "baseline_v1"
+    out["production_model_family"], out["production_model_version"] = production_identity
     for col in fcols:
         out[col] = joined[col]
     out["shadow_source"] = np.where(eligible, PRIMARY_SOURCE, "NO_CLEAN_HISTORY_PRODUCTION_FALLBACK")

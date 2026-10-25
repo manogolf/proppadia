@@ -32,8 +32,12 @@ def _sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+HGB = ("hgb_count", "NHL_SOG_COUNT_HGB_V1", "backend/nhl/sog_hgb_count_model.py")
+FORMULA = ("poisson_baseline", "baseline_v1", "backend/nhl/scripts/score_sog_poisson_baseline.py")
+
+
 def _daily_run(root: Path, run_id: str, ended_at: str, eligible: list[int],
-               p_over: float) -> None:
+               p_over: float, identity: tuple[str, str, str] = FORMULA) -> None:
     """Write a READY daily run whose baseline SOG lane predicted ``eligible``."""
     run_dir = root / "daily_runs" / f"run_id={run_id}"
     run_dir.mkdir(parents=True)
@@ -45,12 +49,12 @@ def _daily_run(root: Path, run_id: str, ended_at: str, eligible: list[int],
                  ).to_csv(predictions_path, index=False)
     prediction_sha = _sha(predictions_path)
     game_hash = canonical_game_set_hash(GAMES)
-    evidence = {"model_family": "poisson_baseline", "model_version": "baseline_v1",
+    evidence = {"model_family": identity[0], "model_version": identity[1],
                 "scoring_run_id": run_id, "fitted_model_identity_sha256": "model",
                 "prediction_artifact_path": str(predictions_path.resolve()),
                 "prediction_artifact_sha256": prediction_sha,
                 "component_artifacts": [{"role": "scorer", "sha256": "scorer",
-                    "canonical_artifact_path": "backend/nhl/scripts/score_sog_poisson_baseline.py"}]}
+                    "canonical_artifact_path": identity[2]}]}
     receipt = {"slate_date": SLATE, "parent_daily_run_id": run_id, "ended_at_utc": ended_at,
                "canonical_season": 2026, "canonical_game_ids": GAMES,
                "canonical_game_set_hash": game_hash, "eligible_pregame_game_ids": eligible,
@@ -172,3 +176,24 @@ def test_an_absence_without_a_complete_box_score_stays_unresolved(tmp_path):
         daily_run_root=tmp_path / "daily_runs")
     assert display["overall"]["unresolved"] == 6
     assert display["overall"]["not_gradeable"] == 0
+
+
+def test_cutover_day_mixes_formula_and_hgb_runs_and_reports_the_latest_identity(tmp_path):
+    _daily_run(tmp_path, "midday", "2026-10-20T19:00:00Z", GAMES, p_over=0.2, identity=FORMULA)
+    _daily_run(tmp_path, "late", "2026-10-20T22:00:00Z", GAMES, p_over=0.2, identity=HGB)
+    display, _ = build_production_sog_reference(
+        slate_date=SLATE, package=_outcomes(tmp_path), daily_run_root=tmp_path / "daily_runs")
+    identity = display["model_identity"]
+    assert (identity["model_family"], identity["model_version"]) == HGB[:2]
+    assert identity["parent_daily_run_id"] == "late"
+    assert display["market_coverage"]["model_family"] == "hgb_count"
+
+
+def test_an_unknown_production_identity_contributes_nothing(tmp_path):
+    _daily_run(tmp_path, "midday", "2026-10-20T19:00:00Z", GAMES, p_over=0.2, identity=FORMULA)
+    _daily_run(tmp_path, "late", "2026-10-20T22:00:00Z", GAMES, p_over=0.8,
+               identity=("hgb_count", "SOME_OTHER_ARTIFACT", "backend/nhl/sog_hgb_count_model.py"))
+    display, _ = build_production_sog_reference(
+        slate_date=SLATE, package=_outcomes(tmp_path), daily_run_root=tmp_path / "daily_runs")
+    assert display["model_identity"]["parent_daily_run_id"] == "midday"
+    assert display["model_identity"]["model_family"] == "poisson_baseline"

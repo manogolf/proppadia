@@ -86,6 +86,9 @@ def model_records(summaries: dict[str, dict]) -> pd.DataFrame:
         hgb_sog = ((s.get("sog_count_hgb_shadow") or {}).get("latest_pregame") or {}).get("overall") or {}
         if hgb_sog and day >= SOG_START:
             out.append((day, "sog", "shadow: HGB count model (latest pregame)", int(hgb_sog["wins"]), int(hgb_sog["losses"])))
+        formula = ((s.get("sog_formula_shadow") or {}).get("latest_pregame") or {}).get("overall") or {}
+        if formula and day >= SOG_START:
+            out.append((day, "sog", "shadow: Poisson formula (latest pregame)", int(formula["wins"]), int(formula["losses"])))
         points = m.get("points") or {}
         evaluation = (points.get("authority_context") or {}).get("hgb_evaluation") or {}
         hgb = (evaluation.get("metrics") or {}).get("selected_side_record") or {}

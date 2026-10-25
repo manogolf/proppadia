@@ -416,6 +416,19 @@ def _validate_production_sog_game_set(
     return sorted(set(eligible_ids) - set(prediction_ids))
 
 
+# Production SOG identities and their scorer, as recorded in the daily
+# receipt's legacy_sog lane. HGB is production from 2026-10-25; the formula
+# remains valid for earlier runs and for the NHL_SOG_SCORER rollback.
+PRODUCTION_SOG_SCORERS = {
+    ("poisson_baseline", "baseline_v1"): "backend/nhl/scripts/score_sog_poisson_baseline.py",
+    ("hgb_count", "NHL_SOG_COUNT_HGB_V1"): "backend/nhl/sog_hgb_count_model.py",
+}
+
+
+def _sog_identity_text(evidence: dict[str, Any]) -> str:
+    return f"{evidence.get('model_family')}/{evidence.get('model_version')}"
+
+
 def _load_production_sog_run(receipt_path: Path, slate_date: str, *,
                              require_ready: bool = True) -> dict[str, Any]:
     """Validate one daily run's immutable baseline SOG predictions."""
@@ -430,13 +443,12 @@ def _load_production_sog_run(receipt_path: Path, slate_date: str, *,
     if len(evidence_items) != 1:
         raise ValueError("PRODUCTION_SOG_FITTED_EVIDENCE_CARDINALITY")
     evidence = evidence_items[0]["fitted_model_evidence"]
-    if (evidence.get("model_family") != "poisson_baseline"
-            or evidence.get("model_version") != "baseline_v1"
-            or evidence.get("scoring_run_id") != run_id):
+    identity = (evidence.get("model_family"), evidence.get("model_version"))
+    if identity not in PRODUCTION_SOG_SCORERS or evidence.get("scoring_run_id") != run_id:
         raise ValueError("PRODUCTION_SOG_MODEL_IDENTITY_MISMATCH")
     scorer = next((item for item in evidence.get("component_artifacts", [])
                    if item.get("role") == "scorer"), None)
-    expected_scorer_path = "backend/nhl/scripts/score_sog_poisson_baseline.py"
+    expected_scorer_path = PRODUCTION_SOG_SCORERS[identity]
     if not scorer or scorer.get("canonical_artifact_path") != expected_scorer_path:
         raise ValueError("PRODUCTION_SOG_SCORER_IDENTITY_MISMATCH")
     prediction_path = Path(str(evidence.get("prediction_artifact_path", ""))).resolve()
@@ -502,6 +514,7 @@ def _load_production_sog_run(receipt_path: Path, slate_date: str, *,
         "prediction_path": str(prediction_path), "phase": str(receipt.get("resolved_phase") or "DAILY"),
         "lane_ended_at_utc": lane_ended, "feature_cutoff_utc": feature_cutoff,
         "feature_contract": str(feature_binding.get("feature_contract")
+                                or output_identity.get("feature_contract")
                                 or "LEGACY_SOG_FEATURE_INPUT_UNBOUND"),
         "receipt": receipt, "receipt_manifest_sha": receipt_manifest_sha,
         "evidence": evidence, "scorer": scorer, "scorer_path": expected_scorer_path,
@@ -543,7 +556,7 @@ def _production_sog_candidates(run: dict[str, Any]) -> list[dict[str, Any]]:
                 "observer_receipt_path": run["receipt_path"],
                 "observer_receipt_sha256": run["receipt_sha"],
                 **proofs,
-                "model_identity": "poisson_baseline/baseline_v1",
+                "model_identity": _sog_identity_text(run["evidence"]),
                 "feature_contract_identity": run["feature_contract"],
                 "feature_cutoff_timestamp_utc": run["feature_cutoff_utc"],
                 "prediction_timestamp_utc": published,
@@ -695,8 +708,8 @@ def build_production_sog_reference(
         if sum(values[key] for values in display["by_side"].values()) != total[key]:
             raise ValueError(f"PRODUCTION_SOG_SIDE_TOTAL_MISMATCH:{key}")
     display["model_identity"] = {
-        "name": "sog_reference", "model_family": "poisson_baseline",
-        "model_version": "baseline_v1", "parent_daily_run_id": run_id,
+        "name": "sog_reference", "model_family": evidence.get("model_family"),
+        "model_version": evidence.get("model_version"), "parent_daily_run_id": run_id,
         "fitted_model_identity_sha256": evidence.get("fitted_model_identity_sha256"),
         "prediction_artifact_sha256": prediction_sha,
         **feature_binding,
@@ -782,7 +795,7 @@ def build_production_sog_reference(
             raise ValueError("PRODUCTION_SOG_MARKET_COVERAGE_REFERENCE_MISMATCH")
         bound_coverage = dict(coverage)
         bound_coverage.update({"reference_name": "sog_reference",
-            "model_family": "poisson_baseline", "model_version": "baseline_v1",
+            "model_family": evidence.get("model_family"), "model_version": evidence.get("model_version"),
             "prediction_rows": int(coverage.get("prediction_rows", len(graded))),
             "prediction_artifact_sha256": coverage_run["prediction_sha"],
             "odds_observation_sha": coverage.get("odds_observation_manifest_sha256"),
@@ -790,8 +803,8 @@ def build_production_sog_reference(
             "affects_grading_denominator": False})
     else:
         bound_coverage = {"status": coverage.get("status", "UNAVAILABLE_FROM_RETAINED_BOUND_EVIDENCE"),
-            "reference_name": "sog_reference", "model_family": "poisson_baseline",
-            "model_version": "baseline_v1", "prediction_rows": int(len(graded)),
+            "reference_name": "sog_reference", "model_family": evidence.get("model_family"),
+            "model_version": evidence.get("model_version"), "prediction_rows": int(len(graded)),
             "matched": None, "unmatched": None, "match_rate": None,
             "prediction_artifact_sha256": prediction_sha,
             "odds_observation_sha": None, "population_binding": None,
@@ -1202,6 +1215,7 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
                      sog_structural_correction_shadow_context: dict[str, Any] | None = None,
                      sog_shrunk_rate_shadow_context: dict[str, Any] | None = None,
                      sog_count_hgb_shadow_context: dict[str, Any] | None = None,
+                     sog_formula_shadow_context: dict[str, Any] | None = None,
                      package: Path | None = None) -> dict[str, Any]:
     challengers = challengers or {}
     moneyline = grades.get("moneyline", pd.DataFrame())
@@ -1301,6 +1315,8 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
             "status": "NO_IMMUTABLE_SHADOW_CAPTURE", "role": "PROSPECTIVE_SHADOW", "grades": []}),
         "sog_count_hgb_shadow": dict(sog_count_hgb_shadow_context or {
             "status": "NO_IMMUTABLE_SHADOW_CAPTURE", "role": "PROSPECTIVE_SHADOW", "grades": []}),
+        "sog_formula_shadow": dict(sog_formula_shadow_context or {
+            "status": "NO_IMMUTABLE_SHADOW_CAPTURE", "role": "PROSPECTIVE_SHADOW", "grades": []}),
     }
 
 
@@ -1323,7 +1339,7 @@ def _count_shadow_section(context: dict[str, Any], title: str) -> list[str]:
         loss = latest.get("paired_poisson_log_loss_difference_vs_production")
         if loss is not None:
             lines.append(f"Paired count log loss vs production {loss:+.4f} (negative is better).")
-    lines.append("Production SOG authority remains poisson_baseline/baseline_v1.")
+    lines.append("Shadow only; production SOG is the SOG section's production model.")
     return lines
 
 
@@ -1503,24 +1519,26 @@ def render_markdown(summary: dict[str, Any]) -> str:
             f"count MAE difference vs d10 {grade.get('paired_count_mae_difference_vs_d10')}, "
             f"1.5 Brier difference {grade.get('paired_brier_difference_1_5_vs_d10')}."
         )
-    lines.append("These are research shadows; production SOG authority remains d10.")
+    lines.append("These are research shadows of the Poisson formula; they do not affect production SOG.")
     divergence = summary.get("sog_d10_d20_divergence_shadow") or {}
     divergence_grades = divergence.get("grades", [])
     lines += ["", "## SOG D10/D20 Divergence Prospective Shadow",
               f"Status: {divergence.get('status', 'NO_IMMUTABLE_SHADOW_CAPTURE')} (PROSPECTIVE_SHADOW)"]
     for grade in divergence_grades:
         lines.append(f"- Settled player-games {grade.get('settled_player_games', 0)}; count MAE {grade.get('count_mae')}; paired count MAE difference vs production {grade.get('paired_count_mae_difference_vs_production')}.")
-    lines.append("Production SOG authority remains poisson_baseline/baseline_v1.")
+    lines.append("Shadow only; production SOG is the SOG section's production model.")
     structural = summary.get("sog_d10_structural_correction_shadow") or {}
     lines += ["", "## SOG Combined Structural-Correction Prospective Shadow",
               f"Status: {structural.get('status', 'NO_IMMUTABLE_SHADOW_CAPTURE')} (PROSPECTIVE_SHADOW)"]
     for grade in structural.get("grades", []):
         lines.append(f"- Settled player-games {grade.get('settled_player_games', 0)}; combined count MAE {grade.get('count', {}).get('mae')}.")
-    lines.append("Production SOG authority remains poisson_baseline/baseline_v1.")
+    lines.append("Shadow only; production SOG is the SOG section's production model.")
     lines += _count_shadow_section(summary.get("sog_shrunk_rate_k180_shadow") or {},
                                    "SOG Shrunk-Rate (K=180) Prospective Shadow")
     lines += _count_shadow_section(summary.get("sog_count_hgb_shadow") or {},
                                    "SOG HGB Count-Model Prospective Shadow")
+    lines += _count_shadow_section(summary.get("sog_formula_shadow") or {},
+                                   "SOG Poisson Formula Shadow (former production)")
     coverage_rows = []
     for lane in ("points", "saves", "sog"):
         context = models.get(lane, {}).get("market_coverage", {})
@@ -1810,6 +1828,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
                             sog_structural_correction_shadow_context: dict[str, Any] | None = None,
                             sog_shrunk_rate_shadow_context: dict[str, Any] | None = None,
                             sog_count_hgb_shadow_context: dict[str, Any] | None = None,
+                            sog_formula_shadow_context: dict[str, Any] | None = None,
                             output_root: Path | None = None) -> tuple[Path, Path, dict[str, Any]]:
     """Build/reuse a summary package from retained reconciliation grade rows."""
     package = Path(package).resolve()
@@ -1852,6 +1871,9 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
     if sog_count_hgb_shadow_context:
         source_hashes["sog_count_hgb_shadow_context_sha256"] = hashlib.sha256(
             json.dumps(sog_count_hgb_shadow_context, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if sog_formula_shadow_context:
+        source_hashes["sog_formula_shadow_context_sha256"] = hashlib.sha256(
+            json.dumps(sog_formula_shadow_context, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     for lane, coverage in (market_coverage or {}).items():
         if coverage.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
             source_hashes[f"{lane}_attachment_integrity_sha256"] = str(
@@ -1920,6 +1942,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         sog_structural_correction_shadow_context=sog_structural_correction_shadow_context,
         sog_shrunk_rate_shadow_context=sog_shrunk_rate_shadow_context,
         sog_count_hgb_shadow_context=sog_count_hgb_shadow_context,
+        sog_formula_shadow_context=sog_formula_shadow_context,
     )
     summary["official_outcomes_status"] = (
         "FINAL" if source_summary.get("status") == "COMPLETE"

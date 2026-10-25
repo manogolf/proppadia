@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 from sklearn.ensemble import HistGradientBoostingRegressor
 
-import backend.nhl.sog_hgb_count_shadow as shadow
+import backend.nhl.sog_hgb_count_model as shadow
 from backend.nhl.daily_orchestration import LANE_NAMES
 from backend.nhl.performance_summary import render_markdown, summarize_frames
 from backend.nhl.sog_hgb_features import FEATURES, build, normalize_logs, position_groups

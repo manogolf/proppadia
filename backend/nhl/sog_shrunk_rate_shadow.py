@@ -116,6 +116,7 @@ def player_windows(history: pd.DataFrame) -> pd.DataFrame:
 def build_predictions(history: pd.DataFrame, positions: pd.DataFrame, production: pd.DataFrame, *,
                       slate_date: str, season: int, run_id: str, feature_cutoff_utc: str,
                       canonical_game_ids: list[int], started_excluded_game_ids: list[int] | None = None,
+                      production_identity: tuple[str, str] = ("poisson_baseline", "baseline_v1"),
                       ) -> tuple[pd.DataFrame, dict[str, float]]:
     """Build shadow rows for the exact production-scored player-game set."""
     keys = ["game_id", "player_id"]
@@ -152,8 +153,7 @@ def build_predictions(history: pd.DataFrame, positions: pd.DataFrame, production
     out["parent_daily_run_id"] = run_id
     out["started_excluded_game_ids"] = json.dumps(sorted(set(map(int, started_excluded_game_ids or []))))
     out["feature_cutoff_utc"] = feature_cutoff_utc
-    out["production_model_family"] = "poisson_baseline"
-    out["production_model_version"] = "baseline_v1"
+    out["production_model_family"], out["production_model_version"] = production_identity
     out["position_group"] = joined.position_group
     out["league_prior_sog_per60"] = prior_rate
     out["prior_minutes"] = PRIOR_MINUTES
@@ -197,10 +197,12 @@ def _write_sums(path: Path) -> None:
 def capture(*, history: pd.DataFrame, positions: pd.DataFrame, production_path: Path, output_root: Path,
             run_id: str, slate_date: str, season: int, feature_cutoff_utc: str,
             canonical_game_ids: list[int], started_excluded_game_ids: list[int] | None,
-            scorer_path: Path) -> dict[str, Any]:
+            scorer_path: Path, production_identity: tuple[str, str] = ("poisson_baseline", "baseline_v1"),
+            ) -> dict[str, Any]:
     production = pd.read_csv(production_path)
     kwargs = dict(slate_date=slate_date, season=season, run_id=run_id, feature_cutoff_utc=feature_cutoff_utc,
-                  canonical_game_ids=canonical_game_ids, started_excluded_game_ids=started_excluded_game_ids)
+                  canonical_game_ids=canonical_game_ids, started_excluded_game_ids=started_excluded_game_ids,
+                  production_identity=production_identity)
     frame, prior = build_predictions(history, positions, production, **kwargs)
     replay, _ = build_predictions(history, positions, production, **kwargs)
     out_root = Path(output_root) / f"season={season}" / f"slate_date={slate_date}" / f"run_id={run_id}"
@@ -228,7 +230,7 @@ def capture(*, history: pd.DataFrame, positions: pd.DataFrame, production_path: 
         "league_prior_sog_per60": prior,
         "history_source": "nhl.skater_game_logs_raw JOIN nhl.games (read-only)",
         "history_row_count": int(len(history)), "history_sha256": history_sha256(history, slate_date),
-        "production_model_identity": {"family": "poisson_baseline", "version": "baseline_v1"},
+        "production_model_identity": {"family": production_identity[0], "version": production_identity[1]},
         "production_scorer_path": str(Path(scorer_path).resolve()), "production_scorer_sha256": sha256_file(scorer_path),
         "production_prediction_path": str(Path(production_path).resolve()),
         "production_prediction_sha256": sha256_file(production_path),

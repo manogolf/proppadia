@@ -2500,8 +2500,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.33 Fitted SOG count model (HGB Poisson): research candidate
 
-- Status: **LIVE SHADOW 2026-10-25 (`NHL_SOG_COUNT_HGB_V1`); production
-  unchanged.** Operator question: why is production SOG a formula? It was a fitted ordinal
+- Status: **PRODUCTION SOG since 2026-10-25 (operator decision; route A
+  shadow period waived, recorded in `docs/nhl/model_promotion_rules.md`).**
+  Formula and SHRUNK_180 are shadows; rollback `NHL_SOG_SCORER=poisson_baseline`.
+  Operator question: why is production SOG a formula? It was a fitted ordinal
   LightGBM (`sog_player_denali_pairings_ordinal_v1`, `denali_blend/phoenix_v2`)
   until commit `5b2c6505` (2026-03-01) cut over to the Poisson baseline; the
   reason was not recorded (benchmark tools `benchmark_sog_ge4_vs_poisson.py`
@@ -2556,8 +2558,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (`nhl_sog_count_hgb_v1.joblib`, SHA-256 `f7bf625d...ae392`, and
   `shadow_contract.json`). Both files are committed (force-added with operator
   authorization, 2026-10-25); the shadow refuses any other artifact (SHA
-  pinned in `sog_hgb_count_shadow.py`). Shadow:
-  `backend/nhl/sog_hgb_count_shadow.py`, model `NHL_SOG_COUNT_HGB_V1`,
+  pinned in `sog_hgb_count_model.py`). Shadow:
+  `backend/nhl/sog_hgb_count_model.py`, model `NHL_SOG_COUNT_HGB_V1`,
   daily-run lane `sog_count_hgb_shadow` (non-blocking, after the SHRUNK_180
   lane), read-only history (seasons s-2..s), captures under
   `artifacts/operational/nhl/sog_count_hgb_shadows/`, graded in postgame
@@ -2569,8 +2571,25 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   the other 4 are players with under 20 games in 2024-2026, whose research
   windows reached 2023 games (outside the live s-2..s horizon). 998-292 vs
   production 990-300, paired count log loss -0.045.
-- Next: route A for both SOG shadows (4 weekly evaluations, 2,000+ paired
-  lines); compare HGB with SHRUNK_180 head to head in the weekly report.
+- **Cutover to production, 2026-10-25** (operator-approved). The daily run's
+  default scorer is `hgb_count`: the formula scores first
+  (`sog_predictions_wide_formula.csv`), then
+  `sog_hgb_count_model.build_production_predictions` rescores the same
+  player-games into the production file with the formula's column layout.
+  Production identity `hgb_count / NHL_SOG_COUNT_HGB_V1` flows through the
+  `legacy_sog` lane evidence, `nhl.predictions`, the 8rain export
+  (`NHL_SOG_COUNT_HGB_V1` model identity) and grading (`PRODUCTION_SOG_SCORERS`
+  accepts both identities; a cutover-day slate with formula and HGB runs uses
+  each player-game's latest pregame run). Formula shadow lane
+  `sog_poisson_formula_shadow` (`backend/nhl/sog_formula_shadow.py`), graded
+  and reported with the other count shadows; the weekly report lists it as
+  `shadow: Poisson formula (latest pregame)`. Dry run of the production step on
+  10-24 (tmp only): identical layout, 545 model rows and 3 formula fallbacks,
+  equal to the shadow dry run to 4e-16; 998-292 vs the formula's 990-300.
+  Rollback: `NHL_SOG_SCORER=poisson_baseline`.
+- Next: watch the first live runs (lane `legacy_sog` evidence, the 8rain SOG
+  file, next-day grading); track the season-level bias and both shadows in the
+  weekly report.
 
 ### P2.32 Production SOG model review: what drives the predictions
 

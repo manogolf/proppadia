@@ -685,7 +685,11 @@ def add_captured_sog_arms(rows: list[dict[str, Any]], operational_root: Path,
             game_id, player_id = r.get("game_id", ""), r.get("player_id", "")
             outcome = outcomes.get((game_id, player_id), {})
             if model == "PRODUCTION":
-                family, version = "poisson_baseline", "baseline_v1"
+                # The production wide file records its scorer per row (HGB from 2026-10-25).
+                if r.get("poisson_source") in ("hgb_count", "formula_fallback"):
+                    family, version = "hgb_count", "NHL_SOG_COUNT_HGB_V1"
+                else:
+                    family, version = "poisson_baseline", "baseline_v1"
                 line_probs = [("1.5", _num(r.get("p_over_1_5"))), ("2.5", _num(r.get("p_over_2_5"))), ("3.5", _num(r.get("p_over_3_5")))]
             else:
                 family, version = "poisson_baseline", model
