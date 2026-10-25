@@ -863,13 +863,19 @@ def _hgb_capture_predictions(capture: Path, receipt: dict[str, Any],
     return pred, production_prediction_path, production_prediction_sha256, hgb_is_production
 
 
+# Same label the daily receipt uses for HGB Points rows (cli.py).
+HGB_PROBABILITY_CONSTRUCTION = "POISSON_SURVIVAL_FROM_FROZEN_HGB_EXPECTED_COUNT"
+
+
 def _hgb_selector_candidates(index: int, capture: Path, receipt: dict[str, Any],
                              daily_run_root: Path) -> list[dict[str, Any]]:
     """Describe one HGB capture's predictions as resilient-selector candidates.
 
     Proofs come from the parent daily receipt the capture is bound to. The
-    model identity hash is the probability construction, so captures of the
-    same fitted model share one identity per player-game.
+    selection key is the player-game under the HGB Poisson construction, not
+    the fitted artifact: after a mid-day artifact change each player-game is
+    still graded once, from its latest pregame capture. The fitted identity
+    travels with each row and is recorded per contributing source.
     """
     parent_path = Path(daily_run_root) / f"run_id={receipt['parent_run_id']}" / "parent_receipt.json"
     parent = json.loads(parent_path.read_text())
@@ -887,7 +893,7 @@ def _hgb_selector_candidates(index: int, capture: Path, receipt: dict[str, Any],
             "atomic_prediction_identity": canonical_atomic_identity("POINTS", {
                 "game_id": game_id, "player_id": player_id,
                 "model_version": "NHL_POINTS_COUNT_HGB_V1",
-                "probability_construction": construction}),
+                "probability_construction": HGB_PROBABILITY_CONSTRUCTION}),
             "eligible": True, "source_phase": str(receipt.get("capture_phase") or ""),
             "source_path": str(capture / "predictions.csv"),
             "source_manifest_sha256": sha(capture / "SHA256SUMS"),
@@ -906,6 +912,7 @@ def _hgb_selector_candidates(index: int, capture: Path, receipt: dict[str, Any],
                 separators=(",", ":")).encode()).hexdigest(),
             "source_run_id": str(index),
             "source_row_identity": f"{game_id}:{player_id}",
+            "fitted_model_identity_sha256": construction,
         })
     return rows
 
@@ -1012,6 +1019,8 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
                                                            if production_path else None),
                             "production_prediction_sha256": production_sha,
                             "evaluation_role": "PRODUCTION" if production_role else "SHADOW",
+                            "fitted_model_identity_sha256": (source_receipt.get("model_identity") or {}).get("model_identity_sha256"),
+                            "model_artifact_sha256": (source_receipt.get("model_identity") or {}).get("model_artifact_sha256"),
                             "game_ids": sorted({game for (game, _), owner in player_source.items()
                                                 if owner == index}),
                             "player_games": sum(owner == index for owner in player_source.values())})
@@ -1143,7 +1152,7 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
         identity_payload["source_selection"] = selection["contract_version"]
         identity_payload["sources"] = [{key: item[key] for key in (
             "capture_manifest_sha256", "hgb_prediction_sha256", "production_prediction_sha256",
-            "game_ids")} for item in sources]
+            "fitted_model_identity_sha256", "game_ids")} for item in sources]
     input_identity = hashlib.sha256(json.dumps(identity_payload, sort_keys=True).encode()).hexdigest()
     grade_root = shadow_root / "grades" / f"season={season}" / f"slate_date={slate_date}" / f"capture={capture.name}" / f"grade={input_identity[:20]}"
     # A prior failed grade may have created its destination before finishing.
@@ -1185,6 +1194,10 @@ def grade_prior_hgb_capture(*, slate_date: str, reconciliation_package: Path,
     if multi_source:
         result["source_selection"] = selection["contract_version"]
         result["source_captures"] = sources
+        result["fitted_model_identities"] = sorted({str(item.get("fitted_model_identity_sha256"))
+                                                    for item in sources})
+    else:
+        result["fitted_model_identities"] = [str((receipt.get("model_identity") or {}).get("model_identity_sha256"))]
     (grade_root / "grade.json").write_text(json.dumps(result, indent=2, sort_keys=True)+"\n")
     (grade_root / "RUN_COMPLETE.json").write_text(json.dumps({"status":"COMPLETE",
         "official_outcome_identity":input_identity}, indent=2, sort_keys=True)+"\n")

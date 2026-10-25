@@ -147,3 +147,39 @@ def test_a_capture_after_a_games_start_never_supplies_that_game(tmp_path):
     result = _grade(tmp_path, {EARLY_GAME: started, LATE_GAME: LATER})
     assert [(item["parent_daily_run_id"], item["game_ids"]) for item in result["source_captures"]] == [
         ("midday", [EARLY_GAME]), ("late", [LATE_GAME])]
+
+
+def _use_artifact(monkeypatch, contract_path: Path) -> str:
+    """Point the capture helper at one frozen fitted artifact; return its identity."""
+    contract = json.loads(contract_path.read_text())
+    monkeypatch.setattr(points_hgb_shadow, "CONTRACT", contract_path)
+    monkeypatch.setattr(points_hgb_shadow, "MODEL", contract_path.parent / contract["fitted_artifact"])
+    return contract["model_identity_sha256"]
+
+
+def test_a_mid_day_artifact_switch_grades_each_player_game_once(tmp_path, monkeypatch):
+    from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
+    v1 = _use_artifact(monkeypatch, scorer.V1_CONTRACT_PATH)
+    _capture(tmp_path, "midday", [EARLY_GAME, LATE_GAME])
+    corrected = _use_artifact(monkeypatch, scorer.PP_CORRECTED_CONTRACT_PATH)
+    _capture(tmp_path, "late", [LATE_GAME])  # after the switch; the early game has started
+    result = _grade(tmp_path)
+    assert result["status"] == "COMPLETE"
+    assert result["hgb_metrics"]["participated_graded_count"] == 2
+    assert [(item["parent_daily_run_id"], item["game_ids"], item["fitted_model_identity_sha256"])
+            for item in result["source_captures"]] == [
+        ("midday", [EARLY_GAME], v1), ("late", [LATE_GAME], corrected)]
+    assert result["fitted_model_identities"] == sorted([v1, corrected])
+
+
+def test_after_a_switch_the_latest_capture_wins_for_every_game(tmp_path, monkeypatch):
+    from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
+    _use_artifact(monkeypatch, scorer.V1_CONTRACT_PATH)
+    _capture(tmp_path, "midday", [EARLY_GAME, LATE_GAME])
+    corrected = _use_artifact(monkeypatch, scorer.PP_CORRECTED_CONTRACT_PATH)
+    _capture(tmp_path, "late", [EARLY_GAME, LATE_GAME])
+    result = _grade(tmp_path)
+    assert result["status"] == "COMPLETE"
+    assert "source_captures" not in result
+    assert result["fitted_model_identities"] == [corrected]
+    assert result["hgb_metrics"]["participated_graded_count"] == 2

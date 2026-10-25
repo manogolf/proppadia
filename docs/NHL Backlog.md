@@ -2291,6 +2291,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `94e75216…`, identity `fb701c67…`, helper/CLI/exporter/scorer checksums
   current), so gate J passes on the evidence itself. Test:
   `test_verify_points_hgb_routine_daily_integration.py`.
+- **HGB grade after the mid-day switch, fixed 2026-10-25.** The 10-24
+  performance summary showed Points 599-691: that headline row is the Phoenix
+  incumbent shadow (`points_phoenix_lr`), and the production HGB grade had
+  failed non-blocking with `HGB_PLAYER_SELECTED_FROM_MULTIPLE_MODEL_IDENTITIES`.
+  Cause: `_hgb_selector_candidates` keyed selection by the fitted identity, so
+  V1 (12:01 run) and corrected (17:43, 21:09 runs) predictions of the same
+  player-game counted as different predictions and both were selected. Fix:
+  key by player-game under the fixed construction label (same as the daily
+  receipt), record fitted identities per contributing capture and in
+  `fitted_model_identities`; the summary now labels the Phoenix reference row
+  as the incumbent shadow and says when the HGB grade is unavailable. Tests:
+  two mid-day switch cases in `backend/tests/test_nhl_points_hgb_per_game_source.py`
+  (the first reproduces the original error on the old code). 10-24 restated
+  through `ensure_prior_learning` (package reused, no provider calls): new
+  summary `performance_summary=3ad23839…`; HGB production 1,099-191 (85.2%)
+  on 430 players (0.5 285-145, 1.5 389-41, 2.5 425-5); sources 12:01 V1 run 2
+  games / 100 player-games, 17:43 corrected 8 / 407, 21:09 corrected 2 / 104;
+  Phoenix same-capture 610-680.
 - Strength-split SOG audit (read-only, 2026-10-24): the swapped `pp_sog` is
   not limited to the nine games. Per-skater SOG by strength rebuilt from the
   retained official play-by-play (situation code from the shooter's side;

@@ -1372,7 +1372,18 @@ def render_markdown(summary: dict[str, Any]) -> str:
                 lines.append(f"{name}: " + prop_body(display, title)[0])
                 lines.extend(prop_body(display, title)[1:])
             return lines
-        lines.extend(prop_body(models.get("reference", {}), title))
+        body = prop_body(models.get("reference", {}), title)
+        if title == "Points" and body:
+            # Under HGB authority the reconciliation reference grade is the
+            # Phoenix incumbent shadow; label it so it is not read as production.
+            identity = (models.get("reference") or {}).get("model_identity") or {}
+            production_model = str(((models.get("authority_context") or {}).get("production") or {}).get("model") or "")
+            reference_model = str(identity.get("model") or "")
+            if production_model.startswith("NHL_POINTS_COUNT_HGB") or "phoenix" in reference_model.lower():
+                body[0] = (f"Reference grade ({reference_model or 'unknown'} / "
+                           f"{identity.get('model_version', 'unknown')}; incumbent shadow, not production) — "
+                           + body[0])
+        lines.extend(body)
         if title == "Points":
             lines.append("Realized total: official goals + official assists.")
             authority = models.get("authority_context")
@@ -1387,6 +1398,9 @@ def render_markdown(summary: dict[str, Any]) -> str:
                     f"({shadow.get('status', 'unavailable')}; prediction SHA "
                     f"{shadow.get('sha256') or shadow.get('prediction_sha256') or 'unavailable'}).")
                 evaluation = authority.get("hgb_evaluation", {})
+                if not evaluation and str(production.get("model", "")).startswith("NHL_POINTS_COUNT_HGB"):
+                    lines.append("HGB production grade: not available for this slate "
+                                 "(see the daily receipt's points_hgb_shadow_grade).")
                 if evaluation:
                     metrics = evaluation.get("metrics", {})
                     lines.append(

@@ -217,8 +217,13 @@ measure early coverage and prices against later snapshots and CLOSING:
     by `reconciliation_certificate.daily_receipt_source_proofs` (runs before
     2026-10-18 re-verify from the prior-day package they recorded);
   - SOG identity uses the fixed arm `PRODUCTION_REFERENCE` with the fitted
-    model identity; Points uses `NHL_POINTS_COUNT_HGB_V1` with the capture's
-    model identity, so repeated runs of one model share an identity;
+    model identity; Points uses `NHL_POINTS_COUNT_HGB_V1` with the fixed
+    construction `POISSON_SURVIVAL_FROM_FROZEN_HGB_EXPECTED_COUNT` (changed
+    2026-10-25, P2.31; it was the capture's fitted identity), so a mid-day
+    fitted-artifact change still grades each player-game once, from its latest
+    pregame capture. The grade records `fitted_model_identities` and, per
+    contributing capture, `fitted_model_identity_sha256` and
+    `model_artifact_sha256`;
   - SOG prediction and publication time are the SOG lane's `ended_at_utc`;
     runs before 2026-10-10 recorded no SOG feature cutoff and use the same
     bound;
