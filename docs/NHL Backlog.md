@@ -2486,8 +2486,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.32 Production SOG model review: what drives the predictions
 
-- Status: **REVIEWED 2026-10-25 (read-only); no change made.** Operator
-  priority: raw output before calibration.
+- Status: **REVIEWED 2026-10-25; SHRUNK_180 live shadow added 2026-10-25
+  (production unchanged).** Operator priority: raw output before
+  calibration.
 - What production SOG is: no fitted model. `score_sog_poisson_baseline.py`
   computes expected shots = `d10_sog_per60` x `d10_toi_min_avg` / 60 (d20,
   d5 and season fallbacks) and a Poisson ladder for 1.5/2.5/3.5. The rate is
@@ -2537,9 +2538,27 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   interval -0.041 to -0.021), arms C 1.5649, D 1.5638, G 1.5704. C and D
   over-shrink (mean 1.63 vs 1.55 actual, slope 1.15-1.21); SHRUNK_180 is
   centered (1.563 vs 1.554, slope 1.02).
-- Next: under the adopted promotion rules this is a recipe change (route A):
-  run SHRUNK_180 as a live shadow for 4 weekly evaluations / 2,000+ paired
-  lines before any promotion decision.
+- **Live shadow added 2026-10-25** (operator-approved; production unchanged).
+  `backend/nhl/sog_shrunk_rate_shadow.py`, model
+  `NHL_SOG_SHRUNK_RATE_K180_V1`. Daily-run lane `sog_shrunk_rate_k180_shadow`
+  (non-blocking, after the structural-correction shadow) reads strict-prior
+  logs read-only from `nhl.skater_game_logs_raw` (seasons s-2..s, game_date <
+  slate), scores the exact production-scored player-games and writes an
+  immutable package to
+  `artifacts/operational/nhl/sog_shrunk_rate_shadows/season=/slate_date=/run_id=/model=NHL_SOG_SHRUNK_RATE_K180_V1/`
+  (predictions with production and shadow lambda/p_over per line, the window
+  inputs, manifest with league prior and history SHA, deterministic replay,
+  SHA256SUMS). A player with no qualifying history keeps production expected
+  shots (`shadow_source = NO_CLEAN_HISTORY_PRODUCTION_FALLBACK`). Postgame
+  learning grades it (`sog_shrunk_rate_k180_shadow_grade`): per capture, and
+  `latest_pregame` (each player-game from its latest capture, paired with
+  production on the same rows). The daily summary has a "SOG Shrunk-Rate
+  (K=180) Prospective Shadow" section and the weekly evaluation lists
+  `shadow: SHRUNK_180 (latest pregame)`. Dry run on 10-24 (tmp only): matches
+  the research recipe to 1e-15 on 430 player-games; 998-292 vs production
+  990-300, paired count log loss -0.053. First live capture: next daily run.
+- Next: route A. Promotion decision only after 4 weekly evaluations and
+  2,000+ paired lines (earliest after the week ending 2026-11-21).
 
 ### P2.30 All-candidate export writes the stat count into outcome_side
 

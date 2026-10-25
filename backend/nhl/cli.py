@@ -95,6 +95,8 @@ from backend.nhl.sog_feature_input import finalize_capture as finalize_sog_featu
 from backend.nhl.sog_fixed_blend import capture as capture_sog_fixed_blends
 from backend.nhl.sog_divergence_shadow import capture as capture_sog_divergence_shadow
 from backend.nhl.sog_structural_correction_shadow import capture as capture_sog_structural_correction_shadow
+from backend.nhl.sog_shrunk_rate_shadow import capture as capture_sog_shrunk_rate_shadow
+from backend.nhl.sog_shrunk_rate_shadow import load_history as load_sog_shrunk_rate_history
 from backend.nhl.points_hgb_shadow import capture_from_files as capture_points_hgb_shadow
 from backend.nhl.points_hgb_shadow import prepare_authoritative_inputs as prepare_points_hgb_inputs
 from backend.nhl.points_hgb_shadow import build_production_prediction_artifact
@@ -3552,6 +3554,38 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     else:
         recorder.finish_lane("sog_d10_structural_correction_shadow", status="SKIPPED_UNSUPPORTED_PRODUCTION_SCORER",
             reason="STRUCTURAL_CORRECTION_SHADOW_REQUIRES_POISSON_BASELINE", database_rows_written=False,
+            provider_requests=0, credits_consumed=0)
+
+    recorder.start_lane("sog_shrunk_rate_k180_shadow", inputs=[{
+        "model_identity": "NHL_SOG_SHRUNK_RATE_K180_V1",
+        "parent_daily_run_id": daily_run_id,
+        "production_model_identity": "poisson_baseline/baseline_v1",
+        "prior_minutes": 180, "rate_window_games": 20, "toi_window_games": 10,
+        "history_source": "nhl.skater_game_logs_raw (read-only)",
+        "provider_requests": 0, "credits_consumed": 0,
+    }])
+    if sog_scorer == "poisson_baseline" and sog_feature_capture is not None:
+        try:
+            shrunk_season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
+            shrunk_history, shrunk_positions = load_sog_shrunk_rate_history(
+                db, slate_date=slate, season=shrunk_season)
+            shrunk_package = capture_sog_shrunk_rate_shadow(
+                history=shrunk_history, positions=shrunk_positions, production_path=calibrated_pred_path,
+                output_root=ROOT / "artifacts" / "operational" / "nhl" / "sog_shrunk_rate_shadows",
+                run_id=daily_run_id, slate_date=slate, season=shrunk_season,
+                feature_cutoff_utc=str(sog_feature_capture["cutoff_utc"]),
+                canonical_game_ids=[int(game.game_id) for game in canonical_games],
+                started_excluded_game_ids=list(sog_eligibility["started_excluded_game_ids"]),
+                scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py")
+            recorder.finish_lane("sog_shrunk_rate_k180_shadow", outputs=[shrunk_package],
+                reason="PROSPECTIVE_SHADOW_IMMUTABLE_CAPTURE_COMPLETE", database_rows_written=False,
+                provider_requests=0, credits_consumed=0)
+        except Exception as error:
+            recorder.fail_lane("sog_shrunk_rate_k180_shadow", error, blocking=False)
+            print(f"⚠️ shrunk-rate (K=180) SOG shadow failed; production continues: {error}")
+    else:
+        recorder.finish_lane("sog_shrunk_rate_k180_shadow", status="SKIPPED_UNSUPPORTED_PRODUCTION_SCORER",
+            reason="SHRUNK_RATE_SHADOW_REQUIRES_POISSON_BASELINE", database_rows_written=False,
             provider_requests=0, credits_consumed=0)
 
     # 5b) Load SOG into nhl.predictions

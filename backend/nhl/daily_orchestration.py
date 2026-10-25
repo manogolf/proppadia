@@ -48,6 +48,7 @@ LANE_NAMES = (
     "sog_fixed_blend_shadows",
     "sog_d10_d20_divergence_shadow",
     "sog_d10_structural_correction_shadow",
+    "sog_shrunk_rate_k180_shadow",
     "points",
     "points_hgb_shadow",
     "saves",

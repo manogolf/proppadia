@@ -38,6 +38,14 @@ class RecordTests(unittest.TestCase):
         self.assertFalse((frame.lane == "sog").any())  # before the SOG season start
 
 
+    def test_shrunk_rate_shadow_counts_its_latest_pregame_record(self):
+        s = summary(V3, V3)
+        s["sog_shrunk_rate_k180_shadow"] = {"status": "COMPLETE", "latest_pregame": {"overall": {"wins": 9, "losses": 1}}}
+        frame = ev.model_records({"2026-10-20": s})
+        row = frame[frame.model == "shadow: SHRUNK_180 (latest pregame)"]
+        self.assertEqual((int(row.wins.sum()), int(row.losses.sum())), (9, 1))
+
+
 class QualityTests(unittest.TestCase):
     def setUp(self):
         self.rows = ev.enrich(pd.DataFrame({
