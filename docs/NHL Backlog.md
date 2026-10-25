@@ -2517,9 +2517,29 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   shrinking; it mattered for the first weeks.
 - Finding 3: Poisson spread is only mildly narrow (variance about 1.2x the
   mean); the expected-shots number, not the distribution, is the problem.
-- Next (to decide): validate shrinkage out of sample and against arms C/D/G
-  under the promotion rules (route A, since it changes the recipe); fix the
-  window hygiene in the same candidate.
+- **Out-of-sample validation, 2026-10-25** (read-only;
+  `backend/nhl/scripts/research_nhl_sog_shrunk_rate.py`, output
+  `artifacts/analysis/nhl/sog_shrunk_rate/2026-10-25/`). Recipes rebuilt
+  strict-prior from `skater_game_logs_raw`: PROD (production formula),
+  CLEAN10/CLEAN20 (regular-season games with TOI only; 10/20-game rate) and
+  SHRUNK(k) (CLEAN20 rate pulled toward the prior season's league rate by
+  position, F 6.75 / D 4.11 per 60, with k prior minutes; exposure = mean TOI
+  of the last 10 cleaned games). k chosen on 2025-10..12 (best 180), scored
+  on 2026-01..04 only (24,208 player-games): Poisson log loss PROD 1.5814,
+  CLEAN10 1.5816, CLEAN20 1.5542, SHRUNK_180 1.5391; paired SHRUNK - PROD
+  -0.042 (95% date-clustered interval -0.048 to -0.037); slope 0.73 -> 1.06;
+  Brier better at 1.5/2.5/3.5 (.219/.151/.083 -> .212/.146/.080); W/L at
+  1.5/2.5 65.7%/78.8% -> 66.9%/79.6%. Window hygiene alone (CLEAN10) changes
+  nothing in 2025 (no preseason logs that season); the 20-game window and the
+  shrinkage carry the gain.
+- **2026 paired, 10-08..10-24** (4,114 player-games, 17 slates, same rows for
+  all): log loss production 1.5847, SHRUNK_180 1.5536 (paired -0.031,
+  interval -0.041 to -0.021), arms C 1.5649, D 1.5638, G 1.5704. C and D
+  over-shrink (mean 1.63 vs 1.55 actual, slope 1.15-1.21); SHRUNK_180 is
+  centered (1.563 vs 1.554, slope 1.02).
+- Next: under the adopted promotion rules this is a recipe change (route A):
+  run SHRUNK_180 as a live shadow for 4 weekly evaluations / 2,000+ paired
+  lines before any promotion decision.
 
 ### P2.30 All-candidate export writes the stat count into outcome_side
 
