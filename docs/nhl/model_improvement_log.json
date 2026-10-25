@@ -1,0 +1,318 @@
+{
+  "schema_version": "NHL_MODEL_IMPROVEMENT_LOG_V1",
+  "entries": [
+    {
+      "id": "IMP-001",
+      "key": "sog|2.5|OVER|.70-1.00",
+      "lane": "sog",
+      "line": 2.5,
+      "side": "OVER",
+      "band": ".70-1.00",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 2.5 OVER, P(over) .70-1.00: model is overconfident (wins 62.7% vs 77.3% expected, n=75).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 75,
+          "win_rate": 0.6267,
+          "predicted": 0.7729,
+          "gap": -0.1462,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-002",
+      "key": "sog|2.5|OVER|.60-.70",
+      "lane": "sog",
+      "line": 2.5,
+      "side": "OVER",
+      "band": ".60-.70",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 2.5 OVER, P(over) .60-.70: model is overconfident (wins 51.5% vs 65.6% expected, n=103).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 103,
+          "win_rate": 0.5146,
+          "predicted": 0.6555,
+          "gap": -0.141,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-003",
+      "key": "sog|2.5|OVER|.55-.60",
+      "lane": "sog",
+      "line": 2.5,
+      "side": "OVER",
+      "band": ".55-.60",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 2.5 OVER, P(over) .55-.60: model is overconfident (wins 44.5% vs 57.7% expected, n=137).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 137,
+          "win_rate": 0.4453,
+          "predicted": 0.5767,
+          "gap": -0.1315,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-004",
+      "key": "sog|1.5|OVER|.70-1.00",
+      "lane": "sog",
+      "line": 1.5,
+      "side": "OVER",
+      "band": ".70-1.00",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 1.5 OVER, P(over) .70-1.00: model is overconfident (wins 70.3% vs 79.4% expected, n=596).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 596,
+          "win_rate": 0.703,
+          "predicted": 0.7937,
+          "gap": -0.0906,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-005",
+      "key": "sog|2.5|OVER|.50-.55",
+      "lane": "sog",
+      "line": 2.5,
+      "side": "OVER",
+      "band": ".50-.55",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 42.7% vs 51.6% expected, n=124).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 124,
+          "win_rate": 0.4274,
+          "predicted": 0.5158,
+          "gap": -0.0883,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-006",
+      "key": "points|0.5|UNDER|.30-.40",
+      "lane": "points",
+      "line": 0.5,
+      "side": "UNDER",
+      "band": ".30-.40",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "points 0.5 UNDER, P(over) .30-.40: model is overconfident (wins 57.1% vs 65.5% expected, n=837).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 837,
+          "win_rate": 0.5711,
+          "predicted": 0.6552,
+          "gap": -0.0842,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-007",
+      "key": "sog|1.5|OVER|.60-.70",
+      "lane": "sog",
+      "line": 1.5,
+      "side": "OVER",
+      "band": ".60-.70",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 1.5 OVER, P(over) .60-.70: model is overconfident (wins 57.3% vs 65.5% expected, n=386).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 386,
+          "win_rate": 0.5725,
+          "predicted": 0.655,
+          "gap": -0.0825,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-008",
+      "key": "sog|1.5|UNDER|.00-.30",
+      "lane": "sog",
+      "line": 1.5,
+      "side": "UNDER",
+      "band": ".00-.30",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 1.5 UNDER, P(over) .00-.30: model is overconfident (wins 76.1% vs 82.4% expected, n=1267).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 1267,
+          "win_rate": 0.7609,
+          "predicted": 0.8238,
+          "gap": -0.063,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-009",
+      "key": "sog|1.5|UNDER|.45-.50",
+      "lane": "sog",
+      "line": 1.5,
+      "side": "UNDER",
+      "band": ".45-.50",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 1.5 UNDER, P(over) .45-.50: model is underconfident (wins 58.0% vs 52.4% expected, n=255).",
+      "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 255,
+          "win_rate": 0.5804,
+          "predicted": 0.5241,
+          "gap": 0.0563,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-010",
+      "key": "sog|2.5|UNDER|.45-.50",
+      "lane": "sog",
+      "line": 2.5,
+      "side": "UNDER",
+      "band": ".45-.50",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 2.5 UNDER, P(over) .45-.50: model is underconfident (wins 59.5% vs 53.2% expected, n=153).",
+      "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 153,
+          "win_rate": 0.5948,
+          "predicted": 0.5319,
+          "gap": 0.0628,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-011",
+      "key": "sog|3.5|UNDER|.30-.40",
+      "lane": "sog",
+      "line": 3.5,
+      "side": "UNDER",
+      "band": ".30-.40",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 3.5 UNDER, P(over) .30-.40: model is underconfident (wins 73.2% vs 65.3% expected, n=205).",
+      "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 205,
+          "win_rate": 0.7317,
+          "predicted": 0.6529,
+          "gap": 0.0788,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-012",
+      "key": "sog|3.5|UNDER|.40-.45",
+      "lane": "sog",
+      "line": 3.5,
+      "side": "UNDER",
+      "band": ".40-.45",
+      "first_flagged": "2026-10-24",
+      "status": "OPEN",
+      "finding": "sog 3.5 UNDER, P(over) .40-.45: model is underconfident (wins 66.7% vs 57.0% expected, n=48).",
+      "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-10-24",
+          "n": 48,
+          "win_rate": 0.6667,
+          "predicted": 0.57,
+          "gap": 0.0967,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-10-24",
+      "weeks_flagged": 1
+    }
+  ],
+  "updated_as_of": "2026-10-24"
+}

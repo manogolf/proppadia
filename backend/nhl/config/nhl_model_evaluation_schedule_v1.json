@@ -1,0 +1,11 @@
+{
+  "schema_version": "NHL_MODEL_EVALUATION_SCHEDULE_V1",
+  "enabled": false,
+  "weekly": {
+    "run_on_et_weekday": "SUNDAY",
+    "covers_days": 7,
+    "report_glob": "docs/nhl/weekly_model_evaluation_*.md",
+    "builder": "backend/nhl/scripts/build_nhl_weekly_model_evaluation.py"
+  },
+  "notes": "Set enabled to true to let the daily run build the weekly report on Sundays. While false the daily run still reports whether a report is current or overdue."
+}

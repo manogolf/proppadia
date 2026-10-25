@@ -2761,6 +2761,12 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     recorder.prior_learning["certificate"] = _require_daily_prior_certificate(
         prior_date_et, recorder.prior_learning)
     print("NHL_PRIOR_DAY_LEARNING=" + json.dumps(recorder.prior_learning, sort_keys=True))
+    # Weekly model evaluation: report status every run; build on the scheduled
+    # day only when the schedule is enabled. Never blocks the daily run.
+    from backend.nhl.model_evaluation_schedule import check_and_run as _evaluation_check
+    from backend.nhl.model_evaluation_schedule import console_line as _evaluation_line
+    recorder.prior_learning["model_evaluation"] = _evaluation_check(current_et_slate())
+    print("NHL_MODEL_EVALUATION=" + _evaluation_line(recorder.prior_learning["model_evaluation"]))
 
     # Create working directories only after the prior-date checkpoint passes.
     DAILY_EXPORTS_DIR = ROOT / "backend" / "nhl" / "exports" / "daily"

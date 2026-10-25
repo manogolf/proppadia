@@ -1,5 +1,7 @@
 # NHL weekly model evaluation — week ending 2026-10-24
 
+Schedule: automatic weekly build is off; next report due 2026-11-01 (week ending 2026-10-31).
+
 Week: 2026-10-18 to 2026-10-24 (7 slates with production rows). Season to date: SOG (production and shadows) from 2026-10-08, Points HGB as production from 2026-10-10, Moneyline, Puck Line and Saves from 2026-10-01. Governed grades only.
 
 ## Where every model stands (W-L)
@@ -62,6 +64,10 @@ Gap = actual win rate minus the model's average confidence in its pick. Negative
 | sog | 2.5 | UNDER | .45-.50 | 153 | 59.5% | 53.2% | +6.3 pts |
 | sog | 3.5 | UNDER | .30-.40 | 205 | 73.2% | 65.3% | +7.9 pts |
 | sog | 3.5 | UNDER | .40-.45 | 48 | 66.7% | 57.0% | +9.7 pts |
+
+## Improvement log
+
+New this week: IMP-001, IMP-002, IMP-003, IMP-004, IMP-005, IMP-006, IMP-007, IMP-008, IMP-009, IMP-010, IMP-011, IMP-012. Still flagged: none. Open or in test: 12. Full log: `docs/nhl/model_improvement_log.md`.
 
 ## Data health
 
