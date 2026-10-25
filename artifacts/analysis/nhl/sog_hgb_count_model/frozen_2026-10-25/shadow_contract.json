@@ -1,0 +1,62 @@
+{
+  "schema_version": "NHL_SOG_COUNT_HGB_SHADOW_CONTRACT_V1",
+  "model_id": "NHL_SOG_COUNT_HGB_V1",
+  "authority": "PROSPECTIVE_SHADOW",
+  "fitted_artifact": "nhl_sog_count_hgb_v1.joblib",
+  "fitted_artifact_sha256": "f7bf625dd3a32030a6003879f7e62380e674859f8c7f9f299e4bdae2245ae392",
+  "training_seasons": [
+    2024,
+    2025
+  ],
+  "training_rows": 90598,
+  "training_window": [
+    "2024-10-04",
+    "2026-04-15"
+  ],
+  "training_frame_sha256": "4042e31c758c6b0083272cf82904426b8732e06a9f2837c79e7e0d2e9aa093f6",
+  "training_mean_target": 1.56181151901808,
+  "training_mean_prediction": 1.5618660831861164,
+  "feature_module": "backend/nhl/sog_hgb_features.py",
+  "feature_columns": [
+    "is_home",
+    "is_defense",
+    "sog60_5",
+    "sog60_10",
+    "sog60_20",
+    "sog60_season",
+    "sog60_prior_season",
+    "shrunk_rate_180",
+    "shrunk_lambda_180",
+    "toi_avg_5",
+    "toi_avg_10",
+    "toi_season",
+    "pp_toi_avg_10",
+    "att60_10",
+    "att60_20",
+    "games_season",
+    "rest_days",
+    "team_sf_10",
+    "opp_sa_10",
+    "league_prior"
+  ],
+  "history_semantics": "strict prior game_date; cleaned regular-season games (TOI > 0, SOG recorded); seasons s-2..s",
+  "target": "skater_game_logs_raw.shots_on_goal",
+  "distribution": "Poisson",
+  "thresholds": {
+    "over_1_5": "P(X >= 2)",
+    "over_2_5": "P(X >= 3)",
+    "over_3_5": "P(X >= 4)"
+  },
+  "hyperparameters": {
+    "loss": "poisson",
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "l2_regularization": 1.0,
+    "early_stopping": false,
+    "random_state": 42
+  },
+  "sklearn_version": "1.6.1",
+  "joblib_version": "1.4.2",
+  "validation": "NHL Backlog P2.33 (out of sample 2026-01..04; 2026 slates 10-08..10-24)",
+  "known_limitation": "season-level shot-rate drift: about -2% to -4% low early in a new season; no tested fix improved log loss"
+}

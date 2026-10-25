@@ -2554,9 +2554,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   2024-10-04..2026-04-15) and wrote
   `artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-10-25/`
   (`nhl_sog_count_hgb_v1.joblib`, SHA-256 `f7bf625d...ae392`, and
-  `shadow_contract.json`). The artifact is git-ignored and local only until
-  the operator authorizes force-adding it; the shadow refuses any other
-  artifact (SHA pinned in `sog_hgb_count_shadow.py`). Shadow:
+  `shadow_contract.json`). Both files are committed (force-added with operator
+  authorization, 2026-10-25); the shadow refuses any other artifact (SHA
+  pinned in `sog_hgb_count_shadow.py`). Shadow:
   `backend/nhl/sog_hgb_count_shadow.py`, model `NHL_SOG_COUNT_HGB_V1`,
   daily-run lane `sog_count_hgb_shadow` (non-blocking, after the SHRUNK_180
   lane), read-only history (seasons s-2..s), captures under
