@@ -1,6 +1,7 @@
 # NHL model promotion and retirement rules
 
-Status: **draft for operator review (2026-10-25), not yet enforced by code.**
+Status: **adopted by the operator 2026-10-25.** Applied by review; not yet enforced by code
+(see "Not yet automated").
 These rules decide when a candidate replaces a production model, when a shadow
 is retired, and how an improvement-log entry closes. The operator approves
 every production change; the rules make the evidence for that decision fixed

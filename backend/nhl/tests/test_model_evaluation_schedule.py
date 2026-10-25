@@ -23,8 +23,10 @@ def make_root(enabled: bool, reports: list[str]) -> Path:
 
 
 class ScheduleTests(unittest.TestCase):
-    def test_shipped_schedule_is_switched_off(self):
-        self.assertFalse(sched.load_config()["enabled"])
+    def test_shipped_schedule_is_enabled_for_sundays(self):
+        config = sched.load_config()
+        self.assertTrue(config["enabled"])
+        self.assertEqual(config["weekly"]["run_on_et_weekday"], "SUNDAY")
 
     def test_status_across_the_week(self):
         root = make_root(False, ["2026-10-24"])
