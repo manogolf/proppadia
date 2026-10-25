@@ -2484,6 +2484,61 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.34 Skater log SOG differs from the official outcome on about 1% of player-games
+
+- Status: **OPEN (found 2026-10-25, not investigated).** For 10-08..10-24,
+  42 of 4,464 player-games (28 games) have `skater_game_logs_raw.shots_on_goal`
+  one shot above or below the reconciliation package's `official_sog`
+  (source NHL_OFFICIAL_GAMECENTER); most likely the official stat was corrected
+  after the logs were captured. Grading uses official outcomes and is not
+  affected. Model inputs (production d10 rate, SHRUNK_180, the P2.33 HGB
+  features) read the logs, so a stale value stays in the rate windows.
+- Next: confirm the direction (log stale vs official stale) on a few games
+  against the current gamecenter boxscore, then decide whether routine
+  ingestion should refresh SOG for recent games. Needs operator approval before
+  any write to populated log values.
+
+### P2.33 Fitted SOG count model (HGB Poisson): research candidate
+
+- Status: **RESEARCH 2026-10-25 (read-only); no production change.**
+  Operator question: why is production SOG a formula? It was a fitted ordinal
+  LightGBM (`sog_player_denali_pairings_ordinal_v1`, `denali_blend/phoenix_v2`)
+  until commit `5b2c6505` (2026-03-01) cut over to the Poisson baseline; the
+  reason was not recorded (benchmark tools `benchmark_sog_ge4_vs_poisson.py`
+  were added the day before).
+- Script `backend/nhl/scripts/research_nhl_sog_hgb_count_model.py`, output
+  `artifacts/analysis/nhl/sog_hgb_count_model/2026-10-25/` (git-ignored;
+  regenerate by running the script). HistGradientBoosting, Poisson loss, the
+  Points HGB settings (selected over three slower/deeper configs on an inner
+  split: fit season 2024, validate 2025-10..12). 20 strict-prior features
+  from cleaned regular-season logs: 5/10/20-game, season and prior-season shots
+  per 60, SHRUNK_180 rate and lambda, TOI (5, 10, season), PP TOI, attempts per
+  60 (10, 20), games this season, rest days, team shots for and opponent shots
+  allowed (last 10), position and home.
+- **Out of sample, 2026-01-01..04-15** (fit on 2024-10-04..2025-12-31,
+  66,385 rows; 24,213 test rows, same rows for all): Poisson log loss PROD
+  1.5811, SHRUNK_180 1.5390, HGB 1.5301. Paired HGB - PROD -0.051 (95%
+  date-clustered interval -0.056 to -0.046); HGB - SHRUNK_180 -0.0089
+  (-0.0112 to -0.0066). Slope 0.73 / 1.06 / 1.02. Brier 1.5 .219/.212/.209,
+  2.5 .151/.146/.144, 3.5 .083/.080/.080. W/L 1.5 65.8%/66.9%/67.5%, 2.5
+  78.8%/79.6%/79.6%, 3.5 89.6%/90.1%/90.0%.
+- **2026 live slates, 10-08..10-24** (model fit on all of seasons 2024-2025;
+  4,395 player-games paired with governed production rows, graded against
+  official SOG; production lambda recovered from its P(over 1.5)): log loss
+  production 1.5807, SHRUNK_180 1.5490, HGB 1.5415; HGB - production -0.039
+  (-0.050 to -0.028), HGB - SHRUNK_180 -0.0075 (-0.0131 to -0.0020). HGB runs
+  slightly low early in the season (mean 1.50 vs 1.53 actual, slope 0.94).
+  On 10-18..10-24 (1,497 rows with arm grades) arms C 1.5709, D 1.5718,
+  G 1.5886 are all behind SHRUNK_180 (1.5543) and HGB (1.5486).
+- What drives it (permutation importance on the test window): SHRUNK_180
+  lambda by far, then prior-season rate, 20-game rate, recent TOI, shot
+  attempts, opponent shots allowed. Most of the gain over production is the
+  shrunk rate; the model adds a smaller, consistent improvement on top.
+- Next (needs operator decision): under route A, a frozen HGB artifact would
+  run as a second live SOG shadow next to SHRUNK_180. Before that, check the
+  early-season low bias (e.g. weight current-season games or add a
+  games-this-season interaction) on 2025-10 replays.
+
 ### P2.32 Production SOG model review: what drives the predictions
 
 - Status: **REVIEWED 2026-10-25; SHRUNK_180 live shadow added 2026-10-25
