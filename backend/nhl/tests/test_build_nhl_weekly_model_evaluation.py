@@ -45,6 +45,13 @@ class RecordTests(unittest.TestCase):
         row = frame[frame.model == "shadow: SHRUNK_180 (latest pregame)"]
         self.assertEqual((int(row.wins.sum()), int(row.losses.sum())), (9, 1))
 
+    def test_hgb_count_shadow_counts_its_latest_pregame_record(self):
+        s = summary(V3, V3)
+        s["sog_count_hgb_shadow"] = {"status": "COMPLETE", "latest_pregame": {"overall": {"wins": 8, "losses": 2}}}
+        row = ev.model_records({"2026-10-20": s})
+        row = row[row.model == "shadow: HGB count model (latest pregame)"]
+        self.assertEqual((int(row.wins.sum()), int(row.losses.sum())), (8, 2))
+
 
 class QualityTests(unittest.TestCase):
     def setUp(self):

@@ -83,6 +83,9 @@ def model_records(summaries: dict[str, dict]) -> pd.DataFrame:
         shrunk = ((s.get("sog_shrunk_rate_k180_shadow") or {}).get("latest_pregame") or {}).get("overall") or {}
         if shrunk and day >= SOG_START:
             out.append((day, "sog", "shadow: SHRUNK_180 (latest pregame)", int(shrunk["wins"]), int(shrunk["losses"])))
+        hgb_sog = ((s.get("sog_count_hgb_shadow") or {}).get("latest_pregame") or {}).get("overall") or {}
+        if hgb_sog and day >= SOG_START:
+            out.append((day, "sog", "shadow: HGB count model (latest pregame)", int(hgb_sog["wins"]), int(hgb_sog["losses"])))
         points = m.get("points") or {}
         evaluation = (points.get("authority_context") or {}).get("hgb_evaluation") or {}
         hgb = (evaluation.get("metrics") or {}).get("selected_side_record") or {}

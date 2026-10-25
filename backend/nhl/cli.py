@@ -97,6 +97,8 @@ from backend.nhl.sog_divergence_shadow import capture as capture_sog_divergence_
 from backend.nhl.sog_structural_correction_shadow import capture as capture_sog_structural_correction_shadow
 from backend.nhl.sog_shrunk_rate_shadow import capture as capture_sog_shrunk_rate_shadow
 from backend.nhl.sog_shrunk_rate_shadow import load_history as load_sog_shrunk_rate_history
+from backend.nhl.sog_hgb_count_shadow import capture as capture_sog_count_hgb_shadow
+from backend.nhl.sog_hgb_count_shadow import load_history as load_sog_count_hgb_history
 from backend.nhl.points_hgb_shadow import capture_from_files as capture_points_hgb_shadow
 from backend.nhl.points_hgb_shadow import prepare_authoritative_inputs as prepare_points_hgb_inputs
 from backend.nhl.points_hgb_shadow import build_production_prediction_artifact
@@ -3586,6 +3588,39 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     else:
         recorder.finish_lane("sog_shrunk_rate_k180_shadow", status="SKIPPED_UNSUPPORTED_PRODUCTION_SCORER",
             reason="SHRUNK_RATE_SHADOW_REQUIRES_POISSON_BASELINE", database_rows_written=False,
+            provider_requests=0, credits_consumed=0)
+
+    recorder.start_lane("sog_count_hgb_shadow", inputs=[{
+        "model_identity": "NHL_SOG_COUNT_HGB_V1",
+        "parent_daily_run_id": daily_run_id,
+        "production_model_identity": "poisson_baseline/baseline_v1",
+        "history_source": "nhl.skater_game_logs_raw (read-only)",
+        "provider_requests": 0, "credits_consumed": 0,
+    }])
+    if sog_scorer == "poisson_baseline" and sog_feature_capture is not None:
+        try:
+            hgb_sog_season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
+            hgb_sog_games = [int(game.game_id) for game in canonical_games]
+            hgb_sog_history, hgb_sog_positions, hgb_sog_slate_games = load_sog_count_hgb_history(
+                db, slate_date=slate, season=hgb_sog_season, game_ids=hgb_sog_games)
+            hgb_sog_package = capture_sog_count_hgb_shadow(
+                history=hgb_sog_history, positions=hgb_sog_positions, games=hgb_sog_slate_games,
+                production_path=calibrated_pred_path,
+                output_root=ROOT / "artifacts" / "operational" / "nhl" / "sog_count_hgb_shadows",
+                run_id=daily_run_id, slate_date=slate, season=hgb_sog_season,
+                feature_cutoff_utc=str(sog_feature_capture["cutoff_utc"]),
+                canonical_game_ids=hgb_sog_games,
+                started_excluded_game_ids=list(sog_eligibility["started_excluded_game_ids"]),
+                scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py")
+            recorder.finish_lane("sog_count_hgb_shadow", outputs=[hgb_sog_package],
+                reason="PROSPECTIVE_SHADOW_IMMUTABLE_CAPTURE_COMPLETE", database_rows_written=False,
+                provider_requests=0, credits_consumed=0)
+        except Exception as error:
+            recorder.fail_lane("sog_count_hgb_shadow", error, blocking=False)
+            print(f"⚠️ HGB count-model SOG shadow failed; production continues: {error}")
+    else:
+        recorder.finish_lane("sog_count_hgb_shadow", status="SKIPPED_UNSUPPORTED_PRODUCTION_SCORER",
+            reason="HGB_COUNT_SHADOW_REQUIRES_POISSON_BASELINE", database_rows_written=False,
             provider_requests=0, credits_consumed=0)
 
     # 5b) Load SOG into nhl.predictions

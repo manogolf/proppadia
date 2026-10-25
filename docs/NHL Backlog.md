@@ -2500,8 +2500,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.33 Fitted SOG count model (HGB Poisson): research candidate
 
-- Status: **RESEARCH 2026-10-25 (read-only); no production change.**
-  Operator question: why is production SOG a formula? It was a fitted ordinal
+- Status: **LIVE SHADOW 2026-10-25 (`NHL_SOG_COUNT_HGB_V1`); production
+  unchanged.** Operator question: why is production SOG a formula? It was a fitted ordinal
   LightGBM (`sog_player_denali_pairings_ordinal_v1`, `denali_blend/phoenix_v2`)
   until commit `5b2c6505` (2026-03-01) cut over to the Poisson baseline; the
   reason was not recorded (benchmark tools `benchmark_sog_ge4_vs_poisson.py`
@@ -2534,10 +2534,43 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   lambda by far, then prior-season rate, 20-game rate, recent TOI, shot
   attempts, opponent shots allowed. Most of the gain over production is the
   shrunk rate; the model adds a smaller, consistent improvement on top.
-- Next (needs operator decision): under route A, a frozen HGB artifact would
-  run as a second live SOG shadow next to SHRUNK_180. Before that, check the
-  early-season low bias (e.g. weight current-season games or add a
-  games-this-season interaction) on 2025-10 replays.
+- **Early-season bias check, 2026-10-25** (`level_bias_check` in the research
+  script, output `level_bias_check.csv`). The low bias is not early-season
+  dynamics: it is season-level drift. League shots per 60 fall from season to
+  season (October 5.96 / 5.71 / 5.54 for 2024 / 2025 / 2026), so the model
+  carries the training season's level relative to the prior-season league
+  rate. Bias (log loss): replay 2025-10..11-15 fit on 2024 -3.9% (1.5487);
+  test 2026-01..04 +0.2% (1.5301); 2026 slates -1.7% (1.5315). Candidates:
+  a league-level-to-date offset (strict prior, shrunk with 20,000 minutes)
+  cut the bias to -2.4% / +1.5% / -0.5% but log loss was no better on any
+  split (1.5492 / 1.5305 / 1.5308); doubling the latest season's weight
+  changed nothing material. No candidate improved log loss, so the base recipe
+  is frozen unchanged and the live shadow measures the bias.
+- **Frozen and live as a shadow, 2026-10-25** (operator-approved; production
+  unchanged). Shared features: `backend/nhl/sog_hgb_features.py` (used by the
+  research script, the freeze script and the shadow). Freeze:
+  `backend/nhl/scripts/freeze_nhl_sog_hgb_count_model.py` fit on every
+  eligible regular-season skater-game of seasons 2024-2025 (90,598 rows,
+  2024-10-04..2026-04-15) and wrote
+  `artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-10-25/`
+  (`nhl_sog_count_hgb_v1.joblib`, SHA-256 `f7bf625d...ae392`, and
+  `shadow_contract.json`). The artifact is git-ignored and local only until
+  the operator authorizes force-adding it; the shadow refuses any other
+  artifact (SHA pinned in `sog_hgb_count_shadow.py`). Shadow:
+  `backend/nhl/sog_hgb_count_shadow.py`, model `NHL_SOG_COUNT_HGB_V1`,
+  daily-run lane `sog_count_hgb_shadow` (non-blocking, after the SHRUNK_180
+  lane), read-only history (seasons s-2..s), captures under
+  `artifacts/operational/nhl/sog_count_hgb_shadows/`, graded in postgame
+  learning (`sog_count_hgb_shadow_grade`, per capture and latest pregame) with
+  the same grader as SHRUNK_180, a daily-summary section and the weekly row
+  `shadow: HGB count model (latest pregame)`. Players without qualifying
+  history keep production expected shots. Dry run on 10-24 (tmp only):
+  slate features equal the history-built features on 426 of 430 player-games;
+  the other 4 are players with under 20 games in 2024-2026, whose research
+  windows reached 2023 games (outside the live s-2..s horizon). 998-292 vs
+  production 990-300, paired count log loss -0.045.
+- Next: route A for both SOG shadows (4 weekly evaluations, 2,000+ paired
+  lines); compare HGB with SHRUNK_180 head to head in the weekly report.
 
 ### P2.32 Production SOG model review: what drives the predictions
 

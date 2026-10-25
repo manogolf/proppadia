@@ -269,13 +269,13 @@ def _poisson_log_loss(y: pd.Series, lam: pd.Series) -> float:
     return float(-poisson.logpmf(y.astype(int), lam.clip(lower=0.02)).mean())
 
 
-def _grade_rows(rows: pd.DataFrame, value: str) -> dict[str, Any]:
+def _grade_rows(rows: pd.DataFrame, value: str, primary_source: str = "SHRUNK_RATE") -> dict[str, Any]:
     """Count and per-line metrics for settled line rows, paired with production."""
     players = rows.drop_duplicates(["game_id", "player_id"])
     y_player = pd.to_numeric(players[value])
     lam, prod = pd.to_numeric(players.shadow_lambda), pd.to_numeric(players.production_lambda)
     item: dict[str, Any] = {"settled_player_games": int(len(players)), "settled_line_rows": int(len(rows)),
-                            "production_fallback_player_games": int(players.shadow_source.ne("SHRUNK_RATE").sum())}
+                            "production_fallback_player_games": int(players.shadow_source.ne(primary_source).sum())}
     if len(players):
         item.update({
             "mean_lambda": float(lam.mean()), "mean_actual": float(y_player.mean()),
@@ -310,8 +310,12 @@ def _grade_rows(rows: pd.DataFrame, value: str) -> dict[str, Any]:
     return item
 
 
-def grade_slate(*, slate_date: str, reconciliation_package: Path, capture_root: Path) -> dict[str, Any]:
+def grade_slate(*, slate_date: str, reconciliation_package: Path, capture_root: Path,
+                model_identity: str = MODEL_IDENTITY, primary_source: str = "SHRUNK_RATE") -> dict[str, Any]:
     """Grade retained immutable captures against finalized canonical outcomes.
+
+    Shared with other count-model SOG shadows through `model_identity` and
+    `primary_source` (the `shadow_source` value of non-fallback rows).
 
     `grades` holds one entry per daily-run capture. `latest_pregame` grades each
     player-game once, from the latest run that captured it (runs only capture
@@ -330,7 +334,7 @@ def grade_slate(*, slate_date: str, reconciliation_package: Path, capture_root: 
     outcome_sha = sha256_file(outcome_path)
     grades: list[dict[str, Any]] = []
     settled_parts: list[pd.DataFrame] = []
-    for package in sorted(Path(capture_root).glob(f"season=*/slate_date={slate_date}/run_id=*/model={MODEL_IDENTITY}")):
+    for package in sorted(Path(capture_root).glob(f"season=*/slate_date={slate_date}/run_id=*/model={model_identity}")):
         verify_package(package)
         manifest = json.loads((package / "manifest.json").read_text())
         pred = pd.read_csv(package / "predictions.csv")
@@ -341,17 +345,17 @@ def grade_slate(*, slate_date: str, reconciliation_package: Path, capture_root: 
         rows = joined[settled].copy()
         rows["capture_run_id"] = manifest["parent_daily_run_id"]
         settled_parts.append(rows)
-        grades.append({"model_identity": MODEL_IDENTITY, "research_role": "PROSPECTIVE_SHADOW",
+        grades.append({"model_identity": model_identity, "research_role": "PROSPECTIVE_SHADOW",
                        "slate_date": slate_date, "run_id": manifest["parent_daily_run_id"],
                        "prediction_sha256": manifest["prediction_sha256"], "outcome_sha256": outcome_sha,
-                       "unsettled_line_rows": int((~settled).sum()), **_grade_rows(rows, value)})
+                       "unsettled_line_rows": int((~settled).sum()), **_grade_rows(rows, value, primary_source)})
     result: dict[str, Any] = {"status": "COMPLETE" if grades else "NO_IMMUTABLE_SHADOW_CAPTURE",
-                              "role": "PROSPECTIVE_SHADOW", "model_identity": MODEL_IDENTITY, "grades": grades}
+                              "role": "PROSPECTIVE_SHADOW", "model_identity": model_identity, "grades": grades}
     if settled_parts:
         combined = pd.concat(settled_parts, ignore_index=True)
         latest = combined.groupby(["game_id", "player_id"]).capture_run_id.transform("max")
         selected = combined[combined.capture_run_id.eq(latest)]
         result["latest_pregame"] = {"selection": "LATEST_CAPTURE_RUN_PER_PLAYER_GAME",
                                     "capture_runs": sorted(set(selected.capture_run_id)),
-                                    **_grade_rows(selected, value)}
+                                    **_grade_rows(selected, value, primary_source)}
     return result

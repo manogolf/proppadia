@@ -1201,6 +1201,7 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
                      sog_divergence_shadow_context: dict[str, Any] | None = None,
                      sog_structural_correction_shadow_context: dict[str, Any] | None = None,
                      sog_shrunk_rate_shadow_context: dict[str, Any] | None = None,
+                     sog_count_hgb_shadow_context: dict[str, Any] | None = None,
                      package: Path | None = None) -> dict[str, Any]:
     challengers = challengers or {}
     moneyline = grades.get("moneyline", pd.DataFrame())
@@ -1298,7 +1299,32 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
             "status": "NO_IMMUTABLE_SHADOW_CAPTURE", "role": "PROSPECTIVE_SHADOW", "grades": []}),
         "sog_shrunk_rate_k180_shadow": dict(sog_shrunk_rate_shadow_context or {
             "status": "NO_IMMUTABLE_SHADOW_CAPTURE", "role": "PROSPECTIVE_SHADOW", "grades": []}),
+        "sog_count_hgb_shadow": dict(sog_count_hgb_shadow_context or {
+            "status": "NO_IMMUTABLE_SHADOW_CAPTURE", "role": "PROSPECTIVE_SHADOW", "grades": []}),
     }
+
+
+def _count_shadow_section(context: dict[str, Any], title: str) -> list[str]:
+    """Markdown for a count-model SOG shadow graded by latest pregame capture."""
+    lines = ["", f"## {title}",
+             f"Status: {context.get('status', 'NO_IMMUTABLE_SHADOW_CAPTURE')} (PROSPECTIVE_SHADOW)"]
+    latest = context.get("latest_pregame") or {}
+    if latest:
+        overall, prod = latest.get("overall", {}), latest.get("production_overall", {})
+        lines.append(f"Latest pregame capture per player-game: {overall.get('wins', 0)}-{overall.get('losses', 0)} "
+                     f"vs production {prod.get('wins', 0)}-{prod.get('losses', 0)} on the same "
+                     f"{latest.get('settled_player_games', 0)} player-games "
+                     f"({len(context.get('grades', []))} captures).")
+        for line, entry in (latest.get("by_line") or {}).items():
+            if entry.get("n"):
+                lines.append(f"- {line}: {entry.get('wins', 0)}-{entry.get('losses', 0)} vs production "
+                             f"{entry.get('production_wins', 0)}-{entry.get('production_losses', 0)}; "
+                             f"Brier difference {entry.get('paired_brier_difference_vs_production', 0):+.4f}.")
+        loss = latest.get("paired_poisson_log_loss_difference_vs_production")
+        if loss is not None:
+            lines.append(f"Paired count log loss vs production {loss:+.4f} (negative is better).")
+    lines.append("Production SOG authority remains poisson_baseline/baseline_v1.")
+    return lines
 
 
 def render_markdown(summary: dict[str, Any]) -> str:
@@ -1491,25 +1517,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
     for grade in structural.get("grades", []):
         lines.append(f"- Settled player-games {grade.get('settled_player_games', 0)}; combined count MAE {grade.get('count', {}).get('mae')}.")
     lines.append("Production SOG authority remains poisson_baseline/baseline_v1.")
-    shrunk = summary.get("sog_shrunk_rate_k180_shadow") or {}
-    lines += ["", "## SOG Shrunk-Rate (K=180) Prospective Shadow",
-              f"Status: {shrunk.get('status', 'NO_IMMUTABLE_SHADOW_CAPTURE')} (PROSPECTIVE_SHADOW)"]
-    latest = shrunk.get("latest_pregame") or {}
-    if latest:
-        overall, prod = latest.get("overall", {}), latest.get("production_overall", {})
-        lines.append(f"Latest pregame capture per player-game: {overall.get('wins', 0)}-{overall.get('losses', 0)} "
-                     f"vs production {prod.get('wins', 0)}-{prod.get('losses', 0)} on the same "
-                     f"{latest.get('settled_player_games', 0)} player-games "
-                     f"({len(shrunk.get('grades', []))} captures).")
-        for line, entry in (latest.get("by_line") or {}).items():
-            if entry.get("n"):
-                lines.append(f"- {line}: {entry.get('wins', 0)}-{entry.get('losses', 0)} vs production "
-                             f"{entry.get('production_wins', 0)}-{entry.get('production_losses', 0)}; "
-                             f"Brier difference {entry.get('paired_brier_difference_vs_production', 0):+.4f}.")
-        loss = latest.get("paired_poisson_log_loss_difference_vs_production")
-        if loss is not None:
-            lines.append(f"Paired count log loss vs production {loss:+.4f} (negative is better).")
-    lines.append("Production SOG authority remains poisson_baseline/baseline_v1.")
+    lines += _count_shadow_section(summary.get("sog_shrunk_rate_k180_shadow") or {},
+                                   "SOG Shrunk-Rate (K=180) Prospective Shadow")
+    lines += _count_shadow_section(summary.get("sog_count_hgb_shadow") or {},
+                                   "SOG HGB Count-Model Prospective Shadow")
     coverage_rows = []
     for lane in ("points", "saves", "sog"):
         context = models.get(lane, {}).get("market_coverage", {})
@@ -1798,6 +1809,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
                             sog_divergence_shadow_context: dict[str, Any] | None = None,
                             sog_structural_correction_shadow_context: dict[str, Any] | None = None,
                             sog_shrunk_rate_shadow_context: dict[str, Any] | None = None,
+                            sog_count_hgb_shadow_context: dict[str, Any] | None = None,
                             output_root: Path | None = None) -> tuple[Path, Path, dict[str, Any]]:
     """Build/reuse a summary package from retained reconciliation grade rows."""
     package = Path(package).resolve()
@@ -1837,6 +1849,9 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
     if sog_shrunk_rate_shadow_context:
         source_hashes["sog_shrunk_rate_shadow_context_sha256"] = hashlib.sha256(
             json.dumps(sog_shrunk_rate_shadow_context, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if sog_count_hgb_shadow_context:
+        source_hashes["sog_count_hgb_shadow_context_sha256"] = hashlib.sha256(
+            json.dumps(sog_count_hgb_shadow_context, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     for lane, coverage in (market_coverage or {}).items():
         if coverage.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
             source_hashes[f"{lane}_attachment_integrity_sha256"] = str(
@@ -1904,6 +1919,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         sog_divergence_shadow_context=sog_divergence_shadow_context,
         sog_structural_correction_shadow_context=sog_structural_correction_shadow_context,
         sog_shrunk_rate_shadow_context=sog_shrunk_rate_shadow_context,
+        sog_count_hgb_shadow_context=sog_count_hgb_shadow_context,
     )
     summary["official_outcomes_status"] = (
         "FINAL" if source_summary.get("status") == "COMPLETE"

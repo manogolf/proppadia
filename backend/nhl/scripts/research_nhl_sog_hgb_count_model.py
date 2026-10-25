@@ -26,25 +26,19 @@ from scipy.stats import poisson
 from sklearn.ensemble import HistGradientBoostingRegressor
 
 from backend.nhl.database_access import database_url
+from backend.nhl.sog_hgb_features import (  # noqa: F401  (re-exported for tests)
+    BASE_KW, FEATURES, PRIOR_MINUTES, _roll, build, fit, predict)
 from backend.nhl.scripts.research_nhl_sog_shrunk_rate import score
 
 ROOT = Path(__file__).resolve().parents[3]
 OUT = ROOT / "artifacts/analysis/nhl/sog_hgb_count_model/2026-10-25"
-PRIOR_MINUTES = 180
 TEST_START, TEST_END = "2026-01-01", "2026-05-01"
-BASE_KW = dict(loss="poisson", max_iter=100, max_leaf_nodes=15, l2_regularization=1.0,
-               early_stopping=False, random_state=42)
 CONFIGS = {
     "points_kw": BASE_KW,
     "slow_300": {**BASE_KW, "max_iter": 300, "learning_rate": 0.05},
     "slow_300_leaf100": {**BASE_KW, "max_iter": 300, "learning_rate": 0.05, "min_samples_leaf": 100},
     "deep_31": {**BASE_KW, "max_iter": 200, "learning_rate": 0.05, "max_leaf_nodes": 31, "min_samples_leaf": 100},
 }
-FEATURES = [
-    "is_home", "is_defense", "sog60_5", "sog60_10", "sog60_20", "sog60_season", "sog60_prior_season",
-    "shrunk_rate_180", "shrunk_lambda_180", "toi_avg_5", "toi_avg_10", "toi_season", "pp_toi_avg_10",
-    "att60_10", "att60_20", "games_season", "rest_days", "team_sf_10", "opp_sa_10", "league_prior",
-]
 
 
 def pull() -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -64,103 +58,6 @@ def pull() -> tuple[pd.DataFrame, pd.DataFrame]:
     logs["game_date"] = pd.to_datetime(logs.game_date)
     pos["group"] = np.where(pos.position.astype(str).str.upper().str.startswith("D"), "D", "F")
     return logs, pos[["player_id", "group"]].drop_duplicates("player_id")
-
-
-def _roll(frame: pd.DataFrame, keys, value: str, n: int | None, how: str) -> pd.Series:
-    """Strict-prior rolling (or expanding, n=None) aggregate within key groups."""
-    def f(s):
-        s = s.shift(1)
-        r = s.expanding(min_periods=1) if n is None else s.rolling(n, min_periods=1)
-        return getattr(r, how)()
-    return frame.groupby(keys, sort=False)[value].transform(f)
-
-
-def build(logs: pd.DataFrame, pos: pd.DataFrame) -> pd.DataFrame:
-    """One row per clean regular-season skater-game with strict-prior features."""
-    clean = logs[(logs.game_type == "02") & (logs.toi_minutes > 0) & logs.shots_on_goal.notna()].copy()
-    clean = clean.merge(pos, on="player_id", how="left")
-    clean["group"] = clean.group.fillna("F")
-    clean = clean.sort_values(["player_id", "game_date", "game_id"]).reset_index(drop=True)
-    clean["is_home"] = clean.is_home.astype(bool).astype(int)
-    clean["is_defense"] = clean.group.eq("D").astype(int)
-    clean["team_id_bound"] = np.where(clean.is_home == 1, clean.home_team_id, clean.away_team_id)
-    clean["opp_id_bound"] = np.where(clean.is_home == 1, clean.away_team_id, clean.home_team_id)
-    p = "player_id"
-    sums = {}
-    for n in (5, 10, 20):
-        sums[f"sog{n}"] = _roll(clean, p, "shots_on_goal", n, "sum")
-        sums[f"toi{n}"] = _roll(clean, p, "toi_minutes", n, "sum")
-    for n in (5, 10, 20):
-        clean[f"sog60_{n}"] = (sums[f"sog{n}"] / sums[f"toi{n}"] * 60).where(sums[f"toi{n}"] > 0)
-    clean["toi_avg_5"] = _roll(clean, p, "toi_minutes", 5, "mean")
-    clean["toi_avg_10"] = _roll(clean, p, "toi_minutes", 10, "mean")
-    clean["pp_toi_avg_10"] = _roll(clean, p, "pp_toi_minutes", 10, "mean")
-    clean["toi_att"] = clean.toi_minutes.where(clean.shot_attempts.notna())
-    for n in (10, 20):
-        a, t = _roll(clean, p, "shot_attempts", n, "sum"), _roll(clean, p, "toi_att", n, "sum")
-        clean[f"att60_{n}"] = (a / t * 60).where(t > 0)
-    ps = [p, "season"]
-    s_sog, s_toi = _roll(clean, ps, "shots_on_goal", None, "sum"), _roll(clean, ps, "toi_minutes", None, "sum")
-    clean["sog60_season"] = (s_sog / s_toi * 60).where(s_toi > 0)
-    clean["toi_season"] = _roll(clean, ps, "toi_minutes", None, "mean")
-    clean["games_season"] = clean.groupby(ps).cumcount()
-    season_tot = clean.groupby(ps).agg(s=("shots_on_goal", "sum"), t=("toi_minutes", "sum")).reset_index()
-    season_tot["sog60_prior_season"] = season_tot.s / season_tot.t * 60
-    season_tot["season"] += 1
-    clean = clean.merge(season_tot[[p, "season", "sog60_prior_season"]], on=ps, how="left")
-    clean["rest_days"] = clean.groupby(p).game_date.diff().dt.days.clip(upper=10)
-    league = (clean.groupby(["season", "group"]).agg(s=("shots_on_goal", "sum"), t=("toi_minutes", "sum"))
-              .assign(r=lambda d: d.s / d.t * 60).r.rename("league_prior").reset_index())
-    league["season"] += 1
-    clean = clean.merge(league, on=["season", "group"], how="left")
-    # window sums recomputed after the merges above
-    sog20 = _roll(clean, p, "shots_on_goal", 20, "sum").fillna(0)
-    toi20 = _roll(clean, p, "toi_minutes", 20, "sum").fillna(0)
-    clean["shrunk_rate_180"] = (sog20 + clean.league_prior * PRIOR_MINUTES / 60) / (toi20 + PRIOR_MINUTES) * 60
-    clean["shrunk_lambda_180"] = clean.shrunk_rate_180 * clean.toi_avg_10 / 60
-    # team shots for / opponent shots against, strict prior per team over its last 10 games
-    team = clean.groupby(["team_id_bound", "game_id", "game_date"], as_index=False).shots_on_goal.sum()
-    team = team.rename(columns={"team_id_bound": "team", "shots_on_goal": "sf"})
-    opp = clean.groupby(["opp_id_bound", "game_id"], as_index=False).shots_on_goal.sum()
-    opp = opp.rename(columns={"opp_id_bound": "team", "shots_on_goal": "sa"})
-    team = team.merge(opp, on=["team", "game_id"], how="left").sort_values(["team", "game_date", "game_id"])
-    team["team_sf_10"] = _roll(team, "team", "sf", 10, "mean")
-    team["opp_sa_10"] = _roll(team, "team", "sa", 10, "mean")
-    clean = clean.merge(team[["team", "game_id", "team_sf_10"]].rename(columns={"team": "team_id_bound"}),
-                        on=["team_id_bound", "game_id"], how="left")
-    clean = clean.merge(team[["team", "game_id", "opp_sa_10"]].rename(columns={"team": "opp_id_bound"}),
-                        on=["opp_id_bound", "game_id"], how="left")
-    # production formula (as in the shrunk-rate research): rate from last 10 logged games of any type
-    allrows = logs.sort_values(["player_id", "game_date", "game_id"]).reset_index(drop=True)
-    allrows["sog0"] = allrows.shots_on_goal.fillna(0)
-    allrows["toi_pos"] = allrows.toi_minutes.where(allrows.toi_minutes > 0)
-    for n in (5, 10, 20):
-        allrows[f"p_sog{n}"] = _roll(allrows, p, "sog0", n, "sum")
-        allrows[f"p_toi{n}"] = _roll(allrows, p, "toi_pos", n, "sum")
-    toi_rows = allrows[allrows.toi_pos.notna()].copy()
-    for n in (5, 10, 20):
-        toi_rows[f"p_toiavg{n}"] = _roll(toi_rows, p, "toi_pos", n, "mean")
-    allrows = allrows.merge(toi_rows[[p, "game_id", "p_toiavg5", "p_toiavg10", "p_toiavg20"]], on=[p, "game_id"], how="left")
-    rate = lambda s, t: (s / t * 60).where(t > 0)
-    allrows["PROD"] = (rate(allrows.p_sog10, allrows.p_toi10).fillna(rate(allrows.p_sog20, allrows.p_toi20))
-                       .fillna(rate(allrows.p_sog5, allrows.p_toi5))
-                       * allrows.p_toiavg10.fillna(allrows.p_toiavg20).fillna(allrows.p_toiavg5) / 60)
-    clean = clean.merge(allrows[[p, "game_id", "PROD"]], on=[p, "game_id"], how="left")
-    return clean
-
-
-def fit(frame: pd.DataFrame, kw: dict) -> HistGradientBoostingRegressor:
-    x = frame[FEATURES].astype(float).to_numpy()
-    y = frame.shots_on_goal.to_numpy(int)
-    model = HistGradientBoostingRegressor(**kw).fit(x, y)
-    repeat = HistGradientBoostingRegressor(**kw).fit(x.copy(), y.copy())
-    if not np.array_equal(model.predict(x), repeat.predict(x)):
-        raise ValueError("SOG_HGB_REFIT_REPRODUCIBILITY_FAIL")
-    return model
-
-
-def predict(model, frame: pd.DataFrame) -> np.ndarray:
-    return model.predict(frame[FEATURES].astype(float).to_numpy())
 
 
 def paired_ci(frame: pd.DataFrame, a: str, b: str, seed: int = 20261025) -> dict:
@@ -246,6 +143,48 @@ def live_2026(rows: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, list[str]
     return base, with_arms, arm_cols
 
 
+def level_bias_check(eligible: pd.DataFrame, league_k: float = 20000) -> pd.DataFrame:
+    """Early-season / season-level bias: base model vs candidate fixes on three splits.
+
+    Candidates: league level to date (strict prior, shrunk toward the prior
+    season with `league_k` minutes) as an offset on SHRUNK_180 plus features;
+    and doubling the weight of the latest training season.
+    """
+    day = eligible.groupby(["season", "group", "game_date"], as_index=False).agg(
+        s=("shots_on_goal", "sum"), t=("toi_minutes", "sum")).sort_values(["season", "group", "game_date"])
+    day["cs"] = day.groupby(["season", "group"]).s.cumsum() - day.s
+    day["ct"] = day.groupby(["season", "group"]).t.cumsum() - day.t
+    e = eligible.merge(day[["season", "group", "game_date", "cs", "ct"]], on=["season", "group", "game_date"], how="left")
+    e["league_td"] = (e.cs + e.league_prior * league_k / 60) / (e.ct + league_k) * 60
+    e["level_ratio"] = e.league_td / e.league_prior
+    e["shrunk_adj"] = e.shrunk_lambda_180 * e.level_ratio
+    splits = {
+        "replay 2025-10..11-15 (fit season 2024)": (e[e.season.eq(2024)], e[e.season.eq(2025) & (e.game_date < "2025-11-16")]),
+        "test 2026-01..04 (fit before 2026)": (e[e.game_date < TEST_START], e[e.season.eq(2025) & (e.game_date >= TEST_START)]),
+        "2026 slates (fit seasons 2024-2025)": (e[e.season.isin([2024, 2025])], e[e.season.eq(2026)]),
+    }
+    rows = []
+    for name, (tr, te) in splits.items():
+        y = te.shots_on_goal.to_numpy(int)
+        cands = {"SHRUNK_180": te.shrunk_lambda_180.to_numpy()}
+        cands["HGB base"] = predict(fit(tr, BASE_KW), te)
+        sw = np.where(tr.season.eq(tr.season.max()), 2.0, 1.0)
+        cands["HGB latest season x2"] = HistGradientBoostingRegressor(**BASE_KW).fit(
+            tr[FEATURES].astype(float), tr.shots_on_goal, sample_weight=sw).predict(te[FEATURES].astype(float))
+        feats = FEATURES + ["league_td", "level_ratio"]
+        off = tr.shrunk_adj.to_numpy()
+        cands["HGB league-to-date offset"] = HistGradientBoostingRegressor(**BASE_KW).fit(
+            tr[feats].astype(float), tr.shots_on_goal / off, sample_weight=off).predict(
+            te[feats].astype(float)) * te.shrunk_adj.to_numpy()
+        early = te.games_season.le(9).to_numpy()
+        for label, lam in cands.items():
+            rows.append({"split": name, "candidate": label, "n": len(te), "mean_pred": float(lam.mean()),
+                         "mean_actual": float(y.mean()), "bias_pct": float(lam.mean() / y.mean() - 1) * 100,
+                         "early_bias_pct": float(lam[early].mean() / y[early].mean() - 1) * 100 if early.any() else None,
+                         "poisson_log_loss": float(-poisson.logpmf(y, np.clip(lam, 0.02, None)).mean())})
+    return pd.DataFrame(rows)
+
+
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     logs, pos = pull()
@@ -294,6 +233,8 @@ def main() -> int:
     result["live_2026_paired_hgb_minus_shrunk180"] = paired_ci(paired, "HGB", "shrunk_lambda_180")
     table = pd.DataFrame(rows)
     table.to_csv(OUT / "comparison.csv", index=False)
+    bias = level_bias_check(eligible)
+    bias.to_csv(OUT / "level_bias_check.csv", index=False)
     (OUT / "summary.json").write_text(json.dumps(result, indent=2, default=str) + "\n")
     pd.set_option("display.width", 250)
     print(table.round(4).to_string(index=False))
@@ -301,6 +242,7 @@ def main() -> int:
                                              "paired_hgb_minus_prod", "paired_hgb_minus_shrunk180", "live_2026_rows",
                                              "live_2026_paired_hgb_minus_production", "live_2026_paired_hgb_minus_shrunk180")}, indent=1))
     print(json.dumps(result["permutation_importance_test"][:10], indent=0))
+    print(bias.round(4).to_string(index=False))
     return 0
 
 
