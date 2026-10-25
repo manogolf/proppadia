@@ -2484,6 +2484,43 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.32 Production SOG model review: what drives the predictions
+
+- Status: **REVIEWED 2026-10-25 (read-only); no change made.** Operator
+  priority: raw output before calibration.
+- What production SOG is: no fitted model. `score_sog_poisson_baseline.py`
+  computes expected shots = `d10_sog_per60` x `d10_toi_min_avg` / 60 (d20,
+  d5 and season fallbacks) and a Poisson ladder for 1.5/2.5/3.5. The rate is
+  computed in `export_sog_denali_pregame.sql` (total SOG / total TOI over the
+  last 10 logged games); TOI comes from `fill_sog_toi_features_for_slate.sql`
+  into `nhl.training_features_nhl_sog_enriched_pregame_v2`.
+- Finding 1, the main one: the expected-shots number is too spread out. Graded
+  10-08 to 10-24 (3,896 player-games joined to their feature inputs; the
+  formula reproduces every stored lambda): mean is right (1.55 predicted vs
+  1.53 actual) but low predictions run low (+0.22 shots under 1.0) and high
+  ones run high (-0.39 at 2.5-3.0, -0.54 at 3.0-3.5, -0.97 above 4.0);
+  slope of actual on predicted 0.74. The spread comes from the 10-game shot
+  rate (rate quintiles: 0.70 vs 0.91 actual at the bottom, 2.63 vs 2.22 at
+  the top), not from TOI (TOI quintiles agree). This explains the weekly
+  report's overconfident SOG Overs (improvement log IMP-001..005, 007) and
+  underconfident mid-band Unders (IMP-009..012).
+- Direction, in-sample only: a 20-game rate shrunk toward the league rate
+  with 60-120 prior minutes gives slope ~1.0 and Poisson log loss 1.5454 vs
+  1.5715 (MAE 1.022 vs 1.034). Needs out-of-sample confirmation (2025 season
+  replay, `replay_sog_poisson_base_season.py`) and a paired comparison with
+  the existing shrinkage shadow arm `C_MULTISEASON_SHRUNK_PLAYER` (and D, G).
+- Finding 2, window hygiene: neither window filters game type or season.
+  2026 preseason logs are in the window (2,312 rows, 65 games, 09-19..09-26),
+  and 100 of them have SOG with no TOI, which adds shots without minutes to
+  the rate. The rate window (last 10 logged games) and the TOI window (last
+  10 games with TOI) can differ. Effect on 10-08+ predictions is small and
+  shrinking; it mattered for the first weeks.
+- Finding 3: Poisson spread is only mildly narrow (variance about 1.2x the
+  mean); the expected-shots number, not the distribution, is the problem.
+- Next (to decide): validate shrinkage out of sample and against arms C/D/G
+  under the promotion rules (route A, since it changes the recipe); fix the
+  window hygiene in the same candidate.
+
 ### P2.30 All-candidate export writes the stat count into outcome_side
 
 - Status: **FIXED 2026-10-24** (operator-approved). `_emit` in
