@@ -588,6 +588,17 @@ def _select_production_sog_sources(
     index = select_latest_atomic_sources(
         lane="SOG", slate_date=slate_date, canonical_game_ids=sorted(starts),
         scheduled_starts_utc=starts, candidates=candidates)
+    # The atomic identity carries the fitted model identity, so a slate scored
+    # by two production models (the 2026-10-25 formula-to-HGB cutover) yields
+    # one selected item per model for a player-line. Keep the latest published
+    # one: the same latest-pregame rule, applied across models.
+    latest: dict[str, tuple[tuple[Any, str], dict[str, Any]]] = {}
+    for item in index["selected"]:
+        row = str(item["source_row_identity"])
+        rank = (pd.Timestamp(item["durable_publication_timestamp_utc"]), str(item["source_run_id"]))
+        if row not in latest or rank > latest[row][0]:
+            latest[row] = (rank, item)
+    index = {**index, "selected": [item for _, item in sorted(latest.values(), key=lambda pair: str(pair[1]["source_row_identity"]))]}
     player_source: dict[tuple[int, int], str] = {}
     for item in index["selected"]:
         game_id, player_id, _ = str(item["source_row_identity"]).split(":")

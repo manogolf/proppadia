@@ -50,7 +50,7 @@ def _daily_run(root: Path, run_id: str, ended_at: str, eligible: list[int],
     prediction_sha = _sha(predictions_path)
     game_hash = canonical_game_set_hash(GAMES)
     evidence = {"model_family": identity[0], "model_version": identity[1],
-                "scoring_run_id": run_id, "fitted_model_identity_sha256": "model",
+                "scoring_run_id": run_id, "fitted_model_identity_sha256": f"model:{identity[1]}",
                 "prediction_artifact_path": str(predictions_path.resolve()),
                 "prediction_artifact_sha256": prediction_sha,
                 "component_artifacts": [{"role": "scorer", "sha256": "scorer",
@@ -197,3 +197,17 @@ def test_an_unknown_production_identity_contributes_nothing(tmp_path):
         slate_date=SLATE, package=_outcomes(tmp_path), daily_run_root=tmp_path / "daily_runs")
     assert display["model_identity"]["parent_daily_run_id"] == "midday"
     assert display["model_identity"]["model_family"] == "poisson_baseline"
+
+
+def test_cutover_day_late_formula_run_and_early_hgb_run_pick_the_latest_per_player(tmp_path):
+    # Distinct fitted identities per model: the late run wins every player-line.
+    _daily_run(tmp_path, "early", "2026-10-20T16:00:00Z", GAMES, p_over=0.8, identity=HGB)
+    _daily_run(tmp_path, "midday", "2026-10-20T19:00:00Z", GAMES, p_over=0.2, identity=FORMULA)
+    _daily_run(tmp_path, "late", "2026-10-20T22:00:00Z", [LATE_GAME], p_over=0.8, identity=HGB)
+    display, _ = build_production_sog_reference(
+        slate_date=SLATE, package=_outcomes(tmp_path), daily_run_root=tmp_path / "daily_runs")
+    runs = [(run["parent_daily_run_id"], run["game_ids"]) for run in display["model_identity"]["source_daily_runs"]]
+    assert runs == [("midday", [EARLY_GAME]), ("late", [LATE_GAME])]
+    assert display["overall"]["settled"] == 12
+    # midday UNDER picks win (0 shots), late OVER picks lose.
+    assert (display["overall"]["wins"], display["overall"]["losses"]) == (6, 6)
