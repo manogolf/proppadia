@@ -3660,7 +3660,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     recorder.start_lane("sog_count_hgb_shadow", inputs=[{
         "model_identity": "NHL_SOG_COUNT_HGB_V1",
         "parent_daily_run_id": daily_run_id,
-        "production_model_identity": "poisson_baseline/baseline_v1",
+        "production_model_identity": f"{sog_model_family}/{sog_model_version}",
         "history_source": "nhl.skater_game_logs_raw (read-only)",
         "provider_requests": 0, "credits_consumed": 0,
     }])
