@@ -2484,6 +2484,33 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.35 Puck Line lane: frozen; keep-or-drop decision in early December
+
+- Status: **FROZEN 2026-10-26 (operator decision); decide by the weekly
+  evaluation of 2026-12-06.** No further model development. Both models keep
+  scoring and grading automatically: reference
+  `NHL_STANDARD_PUCK_LINE_SIMPLE_BASELINE_V1` and challenger
+  `NHL_PUCK_LINE_SHOT_PRIOR_CHALLENGER_V2`. Puck Line prices arrive in the same
+  mainline odds pull as Moneyline, so keeping the lane costs no extra credits;
+  neither model feeds an upload.
+- Evidence so far (168 graded regular-season games, 2026-09-29..10-25, consensus
+  of about 20 books per game, no-vig, latest pregame price; favorite -1.5
+  side): favorite covered 38.1%, books priced it at 37.0% on average. Log loss
+  books 0.656, constant 38% guess 0.665, reference V1 0.672; Brier 0.232 /
+  0.236 / 0.237. Pick accuracy books 61.9% (same as always taking +1.5), V1
+  64.3%. Book prices span only about 0.29-0.55 and sort games weakly. The two
+  models pick differently on 31 of 168 games (V2 right 11, V1 right 13).
+  Season W/L through 10-24: V1 64-91, V2 62-93.
+- Decision rule (adapted from the retirement rule in
+  `docs/nhl/model_promotion_rules.md`): over the 8 weekly evaluations ending
+  2026-12-06, if neither model beats the books' consensus on paired log loss
+  and Brier (95% date-clustered interval excluding zero) in any week, propose
+  dropping the lane: stop daily Puck Line scoring and grading, keep all
+  history. Otherwise keep it frozen and recheck at the next 8 weeks.
+- Not covered by the weekly report yet: Puck Line probability quality and the
+  book comparison are computed ad hoc from the cross-market grade packages
+  (`graded_puck_line_market_results.csv`, `graded_puck_line_v1_v2_paired_results.csv`).
+
 ### P2.34 Skater log SOG differs from the official outcome on about 1% of player-games
 
 - Status: **OPEN (found 2026-10-25, not investigated).** For 10-08..10-24,
