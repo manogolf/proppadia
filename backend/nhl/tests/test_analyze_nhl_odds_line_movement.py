@@ -13,6 +13,7 @@ class LineMovementTests(unittest.TestCase):
         self.assertEqual(a.book_group("betonlineag"), "betonline")
         self.assertEqual(a.book_group("draftkings"), "sportsbooks")
         self.assertEqual(a.norm_name("Tim Stützle"), "tim stutzle")
+        self.assertEqual(a.PLACEHOLDER_PRICE, -10000)  # Novig posts -99900 for a side with no offer
 
     def test_earlier_offer_is_compared_with_the_games_last_snapshot(self):
         t0, t1 = pd.Timestamp("2026-10-20T14:00Z"), pd.Timestamp("2026-10-20T20:00Z")

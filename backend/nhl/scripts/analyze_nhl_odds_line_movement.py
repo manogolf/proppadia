@@ -12,6 +12,8 @@ and Points main lines (player_shots_on_goal, player_points) and Moneyline
 earlier snapshot is compared with the same offer in the slate's last
 pre-puck snapshot taken at least 30 minutes later.
 
+Prices at or below -10000 are placeholders (no offer) and are dropped.
+
 Measures, in implied-probability points of the offered price (positive =
 the price got worse for a bettor on that side): mean change, share worse /
 better / unchanged, change in the book's two-sided hold, and how often an
@@ -39,6 +41,9 @@ OUT = ROOT / "artifacts/analysis/nhl/odds_line_movement/2026-10-26"
 MARKETS = {"player_shots_on_goal": "SOG", "player_points": "POINTS", "h2h": "MONEYLINE"}
 PREDICTION_MARKETS = {"kalshi", "novig", "prophetx", "polymarket", "polymarket_us", "betopenly"}
 MIN_GAP_HOURS = 0.5
+# Prices at or below this are placeholders, not offers (Novig posts -99900 for
+# a side with no liquidity); they are dropped before pairing.
+PLACEHOLDER_PRICE = -10000
 BUCKETS = [(10, 99, ">=10h"), (6, 10, "6-10h"), (3, 6, "3-6h"), (1, 3, "1-3h"), (0, 1, "<1h")]
 
 
@@ -77,7 +82,7 @@ def load_snapshots() -> pd.DataFrame:
                 if b.get("binding_status") == "MATCHED":
                     binding[b["provider_event_id"]] = int(b["canonical_game_id"])
         rows = pd.read_json(rows_path, lines=True)
-        rows = rows[rows.market.isin(MARKETS)]
+        rows = rows[rows.market.isin(MARKETS) & (rows.price > PLACEHOLDER_PRICE)]
         if rows.empty:
             continue
         rows = rows.assign(slate=obs.parent.name.split("=")[1], phase=phase, snapshot=obs.name,

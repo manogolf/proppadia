@@ -2162,26 +2162,27 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `backend/nhl/scripts/analyze_nhl_odds_line_movement.py`, output
   `artifacts/analysis/nhl/odds_line_movement/2026-10-26/` (git-ignored;
   rerun the script). 83 non-CLOSING snapshots, 28 slates (09-29..10-26),
-  about 195,000 earlier-vs-latest price pairs for the same offer. Change in
+  about 196,000 earlier-vs-latest price pairs for the same offer (Novig's
+  placeholder prices at or below -10000, about 1,600 rows, are dropped as no offer). Change in
   the offered price's implied probability, positive = worse for the bettor;
   95% intervals clustered by game:
-  1. Sportsbooks: no drift. SOG -0.01pp (-0.03 to +0.01), Points +0.02pp,
+  1. Sportsbooks: no drift. SOG -0.02pp (-0.04 to +0.00), Points +0.03pp,
      Moneyline +0.01pp; prices move up and down about equally often (about
      30% each, the rest unchanged). BetOnline the same. The 06:00-07:00 PT
-     snapshots are no better or worse than later ones (+0.00pp). Early is not
+     snapshots are no better or worse than later ones (-0.01pp). Early is not
      a better deal, and not a worse one.
   2. Prediction markets (Kalshi, Novig, ProphetX, Polymarket): later prices
-     are better. SOG -0.52pp (-0.70 to -0.33), Points -0.63pp (-0.84 to
-     -0.40); about half of offers improve and a quarter worsen, because spreads
-     tighten (two-sided hold falls about 1.5-1.7pp). From the 06:00-07:00
-     snapshots the gain from waiting is -0.71pp. Moneyline there is flat to
+     are better. SOG -0.53pp (-0.69 to -0.35), Points -0.58pp (-0.78 to
+     -0.37); about half of offers improve and a quarter worsen, because spreads
+     tighten (two-sided hold falls about 1.5-1.6pp). From the 06:00-07:00
+     snapshots the gain from waiting is -0.74pp. Moneyline there is flat to
      slightly worse later (+0.11pp).
   3. Our models' side: production SOG at sportsbooks moves toward our pick
      (the price on our side gets worse by +0.11pp, +0.05 to +0.18, 96 games),
      so for SOG at sportsbooks earlier is marginally better. Points HGB: no
-     move (+0.02pp, -0.05 to +0.09). At prediction markets both still improve
-     later (SOG -0.70pp, Points -0.82pp). Moneyline points the same way as SOG
-     (V3 side +0.30pp, -0.15 to +0.81; V2 +0.48pp, +0.03 to +0.92) but only
+     move (+0.01pp, -0.05 to +0.08). At prediction markets both still improve
+     later (SOG -0.69pp, Points -0.85pp). Moneyline points the same way as SOG
+     (V3 side +0.20pp, -0.27 to +0.71; V2 +0.56pp, +0.12 to +1.00) but only
      33 games pair a model prediction with two snapshots.
   4. Offers that disappear later: 2-6% of earlier prop offers; 14% of
      Moneyline offers seen 10+ hours out.
