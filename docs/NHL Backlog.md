@@ -2157,6 +2157,43 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   slates (09-24..10-26), 06:00-18:00 PT, clustered near 07:00, 12:00 and
   15:00-16:00; 28 slates have 2+ snapshots and 18 have 3+. Snapshots carry
   only the best price, not size.
+- **First results, 2026-10-26** (operator asked to run it now on the data in
+  hand; rerun after 10-29 to add the full 06:00 week). Script
+  `backend/nhl/scripts/analyze_nhl_odds_line_movement.py`, output
+  `artifacts/analysis/nhl/odds_line_movement/2026-10-26/` (git-ignored;
+  rerun the script). 83 non-CLOSING snapshots, 28 slates (09-29..10-26),
+  about 195,000 earlier-vs-latest price pairs for the same offer. Change in
+  the offered price's implied probability, positive = worse for the bettor;
+  95% intervals clustered by game:
+  1. Sportsbooks: no drift. SOG -0.01pp (-0.03 to +0.01), Points +0.02pp,
+     Moneyline +0.01pp; prices move up and down about equally often (about
+     30% each, the rest unchanged). BetOnline the same. The 06:00-07:00 PT
+     snapshots are no better or worse than later ones (+0.00pp). Early is not
+     a better deal, and not a worse one.
+  2. Prediction markets (Kalshi, Novig, ProphetX, Polymarket): later prices
+     are better. SOG -0.52pp (-0.70 to -0.33), Points -0.63pp (-0.84 to
+     -0.40); about half of offers improve and a quarter worsen, because spreads
+     tighten (two-sided hold falls about 1.5-1.7pp). From the 06:00-07:00
+     snapshots the gain from waiting is -0.71pp. Moneyline there is flat to
+     slightly worse later (+0.11pp).
+  3. Our models' side: production SOG at sportsbooks moves toward our pick
+     (the price on our side gets worse by +0.11pp, +0.05 to +0.18, 96 games),
+     so for SOG at sportsbooks earlier is marginally better. Points HGB: no
+     move (+0.02pp, -0.05 to +0.09). At prediction markets both still improve
+     later (SOG -0.70pp, Points -0.82pp). Moneyline points the same way as SOG
+     (V3 side +0.30pp, -0.15 to +0.81; V2 +0.48pp, +0.03 to +0.92) but only
+     33 games pair a model prediction with two snapshots.
+  4. Offers that disappear later: 2-6% of earlier prop offers; 14% of
+     Moneyline offers seen 10+ hours out.
+  5. Trend by week: sportsbook prices stay flat; the prediction-market gain
+     from waiting is growing on SOG (-0.27pp all books in the week of
+     10-19 vs -0.06pp two weeks earlier).
+  Practical reading: at sportsbooks timing barely matters (0.1pp is about
+  half a cent on a -110 price); at prediction markets wait until midday or
+  later; for our SOG side at sportsbooks a morning bet is slightly better
+  than an afternoon one. Limits: best price only (no size); "latest" is each
+  game's last non-CLOSING snapshot, usually midday to late afternoon PT;
+  Moneyline sample small.
 
 ### P2.27 Grade production SOG and Points from each game's latest pregame run
 
