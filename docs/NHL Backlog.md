@@ -2135,6 +2135,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   markets, BetOnline), and on the model-picked side separately (whether the
   side the model likes moves against it later). Then uninstall the LaunchAgent
   (`launchctl bootout gui/$UID/com.proppadia.nhl.early-prop-odds-trial`).
+- **Line-movement study, scheduled for about 2026-10-30** (operator-approved
+  2026-10-26; read-only; runs after the trial's last slate, 10-29). Operator
+  observation behind it: early lines no longer seem to be the better deal they
+  once were. Scope, on every retained snapshot (daily-run, EARLY_TRIAL,
+  REFRESH and CLOSING prop observations; Moneyline from the mainline
+  cross-market captures):
+  1. Price movement by hours before puck, per book group (sportsbooks,
+     prediction markets, BetOnline): direction and size of the change in
+     no-vig implied probability, and how often an early offer disappears.
+  2. Closing-line value against our models: for production SOG (HGB from
+     10-25, formula before) and Points HGB, whether the price on the model's
+     side moves toward it (positive CLV) or away by the CLOSING snapshot;
+     by line, side and model-probability band.
+  3. Moneyline: the same for production V3 and shadow V2 from the mainline
+     captures (MIDDAY / FINAL_PREGAME / REFRESH).
+  Inventory on 2026-10-26: 122 prop snapshots over 30 slates (80 daily-run,
+  35 CLOSING since 10-20, 4 EARLY_TRIAL, 3 REFRESH). Known gap: 10-23 has no
+  CLOSING snapshots (0 of 2 games; the closing LaunchAgent logged nothing that
+  evening, most likely the Mac asleep; not confirmed). Snapshots carry only
+  the best price, not size.
 
 ### P2.27 Grade production SOG and Points from each game's latest pregame run
 
