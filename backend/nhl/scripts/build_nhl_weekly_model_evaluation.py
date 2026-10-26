@@ -65,7 +65,38 @@ def _cached_rows(lane: str, day: str, identity: str) -> pd.DataFrame:
     return rows
 
 
-def model_records(summaries: dict[str, dict]) -> pd.DataFrame:
+GRADE_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow/grades"
+
+
+def moneyline_shadow_records(grade_root: Path = GRADE_ROOT, *, last_day: str | None = None) -> pd.DataFrame:
+    """Daily W/L of the cross-market Moneyline shadow model from its graded results.
+
+    Summaries written before the shadow appeared in them (2026-10-14..10-25)
+    do not carry it, so the record comes from the grade packages. A game graded
+    more than once keeps its latest grade.
+    """
+    parts = []
+    for path in sorted(Path(grade_root).glob("state=*/grade=*/graded_moneyline_shadow_results.csv")):
+        frame = pd.read_csv(path)
+        if {"slate_date", "game_id", "correct", "evaluation_status", "control_name"} - set(frame.columns):
+            continue
+        parts.append(frame[["slate_date", "game_id", "correct", "evaluation_status", "control_name",
+                            "grading_timestamp_utc"]])
+    if not parts:
+        return pd.DataFrame(columns=["slate_date", "lane", "model", "wins", "losses"])
+    rows = pd.concat(parts, ignore_index=True)
+    rows = rows[rows.evaluation_status.eq("REGULAR_SEASON_GRADED") & rows.correct.notna()]
+    if last_day:
+        rows = rows[rows.slate_date.astype(str).le(last_day)]
+    rows = rows.sort_values("grading_timestamp_utc").drop_duplicates(["slate_date", "game_id"], keep="last")
+    correct = rows.correct.astype(str).str.lower().isin(["true", "1"])
+    out = (rows.assign(wins=correct.astype(int), losses=(~correct).astype(int))
+           .groupby(["slate_date", "control_name"], as_index=False)[["wins", "losses"]].sum())
+    return out.rename(columns={"control_name": "model"}).assign(lane="moneyline")[
+        ["slate_date", "lane", "model", "wins", "losses"]]
+
+
+def model_records(summaries: dict[str, dict], extra: pd.DataFrame | None = None) -> pd.DataFrame:
     """W/L per model and shadow from the governed summaries."""
     out = []
     for day, s in summaries.items():
@@ -102,6 +133,9 @@ def model_records(summaries: dict[str, dict]) -> pd.DataFrame:
         if "overall" in saves:
             out.append((day, "saves", "production", int(saves["overall"]["wins"]), int(saves["overall"]["losses"])))
     frame = pd.DataFrame(out, columns=["slate_date", "lane", "model", "wins", "losses"])
+    if extra is not None and len(extra):
+        # Summary records come first, so a day the summary already covers keeps them.
+        frame = pd.concat([frame, extra[extra.slate_date.isin(list(summaries))]], ignore_index=True)
     # After the Moneyline cutover the same model fills two roles; count it once.
     frame = frame.drop_duplicates(["slate_date", "lane", "model"])
     totals = frame.groupby(["lane", "model"]).wins.transform("sum") + frame.groupby(["lane", "model"]).losses.transform("sum")
@@ -276,7 +310,7 @@ def main() -> int:
     Path(tempfile.tempdir).mkdir(exist_ok=True)
     week = _days((date.fromisoformat(args.as_of) - timedelta(days=args.days - 1)).isoformat(), args.as_of)
     summaries = {d: s for d in _days("2026-10-01", args.as_of) if (s := _summary(d))}
-    records = model_records(summaries)
+    records = model_records(summaries, moneyline_shadow_records(last_day=args.as_of))
     frames = []
     for lane, start in (("sog", SOG_START), ("points", POINTS_START)):
         for day in _days(start, args.as_of):

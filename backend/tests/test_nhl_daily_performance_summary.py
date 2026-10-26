@@ -175,6 +175,32 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
         self.assertEqual(models["reference"]["graded"], 2)
         self.assertEqual(models["challenger"]["graded"], 1)
 
+    def test_moneyline_after_cutover_shows_production_and_shadow(self):
+        # The challenger file grades the production model again; the shadow is a different model.
+        same = pd.DataFrame({"evaluation_status": ["REGULAR_SEASON_GRADED"] * 2,
+                             "correct": [True, False], "control_name": ["ML_REF"] * 2})
+        shadow = pd.DataFrame({"evaluation_status": ["REGULAR_SEASON_GRADED"] * 3,
+                               "correct": [True, True, False], "control_name": ["ML_OLD"] * 3})
+        summary = self.summary(challengers={"moneyline": same, "moneyline_shadow": shadow})
+        models = summary["models"]["moneyline"]
+        self.assertNotIn("challenger", models)
+        self.assertEqual((models["shadow"]["correct"], models["shadow"]["incorrect"]), (2, 1))
+        text = render_markdown(summary)
+        self.assertIn("Production (ML_REF): 1-1", text)
+        self.assertIn("Shadow (ML_OLD): 2-1", text)
+        self.assertIn("Reference (PL_REF):", text)
+
+    def test_moneyline_before_cutover_keeps_challenger_and_skips_duplicate_shadow(self):
+        challenger = pd.DataFrame({"evaluation_status": ["REGULAR_SEASON_GRADED"],
+                                   "correct": [True], "model_version": ["ML_NEW"]})
+        shadow = pd.DataFrame({"evaluation_status": ["REGULAR_SEASON_GRADED"],
+                               "correct": [False], "control_name": ["ML_REF"]})
+        summary = self.summary(challengers={"moneyline": challenger, "moneyline_shadow": shadow})
+        models = summary["models"]["moneyline"]
+        self.assertIn("challenger", models)
+        self.assertNotIn("shadow", models)
+        self.assertIn("Challenger (ML_NEW): 1-0", render_markdown(summary))
+
     def test_unscored_sog_rows_not_added_to_losses(self):
         with tempfile.TemporaryDirectory() as raw:
             package = Path(raw)
@@ -226,7 +252,8 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
             grades[lane].loc[push, "line"] += 0.5
         summary = self.summary(grades=grades)
         markdown = render_markdown(summary)
-        self.assertIn("Reference: 1-1 |", markdown)
+        self.assertIn("Production (ML_REF): 1-1 |", markdown)
+        self.assertIn("Reference (PL_REF): 1-1 |", markdown)
         self.assertIn("Overall: 2-2 |", markdown)
         self.assertNotIn("Overall: 2-2-0", markdown)
         self.assertNotIn("P | Unresolved", markdown)

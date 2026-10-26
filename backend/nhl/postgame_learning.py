@@ -404,6 +404,8 @@ def ensure_prior_learning(
         for lane, name in (
             ("moneyline", "graded_moneyline_shot_finishing_challenger_v3_results.csv"),
             ("puck_line", "graded_puck_line_v2_shot_prior_model_results.csv"),
+            # The cross-market shadow model (V2 since the 2026-10-14 Moneyline cutover).
+            ("moneyline_shadow", "graded_moneyline_shadow_results.csv"),
         ):
             candidate = grade_package / name
             if candidate.is_file():

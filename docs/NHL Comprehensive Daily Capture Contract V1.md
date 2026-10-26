@@ -562,6 +562,17 @@ cutover keep the formula as production. One-step rollback:
 `NHL_SOG_SCORER=poisson_baseline` (the formula writes the production file and
 the HGB model returns to its shadow lane).
 
+Game-market roles in the daily performance summary (2026-10-26). Moneyline
+shows `Production (<model>)` from the governed grades and, when present,
+`Shadow (<model>)` from the cross-market grade package's
+`graded_moneyline_shadow_results.csv` (V2 since the 2026-10-14 cutover). The
+challenger file still grades V3, which is now production; when its model equals
+production it is not shown, so slates before the cutover keep `Challenger
+(V3)` and no duplicate shadow. Puck Line shows `Reference (<model>)` and
+`Challenger (<model>)`. The weekly evaluation takes the Moneyline shadow's
+daily record from those grade packages for days whose summary does not carry
+it (each game's latest grade).
+
 Points probability ladders have two construction contracts.
 `NHL_POINTS_COUNT_HGB_V1` predicts one nonnegative expected count and derives
 the 0.5, 1.5, and 2.5 exceedance probabilities from the same Poisson count

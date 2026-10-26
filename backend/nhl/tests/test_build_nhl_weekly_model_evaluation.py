@@ -53,6 +53,31 @@ class RecordTests(unittest.TestCase):
         self.assertEqual((int(row.wins.sum()), int(row.losses.sum())), (8, 2))
 
 
+    def test_moneyline_shadow_records_come_from_grade_packages_latest_grade_wins(self):
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            for name, ts, correct in (("grade=a", "2026-10-21T08:00:00Z", [True, True]),
+                                      ("grade=b", "2026-10-21T09:00:00Z", [False, True])):
+                d = root / "state=x" / name; d.mkdir(parents=True)
+                pd.DataFrame({"slate_date": ["2026-10-20"] * 2, "game_id": [1, 2], "correct": correct,
+                              "evaluation_status": ["REGULAR_SEASON_GRADED"] * 2,
+                              "control_name": ["V2"] * 2, "grading_timestamp_utc": [ts] * 2}
+                             ).to_csv(d / "graded_moneyline_shadow_results.csv", index=False)
+            extra = ev.moneyline_shadow_records(root)
+            self.assertEqual(extra.to_dict("records"), [
+                {"slate_date": "2026-10-20", "lane": "moneyline", "model": "V2", "wins": 1, "losses": 1}])
+            frame = ev.model_records({"2026-10-20": summary(V3, V3)}, extra)
+            row = frame[frame.model == "V2"]
+            self.assertEqual((int(row.wins.sum()), int(row.losses.sum())), (1, 1))
+            # A day the summary already covers keeps the summary's record.
+            covered = summary({"control_name": "V2"}, V3)
+            frame = ev.model_records({"2026-10-20": covered}, extra)
+            row = frame[frame.model == "V2"]
+            self.assertEqual((int(row.wins.sum()), int(row.losses.sum())), (3, 1))
+
+
 class QualityTests(unittest.TestCase):
     def setUp(self):
         self.rows = ev.enrich(pd.DataFrame({

@@ -81,6 +81,16 @@ def _probability_context(frame: pd.DataFrame, correct: pd.Series,
     return values
 
 
+def _game_model_label(summary: dict[str, Any]) -> str:
+    """Model name for a game-market summary (version, control name, else role name)."""
+    identity = summary.get("model_identity") or {}
+    for key in ("model_version", "control_name", "model_name"):
+        value = identity.get(key)
+        if isinstance(value, str) and value:
+            return value
+    return str(identity.get("name") or "")
+
+
 def _game_summary(frame: pd.DataFrame, *, lane: str, model_name: str,
                   challenger: bool = False) -> dict[str, Any]:
     if frame.empty:
@@ -1245,9 +1255,9 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
             grade_source=source_artifacts.get(f"{lane}_grade_sha256", "UNBOUND"),
         )
     for lane, frame in challengers.items():
-        if lane in {"moneyline", "puck_line"}:
+        if lane in {"moneyline", "puck_line", "moneyline_shadow"}:
             _assert_game_market_nonpushable(
-                frame, market=lane, slate_date=slate_date,
+                frame, market="moneyline" if lane == "moneyline_shadow" else lane, slate_date=slate_date,
                 grade_source=source_artifacts.get(
                     f"{lane}_challenger_grade_sha256", "UNBOUND"),
             )
@@ -1275,6 +1285,18 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
         models["puck_line"]["challenger"] = _game_summary(
             challengers["puck_line"], lane="puck_line",
             model_name="puck_line_v2_shot_prior_challenger", challenger=True)
+    # After the 2026-10-14 Moneyline cutover the challenger file grades the
+    # production model again; show the cross-market shadow model instead.
+    reference_label = _game_model_label(models["moneyline"]["reference"])
+    if (models["moneyline"].get("challenger")
+            and _game_model_label(models["moneyline"]["challenger"]) == reference_label):
+        del models["moneyline"]["challenger"]
+    shadow_frame = challengers.get("moneyline_shadow")
+    if shadow_frame is not None and not shadow_frame.empty:
+        shadow = _game_summary(shadow_frame, lane="moneyline", model_name="moneyline_shadow", challenger=True)
+        if _game_model_label(shadow) not in {reference_label, _game_model_label(
+                models["moneyline"].get("challenger") or {})}:
+            models["moneyline"]["shadow"] = shadow
     if package is not None:
         models["sog"]["unscored"] = _unscored_sog(package)
     market_coverage = market_coverage or {}
@@ -1495,13 +1517,18 @@ def render_markdown(summary: dict[str, Any]) -> str:
              f"reconciliation {summary['reconciliation_status']}; "
              f"official outcomes {summary['official_outcomes_status']}", "",
              "## Moneyline",
-             "Reference: " + game_line(models["moneyline"]["reference"])]
-    if "challenger" in models["moneyline"]:
-        lines.append("Challenger: " + game_line(models["moneyline"]["challenger"]))
+             f"Production ({_game_model_label(models['moneyline']['reference'])}): "
+             + game_line(models["moneyline"]["reference"])]
+    for role, title in (("challenger", "Challenger"), ("shadow", "Shadow")):
+        if role in models["moneyline"]:
+            lines.append(f"{title} ({_game_model_label(models['moneyline'][role])}): "
+                         + game_line(models["moneyline"][role]))
     lines += ["", "## Puck Line",
-              "Reference: " + game_line(models["puck_line"]["reference"])]
+              f"Reference ({_game_model_label(models['puck_line']['reference'])}): "
+              + game_line(models["puck_line"]["reference"])]
     if "challenger" in models["puck_line"]:
-        lines.append("Challenger: " + game_line(models["puck_line"]["challenger"]))
+        lines.append(f"Challenger ({_game_model_label(models['puck_line']['challenger'])}): "
+                     + game_line(models["puck_line"]["challenger"]))
     lines += ["", *prop_section("SOG", models["sog"]), ""]
     unscored = models["sog"].get("unscored", {})
     if unscored:
