@@ -2138,23 +2138,25 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - **Line-movement study, scheduled for about 2026-10-30** (operator-approved
   2026-10-26; read-only; runs after the trial's last slate, 10-29). Operator
   observation behind it: early lines no longer seem to be the better deal they
-  once were. Scope, on every retained snapshot (daily-run, EARLY_TRIAL,
-  REFRESH and CLOSING prop observations; Moneyline from the mainline
-  cross-market captures):
-  1. Price movement by hours before puck, per book group (sportsbooks,
-     prediction markets, BetOnline): direction and size of the change in
-     no-vig implied probability, and how often an early offer disappears.
-  2. Closing-line value against our models: for production SOG (HGB from
-     10-25, formula before) and Points HGB, whether the price on the model's
-     side moves toward it (positive CLV) or away by the CLOSING snapshot;
-     by line, side and model-probability band.
+  once were. Built on the odds snapshots each daily run stores (plus the 06:00
+  EARLY_TRIAL snapshot), i.e. prices at times the operator can bet. CLOSING
+  snapshots (10-13 minutes before puck) are excluded: that is not a market the
+  operator can bet, and closing-line value is a separate topic. Scope:
+  1. Price movement through the day, by hours before puck and per book group
+     (sportsbooks, prediction markets, BetOnline): direction and size of the
+     change in no-vig implied probability between a slate's run snapshots, and
+     how often an earlier offer disappears or a new one appears.
+  2. Movement on our models' side: for production SOG (HGB from 10-25, formula
+     before) and Points HGB, whether the price on the model's side improves or
+     worsens from the earliest to the later run snapshots of the same slate;
+     by line, side and model-probability band. This answers "bet early or
+     wait" for the side we would actually take.
   3. Moneyline: the same for production V3 and shadow V2 from the mainline
-     captures (MIDDAY / FINAL_PREGAME / REFRESH).
-  Inventory on 2026-10-26: 122 prop snapshots over 30 slates (80 daily-run,
-  35 CLOSING since 10-20, 4 EARLY_TRIAL, 3 REFRESH). Known gap: 10-23 has no
-  CLOSING snapshots (0 of 2 games; the closing LaunchAgent logged nothing that
-  evening, most likely the Mac asleep; not confirmed). Snapshots carry only
-  the best price, not size.
+     cross-market captures (MIDDAY / FINAL_PREGAME / REFRESH).
+  Inventory on 2026-10-26 (excluding CLOSING): 87 prop snapshots over 30
+  slates (09-24..10-26), 06:00-18:00 PT, clustered near 07:00, 12:00 and
+  15:00-16:00; 28 slates have 2+ snapshots and 18 have 3+. Snapshots carry
+  only the best price, not size.
 
 ### P2.27 Grade production SOG and Points from each game's latest pregame run
 
