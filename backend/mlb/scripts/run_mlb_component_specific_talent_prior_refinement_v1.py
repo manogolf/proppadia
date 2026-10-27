@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Bounded component-specific refinement of the frozen MLB PA talent prior."""
 from __future__ import annotations
-import hashlib,json,sys,tempfile
+import hashlib,json,shutil,sys,tempfile
 from pathlib import Path
 import numpy as np,pandas as pd
 from backend.mlb.scripts import run_mlb_pa_outcome_prediction_foundation_v1 as pa
@@ -25,7 +25,7 @@ def main():
   return trace
  sys.settrace(trace)
  try:v1.main()
- finally:sys.settrace(None);v1.OUT=old
+ finally:sys.settrace(None);shutil.rmtree(v1.OUT,ignore_errors=True);v1.OUT=old
  d=captured['d'];frame=captured['frame'];b24=captured['b24'];p24=captured['p24'];b25=captured['b25'];p25=captured['p25'];dev=captured['dev'];val=captured['val'];hold=captured['hold'];features=pa.B+pa.P
  # Controls are exact predecessor constructions.
  xa=frame('A');xb=frame('B2',75);controls={};rows=[]

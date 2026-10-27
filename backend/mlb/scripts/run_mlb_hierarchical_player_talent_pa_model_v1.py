@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Sparse Gaussian-MAP hierarchical batter/pitcher PA hurdle experiment."""
 from __future__ import annotations
-import hashlib,json,time,resource,tempfile,sys
+import hashlib,json,time,resource,shutil,tempfile,sys
 from pathlib import Path
 import numpy as np,pandas as pd
 from scipy import sparse
@@ -43,7 +43,7 @@ def main():
   return trace
  sys.settrace(trace)
  try:prior.main()
- finally:sys.settrace(None);prior.OUT=old
+ finally:sys.settrace(None);shutil.rmtree(prior.OUT,ignore_errors=True);prior.OUT=old
  gd=cap['d'];gx=cap['frame']('B2',75);generic={}
  for phase,q in [('VALIDATION',gd.split.eq('VALIDATION')),('LATER_HOLDOUT',gd.split.eq('LATER_HOLDOUT'))]:m=pa.fit_model(gx.loc[gd.split.eq('DEVELOPMENT'),pa.B+pa.P],gd.loc[gd.split.eq('DEVELOPMENT'),'outcome'],'linear');generic[phase]=pa.pred(m,gx.loc[q,pa.B+pa.P])
  # Fixed monthly strict-prior refits. Same-date/game rows never enter their prediction state.
