@@ -1,11 +1,17 @@
 #!/bin/sh
 set -eu
 
-project_python="$(cd "$(dirname "$0")/.." && pwd)/.venv/bin/python"
+repo_root="$(cd "$(dirname "$0")/.." && pwd)"
+project_python="$repo_root/.venv/bin/python"
 
 if [ ! -x "$project_python" ]; then
     printf 'Project Python is missing or not executable: %s\n' "$project_python" >&2
     exit 127
 fi
+
+# Keep every temporary file inside the repo's git-ignored tmp/ (repo-only rule).
+mkdir -p "$repo_root/tmp"
+TMPDIR="$repo_root/tmp"; TMP="$TMPDIR"; TEMP="$TMPDIR"
+export TMPDIR TMP TEMP
 
 exec "$project_python" "$@"

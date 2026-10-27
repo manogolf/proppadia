@@ -29,6 +29,7 @@
 - Do not use ambient `python`, `python3`, or `pytest` for repository work.
 - Pytest being unavailable is not a reason to change interpreters or troubleshoot NumPy/SciPy. Do not install packages without explicit authorization.
 - For Python import failures, first run `./bin/check-python-env`.
+- `./bin/python` sets `TMPDIR`/`TMP`/`TEMP` to the repo's `tmp/`, so every script it starts (and their children) keeps temporary files inside the repo.
 - `./bin/python` runs the repo's own `.venv` (Python 3.11.13, Homebrew). To rebuild it identically and offline, from the repo root:
   `rm -rf .venv && /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv && TMPDIR=$PWD/tmp PIP_NO_CACHE_DIR=1 .venv/bin/python -m pip install --no-index --no-cache-dir --find-links vendor/python-wheels --require-hashes -r vendor/requirements-lock.txt && printf '%s\n' "$PWD" > .venv/lib/python3.11/site-packages/proppadia_root.pth`
   The wheels in `vendor/python-wheels/` are git-ignored; `vendor/requirements-lock.txt` pins every package version and checksum.
