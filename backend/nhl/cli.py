@@ -3937,7 +3937,24 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return ap
 
 
+REPO_TMP_DIR = ROOT / "tmp"
+
+
+def use_repo_temp_dir() -> Path:
+    """Keep temporary files inside the repo's git-ignored tmp/.
+
+    Covers this process (tempfile) and every child it spawns (TMPDIR is
+    inherited through os.environ), so no run writes to the system temp area.
+    """
+    REPO_TMP_DIR.mkdir(parents=True, exist_ok=True)
+    for key in ("TMPDIR", "TMP", "TEMP"):
+        os.environ[key] = str(REPO_TMP_DIR)
+    tempfile.tempdir = str(REPO_TMP_DIR)
+    return REPO_TMP_DIR
+
+
 def main(argv: Sequence[str] | None = None):
+    use_repo_temp_dir()
     ap = build_arg_parser()
 
     args = ap.parse_args(argv)
