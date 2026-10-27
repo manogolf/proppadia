@@ -169,11 +169,13 @@ def main() -> int:
         raise SystemExit("--now is for --dry-run only; live captures use the real clock")
     now = (datetime.fromisoformat(args.now.replace("Z", "+00:00")) if args.now
            else datetime.now(UTC))
-    root = args.observation_root
     if args.dry_run:
+        # Dry runs write synthetic observations; discard them once reported.
         import tempfile
-        root = Path(tempfile.mkdtemp(prefix="nhl_early_trial_dry_run_"))
-    print(json.dumps(run(now=now, observation_root=root, dry_run=args.dry_run), sort_keys=True))
+        with tempfile.TemporaryDirectory(prefix="nhl_early_trial_dry_run_") as root:
+            print(json.dumps(run(now=now, observation_root=Path(root), dry_run=True), sort_keys=True))
+        return 0
+    print(json.dumps(run(now=now, observation_root=args.observation_root, dry_run=False), sort_keys=True))
     return 0
 
 

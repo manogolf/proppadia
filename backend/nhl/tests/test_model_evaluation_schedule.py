@@ -1,5 +1,6 @@
 """Weekly evaluation schedule (status, gated build) and the improvement log."""
 import json
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -11,8 +12,9 @@ from backend.nhl import model_evaluation_schedule as sched
 from backend.nhl.scripts import build_nhl_weekly_model_evaluation as ev
 
 
-def make_root(enabled: bool, reports: list[str]) -> Path:
+def make_root(test: unittest.TestCase, enabled: bool, reports: list[str]) -> Path:
     root = Path(tempfile.mkdtemp(dir=Path(__file__).resolve().parents[3] / "tmp"))
+    test.addCleanup(shutil.rmtree, root, ignore_errors=True)
     (root / "docs/nhl").mkdir(parents=True)
     for d in reports:
         (root / f"docs/nhl/weekly_model_evaluation_{d}.md").write_text("x")
@@ -29,7 +31,7 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(config["weekly"]["run_on_et_weekday"], "SUNDAY")
 
     def test_status_across_the_week(self):
-        root = make_root(False, ["2026-10-24"])
+        root = make_root(self, False, ["2026-10-24"])
         config = sched.load_config(root / "config.json")
         self.assertTrue(sched.status("2026-10-25", config, root)["current"])          # Sunday after the report
         self.assertEqual(sched.status("2026-10-31", config, root)["next_run_et"], "2026-11-01")
@@ -38,7 +40,7 @@ class ScheduleTests(unittest.TestCase):
         self.assertTrue(sched.status("2026-11-03", config, root)["overdue"])
 
     def test_disabled_never_builds(self):
-        root = make_root(False, ["2026-10-24"])
+        root = make_root(self, False, ["2026-10-24"])
         calls = []
         result = sched.check_and_run("2026-11-01", config_path=root / "config.json", root=root,
                                      runner=lambda *a, **k: calls.append(a))
@@ -47,7 +49,7 @@ class ScheduleTests(unittest.TestCase):
         self.assertIn("switched off", sched.console_line(result))
 
     def test_enabled_builds_once_for_the_expected_week(self):
-        root = make_root(True, ["2026-10-24"])
+        root = make_root(self, True, ["2026-10-24"])
         calls = []
 
         def runner(cmd, **kwargs):
@@ -62,7 +64,7 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
     def test_build_failure_and_bad_config_do_not_raise(self):
-        root = make_root(True, [])
+        root = make_root(self, True, [])
         failed = sched.check_and_run("2026-11-01", config_path=root / "config.json", root=root,
                                      runner=lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="boom"))
         self.assertEqual(failed["status"], "BUILD_FAILED_NONBLOCKING")
