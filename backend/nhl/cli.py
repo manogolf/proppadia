@@ -108,6 +108,7 @@ from backend.nhl.sog_hgb_count_model import load_history as load_sog_count_hgb_h
 from backend.nhl.points_hgb_shadow import capture_from_files as capture_points_hgb_shadow
 from backend.nhl.points_hgb_shadow import prepare_authoritative_inputs as prepare_points_hgb_inputs
 from backend.nhl.points_hgb_shadow import build_production_prediction_artifact
+from backend.nhl.input_watch import run_input_watch
 from backend.nhl.points_team_shots_evidence import (
     attach_fallback_feature_export as attach_points_fallback_export,
     bind_scorer_input as bind_points_evidence_scorer_input,
@@ -1777,6 +1778,31 @@ def _sog_integrity_eligible_game_args(
     return ["--eligible-game-ids", ",".join(str(int(game_id)) for game_id in game_ids)]
 
 
+def _run_input_watch_lane(*, recorder: DailyRunRecorder, slate: str, daily_run_id: str,
+                          prediction_run_dir: Path) -> None:
+    """Read-only input watch; flags reach the console line, never the run status."""
+    recorder.start_lane("input_watch", inputs=[{"prediction_run_dir": str(prediction_run_dir),
+                                                "provider_requests": 0, "credits_consumed": 0}])
+    try:
+        captures = sorted((ROOT / "artifacts/operational/nhl/points_hgb_shadow").glob(
+            f"season=*/slate_date={slate}/run_id={daily_run_id}/phase=*/captured_at=*"))
+        prior = (datetime.fromisoformat(slate) - timedelta(days=1)).date().isoformat()
+        watch = run_input_watch(
+            slate_date=slate, run_id=daily_run_id, prediction_run_dir=prediction_run_dir,
+            points_capture_dir=captures[-1] if captures else None,
+            operational_root=ROOT / "artifacts/operational/nhl", prior_date=prior)
+        recorder.finish_lane("input_watch", outputs=[{
+            "path": watch["path"], "flag_count": watch["flag_count"], "flags": watch["flags"],
+            "disagreements_status": watch["disagreements"].get("status")}],
+            reason=f"FLAGS:{watch['flag_count']}", database_rows_written=False,
+            provider_requests=0, credits_consumed=0)
+        print(f"NHL_INPUT_WATCH=flags={watch['flag_count']} "
+              f"{','.join(watch['flags']) or 'none'} path={watch['path']}/input_watch.md")
+    except Exception as error:
+        recorder.fail_lane("input_watch", error, blocking=False)
+        print(f"⚠️ input watch failed; predictions unaffected: {error}")
+
+
 def _run_independent_daily_lanes(
     *, recorder: DailyRunRecorder, db: str, slate: str, with_odds: bool,
     odds_phase: str, daily_run_id: str, canonical_games,
@@ -1796,7 +1822,7 @@ def _run_independent_daily_lanes(
     if no_pregame_games:
         for lane_name in ("saves", "points", "points_hgb_shadow", "odds", "moneyline",
                           "sog_attachment", "points_attachment", "saves_attachment",
-                          "research_integrity"):
+                          "input_watch", "research_integrity"):
             recorder.finish_lane(lane_name, status="SKIPPED_NO_PREGAME_GAMES",
                                  reason="ALL_CANONICAL_GAMES_ALREADY_STARTED")
         _reference_cold_start_sog(recorder, slate)
@@ -2462,6 +2488,8 @@ def _run_independent_daily_lanes(
             "points_hgb_shadow", status="PREREQUISITES_UNAVAILABLE",
             reason="PHOENIX_SAME_RUN_CONTROL_UNAVAILABLE",
         )
+    _run_input_watch_lane(recorder=recorder, slate=slate, daily_run_id=daily_run_id,
+                          prediction_run_dir=prediction_run_dir)
     _ACTIVE_DAILY_LANE = "research_integrity"
 
     recorder.start_lane("research_integrity")
@@ -3189,6 +3217,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         recorder.finish_lane("odds", status="SKIPPED_MORNING_ONLY")
         for lane_name in ("sog_attachment", "points_attachment", "saves_attachment"):
             recorder.finish_lane(lane_name, status="SKIPPED_MORNING_ONLY")
+        recorder.finish_lane("input_watch", status="SKIPPED_MORNING_ONLY")
         recorder.finish_lane("research_integrity", status="SKIPPED_MORNING_ONLY")
         print("✅ Morning-only boundary reached: stable upstream state prepared; scoring, markets, candidates, and uploads skipped.")
         return

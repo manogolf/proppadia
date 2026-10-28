@@ -589,6 +589,30 @@ production it is not shown, so slates before the cutover keep `Challenger
 daily record from those grade packages for days whose summary does not carry
 it (each game's latest grade).
 
+Input watch (2026-10-28, NHL Backlog P2.38). Lane `input_watch` runs after
+production SOG, Points HGB and the odds observation, before
+`research_integrity`. It is read-only (no database access, no provider
+requests, predictions unchanged) and non-blocking: a failure is
+`FAILED_NONBLOCKING`, and flags never change the run classification. Output:
+`artifacts/operational/nhl/input_watch/slate_date=<d>/run_id=<r>/`
+(`input_watch.json`, `input_watch.md`, `SHA256SUMS`), and the console line
+`NHL_INPUT_WATCH=flags=<n> <flags> path=<md>`. Contents
+(`backend/nhl/input_watch.py`): (1) input sanity per player: impossible
+values (attempts below shots, team shots outside 15-45, shot share outside
+0-0.5, PP TOI above TOI), substituted attempts, and Points inputs outside the
+frozen model's training p01-p99
+(`backend/nhl/config/points_hgb_training_feature_ranges.json`); a check is a
+flag when any impossible value appears or more than 10% of players are out of
+range or missing (2% for substituted attempts); (2) the ten largest gaps per
+lane between model P(selected side) and the median same-book no-vig market
+probability on two-sided lines observed before the watch ran (quote matching
+reuses `export_nhl_all_candidate_evaluation.load_retained_quotes`), each with
+reasons: rule reasons from P2.29/P2.37 and inputs at least 1.5 standard
+deviations from players the market prices within 5 points on the same line;
+(3) the prior date's shot-attempt source diagnostic (games dropped is a
+flag). SOG has no retained training matrix, so its out-of-range check is not
+available.
+
 Two-sided line level in the daily performance summary (2026-10-28). Next to
 the all-predictions tables, SOG production and Points HGB production show W/L
 by line and side for only the graded predictions whose exact line had a

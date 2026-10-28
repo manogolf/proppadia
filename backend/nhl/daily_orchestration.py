@@ -60,6 +60,7 @@ LANE_NAMES = (
     "sog_attachment",
     "points_attachment",
     "saves_attachment",
+    "input_watch",
     "research_integrity",
 )
 

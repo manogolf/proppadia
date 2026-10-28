@@ -1,0 +1,60 @@
+{
+  "schema_version": "NHL_POINTS_HGB_TRAINING_FEATURE_RANGES_V1",
+  "source": "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/2026-10-24/rebuilt_training_matrix_2023_2024.csv.gz",
+  "source_sha256": "d83ba5035a6c34c253a24c4e08e71444caecd98f6f01df1c0436eb2e8ba8533d",
+  "model_identity_sha256": "fb701c671f24acc894ec8195c5f951136f2b521036f0f37e966b85ba726fa4ca",
+  "rows": 90486,
+  "note": "Known (non-missing) training values; p01/p99 bound the range the frozen model saw.",
+  "features": {
+    "is_home": {
+      "p01": 0.0,
+      "p99": 1.0,
+      "missing_share": 0.0
+    },
+    "d10_sog_per60": {
+      "p01": 0.284726,
+      "p99": 13.889715,
+      "missing_share": 0.022523
+    },
+    "attempts_d10_per60": {
+      "p01": 3.333526,
+      "p99": 24.37922,
+      "missing_share": 0.022523
+    },
+    "player_points_last10": {
+      "p01": 0.0,
+      "p99": 1.6,
+      "missing_share": 0.022523
+    },
+    "current_season_points_prior": {
+      "p01": 0.0,
+      "p99": 71.0,
+      "missing_share": 0.0
+    },
+    "current_season_games_prior": {
+      "p01": 0.0,
+      "p99": 77.0,
+      "missing_share": 0.0
+    },
+    "mean_toi_last10": {
+      "p01": 7.749,
+      "p99": 25.52053,
+      "missing_share": 0.022523
+    },
+    "mean_pp_toi_last10": {
+      "p01": 0.0,
+      "p99": 4.13453,
+      "missing_share": 0.022523
+    },
+    "team_d10_sf_per_game": {
+      "p01": 0.0,
+      "p99": 36.6,
+      "missing_share": 0.0
+    },
+    "last10_team_sog_share": {
+      "p01": 0.0,
+      "p99": 0.141737,
+      "missing_share": 0.0
+    }
+  }
+}

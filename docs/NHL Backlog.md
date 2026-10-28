@@ -2577,6 +2577,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.38 Daily input watch surfaces input problems without being asked
+
+- Status: **IMPLEMENTED 2026-10-28** (operator request after the P2.29 and
+  P2.37 finds, each of which began with a question about one player's
+  price). Contract: Comprehensive Daily Capture Contract, "Input watch".
+- First run on 10-28 (run `nhldaily_20261028T152746014617Z_010151fb`,
+  replayed after the fact): 3 flags (one player with attempts below shots in
+  Points and SOG: Studnicka, whose attempt rate averages fewer games than his
+  shot rate; and two 10-27 games without attempts, since backfilled). The
+  explainer put McDavid first (Under 1.5, model 68% vs market 46%: at the
+  model's ceiling, recent scoring outside the training range) and Draisaitl
+  in the top ten for the same reason.
+- Open: no SOG training ranges (no retained SOG training matrix); the weekly
+  report does not yet track the P2.29 cohort record (proposal item 4).
+- Noticed while building: HGB promotion gate J reads `PASS` from
+  `operational_promotion_gates.json` and the integration-proof hash check
+  can only confirm it, never revoke it (`points_hgb_promotion.evaluate_promotion`),
+  so a scorer or CLI edit without refreshed evidence would not stop the
+  Points lane. Evidence was refreshed for both 10-28 edits. Not changed.
+
 ### P2.37 Shot attempts are dropped for whole games; the Points scorer reads unknown as 0
 
 - Status: **RESOLVED 2026-10-28** (per-skater rule live, unknown attempts no longer scored as 0, 2026 backfill committed).

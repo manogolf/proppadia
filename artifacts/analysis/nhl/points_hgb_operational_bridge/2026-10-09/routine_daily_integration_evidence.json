@@ -1,7 +1,7 @@
 {
   "classification": "HGB_ROUTINE_DAILY_INTEGRATION_PASS",
   "coherence_crossing_count": 0,
-  "daily_cli_integration_sha256": "049561dc20a04429f572b5c65ab90a4ecd5972ff3196b6e61bec8804e80e56af",
+  "daily_cli_integration_sha256": "8ebfd257477efeee0a505bebecf5b408850a140b23332bb784e6ebd029b8381e",
   "database_mutations": 0,
   "deterministic_replay": "DETERMINISTIC_REPLAY_PASS",
   "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V1",
