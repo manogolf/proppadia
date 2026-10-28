@@ -2289,6 +2289,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     Nugent-Hopkins Under 0.5 (deflated share and missing attempts),
     Zegras Over 0.5 (high 0.112 shot share).
   - Scratch rows and scripts: `tmp/gap_study/` (git-ignored).
+  - Breakdown 2026-10-28 (Points HGB, two-sided, since 10-16, 173 picks,
+    74-99): by input cause, every group wins 43-50% (defenseman 61 picks,
+    27-34; missed games 20; few games 14; scores without shots 22; star
+    ceiling only 4, 2-2); 84 picks have no input cause (37-47). By gap:
+    model up to 10 points above the market 45-43 (51%); more than 10 points
+    29-56 (34%), below the market's own ~42%. Reading: the cohort selects
+    the model's largest disagreements with a better-informed market, so
+    input fixes shrink it but do not make it win; the ceiling fix (P2.39)
+    touches 4 of 173.
 
 - Live source defect found during the refit: since 2026-01 the database
   stores "no PP time" as NULL. Reconciliation staging inserts
