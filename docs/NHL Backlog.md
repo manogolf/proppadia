@@ -2577,6 +2577,27 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.37 Shot attempts are dropped for whole games; the Points scorer reads unknown as 0
+
+- Status: **OPEN 2026-10-28 (operator: correct, not test).**
+- Source rule: `points_attempts_source.derive_attempts_from_final_pbp` takes
+  attempts from the final play-by-play only when every skater's PBP shots on
+  goal equal the boxscore, else the whole game stays NULL. 29 of 198 2026
+  games are all-NULL, still happening (10-27: 2026020191, 2026020192).
+  In the retained failed sources only 1-8 of 36 skaters mismatch (or one
+  event has an invalid shooter in 2026020191); the rest are discarded.
+- Effect: `attempts_d10_per60` averages the player's non-NULL games, so it
+  is NaN only when all recent games are NULL (0.7% of rows); the scorer then
+  fills 0 (`fill_zero`), reading the player as never attempting a shot.
+  Nugent-Hopkins 10-28 (3 games, all NULL): attempts 0 and a deflated team
+  shot share made Under 0.5 a -132 fair price; with his attempts at 1.9x
+  his SOG rate and share per game played the model gives Over +123 vs
+  Under (market Under +105).
+- Correction: accept attempts per skater whose PBP SOG reconciles (drop only
+  mismatched skaters and invalid-shooter events), backfill the NULL 2026
+  games through the governed source path, and stop scoring an unknown
+  attempt rate as 0.
+
 ### P2.36 Daily performance summary shows a two-sided line level for SOG and Points
 
 - Status: **IMPLEMENTED 2026-10-28.** The operator noticed SOG 2.5/3.5 win
