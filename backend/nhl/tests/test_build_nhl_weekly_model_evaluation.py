@@ -1,5 +1,6 @@
 """Weekly NHL model evaluation: record extraction, quality and segments."""
 import unittest
+from pathlib import Path
 
 import pandas as pd
 
@@ -140,6 +141,20 @@ class QualityTests(unittest.TestCase):
         keys = [[1, 1, 1.5], [1, 2, 1.5, None]]
         self.assertEqual(ev.mark_two_sided(self.rows, keys).tolist(), [True, True, False, False])
         self.assertTrue(ev.market_p_over(self.rows, keys).isna().all())
+
+    def test_formula_shadow_rows_are_graded_on_the_shadow_side(self):
+        import tempfile
+        from unittest import mock
+        shadow = pd.DataFrame({"game_id": [1, 1], "player_id": [7, 8], "line": [1.5, 2.5],
+                               "shadow_p_over": [0.3, 0.7], "official_sog": [1, 2]})
+        with tempfile.TemporaryDirectory(dir=ev.ROOT / "tmp") as temp, \
+                mock.patch.object(ev, "CACHE", Path(temp)), \
+                mock.patch.object(ev.baseline, "_package", return_value=Path(temp)), \
+                mock.patch("backend.nhl.sog_shrunk_rate_shadow.latest_pregame_rows", return_value=shadow):
+            rows = ev.formula_shadow_rows("2026-10-26", {"summary_identity": "x" * 20, "reconciliation_package": "p"})
+        # 0.3 -> UNDER 1.5 with 1 shot: WIN; 0.7 -> OVER 2.5 with 2 shots: LOSS.
+        self.assertEqual(rows.selected_side.tolist(), ["UNDER", "OVER"])
+        self.assertEqual(rows.grading_state.tolist(), ["WIN", "LOSS"])
 
 
 if __name__ == "__main__":

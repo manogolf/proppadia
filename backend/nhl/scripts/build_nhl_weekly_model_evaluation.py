@@ -37,6 +37,10 @@ OUT_ROOT = ROOT / "artifacts/analysis/nhl/model_evaluation"
 CACHE = OUT_ROOT / "row_cache"
 DOCS = ROOT / "docs/nhl"
 SOG_START, POINTS_START = "2026-10-08", "2026-10-10"
+# SOG production became HGB on 2026-10-25; the Poisson formula has run as a
+# shadow since. The formula lane is production rows before and shadow rows after.
+FORMULA_SHADOW_START = "2026-10-25"
+FORMULA_LANE = "sog formula"
 # First slate with timestamped production SOG and Points HGB candidates for quote matching.
 TWO_SIDED_START = "2026-10-10"
 OPERATIONAL = ROOT / "artifacts/operational/nhl"
@@ -58,6 +62,28 @@ def _summary(day: str) -> dict | None:
         return baseline._latest_summary(day)[1]
     except FileNotFoundError:
         return None
+
+
+def formula_shadow_rows(day: str, summary: dict) -> pd.DataFrame:
+    """Latest-pregame SOG formula shadow rows graded like production rows."""
+    from backend.nhl.sog_formula_shadow import MODEL_IDENTITY
+    from backend.nhl.sog_shrunk_rate_shadow import latest_pregame_rows
+    path = CACHE / "sog_formula" / f"{day}_{summary['summary_identity'][:16]}.csv"
+    if path.is_file():
+        return pd.read_csv(path)
+    rows = latest_pregame_rows(
+        slate_date=day, reconciliation_package=baseline._package(day, summary["reconciliation_package"]),
+        capture_root=OPERATIONAL / "sog_formula_shadows", model_identity=MODEL_IDENTITY)
+    if not rows.empty:
+        count = pd.to_numeric(rows.official_sog, errors="coerce")
+        line = pd.to_numeric(rows.line, errors="coerce")
+        side = np.where(pd.to_numeric(rows.shadow_p_over) >= 0.5, "OVER", "UNDER")
+        rows = pd.DataFrame({"slate_date": day, "game_id": rows.game_id, "player_id": rows.player_id,
+                             "line": line, "p_over": pd.to_numeric(rows.shadow_p_over), "selected_side": side,
+                             "grading_state": np.where((side == "OVER") == (count > line), "WIN", "LOSS")})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows.to_csv(path, index=False)
+    return rows
 
 
 def _cached_rows(lane: str, day: str, identity: str) -> pd.DataFrame:
@@ -348,7 +374,7 @@ def _wl(frame: pd.DataFrame) -> str:
 
 
 def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFrame, pulse: str | None,
-           log_note: str = "", schedule_note: str = "") -> str:
+           log_note: str = "", schedule_note: str = "", shadow_rows: pd.DataFrame | None = None) -> str:
     wk = rows[rows.slate_date.isin(week)]
     lines = [f"# NHL weekly model evaluation — week ending {as_of}", "",
              *([schedule_note, ""] if schedule_note else []),
@@ -398,10 +424,12 @@ def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFram
         tw = t[t.slate_date.isin(week)]
         lines.append(f"| {lane} | {line} | {side} | {_wl(w)} | {_wl(tw)} | {_wl(g)} | {_pct(g.win.mean())} | "
                      f"{_wl(t)} | {_pct(t.win.mean()) if len(t) else '—'} |")
-    gaps = gap_table(rows, week)
+    gaps = gap_table(pd.concat([rows, shadow_rows], ignore_index=True) if shadow_rows is not None else rows, week)
     lines += ["", "## Model vs market by gap (two-sided lines, season to date)", "",
               "Gap = model probability on its side minus the market's no-vig probability on that side "
-              "(median across books). Lower log loss is better; the closer of the two shows who forecast better.", "",
+              "(median across books). Lower log loss is better; the closer of the two shows who forecast better. "
+              f"`{FORMULA_LANE}` is the Poisson formula: production until {FORMULA_SHADOW_START}, the "
+              "`sog_poisson_formula_shadow` lane after (latest pregame capture per player-game).", "",
               "| Lane | Gap | Side | Week W-L | Season W-L | Win % | Model | Market | Log loss model | Log loss market |",
               "|---|---|---|---:|---:|---:|---:|---:|---:|---:|"]
     for r in gaps.itertuples():
@@ -457,6 +485,15 @@ def main() -> int:
                 r = _cached_rows(lane, day, summaries[day]["summary_identity"])
                 if not r.empty:
                     frames.append(r.assign(lane=lane))
+    for day in _days(SOG_START, args.as_of):
+        if day not in summaries:
+            continue
+        if day < FORMULA_SHADOW_START:
+            r = _cached_rows("sog", day, summaries[day]["summary_identity"])
+        else:
+            r = formula_shadow_rows(day, summaries[day])
+        if not r.empty:
+            frames.append(r.assign(lane=FORMULA_LANE))
     rows = pd.concat(frames, ignore_index=True)
     rows["two_sided"] = pd.Series(pd.NA, index=rows.index, dtype="boolean")
     rows["market_p_over"] = np.nan
@@ -472,11 +509,14 @@ def main() -> int:
         if not on_day.any():
             continue
         keys = _cached_two_sided_keys(day, load_candidates)
-        for lane in ("sog", "points"):
+        for lane, key_lane in (("sog", "sog"), ("points", "points"), (FORMULA_LANE, "sog")):
             mask = on_day & rows.lane.eq(lane)
-            rows.loc[mask, "two_sided"] = mark_two_sided(rows[mask], keys.get(lane))
-            rows.loc[mask, "market_p_over"] = market_p_over(rows[mask], keys.get(lane))
+            rows.loc[mask, "two_sided"] = mark_two_sided(rows[mask], keys.get(key_lane))
+            rows.loc[mask, "market_p_over"] = market_p_over(rows[mask], keys.get(key_lane))
     rows = enrich(rows)
+    # The formula lane appears only in the model-vs-market gap table.
+    shadow_rows = rows[rows.lane.eq(FORMULA_LANE)]
+    rows = rows[~rows.lane.eq(FORMULA_LANE)].reset_index(drop=True)
     out = OUT_ROOT / f"weekly_{args.as_of}"
     out.mkdir(parents=True, exist_ok=True)
     records.to_csv(out / "model_records.csv", index=False)
@@ -494,9 +534,10 @@ def main() -> int:
     schedule_note = (f"Schedule: automatic weekly build is {'on' if nxt['enabled'] else 'off'}; "
                      f"next report due {(date.fromisoformat(args.as_of) + timedelta(days=8)).isoformat()} "
                      f"(week ending {(date.fromisoformat(args.as_of) + timedelta(days=7)).isoformat()}).")
-    report = render(args.as_of, week, records, rows, latest_pulse(), log_note, schedule_note)
+    report = render(args.as_of, week, records, rows, latest_pulse(), log_note, schedule_note,
+                    shadow_rows=shadow_rows)
     seg.to_csv(out / "segments.csv", index=False)
-    gap_table(rows, week).to_csv(out / "gap_bands.csv", index=False)
+    gap_table(pd.concat([rows, shadow_rows], ignore_index=True), week).to_csv(out / "gap_bands.csv", index=False)
     doc = DOCS / f"weekly_model_evaluation_{args.as_of}.md"
     doc.write_text(report)
     (out / "summary.json").write_text(json.dumps({

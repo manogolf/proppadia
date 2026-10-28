@@ -312,6 +312,42 @@ def _grade_rows(rows: pd.DataFrame, value: str, primary_source: str = "SHRUNK_RA
     return item
 
 
+def _latest_pregame(combined: pd.DataFrame) -> pd.DataFrame:
+    """Each player-game once, from the latest run that captured it."""
+    latest = combined.groupby(["game_id", "player_id"]).capture_run_id.transform("max")
+    return combined[combined.capture_run_id.eq(latest)]
+
+
+def latest_pregame_rows(*, slate_date: str, reconciliation_package: Path, capture_root: Path,
+                        model_identity: str) -> pd.DataFrame:
+    """Settled latest-pregame shadow rows with the official count in ``official_sog``.
+
+    The same outcome filter and selection as ``grade_slate``; for reports that
+    need the rows rather than the summary (weekly evaluation, P2.29).
+    """
+    outcome_path = Path(reconciliation_package) / "canonical_skater_outcomes.csv"
+    if not outcome_path.is_file():
+        return pd.DataFrame()
+    outcomes = pd.read_csv(outcome_path)
+    outcomes = outcomes[outcomes.slate_date.astype(str).eq(slate_date)]
+    if "participation_state" in outcomes:
+        outcomes = outcomes[outcomes.participation_state.eq("PARTICIPATED")]
+    if "official_final" in outcomes:
+        outcomes = outcomes[outcomes.official_final.astype(str).str.lower().eq("true")]
+    value = "shots_on_goal" if "shots_on_goal" in outcomes else "official_sog"
+    parts = []
+    for package in sorted(Path(capture_root).glob(f"season=*/slate_date={slate_date}/run_id=*/model={model_identity}")):
+        verify_package(package)
+        manifest = json.loads((package / "manifest.json").read_text())
+        joined = pd.read_csv(package / "predictions.csv").merge(
+            outcomes[["game_id", "player_id", value]], on=["game_id", "player_id"], how="left", validate="many_to_one")
+        count = pd.to_numeric(joined[value], errors="coerce")
+        rows = joined[count.notna() & count.ge(0)].copy()
+        rows["capture_run_id"] = manifest["parent_daily_run_id"]
+        parts.append(rows.rename(columns={value: "official_sog"}))
+    return _latest_pregame(pd.concat(parts, ignore_index=True)) if parts else pd.DataFrame()
+
+
 def grade_slate(*, slate_date: str, reconciliation_package: Path, capture_root: Path,
                 model_identity: str = MODEL_IDENTITY, primary_source: str = "SHRUNK_RATE") -> dict[str, Any]:
     """Grade retained immutable captures against finalized canonical outcomes.
@@ -354,9 +390,7 @@ def grade_slate(*, slate_date: str, reconciliation_package: Path, capture_root: 
     result: dict[str, Any] = {"status": "COMPLETE" if grades else "NO_IMMUTABLE_SHADOW_CAPTURE",
                               "role": "PROSPECTIVE_SHADOW", "model_identity": model_identity, "grades": grades}
     if settled_parts:
-        combined = pd.concat(settled_parts, ignore_index=True)
-        latest = combined.groupby(["game_id", "player_id"]).capture_run_id.transform("max")
-        selected = combined[combined.capture_run_id.eq(latest)]
+        selected = _latest_pregame(pd.concat(settled_parts, ignore_index=True))
         result["latest_pregame"] = {"selection": "LATEST_CAPTURE_RUN_PER_PLAYER_GAME",
                                     "capture_runs": sorted(set(selected.capture_run_id)),
                                     **_grade_rows(selected, value, primary_source)}
