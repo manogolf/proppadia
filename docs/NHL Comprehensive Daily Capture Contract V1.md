@@ -579,6 +579,23 @@ production it is not shown, so slates before the cutover keep `Challenger
 daily record from those grade packages for days whose summary does not carry
 it (each game's latest grade).
 
+Two-sided line level in the daily performance summary (2026-10-28). Next to
+the all-predictions tables, SOG production and Points HGB production show W/L
+by line and side for only the graded predictions whose exact line had a
+two-sided quote: the same book or prediction market quoted both Over and Under
+in a retained EARLY/FINAL_PREGAME snapshot (CLOSING excluded) whose quote and
+observation precede the prediction, which precedes the scheduled start. One
+side quoted, or Over and Under from different books, does not count. Matching
+reuses `export_nhl_all_candidate_evaluation` (`--price-both-sides`) through
+`backend/nhl/two_sided_lines.py`; SOG rows are the summary's own production
+grade rows, Points rows are the export's HGB production rows and are shown only
+when their W/L equals the governed HGB selected-side record. The level is
+descriptive (`affects_grading_denominator: false`), is stored as
+`two_sided_lines` on `models.sog.reference` and `models.points`, and, like
+market coverage, is left out of the grade projection used to select the
+authoritative summary. If odds evidence cannot be read the level shows
+`UNAVAILABLE` with its reason and the summary is otherwise unchanged.
+
 Points probability ladders have two construction contracts.
 `NHL_POINTS_COUNT_HGB_V1` predicts one nonnegative expected count and derives
 the 0.5, 1.5, and 2.5 exceedance probabilities from the same Poisson count

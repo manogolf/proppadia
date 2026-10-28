@@ -649,7 +649,7 @@ def _prediction_row(base: dict[str, Any], p_over: float | None, p_under: float |
 def add_captured_sog_arms(rows: list[dict[str, Any]], operational_root: Path,
                           slate_date: str) -> list[dict[str, Any]]:
     """Bind immutable production and fixed-blend captures to official SOG outcomes."""
-    repo = Path.cwd()
+    repo = Path(__file__).resolve().parents[3]
     outcomes: dict[tuple[str, str], dict[str, str]] = {}
     reconciliation_root = operational_root / "postgame_reconciliation" / slate_date
     for package in sorted(reconciliation_root.glob("reconciliation=*/")):
@@ -930,7 +930,8 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
         if c.get("goalie_id"):
             by_game_goalie.setdefault((str(c.get("game_id")), str(c.get("goalie_id"))), []).append(c)
         by_game.setdefault(str(c.get("game_id")), []).append(c)
-    names_path_root = Path.cwd() / "backend/nhl/exports/daily/names"
+    # Repo root, not the working directory, so library callers resolve names too.
+    names_path_root = Path(__file__).resolve().parents[3] / "backend/nhl/exports/daily/names"
     output: dict[tuple[str, str], dict[str, Any]] = {}
     diagnostics: list[dict[str, Any]] = []
     odds_root = operational_root / "odds_observations" / "season=2026"

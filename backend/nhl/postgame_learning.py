@@ -25,6 +25,7 @@ from backend.nhl.performance_summary import (
     generate_from_artifacts,
     select_authoritative_summary,
 )
+from backend.nhl import two_sided_lines
 from backend.nhl.sog_fixed_blend import grade_slate as grade_sog_fixed_blend_slate
 from backend.nhl.sog_divergence_shadow import grade_slate as grade_sog_divergence_shadow_slate
 from backend.nhl.sog_structural_correction_shadow import grade_slate as grade_sog_structural_correction_shadow_slate
@@ -314,6 +315,33 @@ def _unauthorized_new_player_lookups(result) -> list[int]:
     return sorted(int(value) for value in classification.get("new_official_lookup") or [])
 
 
+def _two_sided_context(operational_root: Path, slate_date: str,
+                       hgb_grade: dict) -> tuple[dict, dict | None]:
+    """Descriptive two-sided line level for SOG and Points HGB; never blocks."""
+    try:
+        evidence = two_sided_lines.load_evidence(operational_root, slate_date)
+    except Exception as error:
+        return {"status": "UNAVAILABLE", "reason": f"{type(error).__name__}:{error}"}, None
+    points = two_sided_lines.unavailable("HGB_PRODUCTION_GRADE_NOT_AVAILABLE")
+    if evidence["keys"]["points"] is None:
+        points = two_sided_lines.unavailable("NO_PRODUCTION_POINTS_CANDIDATES")
+    elif hgb_grade.get("status") == "COMPLETE" and hgb_grade.get("evaluation_role") == "PRODUCTION":
+        record = (hgb_grade.get("hgb_metrics") or {}).get("selected_side_record") or {}
+        rows = evidence["points_rows"]
+        found = (int(rows.grading_state.eq("WIN").sum()), int(rows.grading_state.eq("LOSS").sum()))
+        governed = (record.get("wins"), record.get("losses"))
+        # Show the level only when it covers exactly the governed HGB population.
+        points = (two_sided_lines.level(rows, evidence["keys"]["points"]) if found == governed
+                  else two_sided_lines.unavailable(
+                      f"POINTS_POPULATION_MISMATCH:{found[0]}-{found[1]}_VS_{governed[0]}-{governed[1]}"))
+    context = {"status": "EVALUATED", "points": points,
+               "candidate_count": evidence["candidate_count"],
+               "quote_count": evidence["quote_count"]}
+    if evidence["keys"]["sog"] is None:
+        context["sog"] = two_sided_lines.unavailable("NO_PRODUCTION_SOG_CANDIDATES")
+    return context, evidence["keys"]
+
+
 def ensure_prior_learning(
     slate_date: str, *, reconciliation_root: Path = DEFAULT_RECONCILIATION_ROOT,
     cross_market_root: Path = DEFAULT_CROSS_MARKET_ROOT,
@@ -448,14 +476,25 @@ def ensure_prior_learning(
         integrity_archive_root=Path(market_integrity_archive_root or
             ROOT / "backend/nhl/exports/odds_history"),
     )
+    daily_run_root = Path(daily_run_root or os.environ.get(
+        "NHL_DAILY_RECEIPT_ROOT", ROOT / "artifacts/operational/nhl/daily_runs"))
+    try:
+        hgb_grade = grade_prior_hgb_capture(
+            slate_date=slate_date, reconciliation_package=package,
+            daily_run_root=daily_run_root)
+    except Exception as error:
+        hgb_grade = {"status": "GRADE_FAILED_NONBLOCKING",
+                     "reason": f"{type(error).__name__}:{error}"}
+    # Points HGB is graded first: the two-sided line level reads its grade.
+    two_sided_context, two_sided_keys = _two_sided_context(root.parent, slate_date, hgb_grade)
     production_sog_reference = None
     production_sog_reference_sources: dict[str, str] = {}
     if "sog" in coverage:
         production_sog_reference, production_sog_reference_sources = build_production_sog_reference(
             slate_date=slate_date, package=package,
-            daily_run_root=Path(daily_run_root or os.environ.get(
-                "NHL_DAILY_RECEIPT_ROOT", ROOT / "artifacts/operational/nhl/daily_runs")),
+            daily_run_root=daily_run_root,
             market_coverage=coverage.get("sog"),
+            two_sided_keys=(two_sided_keys or {}).get("sog"),
         )
     try:
         fixed_blend_grade = grade_sog_fixed_blend_slate(
@@ -507,15 +546,6 @@ def ensure_prior_learning(
     except Exception as error:
         formula_shadow_grade = {"status": "GRADE_FAILED_NONBLOCKING", "role": "PROSPECTIVE_SHADOW",
                                 "reason": f"{type(error).__name__}:{error}", "grades": []}
-    daily_run_root = Path(daily_run_root or os.environ.get(
-        "NHL_DAILY_RECEIPT_ROOT", ROOT / "artifacts/operational/nhl/daily_runs"))
-    try:
-        hgb_grade = grade_prior_hgb_capture(
-            slate_date=slate_date, reconciliation_package=package,
-            daily_run_root=daily_run_root)
-    except Exception as error:
-        hgb_grade = {"status": "GRADE_FAILED_NONBLOCKING",
-                     "reason": f"{type(error).__name__}:{error}"}
     points_authority_context = discover_daily_points_authority(
         slate_date=slate_date, daily_run_root=daily_run_root)
     if points_authority_context and hgb_grade.get("status") == "COMPLETE":
@@ -546,6 +576,7 @@ def ensure_prior_learning(
         sog_shrunk_rate_shadow_context=shrunk_rate_shadow_grade,
         sog_count_hgb_shadow_context=count_hgb_shadow_grade,
         sog_formula_shadow_context=formula_shadow_grade,
+        two_sided_context=two_sided_context,
     )
     performance_json, performance = select_authoritative_summary(
         root=performance_json.parent.parent, expected=performance)

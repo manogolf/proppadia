@@ -2544,6 +2544,27 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.36 Daily performance summary shows a two-sided line level for SOG and Points
+
+- Status: **IMPLEMENTED 2026-10-28.** The operator noticed SOG 2.5/3.5 win
+  rates in the daily summary (78.7% / 91.4% on 10-27) far above the
+  executable-line evaluations. The summary graded every prediction; the
+  evaluations keep only lines with a two-sided quote. The summary now shows both
+  levels (contract: Comprehensive Daily Capture Contract, "Two-sided line
+  level").
+- Evidence (10-27): SOG all 936-246 (79.2%), two-sided 319-156 (67.2%, 475
+  picks); 3.5 360-34 -> 81-18; 2.5 310-84 -> 109-63. Points HGB all 1036-146
+  (87.6%), two-sided 474-127 (78.9%, 601 picks). Both equal the manual export
+  check. "Any line quoted" (71.3% for SOG) was rejected as the level: the extra
+  picks are mostly Over-only alternate lines where our pick was the Under.
+- Also fixed: the export's names and production-capture paths used the working
+  directory; they now use the repo root.
+- Open: the weekly evaluation still reports only the all-predictions level
+  ("Not yet covered: model vs market (two-sided lines)"). Production SOG
+  prediction timestamps in the export come from the slate's latest fixed-blend
+  shadow capture; if that shadow lane stops running, the SOG level shows
+  `UNAVAILABLE (NO_PRODUCTION_SOG_CANDIDATES)`.
+
 ### P2.35 Puck Line lane: frozen; keep-or-drop decision in early December
 
 - Status: **FROZEN 2026-10-26 (operator decision); decide by the weekly

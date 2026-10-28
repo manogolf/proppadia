@@ -17,6 +17,7 @@ from backend.nhl.sog_coverage_annotations import validate_annotation
 from backend.nhl.daily_capture import verify_package
 from backend.nhl.daily_capture import canonical_game_set_hash
 from backend.nhl.sog_cold_start.core import grade_predictions as grade_sog_predictions
+from backend.nhl import two_sided_lines
 from backend.nhl.postgame_reconcile.resilient_finalization import (
     canonical_atomic_identity, select_latest_atomic_sources,
 )
@@ -624,6 +625,7 @@ def _select_production_sog_sources(
 def build_production_sog_reference(
     *, slate_date: str, package: Path, daily_run_root: Path,
     market_coverage: dict[str, Any] | None = None,
+    two_sided_keys: set[tuple[int, int, float]] | None = None,
 ) -> tuple[dict[str, Any], dict[str, str]]:
     """Grade the immutable baseline SOG predictions for a reconciled slate.
 
@@ -720,6 +722,8 @@ def build_production_sog_reference(
         pd.concat(long_rows, ignore_index=True), eligible_outcomes,
         grading_timestamp_utc=datetime.now(timezone.utc).isoformat())
     display = _grouped_props(graded, lane="sog")
+    if two_sided_keys is not None:
+        display["two_sided_lines"] = two_sided_lines.level(graded, two_sided_keys)
     total = display["overall"]
     if total["settled"] != total["wins"] + total["losses"] + total["pushes"]:
         raise ValueError("PRODUCTION_SOG_OVERALL_SETTLEMENT_TOTAL_MISMATCH")
@@ -1237,6 +1241,7 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
                      sog_shrunk_rate_shadow_context: dict[str, Any] | None = None,
                      sog_count_hgb_shadow_context: dict[str, Any] | None = None,
                      sog_formula_shadow_context: dict[str, Any] | None = None,
+                     two_sided_context: dict[str, Any] | None = None,
                      package: Path | None = None) -> dict[str, Any]:
     challengers = challengers or {}
     moneyline = grades.get("moneyline", pd.DataFrame())
@@ -1315,6 +1320,13 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
         if lane == "sog" and models[lane]["market_coverage"].get("per_arm"):
             models[lane]["arm_market_coverage"] = dict(
                 models[lane]["market_coverage"]["per_arm"])
+    if two_sided_context is not None:
+        reference = models["sog"].get("reference")
+        if isinstance(reference, dict) and "two_sided_lines" not in reference:
+            reference["two_sided_lines"] = dict(two_sided_context.get("sog") or two_sided_lines.unavailable(
+                str(two_sided_context.get("reason") or "SOG_REFERENCE_NOT_ANNOTATED")))
+        models["points"]["two_sided_lines"] = dict(two_sided_context.get("points") or two_sided_lines.unavailable(
+            str(two_sided_context.get("reason") or "POINTS_NOT_EVALUATED")))
     models["points"]["realized_points_definition"] = "official_goals + official_assists"
     if points_authority_context:
         models["points"]["authority_context"] = dict(points_authority_context)
@@ -1443,6 +1455,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
                     lines.append("Reference probability context: " + "; ".join(
                         f"{key.removeprefix('average_predicted_probability_')} "
                         f"{rate(value)}" for key, value in probability.items()))
+                lines.extend(two_sided_lines.render(reference.get("two_sided_lines"), "SOG production"))
+                lines.append("")
                 lines.append("Cold-start shadow arms:")
             for name, display in models.items():
                 if name == "reference" or not isinstance(display, dict) or "overall" not in display:
@@ -1509,6 +1523,8 @@ def render_markdown(summary: dict[str, Any]) -> str:
                             f"  Disagreements: {comparison.get('side_disagreements', 0)}; "
                             f"HGB wins {comparison.get('hgb_wins_on_disagreement_rows', 0)}, "
                             f"Phoenix wins {comparison.get('phoenix_wins_on_disagreement_rows', 0)}.")
+            if "two_sided_lines" in models:
+                lines.extend(two_sided_lines.render(models["two_sided_lines"], "Points HGB production"))
         return lines
 
     models = summary["models"]
@@ -1744,7 +1760,7 @@ def _grade_projection(summary: dict[str, Any]) -> dict[str, Any]:
     def strip_coverage(value: Any) -> Any:
         if isinstance(value, dict):
             return {key: strip_coverage(item) for key, item in value.items()
-                    if key not in {"market_coverage", "arm_market_coverage"}}
+                    if key not in {"market_coverage", "arm_market_coverage", "two_sided_lines"}}
         if isinstance(value, list):
             return [strip_coverage(item) for item in value]
         return value
@@ -1867,6 +1883,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
                             sog_shrunk_rate_shadow_context: dict[str, Any] | None = None,
                             sog_count_hgb_shadow_context: dict[str, Any] | None = None,
                             sog_formula_shadow_context: dict[str, Any] | None = None,
+                            two_sided_context: dict[str, Any] | None = None,
                             output_root: Path | None = None) -> tuple[Path, Path, dict[str, Any]]:
     """Build/reuse a summary package from retained reconciliation grade rows."""
     package = Path(package).resolve()
@@ -1912,6 +1929,9 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
     if sog_formula_shadow_context:
         source_hashes["sog_formula_shadow_context_sha256"] = hashlib.sha256(
             json.dumps(sog_formula_shadow_context, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    if two_sided_context:
+        source_hashes["two_sided_lines_context_sha256"] = hashlib.sha256(
+            json.dumps(two_sided_context, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
     for lane, coverage in (market_coverage or {}).items():
         if coverage.get("status") in {"AVAILABLE", "AVAILABLE_PARTIAL"}:
             source_hashes[f"{lane}_attachment_integrity_sha256"] = str(
@@ -1981,6 +2001,7 @@ def generate_from_artifacts(*, package: Path, restatement: Path,
         sog_shrunk_rate_shadow_context=sog_shrunk_rate_shadow_context,
         sog_count_hgb_shadow_context=sog_count_hgb_shadow_context,
         sog_formula_shadow_context=sog_formula_shadow_context,
+        two_sided_context=two_sided_context,
     )
     summary["official_outcomes_status"] = (
         "FINAL" if source_summary.get("status") == "COMPLETE"
