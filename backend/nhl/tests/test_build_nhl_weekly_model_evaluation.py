@@ -119,6 +119,28 @@ class QualityTests(unittest.TestCase):
         self.assertIn("| sog | week | 2 | 50.0% | 1-1 | 50.0% |", text)
         self.assertIn("| sog | 1.5 | OVER | 1-1 | 1-1 | 1-1 | 50.0% | 1-1 | 50.0% |", text)
 
+    def test_gap_bands_and_table_compare_model_with_market(self):
+        rows = self.rows.copy()
+        # p_over 0.8 OVER vs market 0.6 (gap +20); 0.2 UNDER vs market 0.33 over -> 0.67 under (+13);
+        # 0.6 OVER vs 0.55 (+5); 0.3 UNDER vs market 0.10 over -> 0.90 under (-20).
+        keys = [[1, 1, 1.5, 0.6], [1, 2, 1.5, 0.33], [2, 3, 1.5, 0.55], [2, 4, 1.5, 0.10]]
+        rows["market_p_over"] = ev.market_p_over(rows, keys)
+        rows = ev.enrich(rows.drop(columns=["win", "p_pick", "y_over", "band"]))
+        self.assertEqual(rows.gap_band.tolist(), ["over 15 above", "10-15 above", "within 10", "model 10+ below"])
+        table = ev.gap_table(rows, ["2026-10-20"])
+        self.assertEqual(list(table.gap_band), ["model 10+ below", "within 10", "10-15 above", "over 15 above"])
+        top = table[table.gap_band.eq("over 15 above")].iloc[0]
+        self.assertEqual((top.wins, top.losses), (1, 0))
+        self.assertAlmostEqual(top.market_p, 0.6)
+        text = ev.render("2026-10-20", ["2026-10-20"], ev.model_records({"2026-10-20": summary(V3, V3)}), rows, None)
+        self.assertIn("Model vs market by gap", text)
+        self.assertIn("| sog | over 15 above | OVER | 1-0 | 1-0 |", text)
+
+    def test_keys_without_a_market_price_still_mark_two_sided(self):
+        keys = [[1, 1, 1.5], [1, 2, 1.5, None]]
+        self.assertEqual(ev.mark_two_sided(self.rows, keys).tolist(), [True, True, False, False])
+        self.assertTrue(ev.market_p_over(self.rows, keys).isna().all())
+
 
 if __name__ == "__main__":
     unittest.main()

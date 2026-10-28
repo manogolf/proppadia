@@ -15,6 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from backend.nhl.scripts import export_nhl_all_candidate_evaluation as candidate_export
@@ -27,7 +28,11 @@ KEY_COLUMNS = ("game_id", "player_id", "line")
 
 def load_evidence(operational_root: Path, slate_date: str, *,
                   candidates: list[dict[str, Any]] | None = None) -> dict[str, Any]:
-    """Return two-sided keys per lane and the export's Points production rows.
+    """Return two-sided keys per lane, the market's no-vig P(over) per key, and
+    the export's Points production rows.
+
+    ``market_p_over`` is the median across books of each book's own no-vig
+    P(over) (its Over implied probability over the sum of its Over and Under).
 
     ``candidates`` lets a multi-slate caller load the export candidates once.
     """
@@ -44,18 +49,33 @@ def load_evidence(operational_root: Path, slate_date: str, *,
         Path(operational_root), candidates, price_both_sides=True)
     quotes = candidate_export.deduplicate_quotes(quotes)
     sides: dict[tuple, set[str]] = {}
+    implied: dict[tuple, dict[str, list[float]]] = {}
     for quote in quotes:
         key = (quote["market_key"], int(float(quote["game_id"])), int(float(quote["player_id"])),
                float(quote["market_line"]), str(quote["sportsbook_key"]))
-        sides.setdefault(key, set()).add(str(quote["quote_side"]))
+        side = str(quote["quote_side"])
+        sides.setdefault(key, set()).add(side)
+        try:
+            implied.setdefault(key, {}).setdefault(side, []).append(float(quote.get("implied_probability")))
+        except (TypeError, ValueError):
+            pass
+    by_line: dict[tuple, list[float]] = {}
+    for key, values in implied.items():
+        if values.get("OVER") and values.get("UNDER"):
+            over, under = float(np.mean(values["OVER"])), float(np.mean(values["UNDER"]))
+            if over + under > 0:
+                by_line.setdefault(key[:4], []).append(over / (over + under))
     # A lane with no production candidates has no evidence, not zero two-sided lines.
     present = {row["market_key"] for row in candidates}
     keys = {lane: ({key[1:4] for key, quoted in sides.items()
                     if key[0] == market and {"OVER", "UNDER"} <= quoted}
                    if market in present else None)
             for lane, market in MARKETS.items()}
+    market_p_over = {lane: ({key[1:4]: float(np.median(values)) for key, values in by_line.items()
+                             if key[0] == market} if market in present else None)
+                     for lane, market in MARKETS.items()}
     points = pd.DataFrame([row for row in candidates if row["market_key"] == MARKETS["points"]])
-    return {"keys": keys, "points_rows": _export_rows(points),
+    return {"keys": keys, "market_p_over": market_p_over, "points_rows": _export_rows(points),
             "quote_count": len(quotes), "candidate_count": len(candidates)}
 
 

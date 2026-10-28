@@ -2649,8 +2649,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   below anything the model trained on; trees score it as the 2025 value.
   Reported, not flagged (constant all season); consistent with P2.33's
   known early-season low bias.
-- Open: the weekly report does not yet track the P2.29 cohort record
-  (proposal item 4).
+- Weekly tracking added 2026-10-28 (operator request): the weekly report's
+  "Model vs market by gap" table gives season-to-date and week W-L, model
+  and market probability, and log loss for both, by lane, gap band (model
+  10+ below, within 10, 10-15 above, over 15 above) and side, on two-sided
+  lines from 2026-10-10 (`gap_bands.csv` in the weekly data folder). The
+  market probability comes from `two_sided_lines.load_evidence`
+  (`market_p_over`, median of each book's own no-vig P(over)). Test build
+  through 10-27 reconciles to the two-sided totals (Points 4,717, SOG
+  3,127). This is how P2.29 is observed from now on.
 - Noticed while building: HGB promotion gate J reads `PASS` from
   `operational_promotion_gates.json` and the integration-proof hash check
   can only confirm it, never revoke it (`points_hgb_promotion.evaluate_promotion`),

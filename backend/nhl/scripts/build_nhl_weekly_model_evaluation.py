@@ -72,14 +72,21 @@ def _cached_rows(lane: str, day: str, identity: str) -> pd.DataFrame:
 
 
 def _cached_two_sided_keys(day: str, load_candidates) -> dict[str, list | None]:
-    """Two-sided keys for one slate, cached by its retained odds snapshot count."""
+    """Two-sided keys with the market's no-vig P(over) for one slate.
+
+    Entries are [game_id, player_id, line, market_p_over or null]; cached by
+    the slate's retained odds snapshot count (v2 adds the market probability).
+    """
     snapshots = len(list((OPERATIONAL / "odds_observations" / "season=2026" / f"slate_date={day}").glob("observation=*")))
-    path = CACHE / "two_sided" / f"{day}_{snapshots}.json"
+    path = CACHE / "two_sided" / f"{day}_{snapshots}_v2.json"
     if path.is_file():
         return json.loads(path.read_text())
     evidence = two_sided_lines.load_evidence(OPERATIONAL, day, candidates=load_candidates())
-    keys = {lane: (sorted([int(g), int(p), float(line)] for g, p, line in found) if found is not None else None)
-            for lane, found in evidence["keys"].items()}
+    keys = {}
+    for lane, found in evidence["keys"].items():
+        market = (evidence.get("market_p_over") or {}).get(lane) or {}
+        keys[lane] = (sorted([int(g), int(p), float(line), market.get((g, p, line))] for g, p, line in found)
+                      if found is not None else None)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(keys) + "\n")
     return keys
@@ -89,9 +96,52 @@ def mark_two_sided(rows: pd.DataFrame, keys: list | None) -> pd.Series:
     """True/False per row; NA when the slate has no quote evidence for the lane."""
     if keys is None:
         return pd.Series(pd.NA, index=rows.index, dtype="boolean")
-    found = {(int(g), int(p), float(line)) for g, p, line in keys}
+    found = {(int(entry[0]), int(entry[1]), float(entry[2])) for entry in keys}
     return pd.Series([(int(g), int(p), float(line)) in found for g, p, line in
                       zip(rows.game_id, rows.player_id, rows.line)], index=rows.index, dtype="boolean")
+
+
+def market_p_over(rows: pd.DataFrame, keys: list | None) -> pd.Series:
+    """The market's no-vig P(over) per row on a two-sided line, else NaN."""
+    found = {(int(e[0]), int(e[1]), float(e[2])): e[3] for e in (keys or []) if len(e) > 3 and e[3] is not None}
+    return pd.Series([found.get((int(g), int(p), float(line)), np.nan) for g, p, line in
+                      zip(rows.game_id, rows.player_id, rows.line)], index=rows.index, dtype=float)
+
+
+GAP_BANDS = (("model 10+ below", -1.0, -0.10), ("within 10", -0.10, 0.10),
+             ("10-15 above", 0.10, 0.15), ("over 15 above", 0.15, 1.0))
+
+
+def gap_band(gap: pd.Series) -> pd.Series:
+    """Model minus market on the selected side, in the bands the operator reviews."""
+    band = pd.Series(pd.NA, index=gap.index, dtype="object")
+    for label, low, high in GAP_BANDS:
+        inside = gap.gt(low) & gap.le(high) if low > -1 else gap.le(high)
+        band[inside] = label
+    return band
+
+
+def gap_table(rows: pd.DataFrame, week: list[str]) -> pd.DataFrame:
+    """W-L and log loss (model vs market) by lane, gap band and side."""
+    if "gap_band" not in rows:
+        return pd.DataFrame()
+    priced = rows[rows.gap_band.notna()]
+    out = []
+    for (lane, band, side), g in priced.groupby(["lane", "gap_band", "selected_side"]):
+        w = g[g.slate_date.isin(week)]
+        y = g.y_over.to_numpy(float)
+        ll = lambda p: float(-np.mean(y * np.log(np.clip(p, 1e-6, 1 - 1e-6))  # noqa: E731
+                                     + (1 - y) * np.log(np.clip(1 - p, 1e-6, 1 - 1e-6))))
+        out.append({"lane": lane, "gap_band": band, "side": side, "n": int(len(g)),
+                    "week_wins": int(w.win.sum()), "week_losses": int(len(w) - w.win.sum()),
+                    "wins": int(g.win.sum()), "losses": int(len(g) - g.win.sum()),
+                    "win_rate": float(g.win.mean()), "model_p": float(g.p_pick.mean()),
+                    "market_p": float(g.market_p_pick.mean()),
+                    "log_loss_model": ll(g.p_over.to_numpy(float)), "log_loss_market": ll(g.market_p_over.to_numpy(float))})
+    order = {label: i for i, (label, _, _) in enumerate(GAP_BANDS)}
+    frame = pd.DataFrame(out)
+    return frame.sort_values(["lane", "gap_band", "side"], key=lambda s: s.map(order) if s.name == "gap_band" else s) \
+        if len(frame) else frame
 
 
 GRADE_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow/grades"
@@ -177,6 +227,10 @@ def enrich(rows: pd.DataFrame) -> pd.DataFrame:
     rows["p_pick"] = np.where(rows.selected_side.eq("OVER"), rows.p_over, 1 - rows.p_over)
     rows["y_over"] = np.where(rows.selected_side.eq("OVER"), rows.win, 1 - rows.win)
     rows["band"] = rows.p_over.map(baseline._band)
+    if "market_p_over" in rows:
+        rows["market_p_pick"] = np.where(rows.selected_side.eq("OVER"), rows.market_p_over, 1 - rows.market_p_over)
+        rows["gap"] = rows.p_pick - rows.market_p_pick
+        rows["gap_band"] = gap_band(rows.gap)
     return rows
 
 
@@ -344,6 +398,18 @@ def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFram
         tw = t[t.slate_date.isin(week)]
         lines.append(f"| {lane} | {line} | {side} | {_wl(w)} | {_wl(tw)} | {_wl(g)} | {_pct(g.win.mean())} | "
                      f"{_wl(t)} | {_pct(t.win.mean()) if len(t) else '—'} |")
+    gaps = gap_table(rows, week)
+    lines += ["", "## Model vs market by gap (two-sided lines, season to date)", "",
+              "Gap = model probability on its side minus the market's no-vig probability on that side "
+              "(median across books). Lower log loss is better; the closer of the two shows who forecast better.", "",
+              "| Lane | Gap | Side | Week W-L | Season W-L | Win % | Model | Market | Log loss model | Log loss market |",
+              "|---|---|---|---:|---:|---:|---:|---:|---:|---:|"]
+    for r in gaps.itertuples():
+        lines.append(f"| {r.lane} | {r.gap_band} | {r.side} | {r.week_wins}-{r.week_losses} | {r.wins}-{r.losses} | "
+                     f"{_pct(r.win_rate)} | {_pct(r.model_p)} | {_pct(r.market_p)} | "
+                     f"{r.log_loss_model:.4f} | {r.log_loss_market:.4f} |")
+    if gaps.empty:
+        lines.append("| — | no priced two-sided rows | | | | | | | | |")
     seg = segments(rows)
     lines += ["", f"## Areas for improvement (season, segments with at least {MIN_SEGMENT} picks)", "",
               "Gap = actual win rate minus the model's average confidence in its pick. Negative means overconfident.", "",
@@ -358,7 +424,7 @@ def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFram
     if log_note:
         lines += ["", "## Improvement log", "", log_note]
     lines += ["", "## Data health", "", f"Latest player performance pulse: `{pulse}`" if pulse else "Player performance pulse: no revision found.", "",
-              "## Not yet covered", "", "- Model probability vs the market's no-vig price on two-sided lines, and closing-line value.",
+              "## Not yet covered", "", "- Closing-line value.",
               "- Moneyline and Puck Line probability quality (W-L only above).", ""]
     return "\n".join(lines)
 
@@ -393,6 +459,7 @@ def main() -> int:
                     frames.append(r.assign(lane=lane))
     rows = pd.concat(frames, ignore_index=True)
     rows["two_sided"] = pd.Series(pd.NA, index=rows.index, dtype="boolean")
+    rows["market_p_over"] = np.nan
     loaded: list = []
 
     def load_candidates() -> list:
@@ -408,6 +475,7 @@ def main() -> int:
         for lane in ("sog", "points"):
             mask = on_day & rows.lane.eq(lane)
             rows.loc[mask, "two_sided"] = mark_two_sided(rows[mask], keys.get(lane))
+            rows.loc[mask, "market_p_over"] = market_p_over(rows[mask], keys.get(lane))
     rows = enrich(rows)
     out = OUT_ROOT / f"weekly_{args.as_of}"
     out.mkdir(parents=True, exist_ok=True)
@@ -428,6 +496,7 @@ def main() -> int:
                      f"(week ending {(date.fromisoformat(args.as_of) + timedelta(days=7)).isoformat()}).")
     report = render(args.as_of, week, records, rows, latest_pulse(), log_note, schedule_note)
     seg.to_csv(out / "segments.csv", index=False)
+    gap_table(rows, week).to_csv(out / "gap_bands.csv", index=False)
     doc = DOCS / f"weekly_model_evaluation_{args.as_of}.md"
     doc.write_text(report)
     (out / "summary.json").write_text(json.dumps({

@@ -79,9 +79,8 @@ Used when training or live data were wrong, as with the PP-TOI refit
 ## Not yet automated
 - Paired shadow-vs-production proper scores (the weekly report shows W/L for
   shadows today).
-- Model probability vs the market's no-vig price on two-sided lines, and
-  closing-line value. (The weekly report already shows W/L, Brier and log loss
-  on two-sided lines.)
+- Closing-line value. (The weekly report shows W/L, Brier and log loss on
+  two-sided lines, and model vs market by gap band since 2026-10-28.)
 - A promotion check that applies these rules and reports which candidates
   qualify.
 
