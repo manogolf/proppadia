@@ -2597,6 +2597,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   mismatched skaters and invalid-shooter events), backfill the NULL 2026
   games through the governed source path, and stop scoring an unknown
   attempt rate as 0.
+- **Code built 2026-10-28 (`9a9cea24`).** `reconcile_attempts_per_skater`
+  in `points_attempts_source.py` (goalie attempts skipped; the 10-27
+  "invalid shooter" was Montreal's goalie); the seeder records unresolved
+  skaters; the HGB scorer imputes an unknown attempt rate as SOG rate x
+  1.993 (2023-24 training median; training had no unknown attempts beside
+  a known SOG rate). Integration evidence refreshed: gate J PASS, HGB
+  promotion READY. Live from the next daily run.
+- **Backfill preview 2026-10-28 (read-only, no writes).**
+  `backend/nhl/scripts/backfill_nhl_shot_attempts_per_skater.py`; receipt
+  `artifacts/analysis/nhl/points_attempts_source_validation/per_skater_backfill_20261028T191323Z/`
+  (`candidates.csv` SHA-256 `c48a16db8b36978d8a636cea4dd5294a3d192dc6e8d9b4762b35800441e6a809`).
+  1,044 NULL rows in 29 games: 953 fillable (855 positive, 98 verified
+  zero; none below the player's SOG), 91 stay NULL (skater SOG does not
+  reconcile). 22 games' official responses fetched, 7 reused from retained
+  diagnostics. 17 dates.
+- **Write pass awaits operator approval:** `--commit --preview <dir>
+  --preview-sha256 c48a16db…` reruns the daily seeder per date (ingestion
+  login) then `nhl.promote_skater_game_log_protected_fields(date)` (NULL
+  fills only) and verifies each date against the preview. Run outside the
+  daily run windows.
 
 ### P2.36 Daily performance summary shows a two-sided line level for SOG and Points
 

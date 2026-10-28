@@ -259,9 +259,19 @@ measure early coverage and prices against later snapshots and CLOSING:
 
 Prior-date shot-attempt check. During prior-date finalization,
 `seed_skater_logs_for_date.py` reconciles each completed game's official
-play-by-play against its box score (`derive_attempts_from_final_pbp`). A game
-that fails keeps its attempts unknown (never zero) and preserves populated
-values. The run diagnostic
+play-by-play against its box score (`reconcile_attempts_per_skater`, wrapped by
+`derive_attempts_from_final_pbp`). Since 2026-10-28 (NHL Backlog P2.37) the
+check is per skater: a skater is accepted when his PBP shots on goal equal the
+box score; a mismatched skater stays unknown; a goalie's attempt is skipped; an
+attempt whose shooter is not a skater or goalie of the owning team leaves that
+team's skaters unknown. Game-level problems (not final, game or team identity,
+duplicate event ids, no attempt events, no reconciled skater) still leave the
+whole game unknown. Unknown is never zero, and populated values are preserved.
+The child summary adds `pbp_unresolved_skaters` and
+`pbp_unresolved_skater_reasons`. The HGB Points scorer scores an unknown
+attempt rate beside a known SOG rate as SOG rate x 1.993 (training median
+ratio), not zero; the capture receipt counts these as
+`attempts_imputed_from_sog_count`. The run diagnostic
 `shot_attempts_source_diagnostics/slate_date=<date>/run_id=<run>/attempt_source_diagnostic.json`
 lists failure reasons and, since 2026-10-19, retains the failing game's box
 score and play-by-play as `failed_source_<game_id>_<kind>.json` with hashes
