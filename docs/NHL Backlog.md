@@ -2673,6 +2673,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   already used). It appears only in the gap table, not in the improvement
   log. Test build through 10-27: formula over-15 Unders 266-117 (69.5%) vs
   market 56.5%, model 78.2%; log loss 0.621 vs 0.625.
+  Same days, HGB production vs formula shadow, 10-25..10-27 (3 dates, from the
+  weekly row cache): beyond 10 points HGB went 67-28 (over-15 Over 21-9,
+  Under 8-5; 10-15 Over 12-6, Under 26-8) against a market near 56%; the
+  formula's beyond-10 picks went 141-110, about the market's rate (its
+  over-15 Unders 46-33, 58% vs market 58%). Within 10 both track the market.
+  Three dates: direction only.
 - Noticed while building: HGB promotion gate J reads `PASS` from
   `operational_promotion_gates.json` and the integration-proof hash check
   can only confirm it, never revoke it (`points_hgb_promotion.evaluate_promotion`),
