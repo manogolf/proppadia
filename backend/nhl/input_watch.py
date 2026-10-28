@@ -12,7 +12,9 @@ change to any prediction. It writes
 2. Disagreement explainer: the day's largest gaps between our probability on
    the selected side and the median same-book no-vig market probability, on
    two-sided lines quoted before the watch ran. Quote matching reuses
-   ``export_nhl_all_candidate_evaluation.load_retained_quotes``. Each pick
+   ``export_nhl_all_candidate_evaluation.load_retained_quotes``. SOG inputs are
+   checked against ``backend/nhl/config/sog_hgb_training_feature_ranges.json``
+   (from the frozen model's rebuilt training frame, hash-verified). Each pick
    lists the inputs that explain it: rule reasons from the 2026-10-28 study
    (NHL Backlog P2.29, P2.37) and inputs unusual against players the market
    prices the same.
@@ -33,6 +35,7 @@ from backend.nhl.scripts import export_nhl_all_candidate_evaluation as candidate
 
 ROOT = Path(__file__).resolve().parents[2]
 POINTS_RANGES_PATH = ROOT / "backend/nhl/config/points_hgb_training_feature_ranges.json"
+SOG_RANGES_PATH = ROOT / "backend/nhl/config/sog_hgb_training_feature_ranges.json"
 OUTPUT_ROOT = ROOT / "artifacts/operational/nhl/input_watch"
 SCHEMA = "NHL_INPUT_WATCH_V1"
 TOP_N = 10
@@ -104,7 +107,19 @@ def points_sanity(features: pd.DataFrame, ranges: dict[str, Any]) -> list[dict[s
     return checks
 
 
-def sog_sanity(features: pd.DataFrame) -> list[dict[str, Any]]:
+# Constant for a whole season (last season's league rate by position): a new
+# season sits outside the two training values by construction, so it is
+# reported, not flagged. Trees score it as the nearest training value.
+SEASON_CONSTANT_INPUTS = {"feature_league_prior"}
+
+
+def _sog_out_of_range(ranges: dict[str, Any] | None) -> dict[str, dict[str, float]]:
+    """Live SOG column -> training p01/p99; binary inputs are skipped."""
+    return {f"feature_{name}": bounds for name, bounds in ((ranges or {}).get("features") or {}).items()
+            if name not in {"is_home", "is_defense"}}
+
+
+def sog_sanity(features: pd.DataFrame, ranges: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     f = features.copy()
     n = max(len(f), 1)
     num = lambda c: pd.to_numeric(f[c], errors="coerce")  # noqa: E731
@@ -122,6 +137,15 @@ def sog_sanity(features: pd.DataFrame) -> list[dict[str, Any]]:
         missing = num(column).isna()
         checks.append(_check(f"MISSING:{column}", missing, f, flag=missing.sum() / n > DRIFT_SHARE,
                              detail="input missing"))
+    for column, bounds in _sog_out_of_range(ranges).items():
+        if column not in f:
+            continue
+        outside = num(column).notna() & ~num(column).between(bounds["p01"], bounds["p99"])
+        constant = column in SEASON_CONSTANT_INPUTS
+        checks.append(_check(f"OUT_OF_TRAINING_RANGE:{column}", outside, f,
+                             flag=not constant and outside.sum() / n > DRIFT_SHARE,
+                             detail=(f"outside training p01-p99 [{bounds['p01']:g}, {bounds['p99']:g}]"
+                                     + ("; season-level constant, reported not flagged" if constant else ""))))
     return checks
 
 
@@ -214,7 +238,7 @@ def _points_reasons(row: pd.Series, slate: pd.DataFrame, ranges: dict[str, Any])
 
 def explain_disagreements(*, points: pd.DataFrame | None, sog: pd.DataFrame | None, slate_date: str,
                           run_id: str, operational_root: Path, now_utc: str,
-                          ranges: dict[str, Any]) -> dict[str, Any]:
+                          ranges: dict[str, Any], sog_ranges: dict[str, Any] | None = None) -> dict[str, Any]:
     starts: dict[int, str] = {}
     if points is not None and "game_start_utc" in points:
         starts = {int(g): str(s).replace(" ", "T") for g, s in zip(points.game_id, points.game_start_utc)}
@@ -269,6 +293,13 @@ def explain_disagreements(*, points: pd.DataFrame | None, sog: pd.DataFrame | No
                 missing = [FEATURE_LABELS.get(c, c) for c in peer_columns if pd.isna(row.get(c))]
                 if missing:
                     reasons.append("missing: " + ", ".join(missing))
+                for column, bounds in _sog_out_of_range(sog_ranges).items():
+                    if column in SEASON_CONSTANT_INPUTS:
+                        continue
+                    value = pd.to_numeric(row.get(column), errors="coerce")
+                    if pd.notna(value) and not bounds["p01"] <= value <= bounds["p99"]:
+                        reasons.append(f"{FEATURE_LABELS.get(column, column.removeprefix('feature_'))} "
+                                       f"{value:.3g} outside training range")
             reasons += _peer_reasons(row, part, peer_columns)
             picks.append({
                 "player": str(row.get("player_name") or row.player_id), "player_id": int(row.player_id),
@@ -337,6 +368,7 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
                     now_utc: str | None = None) -> dict[str, Any]:
     now_utc = now_utc or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     ranges = json.loads(POINTS_RANGES_PATH.read_text())
+    sog_ranges = json.loads(SOG_RANGES_PATH.read_text()) if SOG_RANGES_PATH.is_file() else None
     points = sog = None
     sog_features_path = Path(prediction_run_dir) / "sog_hgb_features.csv"
     sog_predictions_path = Path(prediction_run_dir) / "sog_predictions_wide_calibrated.csv"
@@ -365,11 +397,11 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
                 frame["player_name"] = frame.player_id.astype("int64").map(named).fillna(
                     frame["player_name"] if "player_name" in frame else frame.player_id.astype(str))
     sanity = {"points": points_sanity(points, ranges) if points is not None else [],
-              "sog": sog_sanity(sog) if sog is not None else []}
+              "sog": sog_sanity(sog, sog_ranges) if sog is not None else []}
     try:
         disagreements = explain_disagreements(points=points, sog=sog, slate_date=slate_date, run_id=run_id,
                                               operational_root=Path(operational_root), now_utc=now_utc,
-                                              ranges=ranges)
+                                              ranges=ranges, sog_ranges=sog_ranges)
         disagreements["status"] = "COMPLETE"
     except Exception as error:  # the watch never blocks the run
         disagreements = {"status": "UNAVAILABLE", "reason": f"{type(error).__name__}:{error}"}

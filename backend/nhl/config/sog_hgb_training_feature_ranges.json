@@ -1,0 +1,110 @@
+{
+  "schema_version": "NHL_SOG_HGB_TRAINING_FEATURE_RANGES_V1",
+  "source": "artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-10-25/training_frame_rebuilt.csv.gz",
+  "training_frame_sha256": "4042e31c758c6b0083272cf82904426b8732e06a9f2837c79e7e0d2e9aa093f6",
+  "fitted_artifact_sha256": "f7bf625dd3a32030a6003879f7e62380e674859f8c7f9f299e4bdae2245ae392",
+  "rows": 90598,
+  "note": "Known (non-missing) training values; p01/p99 bound the range the frozen model saw. Live columns carry a feature_ prefix.",
+  "features": {
+    "is_home": {
+      "p01": 0.0,
+      "p99": 1.0,
+      "missing_share": 0.0
+    },
+    "is_defense": {
+      "p01": 0.0,
+      "p99": 1.0,
+      "missing_share": 0.0
+    },
+    "sog60_5": {
+      "p01": 0.5791,
+      "p99": 13.881261,
+      "missing_share": 0.0
+    },
+    "sog60_10": {
+      "p01": 1.192243,
+      "p99": 12.536565,
+      "missing_share": 0.0
+    },
+    "sog60_20": {
+      "p01": 1.616847,
+      "p99": 11.848183,
+      "missing_share": 0.0
+    },
+    "sog60_season": {
+      "p01": 0.756084,
+      "p99": 12.387483,
+      "missing_share": 0.017053
+    },
+    "sog60_prior_season": {
+      "p01": 1.747555,
+      "p99": 12.526096,
+      "missing_share": 0.070322
+    },
+    "shrunk_rate_180": {
+      "p01": 2.567711,
+      "p99": 10.172556,
+      "missing_share": 0.0
+    },
+    "shrunk_lambda_180": {
+      "p01": 0.645227,
+      "p99": 3.335917,
+      "missing_share": 0.0
+    },
+    "toi_avg_5": {
+      "p01": 7.684,
+      "p99": 25.73806,
+      "missing_share": 0.0
+    },
+    "toi_avg_10": {
+      "p01": 7.991,
+      "p99": 25.457,
+      "missing_share": 0.0
+    },
+    "toi_season": {
+      "p01": 8.007776,
+      "p99": 25.09,
+      "missing_share": 0.017053
+    },
+    "pp_toi_avg_10": {
+      "p01": 0.005,
+      "p99": 3.841,
+      "missing_share": 2.2e-05
+    },
+    "att60_10": {
+      "p01": 4.005803,
+      "p99": 22.831626,
+      "missing_share": 5.5e-05
+    },
+    "att60_20": {
+      "p01": 4.772445,
+      "p99": 22.065729,
+      "missing_share": 5.5e-05
+    },
+    "games_season": {
+      "p01": 0.0,
+      "p99": 77.0,
+      "missing_share": 0.0
+    },
+    "rest_days": {
+      "p01": 1.0,
+      "p99": 10.0,
+      "missing_share": 0.0
+    },
+    "team_sf_10": {
+      "p01": 21.7,
+      "p99": 35.2,
+      "missing_share": 0.000177
+    },
+    "opp_sa_10": {
+      "p01": 21.7,
+      "p99": 35.6,
+      "missing_share": 0.000199
+    },
+    "league_prior": {
+      "p01": 4.111768,
+      "p99": 7.351362,
+      "missing_share": 0.0
+    }
+  }
+}

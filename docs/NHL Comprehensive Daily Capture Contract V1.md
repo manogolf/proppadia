@@ -610,8 +610,12 @@ reuses `export_nhl_all_candidate_evaluation.load_retained_quotes`), each with
 reasons: rule reasons from P2.29/P2.37 and inputs at least 1.5 standard
 deviations from players the market prices within 5 points on the same line;
 (3) the prior date's shot-attempt source diagnostic (games dropped is a
-flag). SOG has no retained training matrix, so its out-of-range check is not
-available.
+flag). SOG inputs are checked against
+`backend/nhl/config/sog_hgb_training_feature_ranges.json`, built from the
+frozen SOG model's training frame rebuilt read-only on 2026-10-28 and
+hash-verified against its contract. `league_prior` is constant for a season
+(last season's league rate by position), so a new season is reported out of
+range but not flagged.
 
 Two-sided line level in the daily performance summary (2026-10-28). Next to
 the all-predictions tables, SOG production and Points HGB production show W/L

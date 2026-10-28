@@ -40,6 +40,25 @@ class SanityTests(unittest.TestCase):
         # One of five players outside the range is above the drift share.
         self.assertTrue(checks["OUT_OF_TRAINING_RANGE:player_points_last10"]["flag"])
 
+    def test_sog_inputs_are_checked_against_the_frozen_training_ranges(self):
+        sog_ranges = json.loads(watch.SOG_RANGES_PATH.read_text())
+        self.assertEqual(sog_ranges["training_frame_sha256"],
+                         "4042e31c758c6b0083272cf82904426b8732e06a9f2837c79e7e0d2e9aa093f6")
+        rows = [{"game_id": 1, "player_id": i, "player_name": f"S{i}", "feature_sog60_10": 7.0,
+                 "feature_att60_10": 14.0, "feature_toi_avg_10": 17.0, "feature_pp_toi_avg_10": 1.0,
+                 "feature_team_sf_10": 28.0, "feature_league_prior": 5.5} for i in range(1, 6)]
+        rows[0]["feature_sog60_10"] = 30.0                      # far above training p99
+        checks = {c["check"]: c for c in watch.sog_sanity(pd.DataFrame(rows), sog_ranges)}
+        self.assertTrue(checks["OUT_OF_TRAINING_RANGE:feature_sog60_10"]["flag"])
+        self.assertEqual(checks["OUT_OF_TRAINING_RANGE:feature_sog60_10"]["examples"], ["S1"])
+        self.assertFalse(checks["OUT_OF_TRAINING_RANGE:feature_toi_avg_10"]["flag"])
+        # 2026 defenseman league prior (3.947) is below both training values: reported, not flagged.
+        for row in rows:
+            row["feature_league_prior"] = 3.947
+        checks = {c["check"]: c for c in watch.sog_sanity(pd.DataFrame(rows), sog_ranges)}
+        self.assertEqual(checks["OUT_OF_TRAINING_RANGE:feature_league_prior"]["count"], 5)
+        self.assertFalse(checks["OUT_OF_TRAINING_RANGE:feature_league_prior"]["flag"])
+
     def test_clean_inputs_raise_no_flags(self):
         frame = pd.DataFrame([points_row(i) for i in range(1, 30)])
         self.assertFalse(any(c["flag"] for c in watch.points_sanity(frame, RANGES)))

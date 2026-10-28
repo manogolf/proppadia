@@ -8,6 +8,12 @@ skater-game of seasons 2024 and 2025 and writes, under OUT:
 - shadow_contract.json (features, hyperparameters, training rows and frame
   SHA-256, library versions, artifact SHA-256).
 Refuses to overwrite an existing artifact.
+
+``--rebuild-training-frame`` (2026-10-28) re-reads the same history read-only,
+rebuilds the training frame with the same code, compares it with the
+contract's ``training_frame_sha256`` and keeps it locally beside the model as
+``training_frame_rebuilt.csv.gz`` with ``training_frame_rebuild_receipt.json``.
+It never changes the model or the contract.
 """
 from __future__ import annotations
 
@@ -47,9 +53,8 @@ def training_frame(logs: pd.DataFrame, positions: pd.DataFrame) -> pd.DataFrame:
     return frame[keep].sort_values(["game_date", "game_id", "player_id"]).reset_index(drop=True)
 
 
-def main() -> int:
-    if (OUT / ARTIFACT).exists():
-        raise SystemExit(f"SOG_HGB_ARTIFACT_ALREADY_FROZEN:{OUT / ARTIFACT}")
+def _read_history() -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Training history and positions in one read-only snapshot (research login)."""
     env = {**os.environ, **{k: v for k, v in dotenv_values(ROOT / "backend/.env").items() if v is not None}}
     with psycopg.connect(database_url("research", environ=env), prepare_threshold=None) as c, c.cursor() as cur:
         cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
@@ -57,8 +62,52 @@ def main() -> int:
         logs = pd.DataFrame(cur.fetchall(), columns=[d.name for d in cur.description])
         cur.execute("SELECT player_id::bigint, position FROM nhl.players")
         positions = pd.DataFrame(cur.fetchall(), columns=["player_id", "position"])
-    train = training_frame(logs, positions)
-    frame_text = train[["game_id", "player_id", "shots_on_goal"] + FEATURES].to_csv(index=False, float_format="%.17g")
+    return logs, positions
+
+
+def _frame_text(train: pd.DataFrame) -> str:
+    return train[["game_id", "player_id", "shots_on_goal"] + FEATURES].to_csv(index=False, float_format="%.17g")
+
+
+def rebuild_training_frame() -> int:
+    """Rebuild the frozen model's training frame and check it against the contract."""
+    import gzip
+    from datetime import datetime, timezone
+    contract = json.loads((OUT / "shadow_contract.json").read_text())
+    if sha(OUT / ARTIFACT) != contract["fitted_artifact_sha256"]:
+        raise SystemExit("SOG_HGB_ARTIFACT_SHA_MISMATCH")
+    train = training_frame(*_read_history())
+    frame_text = _frame_text(train)
+    rebuilt_sha = hashlib.sha256(frame_text.encode()).hexdigest()
+    frame_path = OUT / "training_frame_rebuilt.csv.gz"
+    with gzip.open(frame_path, "wt", encoding="utf-8", newline="") as stream:
+        stream.write(frame_text)
+    model = joblib.load(OUT / ARTIFACT)
+    receipt = {
+        "schema_version": "NHL_SOG_HGB_TRAINING_FRAME_REBUILD_V1",
+        "rebuilt_at_utc": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "database_identity": "research (REPEATABLE READ READ ONLY)", "database_writes": 0,
+        "recorded_training_frame_sha256": contract["training_frame_sha256"],
+        "rebuilt_training_frame_sha256": rebuilt_sha,
+        "matches_recorded_frame": rebuilt_sha == contract["training_frame_sha256"],
+        "recorded_rows": contract["training_rows"], "rebuilt_rows": int(len(train)),
+        "recorded_mean_prediction": contract["training_mean_prediction"],
+        "rebuilt_mean_prediction": float(model.predict(train[FEATURES].astype(float).to_numpy()).mean()),
+        "frame_file": frame_path.name, "frame_file_sha256": sha(frame_path),
+        "frame_columns": ["game_id", "player_id", "shots_on_goal"] + FEATURES,
+    }
+    (OUT / "training_frame_rebuild_receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    print(json.dumps(receipt, indent=1))
+    return 0
+
+
+def main() -> int:
+    if "--rebuild-training-frame" in sys.argv[1:]:
+        return rebuild_training_frame()
+    if (OUT / ARTIFACT).exists():
+        raise SystemExit(f"SOG_HGB_ARTIFACT_ALREADY_FROZEN:{OUT / ARTIFACT}")
+    train = training_frame(*_read_history())
+    frame_text = _frame_text(train)
     model = fit(train, BASE_KW)
     OUT.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, OUT / ARTIFACT)

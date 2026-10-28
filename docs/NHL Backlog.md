@@ -2589,8 +2589,20 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   explainer put McDavid first (Under 1.5, model 68% vs market 46%: at the
   model's ceiling, recent scoring outside the training range) and Draisaitl
   in the top ten for the same reason.
-- Open: no SOG training ranges (no retained SOG training matrix); the weekly
-  report does not yet track the P2.29 cohort record (proposal item 4).
+- SOG training ranges added 2026-10-28: the frozen SOG model's training frame
+  had never been saved (the freeze kept it in memory and recorded only its
+  SHA-256). `freeze_nhl_sog_hgb_count_model.py --rebuild-training-frame`
+  rebuilt it read-only: SHA-256 `4042e31c…` equals the contract, 90,598
+  rows, identical mean prediction. Kept locally beside the model
+  (`training_frame_rebuilt.csv.gz`, `training_frame_rebuild_receipt.json`);
+  ranges in `backend/nhl/config/sog_hgb_training_feature_ranges.json`.
+  First finding: `league_prior` (last season's league SOG/60 by position)
+  keeps falling (D 4.19 -> 4.11 -> 3.95 for 2026; F 7.35 -> 6.75 -> 6.68),
+  below anything the model trained on; trees score it as the 2025 value.
+  Reported, not flagged (constant all season); consistent with P2.33's
+  known early-season low bias.
+- Open: the weekly report does not yet track the P2.29 cohort record
+  (proposal item 4).
 - Noticed while building: HGB promotion gate J reads `PASS` from
   `operational_promotion_gates.json` and the integration-proof hash check
   can only confirm it, never revoke it (`points_hgb_promotion.evaluate_promotion`),
