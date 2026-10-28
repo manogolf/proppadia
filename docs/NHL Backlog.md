@@ -2559,8 +2559,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   picks are mostly Over-only alternate lines where our pick was the Under.
 - Also fixed: the export's names and production-capture paths used the working
   directory; they now use the repo root.
-- Open: the weekly evaluation still reports only the all-predictions level
-  ("Not yet covered: model vs market (two-sided lines)"). Production SOG
+- Weekly evaluation (2026-10-28, operator request): the report shows
+  production SOG and Points HGB on two-sided lines (quality, line x side,
+  flagged segments) for the week and season from 2026-10-10, and the
+  improvement log flags two-sided segments as separate entries
+  (`docs/nhl/model_promotion_rules.md`). Season 10-10..10-27: SOG all 78.2%,
+  two-sided 2,040-1,087 (65.2%, 3,127 picks); Points HGB all 85.7%,
+  two-sided 3,519-1,198 (74.6%, 4,717 picks). 10-08/10-09 have no
+  timestamped production candidates; 10-18 has zero two-sided picks (its only
+  odds snapshot was taken after the predictions).
+- Open: production SOG
   prediction timestamps in the export come from the slate's latest fixed-blend
   shadow capture; if that shadow lane stops running, the SOG level shows
   `UNAVAILABLE (NO_PRODUCTION_SOG_CANDIDATES)`.

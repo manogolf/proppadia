@@ -94,6 +94,18 @@ class ImprovementLogTests(unittest.TestCase):
         log, _, _ = ev.update_improvement_log(log, seg(-0.01), "2026-11-28")
         self.assertEqual(log["entries"][0]["status"], "TESTING")
 
+    def test_two_sided_segments_are_separate_entries(self):
+        both = pd.concat([seg(-0.10).assign(level="all"), seg(-0.10).assign(level="two_sided")])
+        log, new, _ = ev.update_improvement_log({}, both, "2026-10-24")
+        self.assertEqual(new, ["IMP-001", "IMP-002"])
+        keys = {e["key"]: e for e in log["entries"]}
+        self.assertEqual(keys["sog|2.5|OVER|.55-.60"]["level"], "all")
+        self.assertEqual(keys["two_sided|sog|2.5|OVER|.55-.60"]["level"], "two_sided")
+        # One call per week: an all-level flag does not mark the two-sided entry unflagged.
+        log, _, recurring = ev.update_improvement_log(log, both, "2026-10-31")
+        self.assertEqual(sorted(recurring), ["IMP-001", "IMP-002"])
+        self.assertIn("(two-sided)", ev.render_log(log))
+
     def test_small_or_mild_segments_are_not_flagged(self):
         log, new, _ = ev.update_improvement_log({}, pd.concat([seg(-0.10, n=10), seg(-0.02, band=".60-.70")]), "2026-10-24")
         self.assertEqual((new, log["entries"]), ([], []))

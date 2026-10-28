@@ -6,7 +6,9 @@ Reuses the governed grades only:
   shadow (Moneyline, Puck Line, SOG arms, Points HGB and Phoenix, Saves);
 - `freeze_nhl_sog_points_wl_baseline.sog_rows` / `points_rows` for row-level
   production SOG and Points HGB grades, which already check their totals
-  against the governed result.
+  against the governed result;
+- `backend.nhl.two_sided_lines` to mark which of those rows had a two-sided
+  line (same book quoted Over and Under before the prediction), from 2026-10-10.
 
 Adds probability quality (Brier, log loss), calibration by probability band
 and the segments whose results differ most from their predicted confidence.
@@ -27,6 +29,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from backend.nhl import two_sided_lines
 from backend.nhl.scripts import freeze_nhl_sog_points_wl_baseline as baseline
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -34,6 +37,9 @@ OUT_ROOT = ROOT / "artifacts/analysis/nhl/model_evaluation"
 CACHE = OUT_ROOT / "row_cache"
 DOCS = ROOT / "docs/nhl"
 SOG_START, POINTS_START = "2026-10-08", "2026-10-10"
+# First slate with timestamped production SOG and Points HGB candidates for quote matching.
+TWO_SIDED_START = "2026-10-10"
+OPERATIONAL = ROOT / "artifacts/operational/nhl"
 MIN_SEGMENT = 40
 FLAG_GAP = 0.05          # flag a segment when results differ from confidence by 5+ points
 CLEAR_WEEKS = 3          # weeks in a row unflagged before suggesting an entry is resolved
@@ -63,6 +69,29 @@ def _cached_rows(lane: str, day: str, identity: str) -> pd.DataFrame:
     path.parent.mkdir(parents=True, exist_ok=True)
     rows.to_csv(path, index=False)
     return rows
+
+
+def _cached_two_sided_keys(day: str, load_candidates) -> dict[str, list | None]:
+    """Two-sided keys for one slate, cached by its retained odds snapshot count."""
+    snapshots = len(list((OPERATIONAL / "odds_observations" / "season=2026" / f"slate_date={day}").glob("observation=*")))
+    path = CACHE / "two_sided" / f"{day}_{snapshots}.json"
+    if path.is_file():
+        return json.loads(path.read_text())
+    evidence = two_sided_lines.load_evidence(OPERATIONAL, day, candidates=load_candidates())
+    keys = {lane: (sorted([int(g), int(p), float(line)] for g, p, line in found) if found is not None else None)
+            for lane, found in evidence["keys"].items()}
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(keys) + "\n")
+    return keys
+
+
+def mark_two_sided(rows: pd.DataFrame, keys: list | None) -> pd.Series:
+    """True/False per row; NA when the slate has no quote evidence for the lane."""
+    if keys is None:
+        return pd.Series(pd.NA, index=rows.index, dtype="boolean")
+    found = {(int(g), int(p), float(line)) for g, p, line in keys}
+    return pd.Series([(int(g), int(p), float(line)) in found for g, p, line in
+                      zip(rows.game_id, rows.player_id, rows.line)], index=rows.index, dtype="boolean")
 
 
 GRADE_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow/grades"
@@ -183,15 +212,20 @@ def update_improvement_log(log: dict, seg: pd.DataFrame, as_of: str) -> tuple[di
     new, recurring = [], []
     seen = set()
     for r in flagged.itertuples():
-        key = f"{r.lane}|{r.line}|{r.selected_side}|{r.band}"
+        level = getattr(r, "level", "all")
+        # All-predictions keys keep their original form; two-sided segments are separate entries.
+        key = (f"{r.lane}|{r.line}|{r.selected_side}|{r.band}" if level == "all"
+               else f"{level}|{r.lane}|{r.line}|{r.selected_side}|{r.band}")
         seen.add(key)
         point = {"as_of": as_of, "n": int(r.n), "win_rate": round(float(r.win_rate), 4),
                  "predicted": round(float(r.predicted), 4), "gap": round(float(r.gap), 4), "flagged": True}
         direction = "overconfident" if r.gap < 0 else "underconfident"
         if key not in entries:
-            entry = {"id": f"IMP-{len(entries) + 1:03d}", "key": key, "lane": r.lane, "line": float(r.line),
+            entry = {"id": f"IMP-{len(entries) + 1:03d}", "key": key, "level": level, "lane": r.lane,
+                     "line": float(r.line),
                      "side": r.selected_side, "band": r.band, "first_flagged": as_of, "status": "OPEN",
-                     "finding": (f"{r.lane} {r.line} {r.selected_side}, P(over) {r.band}: model is {direction} "
+                     "finding": (f"{'two-sided lines: ' if level == 'two_sided' else ''}"
+                                 f"{r.lane} {r.line} {r.selected_side}, P(over) {r.band}: model is {direction} "
                                  f"(wins {100 * r.win_rate:.1f}% vs {100 * r.predicted:.1f}% expected, n={int(r.n)})."),
                      "suggested_checks": ("Check this group's feature inputs against training; compare with the market on "
                                           "two-sided lines; test a calibration layer as a shadow." if r.gap < 0 else
@@ -227,7 +261,8 @@ def update_improvement_log(log: dict, seg: pd.DataFrame, as_of: str) -> tuple[di
 def render_log(log: dict) -> str:
     lines = ["# NHL model improvement log", "",
              "Generated by the weekly model evaluation from segments whose results differ from the model's",
-             f"confidence by at least {int(FLAG_GAP * 100)} points (n >= {MIN_SEGMENT}). Edit status, hypothesis and",
+             f"confidence by at least {int(FLAG_GAP * 100)} points (n >= {MIN_SEGMENT}), at two levels: all",
+             "predictions, and two-sided lines only (marked \"(two-sided)\"). Edit status, hypothesis and",
              "next_step in `model_improvement_log.json`; the weekly run keeps hand-set statuses",
              "(TESTING, PROMOTED, REJECTED, WATCH, RESOLVED). Rules for acting on an entry:",
              "`docs/nhl/model_promotion_rules.md`.", "",
@@ -236,7 +271,8 @@ def render_log(log: dict) -> str:
              "|---|---|---|---|---:|---:|---|"]
     for e in log["entries"]:
         last = next((h for h in reversed(e["history"]) if h.get("flagged")), {})
-        lines.append(f"| {e['id']} | {e['status']} | {e['lane']} {e['line']} {e['side']} {e['band']} | "
+        level = " (two-sided)" if e.get("level") == "two_sided" else ""
+        lines.append(f"| {e['id']} | {e['status']} | {e['lane']} {e['line']} {e['side']} {e['band']}{level} | "
                      f"{e['first_flagged']} | {e.get('weeks_flagged', 0)} | "
                      f"{100 * last.get('gap', 0):+.1f} pts | {e['finding']} |")
     return "\n".join(lines) + "\n"
@@ -246,6 +282,17 @@ def _pct(x: float) -> str:
     return f"{100 * x:.1f}%"
 
 
+def two_sided_rows(rows: pd.DataFrame) -> pd.DataFrame:
+    """Rows on a two-sided line; empty when no row carries two-sided evidence."""
+    if "two_sided" not in rows:
+        return rows.iloc[0:0]
+    return rows[rows.two_sided.fillna(False).astype(bool)]
+
+
+def _wl(frame: pd.DataFrame) -> str:
+    return f"{int(frame.win.sum())}-{int(len(frame) - frame.win.sum())}"
+
+
 def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFrame, pulse: str | None,
            log_note: str = "", schedule_note: str = "") -> str:
     wk = rows[rows.slate_date.isin(week)]
@@ -253,7 +300,9 @@ def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFram
              *([schedule_note, ""] if schedule_note else []),
              f"Week: {week[0]} to {week[-1]} ({len(set(wk.slate_date))} slates with production rows). "
              f"Season to date: SOG (production and shadows) from {SOG_START}, Points HGB as production from {POINTS_START}, "
-             "Moneyline, Puck Line and Saves from 2026-10-01. Governed grades only.", "",
+             "Moneyline, Puck Line and Saves from 2026-10-01. Governed grades only. "
+             f"Two-sided lines from {TWO_SIDED_START}: only picks whose exact line had the same book or prediction "
+             "market quoting both Over and Under before the prediction (`backend/nhl/two_sided_lines.py`).", "",
              "## Where every model stands (W-L)", "",
              "| Lane | Model | Week | Win % | Season | Win % |", "|---|---|---:|---:|---:|---:|"]
     for (lane, model), g in records.groupby(["lane", "model"], sort=True):
@@ -270,22 +319,46 @@ def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFram
             if q["n"]:
                 lines.append(f"| {lane} | {label} | {q['n']} | {q['wins']}-{q['losses']} | {_pct(q['win_rate'])} | "
                              f"{_pct(q['mean_pick_probability'])} | {q['brier']:.4f} | {q['log_loss']:.4f} |")
-    lines += ["", "## By line and side (week / season)", "", "| Lane | Line | Side | Week W-L | Season W-L | Season win % |",
-              "|---|---:|---|---:|---:|---:|"]
+    two = two_sided_rows(rows)
+    wk_two = two[two.slate_date.isin(week)]
+    lines += ["", "## Two-sided lines (production SOG and Points HGB)", "",
+              "The same measures on picks whose line had a two-sided quote: the level where the model meets the market. "
+              "Share = two-sided picks out of all settled picks on slates with quote evidence.", "",
+              "| Lane | Window | n | Share | W-L | Win % | Mean pick prob | Brier | Log loss |",
+              "|---|---|---:|---:|---:|---:|---:|---:|---:|"]
+    for lane in ("sog", "points"):
+        for label, frame, base in (("week", wk_two[wk_two.lane == lane], wk[wk.lane == lane]),
+                                   ("season", two[two.lane == lane], rows[rows.lane == lane])):
+            q = quality(frame)
+            covered = base.two_sided.notna().sum() if "two_sided" in base else 0
+            if q["n"]:
+                lines.append(f"| {lane} | {label} | {q['n']} | {_pct(q['n'] / covered)} | {q['wins']}-{q['losses']} | "
+                             f"{_pct(q['win_rate'])} | {_pct(q['mean_pick_probability'])} | {q['brier']:.4f} | "
+                             f"{q['log_loss']:.4f} |")
+    lines += ["", "## By line and side (week / season)", "",
+              "| Lane | Line | Side | Week W-L | Week two-sided | Season W-L | Season win % | Season two-sided | Two-sided win % |",
+              "|---|---:|---|---:|---:|---:|---:|---:|---:|"]
     for (lane, line, side), g in rows.groupby(["lane", "line", "selected_side"]):
         w = g[g.slate_date.isin(week)]
-        lines.append(f"| {lane} | {line} | {side} | {int(w.win.sum())}-{int(len(w) - w.win.sum())} | "
-                     f"{int(g.win.sum())}-{int(len(g) - g.win.sum())} | {_pct(g.win.mean())} |")
+        t = two_sided_rows(g)
+        tw = t[t.slate_date.isin(week)]
+        lines.append(f"| {lane} | {line} | {side} | {_wl(w)} | {_wl(tw)} | {_wl(g)} | {_pct(g.win.mean())} | "
+                     f"{_wl(t)} | {_pct(t.win.mean()) if len(t) else '—'} |")
     seg = segments(rows)
     lines += ["", f"## Areas for improvement (season, segments with at least {MIN_SEGMENT} picks)", "",
               "Gap = actual win rate minus the model's average confidence in its pick. Negative means overconfident.", "",
               "| Lane | Line | Side | Band | n | Win % | Predicted | Gap |", "|---|---:|---|---|---:|---:|---:|---:|"]
     for r in pd.concat([seg.head(6), seg.tail(3)]).drop_duplicates().itertuples():
         lines.append(f"| {r.lane} | {r.line} | {r.selected_side} | {r.band} | {r.n} | {_pct(r.win_rate)} | {_pct(r.predicted)} | {100 * r.gap:+.1f} pts |")
+    seg_two = segments(two)
+    lines += ["", f"Two-sided lines only (at least {MIN_SEGMENT} picks):", "",
+              "| Lane | Line | Side | Band | n | Win % | Predicted | Gap |", "|---|---:|---|---|---:|---:|---:|---:|"]
+    for r in pd.concat([seg_two.head(6), seg_two.tail(3)]).drop_duplicates().itertuples():
+        lines.append(f"| {r.lane} | {r.line} | {r.selected_side} | {r.band} | {r.n} | {_pct(r.win_rate)} | {_pct(r.predicted)} | {100 * r.gap:+.1f} pts |")
     if log_note:
         lines += ["", "## Improvement log", "", log_note]
     lines += ["", "## Data health", "", f"Latest player performance pulse: `{pulse}`" if pulse else "Player performance pulse: no revision found.", "",
-              "## Not yet covered", "", "- Model vs market (two-sided lines) and closing-line value.",
+              "## Not yet covered", "", "- Model probability vs the market's no-vig price on two-sided lines, and closing-line value.",
               "- Moneyline and Puck Line probability quality (W-L only above).", ""]
     return "\n".join(lines)
 
@@ -318,11 +391,29 @@ def main() -> int:
                 r = _cached_rows(lane, day, summaries[day]["summary_identity"])
                 if not r.empty:
                     frames.append(r.assign(lane=lane))
-    rows = enrich(pd.concat(frames, ignore_index=True))
+    rows = pd.concat(frames, ignore_index=True)
+    rows["two_sided"] = pd.Series(pd.NA, index=rows.index, dtype="boolean")
+    loaded: list = []
+
+    def load_candidates() -> list:
+        if not loaded:
+            loaded.append(two_sided_lines.candidate_export.load_candidates(OPERATIONAL)[0])
+        return loaded[0]
+
+    for day in _days(TWO_SIDED_START, args.as_of):
+        on_day = rows.slate_date.eq(day)
+        if not on_day.any():
+            continue
+        keys = _cached_two_sided_keys(day, load_candidates)
+        for lane in ("sog", "points"):
+            mask = on_day & rows.lane.eq(lane)
+            rows.loc[mask, "two_sided"] = mark_two_sided(rows[mask], keys.get(lane))
+    rows = enrich(rows)
     out = OUT_ROOT / f"weekly_{args.as_of}"
     out.mkdir(parents=True, exist_ok=True)
     records.to_csv(out / "model_records.csv", index=False)
-    seg = segments(rows, 1)
+    seg = pd.concat([segments(rows, 1).assign(level="all"),
+                     segments(two_sided_rows(rows), 1).assign(level="two_sided")], ignore_index=True)
     log = json.loads(LOG_JSON.read_text()) if LOG_JSON.is_file() else {}
     log, new, recurring = update_improvement_log(log, seg, args.as_of)
     LOG_JSON.write_text(json.dumps(log, indent=2) + "\n")
@@ -344,6 +435,10 @@ def main() -> int:
         "summaries": {d: s.get("summary_identity") for d, s in summaries.items()},
         "quality": {lane: {"week": quality(rows[(rows.lane == lane) & rows.slate_date.isin(week)]),
                            "season": quality(rows[rows.lane == lane])} for lane in ("sog", "points")},
+        "quality_two_sided": {lane: {"week": quality(two_sided_rows(rows[(rows.lane == lane) & rows.slate_date.isin(week)])),
+                                     "season": quality(two_sided_rows(rows[rows.lane == lane]))}
+                              for lane in ("sog", "points")},
+        "two_sided_start": TWO_SIDED_START,
     }, indent=2) + "\n")
     print(f"NHL WEEKLY EVALUATION {args.as_of}: {doc.relative_to(ROOT)}")
     return 0

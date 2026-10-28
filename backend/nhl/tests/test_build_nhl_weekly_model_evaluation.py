@@ -101,9 +101,23 @@ class QualityTests(unittest.TestCase):
     def test_render_has_every_section(self):
         records = ev.model_records({"2026-10-20": summary(V3, V3)})
         text = ev.render("2026-10-20", ["2026-10-20"], records, self.rows, "NHL PULSE x: PASS")
-        for heading in ("Where every model stands", "Probability quality", "By line and side",
-                        "Areas for improvement", "Data health", "Not yet covered"):
+        for heading in ("Where every model stands", "Probability quality", "Two-sided lines",
+                        "By line and side", "Areas for improvement", "Data health", "Not yet covered"):
             self.assertIn(heading, text)
+
+    def test_two_sided_marking_and_report_level(self):
+        rows = self.rows.copy()
+        rows["two_sided"] = ev.mark_two_sided(rows, [[1, 1, 1.5], [2, 3, 1.5]])
+        self.assertEqual(rows.two_sided.tolist(), [True, False, True, False])
+        self.assertTrue(ev.mark_two_sided(rows, None).isna().all())
+        two = ev.two_sided_rows(rows)
+        self.assertEqual(ev.quality(two)["n"], 2)
+        self.assertTrue(ev.two_sided_rows(self.rows).empty)  # no evidence column
+        records = ev.model_records({"2026-10-20": summary(V3, V3)})
+        text = ev.render("2026-10-20", ["2026-10-20"], records, rows, None)
+        # 2 of 4 settled picks were two-sided: one win, one loss.
+        self.assertIn("| sog | week | 2 | 50.0% | 1-1 | 50.0% |", text)
+        self.assertIn("| sog | 1.5 | OVER | 1-1 | 1-1 | 1-1 | 50.0% | 1-1 | 50.0% |", text)
 
 
 if __name__ == "__main__":

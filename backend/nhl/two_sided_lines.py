@@ -25,9 +25,14 @@ DEFINITION = ("same book or prediction market quoted both Over and Under at the 
 KEY_COLUMNS = ("game_id", "player_id", "line")
 
 
-def load_evidence(operational_root: Path, slate_date: str) -> dict[str, Any]:
-    """Return two-sided keys per lane and the export's Points production rows."""
-    candidates, _ = candidate_export.load_candidates(Path(operational_root))
+def load_evidence(operational_root: Path, slate_date: str, *,
+                  candidates: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """Return two-sided keys per lane and the export's Points production rows.
+
+    ``candidates`` lets a multi-slate caller load the export candidates once.
+    """
+    if candidates is None:
+        candidates, _ = candidate_export.load_candidates(Path(operational_root))
     # Production SOG candidates come from the slate's retained production capture.
     candidates = candidate_export.add_captured_sog_arms(
         [row for row in candidates if row["slate_date"] == slate_date], Path(operational_root), slate_date)

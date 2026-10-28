@@ -69,11 +69,19 @@ Used when training or live data were wrong, as with the PP-TOI refit
 - An entry unflagged for 3 weekly evaluations in a row is marked
   `OPEN_CLEAR_3_WEEKS`; the operator closes it as RESOLVED or keeps it on WATCH.
 - One fix may close several entries; record the fix id on each.
+- Segments are flagged at two levels (2026-10-28): all predictions, and
+  two-sided lines only (picks whose line had the same book quoting Over and
+  Under before the prediction; from 2026-10-10). Two-sided entries have
+  `level: two_sided`, key prefix `two_sided|`, and show "(two-sided)" in the
+  log. A two-sided entry is where the model meets a real market; weigh it
+  first when choosing what to fix. Entries without `level` are all-predictions.
 
 ## Not yet automated
 - Paired shadow-vs-production proper scores (the weekly report shows W/L for
   shadows today).
-- Market comparison on two-sided lines and closing-line value.
+- Model probability vs the market's no-vig price on two-sided lines, and
+  closing-line value. (The weekly report already shows W/L, Brier and log loss
+  on two-sided lines.)
 - A promotion check that applies these rules and reports which candidates
   qualify.
 
