@@ -556,7 +556,13 @@ inputs to the formula's own output. The formula is a shadow
 under `artifacts/operational/nhl/sog_formula_shadows/`). Formula-variant
 research shadows (fixed blends, D10/D20 divergence, structural correction,
 defense surprise) keep reading the formula file; the SHRUNK_180 shadow pairs
-with production. Grading accepts either identity
+with production. The fixed-blend, divergence and structural lanes (and the
+divergence and structural manifests) record `production_model_identity` as the
+actual production SOG model and `comparator_model_identity` as
+`poisson_baseline/baseline_v1`, the formula file they pair against; their
+`*_vs_production` grade fields therefore compare against the formula, and the
+daily summary labels the divergence comparison "vs the Poisson formula".
+Captures before 2026-10-28 still list the formula as production. Grading accepts either identity
 (`PRODUCTION_SOG_SCORERS` in `performance_summary.py`), so slates before the
 cutover keep the formula as production. One-step rollback:
 `NHL_SOG_SCORER=poisson_baseline` (the formula writes the production file and

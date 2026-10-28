@@ -134,7 +134,8 @@ def _write_sums(path: Path) -> None:
 def capture(*, feature_path: Path, production_path: Path, output_root: Path,
             run_id: str, slate_date: str, season: int, feature_sha256: str,
             feature_cutoff_utc: str, canonical_game_ids: list[int],
-            started_excluded_game_ids: list[int] | None, scorer_path: Path) -> dict[str, Any]:
+            started_excluded_game_ids: list[int] | None, scorer_path: Path,
+            production_identity: tuple[str, str] = ("poisson_baseline", "baseline_v1")) -> dict[str, Any]:
     if sha256_file(feature_path) != feature_sha256:
         raise ValueError("SOG_DIVERGENCE_FEATURE_SHA_MISMATCH")
     feature = pd.read_csv(feature_path)
@@ -163,7 +164,8 @@ def capture(*, feature_path: Path, production_path: Path, output_root: Path,
         "season": season, "slate_date": slate_date, "parent_daily_run_id": run_id,
         "correction_threshold": THRESHOLD, "midpoint_weights": {"d10": 0.5, "d20": 0.5},
         "correction_contract": "if abs(d10-d20)>0.5 use midpoint; otherwise d10; missing D20 leaves production rate unchanged",
-        "production_model_identity": {"family": "poisson_baseline", "version": "baseline_v1"},
+        "production_model_identity": {"family": production_identity[0], "version": production_identity[1]},
+        "comparator_model_identity": {"family": "poisson_baseline", "version": "baseline_v1"},
         "production_scorer_path": str(Path(scorer_path).resolve()), "production_scorer_sha256": sha256_file(scorer_path),
         "production_feature_input_path": str(Path(feature_path).resolve()), "production_feature_input_sha256": feature_sha256,
         "production_prediction_path": str(Path(production_path).resolve()), "production_prediction_sha256": sha256_file(production_path),

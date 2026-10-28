@@ -109,7 +109,7 @@ def build_predictions(features: pd.DataFrame, production: pd.DataFrame, *, slate
 def capture(*, feature_path: Path, production_path: Path, output_root: Path, run_id: str,
             slate_date: str, season: int, feature_sha256: str, feature_cutoff_utc: str,
             canonical_game_ids: list[int], started_excluded_game_ids: list[int] | None,
-            scorer_path: Path) -> dict[str, Any]:
+            scorer_path: Path, production_identity: tuple[str, str] = ("poisson_baseline", "baseline_v1")) -> dict[str, Any]:
     if sha256_file(feature_path)!=feature_sha256: raise ValueError("SOG_STRUCTURAL_FEATURE_SHA_MISMATCH")
     f,p=pd.read_csv(feature_path),pd.read_csv(production_path)
     kwargs=dict(slate_date=slate_date,run_id=run_id,feature_cutoff_utc=feature_cutoff_utc,canonical_game_ids=canonical_game_ids,started_excluded_game_ids=started_excluded_game_ids)
@@ -127,7 +127,7 @@ def capture(*, feature_path: Path, production_path: Path, output_root: Path, run
     pg=frame.drop_duplicates(["game_id","player_id"])
     activation={k:int(v) for k,v in pg.activation_state.value_counts().to_dict().items()}
     manifest={"contract":"NHL_SOG_D10_STRUCTURAL_CORRECTION_V1","model_identity":MODEL_IDENTITY,"research_role":ROLE,
-      "production_model_identity":"poisson_baseline/baseline_v1","divergence_shadow_identity":"NHL_SOG_D10_D20_DIVERGENCE_SHRINK_V1",
+      "production_model_identity":f"{production_identity[0]}/{production_identity[1]}","comparator_model_identity":"poisson_baseline/baseline_v1","divergence_shadow_identity":"NHL_SOG_D10_D20_DIVERGENCE_SHRINK_V1",
       "stage1_threshold":STAGE1_THRESHOLD,"stage1_weights":{"d10":.5,"d20":.5},"stage2_d10_threshold":STAGE2_THRESHOLD,"stage2_compression_factor":COMPRESSION,
       "parent_daily_run_id":run_id,"season":season,"slate_date":slate_date,"canonical_game_ids":sorted(set(map(int,canonical_game_ids))),"canonical_game_set_hash":canonical_game_set_hash(canonical_game_ids),
       "eligible_game_ids":sorted(set(pd.to_numeric(f.game_id).astype(int))),"started_excluded_game_ids":sorted(set(map(int,started_excluded_game_ids or []))),

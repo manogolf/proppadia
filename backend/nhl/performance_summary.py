@@ -1563,7 +1563,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
     lines += ["", "## SOG D10/D20 Divergence Prospective Shadow",
               f"Status: {divergence.get('status', 'NO_IMMUTABLE_SHADOW_CAPTURE')} (PROSPECTIVE_SHADOW)"]
     for grade in divergence_grades:
-        lines.append(f"- Settled player-games {grade.get('settled_player_games', 0)}; count MAE {grade.get('count_mae')}; paired count MAE difference vs production {grade.get('paired_count_mae_difference_vs_production')}.")
+        lines.append(f"- Settled player-games {grade.get('settled_player_games', 0)}; count MAE {grade.get('count_mae')}; paired count MAE difference vs the Poisson formula {grade.get('paired_count_mae_difference_vs_production')}.")
     lines.append("Shadow only; production SOG is the SOG section's production model.")
     structural = summary.get("sog_d10_structural_correction_shadow") or {}
     lines += ["", "## SOG Combined Structural-Correction Prospective Shadow",

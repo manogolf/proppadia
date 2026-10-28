@@ -82,7 +82,8 @@ class SogDivergenceShadowTests(unittest.TestCase):
             result = capture(feature_path=feature_path, production_path=production_path,
                 output_root=root / "captures", run_id="parent", slate_date="2026-10-14", season=2026,
                 feature_sha256=feature_sha, feature_cutoff_utc="2026-10-14T18:00:00Z",
-                canonical_game_ids=[10], started_excluded_game_ids=[], scorer_path=scorer)
+                canonical_game_ids=[10], started_excluded_game_ids=[], scorer_path=scorer,
+                production_identity=("hgb_count", "NHL_SOG_COUNT_HGB_V1"))
             package = Path(result["path"])
             verify_package(package)
             self.assertTrue((package / "RUN_COMPLETE.json").is_file())
@@ -90,6 +91,10 @@ class SogDivergenceShadowTests(unittest.TestCase):
             self.assertEqual(manifest["model_identity"], MODEL_IDENTITY)
             self.assertEqual(manifest["deterministic_replay"], "PASS")
             self.assertEqual(manifest["prediction_row_count"], len(production) * 3)
+            self.assertEqual(manifest["production_model_identity"],
+                             {"family": "hgb_count", "version": "NHL_SOG_COUNT_HGB_V1"})
+            self.assertEqual(manifest["comparator_model_identity"],
+                             {"family": "poisson_baseline", "version": "baseline_v1"})
             recorder = DailyRunRecorder(run_id="parent", command=["daily"], phase="EARLY")
             recorder.start_lane("sog_d10_d20_divergence_shadow", inputs=[{"feature_sha": feature_sha}])
             recorder.finish_lane("sog_d10_d20_divergence_shadow", outputs=[result],

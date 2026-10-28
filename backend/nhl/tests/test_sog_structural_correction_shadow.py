@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -64,8 +65,12 @@ class StructuralCorrectionShadowTest(unittest.TestCase):
             f.to_csv(fp,index=False); p.to_csv(pp,index=False)
             before=hashlib.sha256(pp.read_bytes()).hexdigest()
             result=capture(feature_path=fp,production_path=pp,output_root=root/"captures",run_id="r",slate_date="2026-10-14",season=2026,
-                feature_sha256=hashlib.sha256(fp.read_bytes()).hexdigest(),feature_cutoff_utc="t",canonical_game_ids=[1],started_excluded_game_ids=[],scorer_path=scorer)
+                feature_sha256=hashlib.sha256(fp.read_bytes()).hexdigest(),feature_cutoff_utc="t",canonical_game_ids=[1],started_excluded_game_ids=[],scorer_path=scorer,
+                production_identity=("hgb_count","NHL_SOG_COUNT_HGB_V1"))
             self.assertEqual(result["model_identity"],MODEL_IDENTITY); self.assertEqual(result["deterministic_replay"],"PASS")
+            manifest=json.loads((Path(result["path"])/"manifest.json").read_text())
+            self.assertEqual(manifest["production_model_identity"],"hgb_count/NHL_SOG_COUNT_HGB_V1")
+            self.assertEqual(manifest["comparator_model_identity"],"poisson_baseline/baseline_v1")
             self.assertEqual(hashlib.sha256(pp.read_bytes()).hexdigest(),before)
             self.assertTrue((Path(result["path"])/"RUN_COMPLETE.json").is_file())
             rec=DailyRunRecorder(run_id="r",command=["offline"],phase="EARLY")

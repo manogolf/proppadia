@@ -3531,7 +3531,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     recorder.start_lane("sog_fixed_blend_shadows", inputs=[{
         "feature_input_sha256": (sog_feature_capture or {}).get("retained_sha256"),
         "parent_daily_run_id": daily_run_id,
-        "production_model_identity": "poisson_baseline/baseline_v1",
+        "production_model_identity": f"{sog_model_family}/{sog_model_version}",
+        "comparator_model_identity": "poisson_baseline/baseline_v1",
     }])
     if sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
         try:
@@ -3558,7 +3559,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     recorder.start_lane("sog_d10_d20_divergence_shadow", inputs=[{
         "feature_input_sha256": (sog_feature_capture or {}).get("retained_sha256"),
         "parent_daily_run_id": daily_run_id,
-        "production_model_identity": "poisson_baseline/baseline_v1",
+        "production_model_identity": f"{sog_model_family}/{sog_model_version}",
+        "comparator_model_identity": "poisson_baseline/baseline_v1",
         "correction_threshold": 0.5,
         "provider_requests": 0,
         "credits_consumed": 0,
@@ -3576,6 +3578,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                 canonical_game_ids=[int(game.game_id) for game in canonical_games],
                 started_excluded_game_ids=list(sog_eligibility["started_excluded_game_ids"]),
                 scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py",
+                production_identity=(sog_model_family, sog_model_version),
             )
             recorder.finish_lane(
                 "sog_d10_d20_divergence_shadow",
@@ -3596,7 +3599,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "model_identity": "NHL_SOG_D10_STRUCTURAL_CORRECTION_V1",
         "parent_daily_run_id": daily_run_id,
         "production_feature_sha256": (sog_feature_capture or {}).get("retained_sha256"),
-        "production_model_identity": "poisson_baseline/baseline_v1",
+        "production_model_identity": f"{sog_model_family}/{sog_model_version}",
+        "comparator_model_identity": "poisson_baseline/baseline_v1",
         "divergence_shadow_identity": "NHL_SOG_D10_D20_DIVERGENCE_SHRINK_V1",
         "stage1_threshold": 0.5, "stage1_weights": {"d10": 0.5, "d20": 0.5},
         "stage2_threshold": 9.0, "stage2_compression_factor": 0.5,
@@ -3612,7 +3616,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
                 feature_cutoff_utc=str(sog_feature_capture["cutoff_utc"]),
                 canonical_game_ids=[int(game.game_id) for game in canonical_games],
                 started_excluded_game_ids=list(sog_eligibility["started_excluded_game_ids"]),
-                scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py")
+                scorer_path=SCRIPTS_DIR / "score_sog_poisson_baseline.py",
+                production_identity=(sog_model_family, sog_model_version))
             recorder.finish_lane("sog_d10_structural_correction_shadow", outputs=[structural_package],
                 reason="PROSPECTIVE_SHADOW_IMMUTABLE_CAPTURE_COMPLETE", database_rows_written=False,
                 provider_requests=0, credits_consumed=0)
