@@ -2308,6 +2308,14 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     near the model's own rate), every date above the market; SOG Overs with
     big gaps did not (2.5 O 16-24). About 10 dates; SOG production was the
     formula until 10-25 and HGB after.
+  - SOG over-15 Unders checked 2026-10-28 (export rows, 10-10..10-27, 95%
+    ranges over dates): 214-87 (71%; range 65-82%) vs market 56%, model 78%;
+    log-loss model minus market -0.023 (range -0.130 to +0.043, includes
+    zero). Almost all formula-era: formula 206-82 on 13 dates (about 22 a
+    day); HGB since 10-25 only 13 picks in 3 dates (8-5), so HGB rarely
+    disagrees with the market this much. The results beat the market's price
+    but the model was overconfident. The formula still runs as a shadow
+    (`sog_poisson_formula_shadow`), so the band can be followed there.
 
 - Live source defect found during the refit: since 2026-01 the database
   stores "no PP time" as NULL. Reconciliation staging inserts
