@@ -2298,6 +2298,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     the model's largest disagreements with a better-informed market, so
     input fixes shrink it but do not make it win; the ceiling fix (P2.39)
     touches 4 of 173.
+  - All picks by model-minus-market gap (two-sided, since 10-16;
+    2026-10-28): within 10 points model and market forecast alike (log loss
+    Points 0.4742 vs 0.4730, SOG 0.6063 vs 0.6031; 88% of Points and 72% of
+    SOG picks). Beyond 10 points the markets split: Points the market is far
+    better (0.719 vs 0.632; model 10-15 above 110-85, 15+ above 45-44);
+    SOG the model is better (0.578 vs 0.591; 15+ above 150-58 vs market
+    55.5%), driven by Unders (1.5 U 76-32, 2.5 U 82-18, 3.5 U 31-8, each
+    near the model's own rate), every date above the market; SOG Overs with
+    big gaps did not (2.5 O 16-24). About 10 dates; SOG production was the
+    formula until 10-25 and HGB after.
 
 - Live source defect found during the refit: since 2026-01 the database
   stores "no PP time" as NULL. Reconciliation staging inserts
