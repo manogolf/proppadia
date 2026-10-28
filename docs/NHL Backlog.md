@@ -2579,7 +2579,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.37 Shot attempts are dropped for whole games; the Points scorer reads unknown as 0
 
-- Status: **OPEN 2026-10-28 (operator: correct, not test).**
+- Status: **RESOLVED 2026-10-28** (per-skater rule live, unknown attempts no longer scored as 0, 2026 backfill committed).
 - Source rule: `points_attempts_source.derive_attempts_from_final_pbp` takes
   attempts from the final play-by-play only when every skater's PBP shots on
   goal equal the boxscore, else the whole game stays NULL. 29 of 198 2026
@@ -2617,6 +2617,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   login) then `nhl.promote_skater_game_log_protected_fields(date)` (NULL
   fills only) and verifies each date against the preview. Run outside the
   daily run windows.
+- **Backfill committed 2026-10-28 12:28-12:32 PT (operator-approved).**
+  All 17 dates: seeder exit 0, protected promotion filled exactly the
+  previewed rows (953 of 953; 0 mismatches; no PP-TOI fills), no attempt
+  conflicts. Read-only after-check: 91 NULL attempts remain in 2026 (19
+  games), all unreconciled skaters. Receipts:
+  `per_skater_backfill_20261028T191323Z/commit_receipts.json` (SHA-256
+  `c425519a9753663f6e5ce923fba0b0e102431b7deddd53b527ccdaffbba0f450`); console log `tmp/attempts_backfill_commit.log`.
 
 ### P2.36 Daily performance summary shows a two-sided line level for SOG and Points
 
