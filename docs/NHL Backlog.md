@@ -2577,6 +2577,35 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.39 HGB Points star ceiling: GLM-offset candidate
+
+- Status: **RESEARCH 2026-10-28** (operator request). Production HGB Points
+  under-predicts top scorers: trees cannot go past the training range
+  (`player_points_last10` p99 1.6); McDavid 10-28 (34 points in 12 games)
+  gets 1.14 expected points, Under 1.5 at -216 against a book +122.
+- Script `backend/nhl/scripts/research_nhl_points_hgb_star_ceiling.py`
+  (local inputs only: P2.31 2023-24 training and 2025 holdout matrices, Points
+  HGB captures, a `--price-both-sides` export). Output
+  `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/star_ceiling_2026-10-28/`.
+  Candidates on the same rows, features and preprocessing as production:
+  GLM (Poisson regression) and OFFSET (production HGB recipe fitted as a
+  multiplier on the GLM: target y/m, weight m).
+- 2025 holdout (47,023 player-games; log-loss difference vs production,
+  95% interval over 166 dates): OFFSET better at every line (0.5 -0.0012,
+  1.5 -0.0016, 2.5 -0.0006; all exclude zero); GLM worse at every line
+  (+0.002 to +0.005). Season 1.2+ points/game (1,003): OFFSET -0.008 to
+  -0.010 (intervals reach zero); mean expected 1.09 vs production 1.01,
+  actual 1.22.
+- 2026 two-sided lines 10-16..10-27 (2,915 rows, 11 dates): OFFSET vs
+  production -0.0013 overall (not significant); 1.2+ points/game (299):
+  -0.017 (interval reaches zero); the gap to the market there falls from
+  +0.024 to +0.006. The "model favorite, market underdog" cohort is not
+  fixed (production 67-77, OFFSET 69-86). McDavid 10-28: 1.14 -> 1.41
+  (market about 1.7).
+- Next, per `docs/nhl/model_promotion_rules.md` route A: run OFFSET as a
+  live shadow for at least 4 weekly evaluations before any promotion.
+  GLM rejected.
+
 ### P2.38 Daily input watch surfaces input problems without being asked
 
 - Status: **IMPLEMENTED 2026-10-28** (operator request after the P2.29 and
