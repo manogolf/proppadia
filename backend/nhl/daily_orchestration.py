@@ -320,6 +320,7 @@ class DailyRunRecorder:
             # per-game hashes remain in the run-bound diagnostic artifact.
             "slate_date", "scheduled_games", "boxscores_seen",
             "pbp_required_games", "pbp_reconciled_games", "pbp_failure_reasons",
+            "pbp_unresolved_skaters", "pbp_unresolved_skater_reasons",
             "boxscore_explicit_rows", "validated_pbp_rows", "unknown_rows",
             "observed_positive_rows", "observed_zero_rows", "verified_observations",
             "promotion_preview", "matched_existing_official_pbp_observations",

@@ -36,6 +36,23 @@ FEATURES = [
     "last10_team_sog_share",
 ]
 HISTORY_CONTRACT = "NHL_POINTS_COUNT_HGB_V1_HISTORY_120_DAY_VALIDATED"
+# Median attempts_d10_per60 / d10_sog_per60 in the 2023-24 training matrix
+# (rebuilt_training_matrix_2023_2024.csv.gz, 87,569 rows with a positive SOG rate).
+# Training never had an unknown attempt rate beside a known SOG rate (P2.37).
+TRAINING_ATTEMPTS_PER_SOG = 1.993
+
+
+def impute_unknown_attempts(features: pd.DataFrame) -> pd.Series:
+    """Attempt rate for rows whose attempts are unknown but SOG rate is known.
+
+    Unknown attempts are not zero: such a row gets its SOG rate times the
+    training ratio. A row with no SOG rate either has no history, which the
+    frozen recipe fills with zero as in training.
+    """
+    attempts = pd.to_numeric(features["attempts_d10_per60"], errors="coerce")
+    sog = pd.to_numeric(features["d10_sog_per60"], errors="coerce")
+    unknown = attempts.isna() & sog.notna()
+    return attempts.where(~unknown, sog * TRAINING_ATTEMPTS_PER_SOG)
 
 
 def sha(path: Path) -> str:
@@ -53,7 +70,9 @@ def score(features: pd.DataFrame, model) -> pd.DataFrame:
         raise ValueError(f"MISSING_FROZEN_HGB_FEATURES:{','.join(missing)}")
     if features.duplicated(["game_id", "player_id"]).any():
         raise ValueError("DUPLICATE_PLAYER_GAME_KEY")
-    x = features[FEATURES].apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0).astype(float)
+    x = features[FEATURES].apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan)
+    x["attempts_d10_per60"] = impute_unknown_attempts(x)
+    x = x.fillna(0).astype(float)
     if isinstance(model, dict):
         scaler = model["scaler"]
         estimator = model["model"]

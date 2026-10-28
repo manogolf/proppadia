@@ -44,3 +44,26 @@ class ProductionArtifactTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class UnknownAttemptsTests(unittest.TestCase):
+    """P2.37: an unknown attempt rate is not scored as zero."""
+
+    def frame(self, attempts, sog):
+        import pandas as pd
+        row = {name: 1.0 for name in scorer.FEATURES}
+        row.update({"game_id": 1, "player_id": 1, "attempts_d10_per60": attempts, "d10_sog_per60": sog})
+        return pd.DataFrame([row])
+
+    def test_unknown_attempts_use_the_training_ratio_of_the_sog_rate(self):
+        import joblib
+        fitted = joblib.load(scorer.MODEL_PATH)
+        imputed = scorer.score(self.frame(None, 9.0), fitted).expected_points.iloc[0]
+        explicit = scorer.score(self.frame(9.0 * scorer.TRAINING_ATTEMPTS_PER_SOG, 9.0), fitted).expected_points.iloc[0]
+        zero = scorer.score(self.frame(0.0, 9.0), fitted).expected_points.iloc[0]
+        self.assertEqual(imputed, explicit)
+        self.assertNotEqual(imputed, zero)
+
+    def test_known_values_and_no_history_rows_are_unchanged(self):
+        self.assertEqual(scorer.impute_unknown_attempts(self.frame(12.0, 9.0)).iloc[0], 12.0)
+        self.assertTrue(scorer.impute_unknown_attempts(self.frame(None, None)).isna().iloc[0])

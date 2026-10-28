@@ -540,6 +540,10 @@ def capture_from_files(
             "identity_count": int(features[keycols].drop_duplicates().shape[0]),
             "prediction_count": int(len(first)), "coherence_crossing_count": crossings,
             "player_exclusions": player_exclusions,
+            # Unknown attempt rates scored from the SOG rate, not zero (P2.37).
+            "attempts_imputed_from_sog_count": int(
+                (pd.to_numeric(features["attempts_d10_per60"], errors="coerce").isna()
+                 & pd.to_numeric(features["d10_sog_per60"], errors="coerce").notna()).sum()),
             "deterministic_replay": "DETERMINISTIC_REPLAY_PASS", "replay_prediction_sha256": replay_sha,
             "model_identity": identity,
             "phoenix_control": phoenix_control,

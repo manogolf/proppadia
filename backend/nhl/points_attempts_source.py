@@ -126,14 +126,30 @@ def _boxscore_skaters(boxscore: dict[str, Any]) -> tuple[dict[int, tuple[int, in
     return player_rows, team_ids
 
 
-def derive_attempts_from_final_pbp(
-    boxscore: dict[str, Any], play_by_play: dict[str, Any], *, game_id: int,
-) -> dict[int, int]:
-    """Return official per-player attempt counts or raise when source is incomplete.
+def _boxscore_goalies(boxscore: dict[str, Any]) -> dict[int, int]:
+    """Goalie id -> team id; a goalie's attempt is not a skater attempt."""
+    goalies: dict[int, int] = {}
+    stats = boxscore.get("playerByGameStats") or {}
+    for side in ("homeTeam", "awayTeam"):
+        team_id = int((boxscore.get(side) or {}).get("id") or -1)
+        for row in (stats.get(side) or {}).get("goalies") or []:
+            if row.get("playerId") is not None:
+                goalies[int(row["playerId"])] = team_id
+    return goalies
 
-    Missing, malformed, duplicate, or cross-team events are not interpreted as
-    zero.  A returned zero means the player's complete final-game PBP contains
-    no attempt event.
+
+def reconcile_attempts_per_skater(
+    boxscore: dict[str, Any], play_by_play: dict[str, Any], *, game_id: int,
+) -> dict[str, Any]:
+    """Per-skater official attempt counts from final PBP (P2.37).
+
+    Game-level identity, finality and event-id problems still raise. Within a
+    valid game each skater is accepted only when his PBP shots on goal equal
+    the boxscore; a mismatched skater stays unknown. A goalie's attempt is
+    skipped. An attempt whose shooter is not a skater or goalie of the owning
+    team cannot be assigned, so every skater of that team stays unknown.
+    Returns ``{"attempts": {player: count}, "unresolved": {player: reason},
+    "skipped_goalie_events": n}``.
     """
     expected_game_id = int(game_id)
     if int(boxscore.get("id") or -1) != expected_game_id:
@@ -144,6 +160,7 @@ def derive_attempts_from_final_pbp(
         raise ValueError("ATTEMPTS_PBP_GAME_NOT_FINAL")
 
     players, box_teams = _boxscore_skaters(boxscore)
+    goalies = _boxscore_goalies(boxscore)
     pbp_teams = {
         int((play_by_play.get(side) or {}).get("id") or -1)
         for side in ("homeTeam", "awayTeam")
@@ -157,7 +174,8 @@ def derive_attempts_from_final_pbp(
     attempts: Counter[int] = Counter()
     on_goal: Counter[int] = Counter()
     event_ids: set[int] = set()
-    attempt_event_count = 0
+    unassigned_teams: set[int] = set()
+    attempt_event_count = skipped_goalie_events = 0
     for play in plays:
         kind = play.get("typeDescKey")
         if kind not in ATTEMPT_TYPES:
@@ -167,20 +185,49 @@ def derive_attempts_from_final_pbp(
         raw_player = details.get("scoringPlayerId") if kind == "goal" else details.get("shootingPlayerId")
         raw_team = details.get("eventOwnerTeamId")
         raw_event_id = play.get("eventId")
-        if raw_player is None or raw_team is None or raw_event_id is None:
+        if raw_team is None or raw_event_id is None:
             raise ValueError("ATTEMPTS_PBP_ATTEMPT_EVENT_IDENTITY_MISSING")
-        player_id, team_id, event_id = int(raw_player), int(raw_team), int(raw_event_id)
+        team_id, event_id = int(raw_team), int(raw_event_id)
+        if team_id not in box_teams:
+            raise ValueError("ATTEMPTS_PBP_EVENT_TEAM_INVALID")
         if event_id in event_ids:
             raise ValueError("ATTEMPTS_PBP_DUPLICATE_EVENT_ID")
         event_ids.add(event_id)
-        if player_id not in players or players[player_id][0] != team_id:
-            raise ValueError("ATTEMPTS_PBP_SHOOTER_IDENTITY_INVALID")
+        player_id = None if raw_player is None else int(raw_player)
+        if player_id is not None and goalies.get(player_id) == team_id:
+            skipped_goalie_events += 1
+            continue
+        if player_id is None or player_id not in players or players[player_id][0] != team_id:
+            unassigned_teams.add(team_id)
+            continue
         attempts[player_id] += 1
         if kind in ON_GOAL_TYPES:
             on_goal[player_id] += 1
 
     if attempt_event_count == 0:
         raise ValueError("ATTEMPTS_PBP_NO_ATTEMPT_EVENTS")
-    if any(on_goal.get(player_id, 0) != sog for player_id, (_team, sog) in players.items()):
-        raise ValueError("ATTEMPTS_PBP_PLAYER_SOG_RECONCILIATION_FAILED")
-    return {player_id: attempts.get(player_id, 0) for player_id in players}
+    accepted: dict[int, int] = {}
+    unresolved: dict[int, str] = {}
+    for player_id, (team_id, sog) in players.items():
+        if team_id in unassigned_teams:
+            unresolved[player_id] = "ATTEMPTS_PBP_TEAM_ATTEMPT_UNASSIGNED"
+        elif on_goal.get(player_id, 0) != sog:
+            unresolved[player_id] = "ATTEMPTS_PBP_PLAYER_SOG_RECONCILIATION_FAILED"
+        else:
+            accepted[player_id] = attempts.get(player_id, 0)
+    if not accepted:
+        raise ValueError("ATTEMPTS_PBP_NO_RECONCILED_SKATERS")
+    return {"attempts": accepted, "unresolved": unresolved,
+            "skipped_goalie_events": skipped_goalie_events}
+
+
+def derive_attempts_from_final_pbp(
+    boxscore: dict[str, Any], play_by_play: dict[str, Any], *, game_id: int,
+) -> dict[int, int]:
+    """Return official attempt counts for every skater that reconciles.
+
+    Skaters whose PBP shots on goal differ from the boxscore are left out, so
+    callers keep them unknown; they are never interpreted as zero. A returned
+    zero means the skater reconciled and has no attempt event.
+    """
+    return reconcile_attempts_per_skater(boxscore, play_by_play, game_id=game_id)["attempts"]

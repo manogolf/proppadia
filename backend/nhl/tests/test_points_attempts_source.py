@@ -15,6 +15,7 @@ from backend.nhl.points_attempts_source import (
     capture_stage_attempt_conflicts,
     compare_reconciled_attempts,
     derive_attempts_from_final_pbp,
+    reconcile_attempts_per_skater,
     replace_staged_attempts_conflict_assignment,
 )
 from backend.nhl.scripts import build_nhl_points_architecture_bakeoff as bakeoff
@@ -208,8 +209,52 @@ class PointsAttemptsSourceTests(unittest.TestCase):
     def test_partial_or_nonfinal_pbp_is_unknown_not_zero(self):
         boxscore, pbp = source_payloads()
         pbp["plays"] = pbp["plays"][:-1]
-        with self.assertRaisesRegex(ValueError, "PLAYER_SOG_RECONCILIATION_FAILED"):
+        # Player 20 loses his only shot on goal: he stays unknown, the
+        # reconciled skaters keep their official counts (P2.37).
+        result = reconcile_attempts_per_skater(boxscore, pbp, game_id=2026020001)
+        self.assertEqual(result["attempts"], {10: 3, 11: 0})
+        self.assertEqual(result["unresolved"], {20: "ATTEMPTS_PBP_PLAYER_SOG_RECONCILIATION_FAILED"})
+        self.assertNotIn(20, derive_attempts_from_final_pbp(boxscore, pbp, game_id=2026020001))
+        parsed = {row["nhl_id"]: row for row in skater_importer._iter_skaters_from_box(
+            boxscore, result["attempts"])}
+        self.assertIsNone(parsed[20]["attempts"])
+        self.assertEqual(parsed[20]["attempts_source"], "UNKNOWN")
+        _boxscore, pbp = source_payloads()
+        pbp["plays"] = []
+        with self.assertRaisesRegex(ValueError, "PLAYS_MISSING"):
             derive_attempts_from_final_pbp(boxscore, pbp, game_id=2026020001)
+        _boxscore, pbp = source_payloads()
+        pbp["gameState"] = "LIVE"
+        with self.assertRaisesRegex(ValueError, "GAME_NOT_FINAL"):
+            derive_attempts_from_final_pbp(boxscore, pbp, game_id=2026020001)
+
+    def test_no_reconciled_skater_leaves_the_game_unknown(self):
+        boxscore, pbp = source_payloads()
+        for side in ("homeTeam", "awayTeam"):
+            for row in boxscore["playerByGameStats"][side]["forwards"]:
+                row["sog"] += 5
+        with self.assertRaisesRegex(ValueError, "NO_RECONCILED_SKATERS"):
+            reconcile_attempts_per_skater(boxscore, pbp, game_id=2026020001)
+
+    def test_goalie_attempt_is_skipped_and_unassignable_attempt_blocks_its_team(self):
+        boxscore, pbp = source_payloads()
+        boxscore["playerByGameStats"]["awayTeam"]["goalies"] = [{"playerId": 30}]
+        pbp["plays"].append({"eventId": 9, "typeDescKey": "blocked-shot",
+                             "details": {"eventOwnerTeamId": 2, "shootingPlayerId": 30}})
+        result = reconcile_attempts_per_skater(boxscore, pbp, game_id=2026020001)
+        self.assertEqual(result["attempts"], {10: 3, 11: 0, 20: 1})
+        self.assertEqual(result["skipped_goalie_events"], 1)
+        # A home attempt whose shooter is not a home skater or goalie could
+        # belong to any home skater, so the home team stays unknown.
+        pbp["plays"].append({"eventId": 10, "typeDescKey": "missed-shot",
+                             "details": {"eventOwnerTeamId": 1, "shootingPlayerId": 999}})
+        result = reconcile_attempts_per_skater(boxscore, pbp, game_id=2026020001)
+        self.assertEqual(result["attempts"], {20: 1})
+        self.assertEqual(set(result["unresolved"].values()), {"ATTEMPTS_PBP_TEAM_ATTEMPT_UNASSIGNED"})
+        pbp["plays"].append({"eventId": 11, "typeDescKey": "missed-shot",
+                             "details": {"eventOwnerTeamId": 7, "shootingPlayerId": 20}})
+        with self.assertRaisesRegex(ValueError, "EVENT_TEAM_INVALID"):
+            reconcile_attempts_per_skater(boxscore, pbp, game_id=2026020001)
         _boxscore, pbp = source_payloads()
         pbp["gameState"] = "LIVE"
         with self.assertRaisesRegex(ValueError, "GAME_NOT_FINAL"):

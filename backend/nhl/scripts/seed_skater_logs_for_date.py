@@ -58,7 +58,7 @@ from backend.nhl.player_external_identity import (
 )
 from backend.nhl.points_attempts_source import (
     compare_reconciled_attempts,
-    derive_attempts_from_final_pbp,
+    reconcile_attempts_per_skater,
     replace_staged_attempts_conflict_assignment,
 )
 
@@ -857,6 +857,8 @@ def main():
         "pbp_required_games": 0,
         "pbp_reconciled_games": 0,
         "pbp_failure_reasons": {},
+        "pbp_unresolved_skaters": 0,
+        "pbp_unresolved_skater_reasons": {},
         "boxscore_explicit_rows": 0,
         "validated_pbp_rows": 0,
         "unknown_rows": 0,
@@ -906,9 +908,16 @@ def main():
                 try:
                     pbp, pbp_sha256 = get_play_by_play(gpk)
                     if pbp is not None:
-                        attempts_by_player = derive_attempts_from_final_pbp(
+                        reconciled = reconcile_attempts_per_skater(
                             box, pbp, game_id=gpk)
+                        # Skaters that do not reconcile stay unknown (P2.37).
+                        attempts_by_player = reconciled["attempts"]
                         attempt_summary["pbp_reconciled_games"] += 1
+                        attempt_summary["pbp_unresolved_skaters"] += len(reconciled["unresolved"])
+                        unresolved_reasons = attempt_summary["pbp_unresolved_skater_reasons"]
+                        for unresolved_reason in reconciled["unresolved"].values():
+                            unresolved_reasons[unresolved_reason] = (
+                                unresolved_reasons.get(unresolved_reason, 0) + 1)
                         attempt_summary["pbp_response_sha256_by_game"][str(gpk)] = pbp_sha256
                     else:
                         raise ValueError("ATTEMPTS_PBP_RESPONSE_EMPTY")
