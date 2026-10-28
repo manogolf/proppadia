@@ -2277,6 +2277,17 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Ceiling: since the refit the highest expected points on any player is
     1.49; players at 2.0+ points per game get about 1.28 (McDavid 10-28:
     34 points in 12 games, model 1.14, so Under 1.5 looked like a favorite).
+  - Missed games deflate `last10_team_sog_share`: it divides the player's
+    SOG over his last <=10 games by the team's SOG over the team's last <=10
+    games, so a returning player's share is cut (Nugent-Hopkins 10-28: 3
+    games, share 0.042 vs about 0.13 per game played). About 9% of two-sided
+    player-games since 10-16; there the model says 0.36, market 0.47, actual
+    0.39 (n=132), so the market overshoots too. A missing attempts rate is
+    scored as 0 (`fillna(0)` in the scorer; 0.7% of rows).
+  - 10-28 examples (not stars; slate points-per-game ranks 13, 23, 29 of
+    206): Kyrou Under 0.5 (low 14.0 TOI and 0.055 shot share at 0.8 ppg),
+    Nugent-Hopkins Under 0.5 (deflated share and missing attempts),
+    Zegras Over 0.5 (high 0.112 shot share).
   - Scratch rows and scripts: `tmp/gap_study/` (git-ignored).
 
 - Live source defect found during the refit: since 2026-01 the database
