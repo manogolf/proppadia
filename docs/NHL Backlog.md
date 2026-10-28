@@ -2256,6 +2256,28 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Done when a later recheck on new slates either confirms the pattern (then
   propose an upload exclusion for the operator) or shows it fading. Rerun the
   export with `--price-both-sides` and repeat the same method.
+- Cause study 2026-10-28 (Points HGB production, two-sided lines, export
+  `--price-both-sides` through 10-27; market = median same-book no-vig;
+  cohort = model P(selected) > 50% while the market prices our side below
+  50%): 160-221 (42.0%) on 381 picks; since 10-16 (clean attempts inputs)
+  74-99 (42.8%) on 173. What the model sees:
+  - 10-10..10-15 (V1): broken inputs. Attempts below shots on goal on ~100%
+    of rows and team shots too low; the model scored 0.40 points per
+    player-game vs 0.46 actual. Fixed from 10-16 (P2.31); the 10-24 refit
+    brought the overall mean to 0.45 vs 0.46 (market 0.57 vs 0.57 on
+    two-sided player-games).
+  - Position is not a model input. Since 10-16 on two-sided player-games:
+    defensemen model 0.50 vs actual 0.47 (market 0.47); forwards 0.58 vs 0.63
+    (market 0.62). Over picks the market opposes are 57% defensemen (17% of
+    agreed Overs): big-minute, PP defensemen look like top forwards.
+  - Points without shots are underrated: forwards in the top third of season
+    points per shot on goal score 0.75, model 0.66, market 0.71; the lowest
+    third (shooters) 0.49 / 0.49 / 0.53. Under picks the market opposes have
+    lower team shot share (0.063 vs 0.095) and SOG rate at similar points.
+  - Ceiling: since the refit the highest expected points on any player is
+    1.49; players at 2.0+ points per game get about 1.28 (McDavid 10-28:
+    34 points in 12 games, model 1.14, so Under 1.5 looked like a favorite).
+  - Scratch rows and scripts: `tmp/gap_study/` (git-ignored).
 
 - Live source defect found during the refit: since 2026-01 the database
   stores "no PP time" as NULL. Reconciliation staging inserts
