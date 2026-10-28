@@ -2666,6 +2666,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (`market_p_over`, median of each book's own no-vig P(over)). Test build
   through 10-27 reconciles to the two-sided totals (Points 4,717, SOG
   3,127). This is how P2.29 is observed from now on.
+  Since 2026-10-28 the table also has a `sog formula` lane (operator
+  request): the Poisson formula, production rows before 10-25 and
+  `sog_poisson_formula_shadow` latest-pregame rows after
+  (`sog_shrunk_rate_shadow.latest_pregame_rows`, the selection `grade_slate`
+  already used). It appears only in the gap table, not in the improvement
+  log. Test build through 10-27: formula over-15 Unders 266-117 (69.5%) vs
+  market 56.5%, model 78.2%; log loss 0.621 vs 0.625.
 - Noticed while building: HGB promotion gate J reads `PASS` from
   `operational_promotion_gates.json` and the integration-proof hash check
   can only confirm it, never revoke it (`points_hgb_promotion.evaluate_promotion`),
