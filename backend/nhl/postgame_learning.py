@@ -297,6 +297,23 @@ def _all_games_void_result(slate_date: str, root: Path, provider_calls: int = 0)
             "credits_consumed": 0}
 
 
+def _unauthorized_new_player_lookups(result) -> list[int]:
+    """Return new-player IDs when the only preflight failure is an unapproved lookup."""
+    if result.returncode != 5:
+        return []
+    try:
+        payload = json.loads(result.stdout)
+    except (ValueError, TypeError):
+        return []
+    if not str(payload.get("failure") or "").startswith("AUTHORIZED_PLAYER_LOOKUP_SET_MISMATCH:"):
+        return []
+    preflight = payload.get("database_preflight") or {}
+    classification = preflight.get("classification") or {}
+    if classification.get("conflict") or preflight.get("authorized_new_official_lookup_ids"):
+        return []
+    return sorted(int(value) for value in classification.get("new_official_lookup") or [])
+
+
 def ensure_prior_learning(
     slate_date: str, *, reconciliation_root: Path = DEFAULT_RECONCILIATION_ROOT,
     cross_market_root: Path = DEFAULT_CROSS_MARKET_ROOT,
@@ -327,9 +344,8 @@ def ensure_prior_learning(
                 "--date", slate_date, "--output-root", str(root)]
         # The governed executor's database identity partition is built from
         # typed, immutable authority and roster evidence. Acquire that evidence
-        # first, then hand its run ID back as both typed sources. No player
-        # landing source is required: identities without a safe binding remain
-        # unresolved by the reconciliation contract.
+        # first, then hand its run ID back as both typed sources. Players with
+        # no database row are looked up automatically (see below).
         acquired = subprocess.run(
             [*base, "--authority-roster-acquisition", "--prior-learning"], cwd=ROOT,
             capture_output=True, text=True, check=False)
@@ -354,12 +370,20 @@ def ensure_prior_learning(
             raise RuntimeError("GOVERNED_AUTHORITY_ROSTER_ACQUISITION_RECEIPT_INVALID") from error
         acquisition_requests = int(
             (acquisition.get("request_accounting") or {}).get("total_logical_requests", 0))
-        result = subprocess.run(
-            [*base, "--execute",
-             "--prior-learning",
-             "--response-source", f"AUTHORITY_RESPONSE_SOURCE={run_id}",
-             "--response-source", f"ROSTER_RESPONSE_SOURCE={run_id}"],
-            cwd=ROOT, capture_output=True, text=True, check=False)
+        execute = [*base, "--execute",
+                   "--prior-learning",
+                   "--response-source", f"AUTHORITY_RESPONSE_SOURCE={run_id}",
+                   "--response-source", f"ROSTER_RESPONSE_SOURCE={run_id}"]
+        result = subprocess.run(execute, cwd=ROOT, capture_output=True, text=True, check=False)
+        new_players = _unauthorized_new_player_lookups(result)
+        if new_players:
+            # A player new to the database (for example a late call-up) is
+            # looked up and added automatically. The reconciler still requires
+            # the lookup set to match exactly, and identity conflicts still fail.
+            result = subprocess.run(
+                [*execute, *[arg for player_id in new_players
+                             for arg in ("--authorized-player-lookup-id", str(player_id))]],
+                cwd=ROOT, capture_output=True, text=True, check=False)
         if result.returncode == 2:
             return {"prior_slate_date": slate_date, "official_outcomes_status": "NOT_FINAL",
                     "reconciliation_status": "NOT_FINAL", "reconciliation_package": None,

@@ -69,6 +69,48 @@ class PriorFinalCaptureGapTests(unittest.TestCase):
         self.assertIn("--authority-roster-acquisition", run.call_args_list[0].args[0])
         self.assertIn("--execute", run.call_args_list[1].args[0])
 
+    def test_new_player_lookup_is_authorized_automatically(self):
+        acquired = {"status": "COMPLETE", "run_id": "acquisition-run",
+                    "request_accounting": {"total_logical_requests": 4}}
+        mismatch = {"status": "FAILED_CLOSED_DATABASE_PREFLIGHT",
+                    "failure": "AUTHORIZED_PLAYER_LOOKUP_SET_MISMATCH:actual=[8483523]:authorized=[]",
+                    "database_preflight": {
+                        "authorized_new_official_lookup_ids": [],
+                        "classification": {"conflict": [], "new_official_lookup": [8483523]}}}
+        responses = [SimpleNamespace(returncode=0, stdout=json.dumps(acquired), stderr=""),
+                     SimpleNamespace(returncode=5, stdout=json.dumps(mismatch), stderr=""),
+                     SimpleNamespace(returncode=2, stdout="NOT_FINAL", stderr="")]
+        with tempfile.TemporaryDirectory() as temp, patch.object(
+            postgame_learning, "ROOT", Path(temp)
+        ), patch.object(postgame_learning, "_existing_reconciliation", return_value=None), patch.object(
+            postgame_learning, "_retained_schedule_game_count", return_value=2
+        ), patch.object(postgame_learning.subprocess, "run", side_effect=responses) as run:
+            result = postgame_learning.ensure_prior_learning("2026-10-27")
+
+        self.assertEqual(result["reconciliation_status"], "NOT_FINAL")
+        self.assertEqual(run.call_count, 3)
+        retry = run.call_args_list[2].args[0]
+        self.assertEqual(retry[:len(run.call_args_list[1].args[0])], run.call_args_list[1].args[0])
+        self.assertEqual(retry[-2:], ["--authorized-player-lookup-id", "8483523"])
+
+    def test_identity_conflict_is_not_authorized_automatically(self):
+        acquired = {"status": "COMPLETE", "run_id": "acquisition-run",
+                    "request_accounting": {"total_logical_requests": 4}}
+        conflict = {"status": "FAILED_CLOSED_DATABASE_PREFLIGHT",
+                    "failure": "DATABASE_IDENTITY_CONFLICT:[8483523]",
+                    "database_preflight": {"classification": {"conflict": [8483523],
+                                                              "new_official_lookup": []}}}
+        responses = [SimpleNamespace(returncode=0, stdout=json.dumps(acquired), stderr=""),
+                     SimpleNamespace(returncode=5, stdout=json.dumps(conflict), stderr="")]
+        with tempfile.TemporaryDirectory() as temp, patch.object(
+            postgame_learning, "ROOT", Path(temp)
+        ), patch.object(postgame_learning, "_existing_reconciliation", return_value=None), patch.object(
+            postgame_learning, "_retained_schedule_game_count", return_value=2
+        ), patch.object(postgame_learning.subprocess, "run", side_effect=responses) as run, \
+                self.assertRaisesRegex(RuntimeError, "GOVERNED_RECONCILIATION_FAILED"):
+            postgame_learning.ensure_prior_learning("2026-10-27")
+        self.assertEqual(run.call_count, 2)
+
     def test_missing_or_duplicate_capture_still_blocks_actual_reconciliation(self):
         schedule = pd.DataFrame({"game_type_code": [2]})
         activation = {"capture_enabled": True}

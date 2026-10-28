@@ -200,7 +200,11 @@ hash-verified authority boxscore. Its game, JSON locator, response object,
 index, journal, request-run tree and canonical game-set hashes enter the
 partition digest and package lineage. It never treats abbreviated text as a
 full name. The new-lookup set must exactly equal repeatable explicit CLI
-authorizations.
+authorizations. In the daily run, a preflight that fails only because the
+new-lookup set was not authorized is retried once with exactly that set
+authorized, so a player with no database row (for example a late call-up) is
+looked up and added without stopping the pipeline. Identity conflicts and
+incomplete partitions still fail closed and are never auto-authorized.
 
 The September 20 gate requires complete, mutually exclusive coverage of all 54
 roster-absent participants. Exact-mapping, authoritative-name-bind, numeric-
