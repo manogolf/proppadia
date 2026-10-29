@@ -152,7 +152,25 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   2026-10-29 as its intended non-superuser role. Remaining P1.4 work is only
   the old-log cleanup below.
 
-- Status: **OPEN — code path closed; cleanup and rotation confirmation are
+- Status: **LOCAL CLEANUP COMPLETE 2026-10-29 (operator-approved); open only
+  for the operator to confirm the current production owner password is
+  neither retired value** (it is not in `backend/.env`, so it cannot be
+  compared here). Then decide whether to rewrite git history for `fccfbe`
+  (optional once retired). 2026-10-29: both retired owner passwords
+  (`a86adf`, `fccfbe`) were replaced with `***` in place in the 160 affected
+  `nhl daily run logs/` files and the Sep 25 `parent_receipt.json`
+  (2,041 replacements; files kept). A rescan of every token in the 273 files
+  in those places found neither fingerprint; the receipt is still valid JSON.
+  The Sep 25 run's `SHA256SUMS` was left unchanged, so its
+  `parent_receipt.json` entry no longer matches; the before/after hash of
+  every redacted file is in
+  `artifacts/ops/nhl_p1_4_password_redaction/2026-10-29/redaction_record.json`
+  (git-ignored, with its own `SHA256SUMS`). Already gone before this:
+  `backend/nhl/range_runner.log`, `nohup.out`, and the `/private/tmp`
+  `.env.before` backups. The other 110 daily logs carry only a 3-character
+  masked value, and the two `backend/_legacy/` archive scripts carry
+  placeholders.
+- Prior status: **OPEN — code path closed; cleanup and rotation confirmation are
   the operator's decision**. Commit `c4164d4b` moves any password in a `psql`
   DSN into the child's `PGPASSWORD` in every mode and adds a final receipt
   redaction pass, so new logs and receipts cannot carry a password.
