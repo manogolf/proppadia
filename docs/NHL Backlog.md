@@ -2818,7 +2818,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.34 Skater log SOG differs from the official outcome on about 1% of player-games
 
-- Status: **OPEN — direction found 2026-10-29; grading rule needs an operator decision.** For 10-08..10-24,
+- Status: **RESOLVED 2026-10-29 — no change; rule documented.** Operator decision: grade on the first official count in the reconciliation package (book-style settlement); no regrade. Rule: Comprehensive Daily Capture Contract, "Stat corrections" paragraph beside the void-game rule. Logs keep the corrected count for model inputs. Original note: for 10-08..10-24,
   42 of 4,464 player-games (28 games) have `skater_game_logs_raw.shots_on_goal`
   one shot above or below the reconciliation package's `official_sog`
   (source NHL_OFFICIAL_GAMECENTER); most likely the official stat was corrected
@@ -2848,10 +2848,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Grading impact: 159 graded production SOG picks fall on these
     player-games; 33 change result under the current count (16 WIN→LOSS,
     17 LOSS→WIN, net +1 win). Points and Saves are not checked here.
-  - No NHL contract states whether grading follows the first official
-    observation (like a book that settles at game end) or later NHL
-    corrections. **Operator decision needed** before any regrade or change
-    to when reconciliation takes its outcome snapshot. Local working files:
+  - No NHL contract stated whether grading follows the first official
+    observation or later NHL corrections; decided 2026-10-29 (see Status). Local working files:
     `tmp/p2_34/` (git-ignored).
 
 ### P2.33 Fitted SOG count model (HGB Poisson): research candidate

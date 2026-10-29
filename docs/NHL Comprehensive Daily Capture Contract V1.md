@@ -490,6 +490,14 @@ A game the official schedule dropped from its date is void as `MOVED` when
 its own official box score gives another date; a day on which every scheduled
 game is void is certified as `VERIFIED_ALL_GAMES_VOID`, like an off day, with
 no package.
+Stat corrections (operator decision 2026-10-29, P2.34): predictions are graded
+on the official count in the reconciliation package's preserved boxscore, the
+way a book settles at game end. Later NHL corrections do not regrade a sealed
+package or restate W/L. History tables follow the corrections instead: re-seeding
+overwrites `skater_game_logs_raw.shots_on_goal` from the latest boxscore, so
+model inputs and training use the corrected count. A log value that differs
+from a package's `official_sog` is therefore expected and is not a defect in
+either.
 Request-level detail is in the Postgame Official Request Accounting Contract.
 Official-outcome certification is independent of prediction grading. In
 prior-learning mode, a missing immutable lane prediction must remain ungraded
