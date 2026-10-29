@@ -112,7 +112,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   rows (with known values) before the daily promotion, so the daily path
   sees only existing rows. The insert half of the completion condition is
   therefore not reachable in the daily path as now ordered.
-- Status: **OPEN** — disposable fixture tests passed new insert, NULL-fill,
+- Status: **VERIFIED COMPLETE 2026-10-29** (operator decision). The natural
+  positive fill and preservation of populated values are verified (check
+  above). The known-value insert half of the completion condition is dropped:
+  new rows and their known values are written by postgame reconciliation's
+  insert into `skater_game_logs_raw` (`run_nhl_postgame_reconciliation.py`),
+  whose conflict update does not touch `shot_attempts` or `pp_toi_minutes`.
+- Prior status: **OPEN** — disposable fixture tests passed new insert, NULL-fill,
   preservation, and replay assertions. The October 16 production promotion
   reported zero fills, and the October 17 receipt does not quantify positive
   fills or known-value inserts through the protected functions.
