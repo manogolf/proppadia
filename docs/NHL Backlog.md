@@ -139,6 +139,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   ingestion, and operations and MLB research and ingestion. Whether the
   production owner entries are still needed (MLB callers may use them) is
   the operator's decision.
+- 2026-10-29 check (names, login roles and project match only, no values):
+  the note above is stale. `backend/.env` no longer has `SUPABASE_DB_URL`,
+  `DATABASE_URL`, `DB` or `PG*`; `NHL_OWNER_LOGIN_GUARD` is enforced with no
+  owner login in an application alias (P1.5). URL-valued entries:
+  `NHL_RESEARCH_DATABASE_URL`, `NHL_INGEST_DATABASE_URL`,
+  `NHL_OPERATIONS_DATABASE_URL`, `MLB_INGEST_DATABASE_URL`,
+  `MLB_MONEYLINE_AUDIT_DATABASE_URL` (`proppadia_mlb_research_login`), and
+  `NHL_PP_TOI_TEST_DSN`, the only owner (`postgres`) login, which points at
+  the separate test project, not production. Each restricted login has its
+  own password (none is the production owner password) and connected
+  2026-10-29 as its intended non-superuser role. Remaining P1.4 work is only
+  the old-log cleanup below.
 
 - Status: **OPEN — code path closed; cleanup and rotation confirmation are
   the operator's decision**. Commit `c4164d4b` moves any password in a `psql`
