@@ -28,7 +28,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P1.1 Coordinate restricted NHL login credential rotation
 
-- Status: **STATUS UNVERIFIED** — the access plan records that all three
+- Status: **VERIFIED COMPLETE 2026-10-29 (operator decision; no rotation
+  planned).** Sanitized evidence (role names only, no values): the only
+  credential source is `backend/.env` (`NHL_DB_ACCESS_MODE=restricted`, no
+  legacy fallback; every NHL LaunchAgent passes `--env-file backend/.env`).
+  On 2026-10-29 each URL connected as its intended non-superuser login:
+  `NHL_RESEARCH_DATABASE_URL` → `proppadia_nhl_research_login`
+  (member of `proppadia_research_ro`), `NHL_INGEST_DATABASE_URL` →
+  `proppadia_nhl_daily_login` (`proppadia_nhl_ingest`),
+  `NHL_OPERATIONS_DATABASE_URL` → `proppadia_nhl_operations_login`
+  (`proppadia_nhl_ops_writer`). Consumers: research 26 scripts, ingestion 13,
+  operations 2 (`evaluate_sog_predictions.py`, `load_sog_predictions_denali.py`);
+  the scheduled daily runs `nhldaily_20261029T143007443803Z_f82a5dcf` and
+  `nhldaily_20261029T143347177150Z_*` completed their schedule import,
+  protected promotion and SOG prediction steps with exit 0. None of these
+  passwords is the owner password (P1.4).
+- Prior status: **STATUS UNVERIFIED** — the access plan records that all three
   restricted login passwords were reset after an earlier process-argument
   exposure and that each login subsequently authenticated. Current credential
   state and consumer validation after that reset are not established here.
