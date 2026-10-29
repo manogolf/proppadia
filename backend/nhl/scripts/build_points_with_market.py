@@ -8,6 +8,7 @@ import pandas as pd
 
 from backend.nhl.attachment_integrity import AttachmentIntegrityError, validate_odds_observation
 from backend.nhl.daily_capture import canonical_game_set_hash, sha256_file
+from backend.nhl.market_name_identity import SlateNames
 
 
 # ------------------ small helpers ------------------
@@ -140,13 +141,17 @@ def load_odds_json(path: Path | None):
                 print(f"[points_with_market] warn: failed to read odds JSON {p}: {e}", file=sys.stderr)
     return None
 
-def parse_points_odds(raw) -> pd.DataFrame | None:
+def parse_points_odds(raw, slate_names: SlateNames | None = None) -> pd.DataFrame | None:
     """
     Return median Over and Under prices per (name_short, line_str), with book provenance.
+
+    With ``slate_names`` the key is the slate ``player_id`` that owns the book's
+    name instead; quotes whose name is shared by two slate players are dropped.
     """
     if raw is None:
         return None
     recs = []
+    key_col = "name_short" if slate_names is None else "player_id"
 
     def walk(x, bookmaker_key: str = ""):
         if isinstance(x, dict):
@@ -162,10 +167,11 @@ def parse_points_odds(raw) -> pd.DataFrame | None:
                     nm_short = short_key(nm_norm)
                     pt = o.get("point")
                     pr = o.get("price")
-                    if nm_short and (pt is not None) and (pr is not None):
+                    key = nm_short if slate_names is None else slate_names.player_for(disp)
+                    if key and (pt is not None) and (pr is not None):
                         recs.append(
                             {
-                                "name_short": nm_short,
+                                key_col: key,
                                 "full_name_odds": disp,
                                 "line_str": str(pt),
                                 "side": side,
@@ -183,16 +189,16 @@ def parse_points_odds(raw) -> pd.DataFrame | None:
     if not recs:
         return None
     od = pd.DataFrame(recs)
-    med = od.groupby(["name_short", "line_str", "side"], as_index=False).agg(
+    med = od.groupby([key_col, "line_str", "side"], as_index=False).agg(
         price=("price", "median"),
         full_name_odds=("full_name_odds", "first"),
         source_quote_count=("price", "size"),
         source_books=("bookmaker_key", lambda values: "|".join(sorted(set(values)))),
     )
-    prices = med.pivot(index=["name_short", "line_str"], columns="side", values="price")
-    counts = med.pivot(index=["name_short", "line_str"], columns="side", values="source_quote_count")
-    books = med.pivot(index=["name_short", "line_str"], columns="side", values="source_books")
-    full_names = od.groupby(["name_short", "line_str"], as_index=False).full_name_odds.first().set_index(["name_short", "line_str"])
+    prices = med.pivot(index=[key_col, "line_str"], columns="side", values="price")
+    counts = med.pivot(index=[key_col, "line_str"], columns="side", values="source_quote_count")
+    books = med.pivot(index=[key_col, "line_str"], columns="side", values="source_books")
+    full_names = od.groupby([key_col, "line_str"], as_index=False).full_name_odds.first().set_index([key_col, "line_str"])
     result = prices.rename(columns={"over": "price_over", "under": "price_under"})
     result["source_quote_count_over"] = counts.get("over")
     result["source_quote_count_under"] = counts.get("under")
@@ -299,6 +305,12 @@ def main():
     names = read_csv_required(Path(args.names))
     name_cols = [c for c in ["player_id", "game_id", "team_id", "full_name", "game_date"] if c in names.columns]
     names = names[name_cols].copy()
+    # Name ownership comes from the slate's own export only, never the
+    # auxiliary sources below (they hold players not on this slate).
+    slate_name_rows = names
+    if slate and "game_date" in names.columns:
+        slate_name_rows = names[names["game_date"].astype(str).str[:10] == slate]
+    slate_names = SlateNames(zip(slate_name_rows["player_id"], slate_name_rows["full_name"]))
 
     # ---- Add more name sources if present (union by player_id; keep first seen) ----
     extra_sources = [] if args.strict_current_run else [
@@ -347,9 +359,15 @@ def main():
         lambda x: (str(float(x)).rstrip("0").rstrip(".")) if pd.notna(x) else ""
     )
 
-    # Merge market medians; avoid column collision and use odds display name only as fallback
+    # Merge market medians by the slate player who owns the book's name; names
+    # shared by two slate players price nobody (backend/nhl/market_name_identity.py).
+    name_report = slate_names.report()
+    if name_report["shared_keys"] or name_report["reviewed_bindings_used"]:
+        print(f"[points_with_market] MARKET_NAME_IDENTITY={json.dumps(name_report, sort_keys=True)}")
+    med = parse_points_odds(odds_raw, slate_names)
     if med is not None:
-        df = df.merge(med, on=["name_short", "line_str"], how="left", suffixes=("", "_odds"))
+        med["player_id"] = med["player_id"].astype("Int64")
+        df = df.merge(med, on=["player_id", "line_str"], how="left", suffixes=("", "_odds"))
         # fill missing display name from odds, but do NOT overwrite valid names
         if "full_name_odds" in df.columns:
             df["full_name"] = df["full_name"].where(

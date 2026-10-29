@@ -101,10 +101,11 @@ def _cached_two_sided_keys(day: str, load_candidates) -> dict[str, list | None]:
     """Two-sided keys with the market's no-vig P(over) for one slate.
 
     Entries are [game_id, player_id, line, market_p_over or null]; cached by
-    the slate's retained odds snapshot count (v2 adds the market probability).
+    the slate's retained odds snapshot count (v2 adds the market probability;
+    v3 binds same-name players by market_name_identity, not last-row-wins).
     """
     snapshots = len(list((OPERATIONAL / "odds_observations" / "season=2026" / f"slate_date={day}").glob("observation=*")))
-    path = CACHE / "two_sided" / f"{day}_{snapshots}_v2.json"
+    path = CACHE / "two_sided" / f"{day}_{snapshots}_v3.json"
     if path.is_file():
         return json.loads(path.read_text())
     evidence = two_sided_lines.load_evidence(OPERATIONAL, day, candidates=load_candidates())

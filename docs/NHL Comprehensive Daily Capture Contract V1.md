@@ -870,6 +870,29 @@ destroy the last nonempty research snapshot. Failed attempts update none of
 these files. Prediction/market builders never implicitly read these mutable
 files; they accept only an explicitly supplied run-bound observation.
 
+### Player name binding in market attachments
+
+Books identify a player by name only. The SOG and Points attachments
+(`build_sog_with_market.py`, `build_points_with_market.py`) and the evaluation
+quote loader (`export_nhl_all_candidate_evaluation.load_retained_quotes`) bind
+a book name to a slate player through `backend/nhl/market_name_identity.py`:
+
+- A name key (normalized full name, or first initial + last name) prices a
+  player only when he is the one slate player who owns it. Ownership comes
+  from the slate's own names export, never auxiliary name files.
+- A key shared by two slate players prices nobody (the two Elias Petterssons
+  on VAN; Anders and Andre Lee on "a lee"). The builders print
+  `MARKET_NAME_IDENTITY=` with the shared keys and the bindings used.
+- A reviewed binding in `backend/nhl/config/market_name_bindings.json` gives
+  a shared full name to one player id, with the evidence recorded there.
+  Only the full name is bound; the abbreviated form stays shared.
+- The evaluation loader matches by game and full name; same-name players in
+  one game follow the same binding rule (never last-row-wins).
+
+Players whose keys are not shared are priced exactly as before. Earlier daily
+attachments are immutable and keep their original prices; the weekly
+evaluation recomputes two-sided keys under this rule (cache v3).
+
 ## Roster observations
 
 The comprehensive runner writes official roster evidence beneath

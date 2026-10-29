@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 from backend.nhl.reconciliation_grades import restated_grade_path
+from backend.nhl import market_name_identity
 
 
 PREDICTION_FIELDS = [
@@ -960,9 +961,19 @@ def load_retained_quotes(operational_root: Path, candidates: list[dict[str, Any]
         names = {}
         names_path = names_path_root / f"names_{slate}.csv"
         if names_path.exists():
+            owners: dict[tuple[str, str], set[str]] = {}
             for r in _csv_rows(names_path):
                 for name_col in ("full_name", "full_name_canonical"):
-                    if r.get(name_col): names[(str(r.get("game_id")), r[name_col].strip().casefold())] = str(r.get("player_id"))
+                    if r.get(name_col):
+                        owners.setdefault((str(r.get("game_id")), r[name_col].strip().casefold()), set()).add(str(r.get("player_id")))
+            # Two players in one game with the same name: a reviewed binding
+            # picks one, otherwise the quote binds to nobody (never last-row-wins).
+            bindings = market_name_identity.load_bindings()
+            for key, ids in owners.items():
+                if len(ids) == 1:
+                    names[key] = next(iter(ids))
+                elif str(bindings.get(market_name_identity.normalize(key[1]))) in ids:
+                    names[key] = str(bindings[market_name_identity.normalize(key[1])])
         obs_sha = _sha(normalized_path)
         manifest_path = obs_dir / "SHA256SUMS"
         odds_manifest_sha = _sha(manifest_path) if manifest_path.exists() else ""

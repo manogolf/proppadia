@@ -1,0 +1,14 @@
+{
+  "schema_version": "NHL_MARKET_NAME_BINDINGS_V1",
+  "rule": "Books name players without an NHL id. When two slate players share a market name key, a key prices nobody unless a reviewed binding below gives it to one player.",
+  "bindings": [
+    {
+      "market_name": "Elias Pettersson",
+      "player_id": 8480012,
+      "other_player_ids": [8483678],
+      "team": "VAN",
+      "reviewed_utc": "2026-10-29",
+      "evidence": "Books post one Elias Pettersson line per market (2026-10-29 observation: one quote per book, line and side). Prices fit the forward 8480012 (Points 0.5 Over -150; SOG alternates to 5.5), not the defenseman 8483678 (0.29 points/game)."
+    }
+  ]
+}

@@ -34,6 +34,7 @@ import pandas as pd
 import subprocess
 
 from backend.nhl.database_access import psql_command_without_password
+from backend.nhl.market_name_identity import SlateNames
 from io import StringIO
 
 # ---------- helpers ----------
@@ -978,7 +979,16 @@ def main():
     if full is None:
         full = pd.Series([None] * len(df_alias))
 
-    df_alias["alias_key"] = full.map(_row_aliases)
+    # A row may use only the name keys its player owns on this slate; keys
+    # shared by two slate players price nobody unless a reviewed binding says
+    # otherwise (backend/nhl/market_name_identity.py).
+    slate_names = SlateNames(zip(names["player_id"], names["full_name"]))
+    shared_report = slate_names.report()
+    if shared_report["shared_keys"] or shared_report["reviewed_bindings_used"]:
+        print(f"[sog_with_market] MARKET_NAME_IDENTITY={json.dumps(shared_report, sort_keys=True)}")
+    df_alias["alias_key"] = [
+        slate_names.keys_for(pid, name) for pid, name in zip(df_alias["player_id"], full)
+    ]
 
     # explode alias list; keep rows even if aliases empty (will become NaN alias_key after explode)
     df_alias = df_alias.explode("alias_key", ignore_index=True)

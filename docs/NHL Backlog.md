@@ -2604,6 +2604,33 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.40 Same-name players share a book's prices
+
+- Status: **RESOLVED 2026-10-29** (found by the P2.38 input watch on the
+  10-29 morning run). Contract: Comprehensive Daily Capture Contract,
+  "Player name binding in market attachments".
+- Defect: the SOG and Points attachments matched book names by full name and
+  by first initial + last name across the slate. Books post one "Elias
+  Pettersson" line (one quote per book, line and side); the forward 8480012
+  and the defenseman 8483678 both got it on every VAN slate (SOG 12 slates
+  from 10-04, Points 11 from 10-08). Andre Lee 8481732 got Anders Lee's prices
+  through "a lee" (SOG 7 slates, Points 6); the same key collision touched
+  Matthew/Miles Wood (6 slates) and Albert/Anton Johansson (Points, 3). The
+  evaluation quote loader kept the last same-name row, so the forward's
+  quotes went to the defenseman in the two-sided and gap-band tables.
+- Fix: `backend/nhl/market_name_identity.py`. A shared key prices nobody;
+  a reviewed binding (`backend/nhl/config/market_name_bindings.json`, Elias
+  Pettersson -> 8480012 with evidence) gives the full name to one player.
+  Rerun of the 10-29 inputs: only the defenseman Pettersson (4 SOG and 1
+  Points line) and Andre Lee (3 SOG lines) lose prices; every other row is
+  identical. Weekly two-sided cache moved to v3: on each VAN slate about two
+  two-sided lines per lane (SOG 1.5/2.5, Points 0.5/1.5) move from the
+  defenseman to the forward (checked 10-11, 10-13, 10-20, 10-22, 10-27).
+- Not changed: earlier daily attachment artifacts are immutable and keep the
+  wrong prices on those rows; past daily performance summaries and the
+  published week-ending 10-24 report are not regenerated. The 10-31 weekly
+  build is the first to use the rule.
+
 ### P2.39 HGB Points star ceiling: GLM-offset candidate
 
 - Status: **RESEARCH 2026-10-28** (operator request). Production HGB Points
