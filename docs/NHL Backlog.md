@@ -2818,7 +2818,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.34 Skater log SOG differs from the official outcome on about 1% of player-games
 
-- Status: **OPEN (found 2026-10-25, not investigated).** For 10-08..10-24,
+- Status: **OPEN — direction found 2026-10-29; grading rule needs an operator decision.** For 10-08..10-24,
   42 of 4,464 player-games (28 games) have `skater_game_logs_raw.shots_on_goal`
   one shot above or below the reconciliation package's `official_sog`
   (source NHL_OFFICIAL_GAMECENTER); most likely the official stat was corrected
@@ -2829,6 +2829,30 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   against the current gamecenter boxscore, then decide whether routine
   ingestion should refresh SOG for recent games. Needs operator approval before
   any write to populated log values.
+- **Direction checked 2026-10-29 (read-only): the logs are current; the
+  graded official value is the stale one.** The statement above that grading
+  is unaffected is wrong. Regular season 10-08..10-28: 53 of 5,400
+  player-games (38 games) differ by one shot. Against today's gamecenter
+  boxscore, the log matches in 52 and the package's `official_sog` in 1
+  (10-28, game 2026020202, player 8479442: log 3, official 4, boxscore now 4).
+  - Mechanism: reconciliation grades from the boxscore preserved by its
+    acquisition run (the morning after, about 13:55Z; 10-28 ran at 04:50Z),
+    and the package is immutable. The NHL corrects shot counts after that.
+    Re-seeding overwrites `skater_game_logs_raw.shots_on_goal` from the
+    staging table (`run_nhl_postgame_reconciliation.py` and `cli.py` promote
+    with `shots_on_goal = EXCLUDED.shots_on_goal`), so the logs pick up the
+    correction. Example: game 2026020117, player 8477951 — the preserved
+    response (`request_runs/2026-10-15/nhlpostgameacq_20261015_20261016T135504068393Z_3077919a`)
+    has 1, today's boxscore and the log have 2. Model inputs are therefore
+    not stale; no log write is needed.
+  - Grading impact: 159 graded production SOG picks fall on these
+    player-games; 33 change result under the current count (16 WIN→LOSS,
+    17 LOSS→WIN, net +1 win). Points and Saves are not checked here.
+  - No NHL contract states whether grading follows the first official
+    observation (like a book that settles at game end) or later NHL
+    corrections. **Operator decision needed** before any regrade or change
+    to when reconciliation takes its outcome snapshot. Local working files:
+    `tmp/p2_34/` (git-ignored).
 
 ### P2.33 Fitted SOG count model (HGB Poisson): research candidate
 
