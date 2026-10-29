@@ -96,6 +96,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `filled_nulls` and complete `database_row_counts`, so the child reads
   `COMMITTED` with the count or a quantified `NONE`; the unknown-before count
   is kept. Still waiting for a natural positive fill.
+- 2026-10-29 check (receipts 10-23..10-29, read-only database check):
+  **natural positive fill observed.** Run
+  `nhldaily_20261028T152746014617Z_010151fb` (slate 10-27) recorded
+  `NHL_PROTECTED_SOURCE_NULL_FILL_SUMMARY_V1` `filled_nulls`=72,
+  `database_write_status`=`COMMITTED`; the promotion before it had 396 rows,
+  252 preserved existing values and 144 unknown before the protected fill.
+  Every other run filled 0. Staging carries no PP-TOI, so the 72 are shot
+  attempts. Today, of the 396 10-27 rows, 388 equal staging, 2 are unknown in
+  both, and 6 hold a populated value that staging now differs from by one
+  attempt (a later NHL correction, like P2.34); the populated value was kept,
+  as designed. PP-TOI fills by the separate shift-overlap filler were also
+  positive (10-25: 3, 10-28: 1). Not observed: `inserted_known_values` stays
+  0 in every run, because postgame reconciliation already inserts the slate's
+  rows (with known values) before the daily promotion, so the daily path
+  sees only existing rows. The insert half of the completion condition is
+  therefore not reachable in the daily path as now ordered.
 - Status: **OPEN** — disposable fixture tests passed new insert, NULL-fill,
   preservation, and replay assertions. The October 16 production promotion
   reported zero fills, and the October 17 receipt does not quantify positive
