@@ -206,6 +206,42 @@ Offseason mode is authorized only after all are true:
 
 The future implementation should gate paid calls after one free schedule/status check, without removing LaunchAgents. Restart for 2027 requires an authoritative `S`/`E` preseason slate or `R` regular slate, a successful identity/credential preflight, explicit operator transition to active mode, and separate authorization for any paid routine. Document the exact environment flags and rollback before changing a schedule. No LaunchAgent or schedule was changed here.
 
+### 2026 closeout: LaunchAgent pause (2026-10-29)
+
+The World Series ended 2026-10-28. On operator instruction the closeout phase
+began by pausing the MLB LaunchAgents. This is a pause, not a removal: plists
+and wrappers in `~/Library/LaunchAgents` and `~/bin` are unchanged, and no
+environment flag was set. The pause does not by itself satisfy the offseason
+authorization conditions above; those remain closeout work.
+
+- Paused (`launchctl bootout` then `launchctl disable`, after the 08:30 refresh
+  for completed slate 2026-10-28 finished on its own):
+  `com.proppadia.mlb.refresh.daily`, `com.proppadia.mlb.dh-forward-capture`,
+  `com.proppadia.mlb.dh-forward-grade`,
+  `com.proppadia.mlb.starter-skill-workload.daily`.
+- Already off before the pause and left as they were:
+  `com.proppadia.mlb.bvp.prewarm.daily` (disabled),
+  `com.proppadia.mlb.retrain.weekly` (suspended 2026-08-03).
+- NHL LaunchAgents are not touched.
+- Final-game grading before the pause: the 05:30 refresh found finalized
+  10-28 stats present (45 player rows) and ran the completed-slate reconcile
+  (0 rows; no qualified prop model produced 10-28 slate predictions); the
+  08:15 DH forward grade reported `GRADING_COMPLETED` for 10-28 (2 new
+  outcomes, 1,558 cumulative). Paused at 2026-10-29T16:02Z.
+- Record (git-ignored): `artifacts/ops/mlb_2026_season_closeout_launchd_pause/2026-10-29/`
+  with the original plists, before/after `launchctl` state and the commands.
+
+Rollback, per label (for example for a missed grading run or the 2027 restart,
+which still needs the restart conditions above):
+
+```bash
+launchctl enable gui/501/com.proppadia.mlb.refresh.daily
+launchctl bootstrap gui/501 ~/Library/LaunchAgents/com.proppadia.mlb.refresh.daily.plist
+```
+
+`dh-forward-capture` has `RunAtLoad` and a 600-second interval, so it runs as
+soon as it is bootstrapped.
+
 ## Deterministic validation
 
 Run:
