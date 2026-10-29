@@ -152,11 +152,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   2026-10-29 as its intended non-superuser role. Remaining P1.4 work is only
   the old-log cleanup below.
 
-- Status: **LOCAL CLEANUP COMPLETE 2026-10-29 (operator-approved); open only
-  for the operator to confirm the current production owner password is
-  neither retired value** (it is not in `backend/.env`, so it cannot be
-  compared here). Then decide whether to rewrite git history for `fccfbe`
-  (optional once retired). 2026-10-29: both retired owner passwords
+- Status: **VERIFIED COMPLETE 2026-10-29 — do not repeat.** Operator
+  confirmed 2026-10-29 that the current Supabase owner password is new, so
+  `fccfbe` and `a86adf` are both retired. Operator decision: **git history is
+  left as is**; the retired `fccfbe` in public history (`nohup.out`, commit
+  `095f20fb`, removed in `876a8d54`) is not a live secret and needs no
+  rewrite. Future credential audits that find either fingerprint in history
+  or old artifacts should note it as retired and take no action. 2026-10-29: both retired owner passwords
   (`a86adf`, `fccfbe`) were replaced with `***` in place in the 160 affected
   `nhl daily run logs/` files and the Sep 25 `parent_receipt.json`
   (2,041 replacements; files kept). A rescan of every token in the 273 files
