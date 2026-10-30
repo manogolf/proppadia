@@ -25,10 +25,24 @@ the slate's latest market-attachment run (sog_with_market.csv /
 points_with_market.csv); Moneyline V3 and V2 home-win probability from the
 slate's latest cross-market capture. OVER (home) when the probability is at
 least 0.5.
+
+06:00 PT trial (P2.28): on slates with an EARLY_TRIAL snapshot, each 06:00
+offer is also compared with the same offer in each game's last MORNING
+(before 10:00 PT), MIDDAY (10:00-13:59), LATE (14:00+) daily snapshot and its
+CLOSING snapshot. CLOSING appears only there, as a reference; it never enters
+the movement tables. Coverage by time of day reports, per snapshot, the share
+of its games with any line and the line depth (players per game against the
+slate's most) per market and book group.
+
+Mean changes carry 95% intervals clustered by game. Output goes to
+`artifacts/analysis/nhl/odds_line_movement/<--as-of>/` (default today);
+`--through` caps the last slate.
 """
 from __future__ import annotations
 
+import argparse
 import json
+from datetime import date
 import unicodedata
 from pathlib import Path
 
@@ -37,8 +51,9 @@ import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[3]
 OBS = ROOT / "artifacts/operational/nhl/odds_observations/season=2026"
-OUT = ROOT / "artifacts/analysis/nhl/odds_line_movement/2026-10-26"
-MARKETS = {"player_shots_on_goal": "SOG", "player_points": "POINTS", "h2h": "MONEYLINE"}
+OUT_ROOT = ROOT / "artifacts/analysis/nhl/odds_line_movement"
+MARKETS = {"player_shots_on_goal": "SOG", "player_points": "POINTS",
+           "player_total_saves": "SAVES", "h2h": "MONEYLINE"}
 PREDICTION_MARKETS = {"kalshi", "novig", "prophetx", "polymarket", "polymarket_us", "betopenly"}
 MIN_GAP_HOURS = 0.5
 # Prices at or below this are placeholders, not offers (Novig posts -99900 for
@@ -63,7 +78,7 @@ def norm_name(name) -> str:
     return " ".join(text.lower().replace(".", "").replace("'", "").split())
 
 
-def load_snapshots() -> pd.DataFrame:
+def load_snapshots(include_closing: bool = False) -> pd.DataFrame:
     frames = []
     for obs in sorted(OBS.glob("slate_date=*/observation=*")):
         summary = obs / "observation_summary.json"
@@ -72,7 +87,7 @@ def load_snapshots() -> pd.DataFrame:
             continue
         meta = json.loads(summary.read_text())
         phase = meta.get("phase") or meta.get("odds_phase") or meta.get("observation_phase")
-        if phase == "CLOSING" or meta.get("classification") != "CAPTURED_NONEMPTY":
+        if (phase == "CLOSING" and not include_closing) or meta.get("classification") != "CAPTURED_NONEMPTY":
             continue
         binding = {}
         bind_path = obs / "game_binding.jsonl"
@@ -103,6 +118,9 @@ def load_snapshots() -> pd.DataFrame:
     d["group"] = d.bookmaker.map(book_group)
     d["implied"] = implied(d.price)
     d["pt_hour"] = d.obs_utc.dt.tz_convert("America/Los_Angeles").dt.hour
+    d["snap_class"] = np.select(
+        [d.phase.eq("EARLY_TRIAL"), d.phase.eq("CLOSING"), d.pt_hour < 10, d.pt_hour < 14],
+        ["0600", "CLOSING", "MORNING", "MIDDAY"], "LATE")
     # two-sided hold per offer pair in the same snapshot
     pair = ["snapshot", "game_id", "bookmaker", "market", "player", "point"]
     hold = d.groupby(pair).implied.agg(["sum", "size"]).reset_index()
@@ -129,6 +147,17 @@ def pairs_vs_latest(d: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return m, matched
 
 
+def cluster_ci(values: pd.Series, clusters: pd.Series) -> tuple[float, float]:
+    """95% interval for a mean, standard error clustered by game."""
+    x = values.to_numpy(float)
+    n, g = len(x), clusters.nunique()
+    if n == 0 or g < 2:
+        return (np.nan, np.nan)
+    resid = pd.Series(x - x.mean()).groupby(clusters.to_numpy()).sum()
+    se = np.sqrt((resid ** 2).sum() * g / (g - 1)) / n
+    return (x.mean() - 1.96 * se, x.mean() + 1.96 * se)
+
+
 def summarize(m: pd.DataFrame, matched: pd.DataFrame, by: list[str]) -> pd.DataFrame:
     g = matched.groupby(by, observed=True)
     out = g.agg(pairs=("delta_pp", "size"), mean_change_pp=("delta_pp", "mean"),
@@ -137,8 +166,79 @@ def summarize(m: pd.DataFrame, matched: pd.DataFrame, by: list[str]) -> pd.DataF
                 better_share=("delta_pp", lambda s: float((s < -0.05).mean())),
                 unchanged_share=("delta_pp", lambda s: float((s.abs() <= 0.05).mean())),
                 hold_change_pp=("hold_delta_pp", "mean"))
+    ci = g[["delta_pp", "game_id"]].apply(lambda t: pd.Series(cluster_ci(t.delta_pp, t.game_id), index=["ci_low_pp", "ci_high_pp"]))
+    games = g.game_id.nunique().rename("games")
     gone = m.groupby(by, observed=True).gone_later.mean().rename("gone_later_share")
-    return out.join(gone).reset_index()
+    return out.join(ci).join(games).join(gone).reset_index()
+
+
+def trial_pairs(d: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """06:00 EARLY_TRIAL offers against each game's last snapshot of each later class."""
+    key = ["slate", "game_id", "bookmaker", "market", "player", "point", "side"]
+    trial_slates = d.loc[d.phase.eq("EARLY_TRIAL"), "slate"].unique()
+    d = d[d.slate.isin(trial_slates)]
+    base = d[d.snap_class.eq("0600")]
+    frames = []
+    for cls in ("MORNING", "MIDDAY", "LATE", "CLOSING"):
+        later = d[d.snap_class.eq(cls)]
+        last = later.groupby(["slate", "game_id"]).obs_utc.max().rename("cls_obs").reset_index()
+        later = later.merge(last, on=["slate", "game_id"])
+        later = later[later.obs_utc.eq(later.cls_obs)][key + ["implied", "hold_sum"]]
+        games = later[["slate", "game_id"]].drop_duplicates()
+        b = base.merge(games, on=["slate", "game_id"])  # only games that have this class
+        m = b.merge(later, on=key, how="outer", suffixes=("", "_late"), indicator=True)
+        m["later_class"] = cls
+        frames.append(m)
+    m = pd.concat(frames, ignore_index=True)
+    m["lane"] = m.market.map(MARKETS)
+    m["group"] = m.bookmaker.map(book_group)
+    m["gone_later"] = m["_merge"].eq("left_only")
+    m["new_later"] = m["_merge"].eq("right_only")
+    matched = m[m["_merge"].eq("both")].copy()
+    matched["delta_pp"] = (matched.implied_late - matched.implied) * 100
+    matched["hold_delta_pp"] = (matched.hold_sum_late - matched.hold_sum) * 100
+    return m, matched
+
+
+def trial_coverage(m: pd.DataFrame) -> pd.DataFrame:
+    """Offers posted at 06:00 vs the later class, and games with any line."""
+    by = ["lane", "group", "later_class"]
+    offers = m.groupby(by).agg(offers_0600=("new_later", lambda s: int((~s).sum())),
+                               offers_later=("gone_later", lambda s: int((~s).sum())),
+                               gone_by_later=("gone_later", "sum"), new_by_later=("new_later", "sum"))
+    offers["later_offers_already_at_0600"] = 1 - offers.new_by_later / offers.offers_later
+    games_0600 = m[~m.new_later].groupby(by).game_id.nunique().rename("games_with_line_0600")
+    games_later = m[~m.gone_later].groupby(by).game_id.nunique().rename("games_with_line_later")
+    games_all = m.groupby("later_class").game_id.nunique().rename("games_in_class")
+    out = offers.join(games_0600).join(games_later).reset_index().merge(games_all.reset_index(), on="later_class")
+    return out
+
+
+def coverage_by_time(d: pd.DataFrame) -> pd.DataFrame:
+    """Per snapshot and market: share of its games with a line, and line depth vs the slate's most."""
+    games = d.groupby("snapshot").game_id.nunique().rename("snapshot_games")
+    # CLOSING snapshots hold one game each; depth compares players per game.
+    per = (d[d.lane.ne("MONEYLINE")].groupby(["slate", "snapshot", "snap_class", "pt_hour", "lane", "group", "game_id"])
+           .player.nunique().rename("players").reset_index())
+    best = per.groupby(["slate", "lane", "group", "game_id"]).players.max().rename("best")
+    per = per.join(best, on=["slate", "lane", "group", "game_id"])
+    per["depth"] = per.players / per.best
+    snap = per.groupby(["slate", "snapshot", "snap_class", "pt_hour", "lane", "group"]).agg(
+        games_with_line=("game_id", "nunique"), depth=("depth", "mean")).reset_index()
+    snap = snap.join(games, on="snapshot")
+    # snapshots where the market/group is entirely absent count as zero coverage
+    grid = d[["slate", "snapshot", "snap_class", "pt_hour"]].drop_duplicates().merge(
+        snap[["lane", "group"]].drop_duplicates(), how="cross")
+    grid = grid.join(games, on="snapshot")
+    snap = grid.merge(snap.drop(columns="snapshot_games"), how="left",
+                      on=["slate", "snapshot", "snap_class", "pt_hour", "lane", "group"]).fillna(
+        {"games_with_line": 0, "depth": 0})
+    snap["game_share"] = snap.games_with_line / snap.snapshot_games
+    snap["window"] = np.where(snap.snap_class.eq("CLOSING"), "CLOSING", snap.pt_hour.astype(str).str.zfill(2) + ":00")
+    return (snap.groupby(["lane", "group", "window"]).agg(
+        snapshots=("snapshot", "nunique"), slates=("slate", "nunique"),
+        game_share=("game_share", "mean"), all_games_share=("game_share", lambda s: float((s >= 0.999).mean())),
+        depth=("depth", "mean")).reset_index())
 
 
 def model_sides() -> pd.DataFrame:
@@ -179,8 +279,16 @@ def moneyline_sides() -> pd.DataFrame:
 
 
 def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--as-of", default=date.today().isoformat(), help="output folder name (YYYY-MM-DD)")
+    ap.add_argument("--through", help="last slate date to include (default: all retained slates)")
+    args = ap.parse_args()
+    OUT = OUT_ROOT / args.as_of
     OUT.mkdir(parents=True, exist_ok=True)
-    d = load_snapshots()
+    d_all = load_snapshots(include_closing=True)
+    if args.through:
+        d_all = d_all[d_all.slate.le(args.through)]
+    d = d_all[d_all.phase.ne("CLOSING")].reset_index(drop=True)
     m, matched = pairs_vs_latest(d)
     inventory = {"snapshots": int(d.snapshot.nunique()), "slates": int(d.slate.nunique()),
                  "first_slate": d.slate.min(), "last_slate": d.slate.max(),
@@ -208,6 +316,18 @@ def main() -> int:
     ml["model_side"] = np.where(ml.p_home >= 0.5, "HOME", "AWAY")
     ml["on_model_side"] = ml.side.eq(ml.model_side)
     tables["moneyline_model_side"] = summarize(ml.assign(gone_later=False), ml, ["model", "on_model_side", "group"])
+    # 06:00 trial: 06:00 against MORNING / MIDDAY / LATE and CLOSING (reference only)
+    tm, tmatched = trial_pairs(d_all)
+    tables["trial_coverage"] = trial_coverage(tm)
+    tables["trial_price"] = summarize(tm[~tm.new_later], tmatched, ["lane", "group", "later_class"])
+    tprops = tmatched[tmatched.lane.isin(["SOG", "POINTS"])].merge(sides, on=["slate", "lane", "game_id", "player", "point"])
+    tprops["on_model_side"] = tprops.side.eq(np.where(tprops.p_model >= 0.5, "OVER", "UNDER"))
+    tprops = tprops[tprops.on_model_side]
+    tables["trial_model_side"] = summarize(tprops.assign(gone_later=False), tprops, ["lane", "group", "later_class"])
+    tables["coverage_by_time"] = coverage_by_time(d_all)
+    inventory["trial_slates"] = sorted(d_all.loc[d_all.phase.eq("EARLY_TRIAL"), "slate"].unique().tolist())
+    inventory["trial_pairs"] = int(len(tmatched))
+    inventory["trial_model_side_pairs"] = int(len(tprops))
     for name, table in tables.items():
         table.to_csv(OUT / f"{name}.csv", index=False)
     inventory["props_pairs_with_model_side"] = int(len(props))
