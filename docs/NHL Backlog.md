@@ -2817,7 +2817,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.39 HGB Points star ceiling: GLM-offset candidate
 
-- Status: **RESEARCH 2026-10-28** (operator request). Production HGB Points
+- Status: **CORRECTION DECIDED 2026-10-30; month-end review** (research 2026-10-28, operator request). Production HGB Points
   under-predicts top scorers: trees cannot go past the training range
   (`player_points_last10` p99 1.6); McDavid 10-28 (34 points in 12 games)
   gets 1.14 expected points, Under 1.5 at -216 against a book +122.
@@ -2840,9 +2840,35 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   +0.024 to +0.006. The "model favorite, market underdog" cohort is not
   fixed (production 67-77, OFFSET 69-86). McDavid 10-28: 1.14 -> 1.41
   (market about 1.7).
-- Next, per `docs/nhl/model_promotion_rules.md` route A: run OFFSET as a
-  live shadow for at least 4 weekly evaluations before any promotion.
-  GLM rejected.
+- Superseded 2026-10-30: the earlier next step was a route A shadow of at
+  least 4 weekly evaluations. GLM rejected.
+- **Operator decision 2026-10-30: correct, do not shadow.** The ceiling is a
+  defect shown over a whole season (2025 holdout: production 1.01 expected vs
+  1.22 actual for 1.2+ points/game), so it is corrected rather than observed,
+  as with the SOG HGB promotion of 2026-10-25 (model promotion rules,
+  "Operator decisions outside these routes"). OFFSET is the correction for
+  the ceiling only; it is not expected to fix the other findings below.
+  Timing: addressed at the month-end review (2026-10-31 weekly evaluation)
+  together with the other findings. Before it goes live: reproducible refit,
+  frozen artifact with its own identity, one-step rollback, live parity on a
+  current slate (side flips reviewed, especially defensemen and stars);
+  current HGB stays as a shadow.
+- **Month-end review list (findings to address together, 2026-10-31):**
+  1. Points star ceiling: OFFSET (this item).
+  2. Points underrates players who score without shooting (playmakers):
+     no assist or playmaking input. Top third of forwards by points per
+     SOG: actual 0.75, model 0.66, market 0.71 (P2.29 cause study). Example
+     2026-10-30: Matthew Tkachuk (4G 16A, about 0.74 points per SOG), model
+     1.09 expected points vs market about 1.2-1.3.
+  3. Position is not a Points input; defensemen are overrated (P2.29).
+  4. Missed games deflate `last10_team_sog_share` (P2.29, P2.38).
+  5. Plus-money-against-model picks (P2.29): recheck per line (1.5 / 2.5 /
+     3.5) and per market, not pooled; SOG Under 3.5 on star shooters
+     (market P(over) 35%+) has beaten the market, 57-28 vs 48.9 expected
+     wins through 10-27, so it may not belong in an exclusion.
+  6. SOG Under 2.5: weakest two-sided segment on 10-29 (25-28), and the
+     operator's 10-29 paper Under 2.5 bets on top-six forwards went 5-6;
+     check whether it is the SOG form of the star ceiling.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
