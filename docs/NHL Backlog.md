@@ -2848,8 +2848,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   as with the SOG HGB promotion of 2026-10-25 (model promotion rules,
   "Operator decisions outside these routes"). OFFSET is the correction for
   the ceiling only; it is not expected to fix the other findings below.
-  Timing: addressed at the month-end review (2026-10-31 weekly evaluation)
-  together with the other findings. Before it goes live: reproducible refit,
+  Timing: addressed at the month-end review together with the other
+  findings, run after the 2026-10-31 slate (a large one) is graded by the
+  2026-11-01 morning reconciliation, so October is complete. Before it goes live: reproducible refit,
   frozen artifact with its own identity, one-step rollback, live parity on a
   current slate (side flips reviewed, especially defensemen and stars);
   current HGB stays as a shadow.
@@ -2869,6 +2870,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   6. SOG Under 2.5: weakest two-sided segment on 10-29 (25-28), and the
      operator's 10-29 paper Under 2.5 bets on top-six forwards went 5-6;
      check whether it is the SOG form of the star ceiling.
+- **Planned approach for items 1-4 (operator-agreed 2026-10-30):** one
+  Points refit carrying OFFSET plus three input changes, so there is one new
+  model identity and one rollback:
+  - Item 2: assist inputs, assists per game over the last 10 and the season,
+    plus involvement (share of team goals the player had a point on).
+    Goals and assists come separately from the restored 2023-25 official
+    outcomes and the 2026 reconciliation packages (the database log
+    goals/assists columns are empty for every season). Primary vs
+    secondary and PP assists are not available. Held back: separate goals
+    and assists models.
+  - Item 3: `is_defense` from `nhl.players` (F/D/G only), as the SOG HGB
+    already uses.
+  - Item 4: correct `last10_team_sog_share` to use only games the player
+    played, in training and live alike.
+  - Each change is added on its own, scored on the 2025 holdout and the 2026
+    retrospective lines; any that does not help is dropped before the
+    freeze. Then live parity (side flips reviewed for defensemen, stars and
+    playmakers) and the current HGB kept as a shadow.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
