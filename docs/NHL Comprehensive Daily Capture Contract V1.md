@@ -187,6 +187,10 @@ measure early coverage and prices against later snapshots and CLOSING:
   nothing outside the trial dates (`TRIAL_INACTIVE`), so it stops spending
   after the week even if left installed. Decisions go to
   `early_trial_capture_log.jsonl` in the day folder. About 21 credits per game.
+- Status (2026-10-30): the trial is over and analysed (NHL Backlog P2.28;
+  all seven slates, 47 of 48 games, 705 credits). The script now logs only
+  `TRIAL_INACTIVE`; removing the LaunchAgent awaits operator approval. Daily
+  run timing is unchanged; the timing recommendation is NHL Backlog P2.33.
 
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has

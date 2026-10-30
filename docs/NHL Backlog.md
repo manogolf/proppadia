@@ -2184,10 +2184,82 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.28 One-week 06:00 PT player-prop odds trial
 
-- Status: **RUNNING — slates 2026-10-23 to 2026-10-29** (operator-approved
-  2026-10-22). Question: is there an early-morning price advantage, or do
-  later prices win, so automation can run at the best times for the
-  operator's schedule?
+- Status: **COMPLETE 2026-10-30** (trial ran slates 2026-10-23 to 10-29,
+  operator-approved 2026-10-22). Question: is there an early-morning price
+  advantage, or do later prices win, so automation can run at the best times
+  for the operator's schedule? Open follow-ups awaiting the operator: the
+  daily-run timing decision (P2.33) and removing the trial LaunchAgent
+  (`launchctl bootout gui/501/com.proppadia.nhl.early-prop-odds-trial`; it
+  logs `TRIAL_INACTIVE` and spends nothing until then).
+- **Results, 2026-10-30.** Practical answer:
+  - Sportsbooks: bet SOG picks as soon as they are published in the morning.
+    The price on the model's SOG side gets worse through the day (from 06:00:
+    +0.23pp by the morning run, +0.39pp midday, +0.41pp late, +0.45pp at
+    CLOSING). Points has no timing effect (about 0 after midday). Saves has
+    no lines before about 08:00 PT and covers 91-95% of games from about 11:00.
+  - Prediction markets (Kalshi, Novig, ProphetX, Polymarket): wait. Prices on
+    the model's side improve all day as spreads tighten (SOG -0.33pp by the
+    morning run, -1.43pp late; Points -0.65pp, -1.09pp late); bet in the last
+    hours before puck.
+  - BetOnline: the SOG model side worsens by +0.30pp between 06:00 and the
+    morning run, then stays put; Points improves slightly later (-0.19pp late).
+  - 06:00 vs about 07:00: 06:00 has slightly better SOG prices on the model's
+    side (+0.16pp worse by 07:xx at sportsbooks, +0.20pp at BetOnline; 3
+    slates, 16 games) but thinner Points lines and no Saves, and no picks
+    exist at 06:00 (the morning run starts 07:30). It adds nothing usable
+    without moving the whole morning chain earlier.
+  - Daily-run timing recommendation (not adopted; P2.33): keep the morning
+    run, publish SOG soon after it; take Points and Saves from a midday run
+    (11:00-12:30 PT); place prediction-market bets from a late pregame run.
+- Trial coverage: an EARLY_TRIAL snapshot at 06:00 PT (13:00Z) on all seven
+  slates, 47 of 48 scheduled games, 705 credits (15 per bound game). The one
+  unbound game, TBL @ UTA on 10-24 (provider start 00:10Z), was unbound in the
+  09:04 daily snapshot too; the CLOSING capture bound it. Each trial slate
+  also has at least two daily (EARLY) snapshots; 10-29 has 07:36 and 14:12 PT
+  plus 11 CLOSING captures. 10-23 has no CLOSING or afternoon snapshot.
+- Detail (06:00 offer vs the same offer in each game's last MORNING
+  snapshot, before 10:00 PT; MIDDAY, 10:00-13:59; LATE, 14:00+; CLOSING;
+  change in implied probability, positive = worse for the bettor, 95%
+  intervals clustered by game, 47 games):
+  1. All sides. Sportsbooks flat: SOG +0.01pp (-0.02 to +0.05) at MORNING to
+     -0.00pp at CLOSING; Points +0.01 to +0.05pp. BetOnline flat (within
+     ±0.01pp). Prediction markets better later: SOG -0.24pp (-0.44 to -0.04)
+     MORNING, -0.57pp LATE, -0.97pp CLOSING; Points -0.63pp MORNING, -0.92pp
+     LATE, -1.32pp CLOSING. Moneyline flat everywhere (within ±0.13pp).
+  2. Model side (production SOG and Points HGB, side from the slate's latest
+     market-attachment run). SOG sportsbooks +0.23pp (+0.14 to +0.32)
+     MORNING, +0.39 (+0.18 to +0.60) MIDDAY, +0.41 (+0.19 to +0.63) LATE,
+     +0.45 (+0.26 to +0.64) CLOSING. SOG BetOnline +0.30 to +0.35pp at every
+     later time. Points sportsbooks +0.10pp (+0.05 to +0.14) MORNING, then
+     -0.01 to +0.02pp. Prediction markets on the model side: SOG -0.33,
+     -0.63, -1.43, -1.97pp; Points -0.65, -1.00, -1.09, -1.45pp. The whole
+     season (31 slates, all snapshot pairs) agrees: SOG model side at
+     sportsbooks +0.14pp (+0.08 to +0.19), the opposite side -0.15pp.
+  3. Coverage at 06:00. Every game has SOG and Points lines at sportsbooks
+     and BetOnline, but only 75% of the sportsbook SOG offers and 84% of the
+     Points offers posted by the morning run (60-70% of those seen late).
+     About 3-6% of 06:00 offers are gone later. No Saves at 06:00 in any book.
+  4. Coverage by time of day (all 2026 snapshots; line depth = players per
+     game against the slate's most): SOG at sportsbooks 0.93 at 06:00, 0.96 at
+     07:00, 0.99 from 08:00. Points 0.73 at 06:00, 0.77 at 07:00, about 0.83
+     at 08:00-09:00, 0.92-0.95 at 11:00-12:00, 1.00 from 13:00. Saves at
+     sportsbooks: none at 06:00, 14% of games at 07:00, about 55% at
+     08:00-09:00, 91-95% at 11:00-12:00, every game from 14:00. Prediction
+     markets list only part of a slate at any hour (50-90% of games) until
+     the last hours.
+  5. Season trend by week (all books): the gain from waiting on SOG grew from
+     +0.01pp (week of 09-28) to -0.26pp (week of 10-26), driven by prediction
+     markets; sportsbook prices did not drift.
+- Regenerate: `./bin/python backend/nhl/scripts/analyze_nhl_odds_line_movement.py
+  --as-of 2026-10-30 --through 2026-10-29` (read-only; no database or provider
+  calls). Output `artifacts/analysis/nhl/odds_line_movement/2026-10-30/`
+  (git-ignored): `trial_price.csv`, `trial_model_side.csv`,
+  `trial_coverage.csv`, `coverage_by_time.csv` and the season tables.
+- Limits: 7 slates and 47 games (MIDDAY exists for 20 games, LATE for 33);
+  the 06:00 vs 07:xx split is 3 slates. Best price only, no size behind it.
+  The model side comes from the slate's latest model run, which did not exist
+  at 06:00. Daily snapshot times vary (MORNING was 07:12-09:42 PT).
+  Descriptive only: a 0.4pp move is about 2 cents on a -110 price.
 - Retained evidence before the trial (87 snapshots, 10-01 to 10-22, only 4 at
   06:xx): 06:00 coverage was about 80% of midday SOG and Points, the same as
   07:00, with no saves market until about 09:45 PT. Only about 5% of early
@@ -2204,6 +2276,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   markets, BetOnline), and on the model-picked side separately (whether the
   side the model likes moves against it later). Then uninstall the LaunchAgent
   (`launchctl bootout gui/$UID/com.proppadia.nhl.early-prop-odds-trial`).
+  Analysis done 2026-10-30 (results above); the bootout awaits operator
+  approval.
 - **Line-movement study, scheduled for about 2026-10-30** (operator-approved
   2026-10-26; read-only; runs after the trial's last slate, 10-29). Operator
   observation behind it: early lines no longer seem to be the better deal they
@@ -2264,6 +2338,47 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   than an afternoon one. Limits: best price only (no size); "latest" is each
   game's last non-CLOSING snapshot, usually midday to late afternoon PT;
   Moneyline sample small.
+
+### P2.33 Daily NHL run timing: when to capture odds and publish picks
+
+- Status: **OPEN — awaiting operator decision** (recommendation from P2.28,
+  2026-10-30). No schedule has changed. Any change needs separate operator
+  approval and its own rollback note (the prior plist values below).
+- Current schedule (read 2026-10-30):
+  - `com.proppadia.nhl.morning-orchestration`: 07:30 PT daily
+    (`StartCalendarInterval` Hour 7 Minute 30). Prerequisites only; no odds.
+  - Player-prop odds that feed the picks come from the operator's manual
+    `daily --with-odds` runs (phase EARLY). On the trial slates the first ran
+    07:12-09:42 PT, a second 12:06-14:46, sometimes a third 16:03-18:12.
+    Market attachment uses the run's own snapshot.
+  - `com.proppadia.nhl.mainline-cross-market-shadow`: every 15 minutes
+    (`StartInterval` 900). Moneyline/Puck Line AUTO: FINAL_PREGAME when the
+    first game is 20-75 minutes away, otherwise MIDDAY. The SOG prediction-only
+    observer it calls picks MIDDAY at 12:00-12:30 ET (09:00-09:30 PT) and
+    FINAL_PREGAME in the same 20-75 minute band.
+  - `com.proppadia.nhl.closing-prop-odds`: every minute (`StartInterval` 60);
+    one CLOSING capture per game 13-10 minutes before puck (closing-line value
+    only).
+  - `com.proppadia.nhl.early-prop-odds-trial`: 06:00 and 06:15 PT; trial
+    over, logs `TRIAL_INACTIVE`; removal awaits approval (P2.28).
+- Recommendation (P2.28 evidence: 7 slates, 47 games, best price only):
+  1. Keep the 07:30 morning run and run the first `daily --with-odds` soon
+     after it finishes (about 08:00 PT). Publish and bet SOG picks for
+     sportsbooks and BetOnline from that run: the model's SOG side worsens
+     about 0.2pp by mid-morning and 0.4pp by midday.
+  2. Run a second capture at 11:00-12:30 PT and publish Points and Saves
+     from it. Points lines are only about 77-83% posted before 10:00 and
+     timing does not move Points prices; Saves lines barely exist before
+     08:00 and cover 91-95% of games only from about 11:00.
+  3. Prediction-market bets: take prices from a late pregame capture, about
+     1-2 hours before the first puck (the existing FINAL_PREGAME band or
+     earlier); they improve about 1pp from morning to late.
+  4. Do not move the morning chain to 06:00: 06:00 gains about 0.16pp on the
+     SOG side over 07:xx (3 slates) but has no picks, thinner Points and no
+     Saves.
+- Done when the operator decides; if a schedule changes, record the old and
+  new times, the rollback (restore the prior plist and `launchctl bootstrap`),
+  and update the capture contract.
 
 ### P2.27 Grade production SOG and Points from each game's latest pregame run
 
