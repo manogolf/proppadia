@@ -3406,6 +3406,40 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   every odds capture (a concordance study against actual starters is
   possible on 2026 captures); (3) third-party starting-goalie sites (terms of
   use); (4) the NHL gamecenter near puck drop (confirmed starters only, late).
+- **In-game patterns and opponent goaltending (2026-11-01, operator: exhaust
+  the search before freezing).** `backend/nhl/scripts/research_nhl_points_game_context.py`
+  (retained play-by-play 2023-25, 3,839 games, 23,504 goals; output
+  `points_hgb_pp_corrected_refit/game_context_2026-11-01/`) and scratch
+  `tmp/p2_39_opp_multiplier.py`.
+  - Timing: goals per game-minute 0.088 (1st), 0.103 (2nd), 0.091 / 0.089
+    (3rd to 55:00), 0.159 in the last five minutes, where 47% are empty-net;
+    power play 22% of goals, even across periods; overtime 2.5%; 2.69 points
+    per goal.
+  - Clusters: a next goal within 120 s happens less than chance (15.5% vs
+    17.9% with each game's goal count drawn from the league's own timing;
+    95% chance band 17.5-18.4%), within 60 s 7.1% vs 9.7%: the faceoff reset
+    spaces goals out. Quick follow-ups split 53% same team / 47% other
+    (about even, no momentum); 8% are empty-net and 16% power play. Non-empty-
+    net goals go to the trailing team 52-54% (mild score effect). Perceived
+    clusters are chance bunching plus late empty-netters.
+  - Opponent: HGB+OWN_k30 misses follow the opponent, 2025 holdout
+    actual/expected 1.10 vs the weakest-defence fifth, 0.97-1.06 by goalie
+    save rate; weak defence plus weak goalie 1.084, strong 0.948. As tree
+    inputs (actual starter's shrunk save rate, opponent goals and shots
+    against) worse: +0.8 to +2.95 x1000. As a fitted pass-through multiplier
+    (opponent goals against over league level, exponent 0.82 on 2023-24):
+    -0.34 / -0.12 / -0.08 at 0.5/1.5/2.5, intervals include zero, stars
+    slightly worse; goalie multiplier -0.11 / +0.11. A ~10% mean shift at the
+    extremes is small next to per-game noise. Not kept; a goalie input would
+    also need a pregame starter source.
+  - League level pass-through (league goals per team-game so far over last
+    season's): +0.18 / +0.25 / +0.14, worse. 2025 rose 1.9% over 2024 while
+    the model runs 3.5% low, so the level does not explain that gap.
+  - Conclusion: with the data held (outcomes 2022-26, shifts, play-by-play,
+    goalie logs, team rates), the own rate is the one input that clearly
+    improves Points; game environment, linemates, PP share and opponent each
+    add at most noise-level amounts. Untested: market totals (captured from
+    2026-11-01) and goal/assist component models.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
