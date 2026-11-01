@@ -2790,7 +2790,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.41 Goalie game logs missing for most of 2025-26; Saves model reads team ID as a number
 
-- Status: **2025 GAP FILLED; SAVES REVIEWED 2026-11-01 (production worse than a flat mean; refit recommended); reconciliation
+- Status: **2025 GAP FILLED; SAVES REVIEWED; REFIT FROZEN AND PARITY-CHECKED 2026-11-01 (cutover awaits operator); reconciliation
   starter rule open** (found during P2.39 team-goals research; operator:
   "goalie logs are too sparse; unreasonable considering we predict saves").
 - `nhl.goalie_game_logs_raw` by regular season (read-only, research login):
@@ -2927,6 +2927,38 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     calibration, and whether to start without a shadow period. The goalie
     starter is still unknown pregame (`UNKNOWN_NO_AUTHORIZED_PREGAME_STARTER_SOURCE`);
     predictions stay conditional on the named goalie starting.
+- **Frozen and parity-checked 2026-11-01 (operator: "Yes, freeze refit"; not
+  in production).** One module, `backend/nhl/saves_refit_model.py`
+  (`NHL_SAVES_SHOTS_X_SAVE_RATE_V1`), builds features for training, freeze
+  and live scoring. `backend/nhl/scripts/freeze_nhl_saves_refit.py` wrote
+  `artifacts/analysis/nhl/saves_refit_2026-11-01/frozen_2026-11-01/`
+  (training team-games and 5,084 starters 2023-24 as CSV with SHA-256,
+  artifact `dd87bdc1…`, contract identity `14998530…`, scale 0.965, variance
+  ratio 1.97, calibration NONE). Two refits and the frozen artifact identical
+  on 3,052 holdout starters (PASS). Holdout 2025 / 2026: negative binomial
+  log loss 3.386 / 3.250 vs flat 3.445 / 3.320, mean 23.73 vs 24.18 / 23.34
+  vs 23.79.
+  - Live parity (`backend/nhl/scripts/parity_nhl_saves_refit.py`, research
+    login, one read-only snapshot; output `saves_refit_2026-11-01/parity/`):
+    2026-11-01, the 27 goalies of production's morning Saves input; 0
+    invalid, no missing team or save-rate input, ladders monotone, 1 goalie
+    with no prior shots (league rate). Expected saves 19.1-28.5. Side flips
+    vs production by line 18.5..30.5: 2, 4, 7, 5, 13, 11, 4, 3, 3, 3, 0, 0,
+    0. Replay of 2026-10-31 (20 starters) through the live path equals the
+    freeze-path predictions (max difference 4e-15).
+  - Production's calibrated 24.5 takes only three values on the slate
+    (0.000, 0.070, 0.417): half the goalies are priced 0% to exceed 24.5. The
+    refit spans 0.19-0.69 by matchup.
+  - Tests: `backend/nhl/tests/test_saves_refit_model.py` (strict-prior team
+    and save-rate inputs, league level from earlier dates only, monotone
+    ladder, no calibration).
+  - The frozen folder is under git-ignored `artifacts/`; committing the
+    artifact and contract needs operator authorization (`git add -f`), as
+    for the Points artifacts.
+  - Open for the operator: cutover (wire the module into the daily Saves
+    lane and the prediction-only Saves packages that grading reads,
+    retire the unapproved calibration, Phoenix V2 as rollback), and whether
+    to start without a shadow period.
 
 ### P2.40 Same-name players share a book's prices
 
