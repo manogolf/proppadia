@@ -3472,6 +3472,30 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Conclusion: the search with held data is exhausted; HGB+OWN_k30 is the
     candidate. Still open: goal/assist component models; market totals as
     captures accumulate.
+- **Goal and assist component models (2026-11-01, operator: no freeze until a
+  meaningful or failing contributor).** `backend/nhl/scripts/research_nhl_points_goal_assist.py`,
+  output `points_hgb_pp_corrected_refit/goal_assist_2026-11-01/`. A goals HGB
+  and an assists HGB (production recipe, official goals and assists from the
+  restored 2023-25 outcomes; labels sum to points exactly) on the ten core
+  inputs, the own points rate, and the player's own goal and assist rates
+  (previous season plus this season, shrunk by 30 games; 2022-23 from the
+  stats API); expected points = goals + assists. Control: one points model
+  with the same added inputs.
+  - **Meaningful.** vs HGB+OWN_k30 on the 2025 holdout: -0.84 (-1.32..-0.35),
+    -0.80 (-1.24..-0.37), -0.39 (-0.71..-0.08) x1000 at 0.5/1.5/2.5, all
+    excluding zero. vs production -5.24 / -5.36 / -2.37 (best candidate);
+    passes the tier gate (low-usage forwards excluded). The control gains
+    less (-0.53 / -0.32 / -0.20) and fails the gate, so the split itself
+    carries the gain. Components beat points split by league share on their
+    own targets: goals log loss 0.4525 vs 0.4582, assists 0.6428 vs 0.6454.
+  - Tiers vs k30: early-season stars 1.5 -7.50 (-13.0..-1.0), 2.5 -7.86;
+    defence 1.5 -0.74; watch: early-season high-scoring defencemen +11.3 /
+    +9.8 at 0.5/1.5 (260 rows, intervals reach zero; still better than
+    production).
+  - 2026 two-sided lines vs production: -6.84 (k30 -6.01); high-scoring
+    defencemen +0.95 (k30 +25.5); early-season stars -55.1 (k30 -29.8).
+  - Candidate for freeze: GOALS+ASSISTS (also gives anytime-goal and assist
+    expectations directly). Not frozen.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
