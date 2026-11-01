@@ -156,7 +156,8 @@ put captures about 26.6 minutes out):
   compatibility files are written.
 - It never requests inside 10 minutes of a start or after it.
 - Unbound or failed attempts are retried in the window, up to 3 attempts
-  per game; discovery is free, and only a bound event is paid (21 credits).
+  per game; discovery is free, and only a bound event is paid (24 credits; 21
+  before `totals` was added on 2026-11-01).
 - Every decision is appended to `closing_capture_log.jsonl` in the day
   folder. Binding failures also go to the LaunchAgent stderr log. A game
   that leaves its window uncaptured is logged as
@@ -861,6 +862,14 @@ The package contains `request_metadata.json`, `response_envelope.json`,
 in base64 with their exact byte lengths and SHA-256 identities. Request URLs
 and parameters are sanitized; credentials and authorization headers are never
 written.
+
+Requested markets (`backend/nhl/odds_markets.py`, shared by the daily run and the
+per-game CLOSING capture): `h2h`, `totals` (game total goals, from 2026-11-01),
+`player_shots_on_goal`, `player_total_saves` and `player_points`, each with its
+`_alternate` market. Credits are markets x regions per paid event: 8 x 3 = 24
+(21 before totals), 384 at the 16-game request ceiling. `totals` rows are
+retained in the observation's `normalized_odds.jsonl` like every market; no lane
+reads them yet (input for the Points team-goals research, NHL Backlog P2.39).
 
 The classifications are:
 

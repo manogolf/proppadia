@@ -35,7 +35,8 @@ class MoneylineAuthorityContractTests(unittest.TestCase):
 
     def test_parent_daily_odds_request_includes_h2h(self):
         self.assertIn("h2h", NHL_COMPREHENSIVE_PROP_MARKETS)
-        self.assertEqual(len(NHL_COMPREHENSIVE_PROP_MARKETS), 7)
+        self.assertIn("totals", NHL_COMPREHENSIVE_PROP_MARKETS)
+        self.assertEqual(len(NHL_COMPREHENSIVE_PROP_MARKETS), 8)
 
     def test_parent_daily_receipt_persists_authority_identity(self):
         with tempfile.TemporaryDirectory() as temporary:

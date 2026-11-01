@@ -2,6 +2,9 @@
 
 NHL_COMPREHENSIVE_PROP_MARKETS = (
     "h2h",
+    # Game total goals (2026-11-01, operator request): game-environment input
+    # for the Points team-goals research (P2.39). Captured and retained only.
+    "totals",
     "player_shots_on_goal",
     "player_shots_on_goal_alternate",
     "player_total_saves",

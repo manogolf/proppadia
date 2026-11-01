@@ -34,6 +34,8 @@ budget from 6 to 7 markets per region: 21 credits per paid event across the
 current three regions, with a 336-credit ceiling at the 16-game request cap.
 There is still one odds acquisition in the daily path; the Moneyline capture
 reuses that immutable observation.
+On 2026-11-01 `totals` was added (8 markets per region, 24 credits per paid
+event, 384 at the cap); the Moneyline lane does not read it.
 
 ## Target-specific chronology
 
