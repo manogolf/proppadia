@@ -2817,7 +2817,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.39 HGB Points star ceiling: GLM-offset candidate
 
-- Status: **CORRECTION DECIDED 2026-10-30; month-end review** (research 2026-10-28, operator request). Production HGB Points
+- Status: **MONTH-END REVIEW DONE 2026-11-01; OFFSET+DEFENSE recommended, awaiting freeze approval** (decided 2026-10-30) (research 2026-10-28, operator request). Production HGB Points
   under-predicts top scorers: trees cannot go past the training range
   (`player_points_last10` p99 1.6); McDavid 10-28 (34 points in 12 games)
   gets 1.14 expected points, Under 1.5 at -216 against a book +122.
@@ -2888,6 +2888,55 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     retrospective lines; any that does not help is dropped before the
     freeze. Then live parity (side flips reviewed for defensemen, stars and
     playmakers) and the current HGB kept as a shadow.
+- **Month-end review results (2026-11-01, research only).** Script
+  `backend/nhl/scripts/research_nhl_points_hgb_month_end_refit.py` (reuses the
+  P2.31 refit pull and labels, live `build_features`, the 10-28 OFFSET recipe;
+  research login, read-only snapshot 2026-11-01 15:13 UTC). Output
+  `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/month_end_2026-11-01/`;
+  2026 rows from export `full_window_2026-11-01_both_sides`. Training 90,486
+  (2023-24), holdout 47,023 (2025), 2026 two-sided lines 4,057 (latest pregame
+  per player-game and line, 15 dates 10-16..10-31). Log-loss differences below
+  are x1000, 95% interval over slate dates; negative is better.
+  - Holdout `mean_pp_toi_last10` differs from the 10-24 matrix on 13,141 rows
+    (2025 PP fills since); production scores slightly better on the new values
+    (0.5994 vs 0.6007 at 0.5), so the drift does not favour the candidates.
+  - OFFSET vs production: holdout 0.5 -0.6 (-1.1..-0.0), 1.5 -1.0 (-1.6..-0.5),
+    2.5 -0.3 (n.s.); 2026 -0.2 (-3.4..+2.8). The star lift is partial: holdout
+    1.2+ points/game expected 1.04 -> 1.10 (actual 1.22); 2026 1.10 -> 1.11.
+  - DEFENSE (item 3), vs OFFSET: holdout 0.5 -3.3 (-4.0..-2.6), 1.5 -2.0,
+    2.5 -0.9, all excluding zero; defensemen expected 0.38 -> 0.34 (actual
+    0.35). 2026 -2.2 (-6.7..+1.4); playmakers vs production -8.4 (-14.8..-2.6).
+    **Kept.**
+  - ASSISTS (item 2), vs OFFSET: holdout -0.2/-0.2/-0.0 (all reach zero);
+    2026 +1.9 (+0.6..+3.2), worse. **Dropped.** Playmakers' gain comes from
+    DEFENSE (forwards no longer share the defense level), not assist inputs.
+  - SHARE (item 4), vs OFFSET: holdout -0.1/-0.0/+0.1 (n.s.), stars worse
+    (1.5 +4.8, +1.4..+8.0); 2026 +1.5 (-0.1..+3.2). **Dropped.** The missed-games
+    deflation is real for single players but does not improve scores.
+  - All four together vs OFFSET: holdout -3.6 at 0.5 (about DEFENSE alone);
+    2026 +0.3, and defensemen +7.6 (+1.0..+15.9). Not used.
+  - Candidate **OFFSET+DEFENSE** vs production on 2026 by line: 0.5 -3.9
+    (-8.6..+0.1, 2,012), 1.5 -1.2 (-5.3..+3.6, 1,561), 2.5 -0.1 (484). Side
+    flips 112 of 2,012 at 0.5, 5 of 1,561 at 1.5, 0 at 2.5. Every model is
+    still behind the market on two-sided lines (production +10.1, +13.4,
+    +26.0 by line; OFFSET+DEFENSE +6.2, +12.2, +25.9).
+  - Item 5 (plus-money-against-model, per line; weekly cache, two-sided
+    10-10..10-31): Points Under 0.5 is the losing cohort, 139-205 (40%) with
+    model 60% vs market 44%, log loss 0.772 vs 0.667; Points Over 0.5 46-43.
+    SOG HGB (from 10-25) is small per line: Over 1.5 12-22, Under 1.5 36-28,
+    2.5 26-20. SOG Under 3.5 with market P(over) 35%+: HGB 38-18 (68%, market
+    57%), formula 41-21; not an exclusion.
+  - Item 6 (SOG Under 2.5): HGB 248-139 (64.1%) vs market 66.0%, model 69.4%,
+    one week. The model is about 5 points overconfident at every shooter
+    level (market P(over 2.5) below 30%: 74% vs model 79%; 40-50%: 47-47 vs
+    model 59%), so it is calibration, not a star ceiling. The formula went
+    420-174 (70.7%) on the same line 10-10..10-24. WATCH: recheck after the
+    11-07 weekly; a SOG calibration fix would be its own item.
+  - Next (needs operator approval, production change): freeze OFFSET+DEFENSE
+    (reproducible refit, own identity, rollback to the 10-24 artifact), add
+    `is_defense` and the GLM-times-HGB structure to the live Points scorer,
+    live parity on a current slate with the 112-style 0.5 flips reviewed,
+    current HGB kept as a shadow.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
