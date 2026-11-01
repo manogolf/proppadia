@@ -1,0 +1,99 @@
+{
+  "schema_version": "NHL_SAVES_REFIT_CONTRACT_V1",
+  "model_id": "NHL_SAVES_SHOTS_X_SAVE_RATE_V1",
+  "structure": "expected shots against (Poisson GLM, league-level offset) x shrunk goalie save rate x scale; negative binomial counts",
+  "target": "official saves of the named starting goalie (P(saves > line | named goalie starts))",
+  "training_seasons": [
+    2023,
+    2024
+  ],
+  "training_team_games": 5084,
+  "training_starters": 5084,
+  "training_team_games_sha256": "50e12f221aa76cf846c4cde11f33b706acad5b92db4c3888c88bb26157151876",
+  "training_starters_sha256": "3e6558e7cf9239b85d5e7b1bb0de425fc53772feb8aff09fc6d5d8c18d6e041b",
+  "shot_features": [
+    "sa_shr",
+    "sa_l10",
+    "opp_sf_shr",
+    "opp_sf_l10",
+    "sf_shr",
+    "opp_sa_shr",
+    "is_home",
+    "rest_days",
+    "opp_rest_days"
+  ],
+  "rate_columns_relative_to_league": [
+    "sa_shr",
+    "sa_l10",
+    "opp_sf_shr",
+    "opp_sf_l10",
+    "sf_shr",
+    "opp_sa_shr"
+  ],
+  "k_team_games": 20,
+  "k_save_shots": 1000,
+  "scale": 0.9653124170651957,
+  "variance_ratio": 1.9731368899412276,
+  "lines": [
+    18.5,
+    19.5,
+    20.5,
+    21.5,
+    22.5,
+    23.5,
+    24.5,
+    25.5,
+    26.5,
+    27.5,
+    28.5,
+    29.5,
+    30.5
+  ],
+  "calibration_layer": "NONE",
+  "feature_module": "backend/nhl/saves_refit_model.py",
+  "feature_module_sha256": "667d49df7ba923f15dc35d6b72df8298771d77308c62583708f25563bb56b6e4",
+  "freeze_script": "backend/nhl/scripts/freeze_nhl_saves_refit.py",
+  "freeze_script_sha256": "4d0355e413992f14f901cb4311829566167e0a9bd20283ee912cbde19cbd253c",
+  "fitted_artifact": "nhl_saves_shots_x_save_rate_v1.joblib",
+  "fitted_artifact_sha256": "dd87bdc1ea099ffd915ee58db5ba5cd0faa834bec955891c782fedc8285586d9",
+  "starter_source": "boxscore starter flag (2023-24 retained boxscores; goalie_game_logs_raw.start_flag 2025+)",
+  "history_sources": {
+    "skater_logs": "nhl.skater_game_logs_raw (research login, canonical team binding)",
+    "goalie_logs": "nhl.goalie_game_logs_raw (2025 completed by the P2.41 backfill)",
+    "team_2022_23": "artifacts/analysis/nhl/points_official_outcome_restoration/2026-11-01_skater_season_totals/team_totals_season=20222023.csv"
+  },
+  "database_login": "proppadia_nhl_research_login",
+  "snapshot_utc": "2026-11-01T19:24:13.594420+00:00",
+  "holdout_evaluation": {
+    "2025": {
+      "starters": 2600,
+      "corr": 0.2768148407121029,
+      "mae": 5.322628570640092,
+      "negbin_ll": 3.385599613094175,
+      "flat_negbin_ll": 3.4446839721239164,
+      "mean_expected": 23.732747590892338,
+      "mean_actual": 24.177307692307693
+    },
+    "2026": {
+      "starters": 452,
+      "corr": 0.3070947553057705,
+      "mae": 4.883774484192665,
+      "negbin_ll": 3.2500010528537318,
+      "flat_negbin_ll": 3.3201729548372874,
+      "mean_expected": 23.341468241907997,
+      "mean_actual": 23.789823008849556
+    }
+  },
+  "reproducibility": {
+    "refit_runs": 2,
+    "csv_parsing": "float_precision=round_trip",
+    "max_abs_diff_between_refits": 0.0,
+    "max_abs_diff_vs_frozen": 0.0,
+    "holdout_rows": 3052,
+    "frozen_prediction_sha256": "7b91a3d42665fc06fe8f64f5581587ea10e399d94fc01f688fa8673937ece40b",
+    "status": "PASS"
+  },
+  "production_status": "NOT_IN_PRODUCTION",
+  "supersedes_on_approval": "NHL_GOALIE_SAVES_PHOENIX_V2 (models/latest/goalie_saves; P2.41 review)",
+  "model_identity_sha256": "1499853039de69d2c9e88df208cc552ca19ea0cd0bdf6d75cfecf9884da13459"
+}
