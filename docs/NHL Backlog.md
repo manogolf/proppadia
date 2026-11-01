@@ -3051,6 +3051,40 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     (4); 2024-only training is worse everywhere (2022 prior helps).
   - Open for the operator: whether noise-level tier cells (interval
     centred on zero) block, and which candidate to freeze. Not frozen.
+- **Missing-contributor diagnostics (2026-11-01, operator question: is a big
+  points driver overlooked?).** Residuals of HGB+OWN_k30 on the 2025 holdout
+  (actual / expected by quintile, strict-prior inputs; scratch scripts
+  `tmp/p2_39_env.py`, `tmp/p2_39_mates.py`, `tmp/p2_39_shift_mates.py`):
+  - The model has no input for the game the player is in. Opponent goals
+    against per game (last 20, from restored official goals): actual/expected
+    0.99, 1.00, 1.03, 1.09, 1.07 by quintile while the model's mean is flat
+    (0.443-0.452). Team goals for: 1.01-1.06. Combined team GF x opponent GA:
+    0.99 -> 1.04-1.09. Adding the two rolling rates as inputs did not help
+    (+0.2 x1000, n.s.): noisy proxies.
+  - Linemates: computed skater-only top linemate per game from
+    `nhl.shiftcharts_shifts` (2025 and 2026 only; 2023-24 shifts are not
+    stored). Mid-scoring players: 0.94 with the weakest quarter of
+    linemates, 1.11 with the strongest. As an input (trained 2025 first
+    half, tested second half) not significant.
+  - Season level: the candidate under-predicts all of 2025 by 3.5% (0.444 vs
+    0.460); 2025 scoring rose over 2024 and the model cannot see the current
+    league scoring level.
+  - Conclusion: no single hidden variable; several moderate ones that all
+    describe the game environment (how many goals the team will score
+    tonight: opponent, goalie, pace, league level) and deployment (line, PP
+    unit). The market sees these through game totals and lineup news; the
+    model sees none directly. Points = the player's share of team goals x
+    team goals; the model has only the share side.
+  - Data defect: `nhl.shiftcharts_pairings_game.top_mate_player_id` is
+    usually the player's own goalie (goalies are not excluded; e.g. 8480280,
+    3,534 s); the derived overlap tables inherit it. Not used by production.
+  - Odds capture has no game totals (markets: h2h and player props only).
+  - Candidate next tests: (a) an expected-team-goals input from a team
+    scoring model (team and opponent rates, starting goalie, home, rest,
+    league level), with points as share x team goals; trainable on 2023-25
+    now. (b) Linemates and PP unit: needs 2023-24 shift charts (NHL API,
+    free) to train. (c) Market game totals: add `totals` to odds capture
+    (about +10% credits) and obtain history for training.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
