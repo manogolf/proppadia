@@ -21,6 +21,8 @@ from backend.nhl.reconciliation_grades import restated_grade_path
 from backend.nhl import market_name_identity
 
 
+SAVES_REFIT_START = "2026-11-01"
+
 PREDICTION_FIELDS = [
     "canonical_season", "slate_date", "game_type", "canonical_phase",
     "run_id", "run_type", "scheduled_start_utc", "prediction_timestamp_utc",
@@ -848,7 +850,10 @@ def add_ungraded_slate_candidates(rows: list[dict[str, Any]], operational_root: 
     for filename, market, version, role, family in (
         ("points_predictions.csv", "player_points", "NHL_POINTS_COUNT_HGB_V1", "PRODUCTION", "hist_gradient_boosting"),
         ("points_phoenix_shadow_predictions.csv", "player_points", "phoenix_v2", "SHADOW", "phoenix"),
-        ("saves_predictions.csv", "goalie_saves", "phoenix_v2", "PRODUCTION", "phoenix"),
+        # Saves production is the refit from 2026-11-01 (P2.41); earlier files are Phoenix V2.
+        ("saves_predictions.csv", "goalie_saves",
+         *(("shots_x_save_rate_v1", "PRODUCTION", "saves_refit") if through_date >= SAVES_REFIT_START
+           else ("phoenix_v2", "PRODUCTION", "phoenix"))),
     ):
         path = run_dir / filename
         if not path.exists():

@@ -117,3 +117,15 @@ Used when training or live data were wrong, as with the PP-TOI refit
   Lesson for A4: apply the segment check to player tiers (stars,
   high-scoring defensemen, playmakers, low-usage defensemen) as well as
   line-and-side, and treat any tier worse than production as blocking.
+- **2026-11-01, Saves: `NHL_SAVES_SHOTS_X_SAVE_RATE_V1` promoted without a
+  shadow period.** Operator decision ("yes, cut over"). Production Phoenix V2
+  predicted worse than a flat league mean on 2026 starters and was promoted
+  before the season without adequate analysis (operator's note). Evidence
+  (NHL Backlog P2.41): 2025 holdout (2,600 starters) negative binomial log
+  loss 3.386 vs flat 3.445; 2026 graded starters and lines (5,252) line log
+  loss 0.568 vs production raw 0.751 and published 1.115, better at every
+  line; level with the market on 433 two-sided rows (+1.6 x1000, interval
+  -29.6..+30.4). A5 and A6: two refits identical, frozen artifact with
+  identity `14998530…`, one-step rollback to Phoenix V2, live parity on
+  2026-11-01 (27 goalies, no invalid values, monotone ladders, live features
+  equal to the freeze path on the 10-31 replay). No calibration layer.

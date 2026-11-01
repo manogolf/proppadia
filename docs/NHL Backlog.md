@@ -2790,7 +2790,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.41 Goalie game logs missing for most of 2025-26; Saves model reads team ID as a number
 
-- Status: **2025 GAP FILLED; SAVES REVIEWED; REFIT FROZEN AND PARITY-CHECKED 2026-11-01 (cutover awaits operator); reconciliation
+- Status: **2025 GAP FILLED; SAVES REFIT IN PRODUCTION 2026-11-01 (Phoenix V2 rollback); reconciliation
   starter rule open** (found during P2.39 team-goals research; operator:
   "goalie logs are too sparse; unreasonable considering we predict saves").
 - `nhl.goalie_game_logs_raw` by regular season (read-only, research login):
@@ -2959,6 +2959,35 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     lane and the prediction-only Saves packages that grading reads,
     retire the unapproved calibration, Phoenix V2 as rollback), and whether
     to start without a shadow period.
+- **Cut over 2026-11-01 (operator: "yes, cut over"; no shadow period).**
+  `backend/nhl/saves_production.py` selects the production Saves model for
+  both paths (`PRODUCTION = SHOTS_X_SAVE_RATE_V1`; rollback `PHOENIX_V2`):
+  - Daily lane: `score_nhl_saves_with_lineage.py` scores the run's Saves input
+    with the refit from read-only history (research login), writes the same
+    `saves_predictions.csv` layout, binds lineage and reports fitted-model
+    evidence (family `saves_refit`, components: selector, module, frozen
+    contract and artifact); `cli.py` loads `nhl.predictions` with those labels.
+  - Prediction-only packages (graded): `prediction_only.core.publish_saves`
+    scores with the refit through the observer's DSN (`dsn=` passed by
+    `nhl_prediction_only_common.observe`); rows carry model
+    `NHL_SAVES_SHOTS_X_SAVE_RATE_V1`, `raw_prob_over` = `prob_over`;
+    `run_metadata.saves_model` records the identity, artifact SHA, history
+    snapshot and calibration NONE. Phoenix fixture checks run only on the
+    rollback path. The unapproved isotonic 24.5 map is no longer used.
+  - All-candidate export labels daily Saves rows `saves_refit /
+    shots_x_save_rate_v1` from 2026-11-01 (`SAVES_REFIT_START`).
+  - Dry runs on 2026-11-01: the lane script on the morning run's input (27
+    goalies) writes the production column layout and equals the parity run
+    exactly; the prediction-only scorer on the FINAL_PREGAME snapshot gives
+    351 rows (27 x 13), refit labels, no calibration (refit mean expected
+    23.04 vs Phoenix 22.11).
+  - Tests: `test_saves_production.py` (selection and rollback labels, long
+    rows without calibration, frozen identity, lane layout with lineage) and
+    `test_saves_refit_model.py`.
+  - First natural use: the next daily run and prediction-only poll; check the
+    receipt's Saves fitted-model evidence and `run_metadata.saves_model`.
+  - Line ladder 18.5-30.5 was set from observation without research
+    (operator); unchanged, untested.
 
 ### P2.40 Same-name players share a book's prices
 

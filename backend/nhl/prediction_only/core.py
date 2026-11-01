@@ -40,6 +40,7 @@ from backend.nhl.saves_shadow.core import (
     verify_frozen_identity as verify_saves_identity,
 )
 from backend.nhl.daily_capture import canonical_game_set_hash
+from backend.nhl import saves_production
 from backend.nhl.reconciliation_certificate import roster_coverage_exclusions
 
 
@@ -364,7 +365,9 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
                   season: int, slate_date: str, phase: str,
                   observation_timestamp_utc: str, input_cutoff_timestamp_utc: str,
                   canonical_run_identifier: str,
-                  readiness_evidence: dict[str, Any] | None = None) -> tuple[Path, str]:
+                  readiness_evidence: dict[str, Any] | None = None,
+                  dsn: str | None = None) -> tuple[Path, str]:
+    """``dsn``: read-only history source for the production Saves refit (P2.41)."""
     observation, cutoff, eligible_game_ids, temporal_exclusions = _validate_common(
         games=games, season=season, slate_date=slate_date, phase=phase,
         observation_timestamp_utc=observation_timestamp_utc,
@@ -383,11 +386,30 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
             raise RuntimeError("NO_QUALIFIED_SAVES_FEATURE_INPUTS")
         goalies["expected_complete_population_rows"] = len(goalies)
         validate_saves_inputs(eligible_games, goalies, slate_date, observation)
-        identity, parity, amendment = verify_saves_identity(), verify_saves_parity(), verify_operational_amendment()
         scoring = goalies.copy()
         scoring["player_id"] = scoring.goalie_id
-        predictions, _ = score_saves(scoring, 1.0, identity)
-        if len(predictions) != len(goalies) * len(identity["lines"]):
+        saves_model: dict[str, Any] = {"production": saves_production.PRODUCTION, **saves_production.labels()}
+        if saves_production.PRODUCTION == saves_production.SHOTS_X_SAVE_RATE_V1:
+            # Same semantics string as before: P(saves > line | named goalie starts).
+            identity = json.loads(SAVES_IDENTITY_PATH.read_text())
+            identity = {**identity, "model_version": saves_production.labels()["model_version"]}
+            parity = {"status": "NOT_APPLICABLE_SAVES_REFIT"}
+            amendment = {"status": "NOT_APPLICABLE_SAVES_REFIT"}
+            if not dsn:
+                raise RuntimeError("SAVES_REFIT_HISTORY_DSN_MISSING")
+            refit, contract = saves_production.load_refit()
+            wide, history_info = saves_production.score_refit(
+                scoring, slate_date=slate_date, season=season, dsn=dsn, model=refit)
+            predictions = saves_production.long_predictions(wide, saves_production.srm.LINES, 1.0)
+            saves_model.update(model_identity_sha256=contract["model_identity_sha256"],
+                               fitted_artifact_sha256=contract["fitted_artifact_sha256"],
+                               calibration_layer="NONE", **history_info)
+            lines = list(saves_production.srm.LINES)
+        else:
+            identity, parity, amendment = verify_saves_identity(), verify_saves_parity(), verify_operational_amendment()
+            predictions, _ = score_saves(scoring, 1.0, identity)
+            lines = identity["lines"]
+        if len(predictions) != len(goalies) * len(lines):
             raise RuntimeError("SAVES_PREDICTION_POPULATION_COLLAPSE")
         predictions = predictions.merge(
             goalies[["game_id", "goalie_id", "goalie_name", "team", "opponent",
@@ -477,6 +499,7 @@ def publish_saves(*, games: pd.DataFrame, goalies: pd.DataFrame, output_root: Pa
                 "candidate_rows": 0, "provider_event_dependency": "NONE",
                 "bookmaker_credential_access": False, "market_requests": 0, "paid_credits": 0,
                 "model_fixture_status": parity["status"], "operational_amendment": amendment["status"],
+                "saves_model": saves_model,
                 "status": "COMPLETE_PREDICTION_ONLY", "first_eligible_live_date": PROSPECTIVE_NOT_BEFORE,
                 "readiness_evidence": readiness_evidence,
             }

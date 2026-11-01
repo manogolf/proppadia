@@ -575,6 +575,29 @@ record which fitted artifact produced each prediction. Selection is
 one-step rollback sets it to `V1_CONTRACT_PATH` (V1 artifact unchanged under
 `artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/`).
 
+Production Saves scorer (2026-11-01, P2.41). Saves is scored by
+`NHL_SAVES_SHOTS_X_SAVE_RATE_V1` (`backend/nhl/saves_refit_model.py`, selected
+by `PRODUCTION` in `backend/nhl/saves_production.py`): expected shots against
+for the goalie's team (Poisson GLM on strict-prior team shots-against and
+opponent shots-for rates shrunk to last season, last 10, the team's
+shots-for, the opponent's shots-against, home, rest, relative to the league's
+shots per team-game so far this season) times the goalie's save rate
+(previous season plus this season, shrunk to last season's league rate by
+1,000 shots) times a fitted scale; negative binomial counts (variance 1.97 x
+mean). No calibration layer. Frozen under
+`artifacts/analysis/nhl/saves_refit_2026-11-01/frozen_2026-11-01/` (artifact
+`dd87bdc1…`, contract identity `14998530…`). Both Saves paths use it: the
+daily lane (`score_nhl_saves_with_lineage.py`, same `saves_predictions.csv`
+layout, `nhl.predictions` model family `saves_refit`) and the prediction-only
+packages grading reads (`prediction_only.core.publish_saves`, model
+`NHL_SAVES_SHOTS_X_SAVE_RATE_V1`, `raw_prob_over` equal to `prob_over`,
+`run_metadata.saves_model` with the identity and history snapshot). Live
+history is read strictly before the slate (skater and goalie logs, slate
+season and the one before) in one read-only snapshot; the goalie population,
+lines (18.5-30.5, an observed ladder without research behind it) and the
+conditional-start semantics are unchanged. One-step rollback: `PRODUCTION =
+PHOENIX_V2` restores the previous Poisson GLM with its isotonic 24.5 map.
+
 Production SOG scorer (2026-10-25, P2.33). Production SOG is the frozen HGB
 Poisson count model `NHL_SOG_COUNT_HGB_V1` (receipt identity `hgb_count /
 NHL_SOG_COUNT_HGB_V1`, scorer `backend/nhl/sog_hgb_count_model.py`, artifact

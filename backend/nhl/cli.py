@@ -28,6 +28,7 @@ from __future__ import annotations
 from backend.nhl.game_phase import season_for_date
 from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
 from backend.nhl.odds_markets import NHL_COMPREHENSIVE_PROP_MARKETS_CSV
+from backend.nhl.saves_production import labels as saves_production_labels
 from backend.nhl.database_access import (
     database_url as nhl_database_url,
     owner_free_child_environment as nhl_owner_free_child_environment,
@@ -1875,11 +1876,12 @@ def _run_independent_daily_lanes(
             if not saves_evidence or saves_evidence.get("prediction_artifact_sha256") != prediction_identities["saves"]["sha256"]:
                 raise RuntimeError("SAVES_FITTED_MODEL_EVIDENCE_MISSING_OR_UNBOUND")
             prediction_identities["saves"]["fitted_model_evidence"] = saves_evidence
+            saves_label = saves_production_labels()
             run([
                 PY, SCRIPTS_DIR / "load_nhl_predictions_generic.py",
                 "--pred-csv", saves_pred_csv, "--project", "nhl",
-                "--prop", "goalie_saves", "--model-family", "phoenix",
-                "--model-version", "phoenix_v2", "--feature-hash", "phoenix_v2",
+                "--prop", "goalie_saves", "--model-family", saves_label["model_family"],
+                "--model-version", saves_label["model_version"], "--feature-hash", saves_label["model_version"],
                 "--expected-sha256", prediction_identities["saves"]["sha256"],
             ])
             recorder.finish_lane(

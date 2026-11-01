@@ -287,6 +287,7 @@ def observe(*, lane: str, season: int, slate_date: str, requested_phase: str,
                 canonical_run_identifier=run_identifier,
                 readiness_evidence={"prior_day_reconciliation_certificate": certificate,
                                     "current_slate_roster_observation": roster},
+                dsn=dsn,
             )
             metadata = json.loads((destination / "run_metadata.json").read_text())
             result.update(status="CAPTURED" if disposition == "COMPLETE_NEW_APPEND_ONLY" else "NOOP_ALREADY_CAPTURED",
