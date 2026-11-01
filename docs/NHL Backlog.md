@@ -2790,7 +2790,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.41 Goalie game logs missing for most of 2025-26; Saves model reads team ID as a number
 
-- Status: **2025 GAP FILLED 2026-11-01; Saves input review and reconciliation
+- Status: **2025 GAP FILLED; SAVES REVIEWED 2026-11-01 (production worse than a flat mean; refit recommended); reconciliation
   starter rule open** (found during P2.39 team-goals research; operator:
   "goalie logs are too sparse; unreasonable considering we predict saves").
 - `nhl.goalie_game_logs_raw` by regular season (read-only, research login):
@@ -2845,6 +2845,43 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Open: review the Saves model inputs (opponent ID as a number, constant
     `start_prob`), and goalie inputs for Points and team goals now that 2025
     has a holdout.
+- **Saves review (2026-11-01, operator: "Yes, review Saves"; read-only,
+  scratch `tmp/p2_41_saves_review.py`).**
+  - Production on 2026 settled starters (404 goalie-games, 29 slates
+    10-01..10-31, latest pregame prediction): correlation with saves 0.10,
+    MAE 5.65, Poisson log loss 3.776. A flat league mean scores 5.19 / 3.416;
+    a team-shots baseline (mean of the team's shots-against rate and the
+    opponent's shots-for rate, shrunk to last season, times 0.90) scores
+    correlation 0.28, MAE 5.10, 3.386. Production is worse than predicting
+    the average for every goalie.
+  - Overconfident: lines priced 0-20% Over hit 23.3% (1,703 rows, predicted
+    5.8%); 80-100% priced lines hit 77.4% (predicted 85.9%). Saves vary 1.82
+    times their mean, so the Poisson ladder is too narrow; with a negative
+    binomial of that width production is still worse than the flat mean
+    (3.476 vs 3.303) and the shots baseline is best (3.287).
+  - Causes, in the export (`backend/nhl/sql/export_saves_from_denali.sql`)
+    and the fitted model (`models/latest/goalie_saves/`, Poisson GLM, 2025-10-09,
+    21-day holdout AUC 0.40 at 24.5 and 0.33 at 28.5):
+    1. Shot volume is not a model input: the export carries team shots
+       against and opponent shots for, but the fitted `feature_order` has only
+       the goalie's own saves and shots faced per 60, save%, rest, home, a
+       constant `start_prob`, and `opponent_id` as a number.
+    2. The rolling windows skip the latest game: each window excludes its own
+       row (`1 PRECEDING`) and the slate takes the prior row's window, so
+       "last 5" is games t-6..t-2.
+    3. Windows count dressed non-appearances (0 TOI rows), so 5/10/20 rows
+       hold fewer games.
+    4. Per-60 rates from relief or pulled appearances are noisy and unweighted;
+       season save% is a mean of per-game rates, not saves over shots.
+  - W/L is misleading here: daily Saves records (e.g. 10-31 198-62) are
+    dominated by lines far from the expectation that any model wins.
+  - Recommended refit (not started): expected saves = expected shots against
+    (team model like the team-goals research, but for shots, which are far
+    more predictable than goals: team shots-against and opponent shots-for
+    rates shrunk to last season, home, rest, league level) x the goalie's
+    save% shrunk to league by shots faced; negative binomial counts; trained
+    on 2023-24 (complete goalie logs), tested on the now-complete 2025 and on
+    2026; per-line calibration and the market as the gates.
 
 ### P2.40 Same-name players share a book's prices
 
