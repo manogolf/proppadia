@@ -2862,6 +2862,23 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     grading scored the reliever as the starter. Graded packages are
     immutable; the stored `start_flag` values are not changed without the
     operator (list in `tmp/p2_41_2026_starter_mismatches.csv`).
+  - **Corrected 2026-11-01 (operator: "correct existing starter data").**
+    `backend/nhl/scripts/correct_nhl_goalie_start_flags.py` set
+    `start_flag` to the boxscore `starter` for every 2023-2026 goalie row with
+    a usable flag (all 11,517), changing only `start_flag` and only where the
+    stored value still matched the preview, in one transaction through
+    `proppadia_nhl_daily_login`: 5,431 rows (2023 2,797 and 2024 2,592 were
+    NULL; 2025 22: 20 NULL in 2025020514-518 plus the two zero-TOI starters
+    of 2025020874; 2026 20: the 10 pulled-starter team-games). Receipt,
+    before/after rows, exact rollback SQL and `start_flag_verify.sql` in
+    `artifacts/analysis/nhl/goalie_log_backfill_2026-11-01/start_flag_correction/apply_2026-11-01T201908Z/`.
+    After: every game has two starters (2023 2,624 / 2024 2,460 / 2025 2,623
+    / 2026 452) except 2025021312, whose starter is an unbound goalie not in
+    the table; no NULL flags; a re-run previews 0 changes. Graded packages
+    are not regraded.
+  - Effect on the Saves refit: training used 2023-24 starters from the
+    boxscores, so the frozen model is unchanged; its 2026 holdout score used
+    the old flags for 10 team-games.
   - Open: review the Saves model inputs (opponent ID as a number, constant
     `start_prob`), and goalie inputs for Points and team goals now that 2025
     has a holdout.
