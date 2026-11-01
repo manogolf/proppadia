@@ -2817,7 +2817,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.39 HGB Points star ceiling: GLM-offset candidate
 
-- Status: **ROLLED BACK 2026-11-01: production is the 10-24 refit; own-rate research next** (OFFSET+DEFENSE frozen and rolled back the same day) (decided 2026-10-30) (research 2026-10-28, operator request). Production HGB Points
+- Status: **ROLLED BACK 2026-11-01: production is the 10-24 refit; own-rate research done, awaiting operator choice** (OFFSET+DEFENSE frozen and rolled back the same day) (decided 2026-10-30) (research 2026-10-28, operator request). Production HGB Points
   under-predicts top scorers: trees cannot go past the training range
   (`player_points_last10` p99 1.6); McDavid 10-28 (34 points in 12 games)
   gets 1.14 expected points, Under 1.5 at -216 against a book +122.
@@ -3002,6 +3002,55 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     high-scoring defensemen, playmakers, low-usage defensemen; n >= 200)
     worse than production on the 2025 holdout or 2026 lines. Data gap: 2023
     training rows have no 2022 season in the restored outcomes.
+  - Operator 2026-11-01: own-rate prior is the testing path; no bet guard;
+    obtain 2022 if available.
+- **Own-rate research (2026-11-01, research only, production unchanged).**
+  - 2022-23 totals: not in the database or retained files (database
+    goals/assists are empty for every season). Fetched from the NHL stats
+    API season summary with `backend/nhl/scripts/fetch_nhl_skater_season_totals.py`
+    (raw pages and SHA-256 under
+    `artifacts/analysis/nhl/points_official_outcome_restoration/2026-11-01_skater_season_totals/`;
+    951 skaters 2022-23). Validation on 2023-24 against our restored
+    outcomes: all 918 players present, games equal for 918, points equal for
+    844 (the other 74 differ by 105 of 21,679 points, both directions,
+    consistent with later NHL scoring corrections our first-count labels do
+    not take).
+  - Script `backend/nhl/scripts/research_nhl_points_hgb_own_rate.py`, output
+    `points_hgb_pp_corrected_refit/own_rate_2026-11-01/`. Input
+    `own_rate_k = (prior-season points + season points so far + k * mu) /
+    (prior-season games + season games so far + k)` plus `own_games`; `mu` =
+    previous season's league points per game (all skaters; POSPRIOR variant
+    by position group). Rows with a prior season: train 85,764 of 90,486,
+    holdout 42,241 of 47,023. Candidates on the production recipe (HGB) and
+    OFFSET, k 10/30/60, POSPRIOR, and 2024-only training.
+  - Best: **HGB+OWN_k30** (no position input) and HGB+OWN_POSPRIOR_k30. 2025
+    holdout vs production x1000, all rows: k30 -4.4/-4.6/-2.0 at
+    0.5/1.5/2.5, POSPRIOR -5.4/-5.1/-2.2, all intervals excluding zero (the
+    withdrawn OFFSET+DEFENSE was -3.9/-3.0/-1.2). Tiers (k30, at 0.5/1.5):
+    star forwards -14.6/-22.8; star forwards early season (prior 1.0+
+    points/game) -43.6/-96.3; playmakers -7.2/-8.6; high-scoring defensemen
+    -7.6/-3.7; top defensemen (1.0+) -7.9/-12.0; low-usage defensemen
+    -5.0/-2.5; early season -8.3/-10.3. Only cell worse: low-usage forwards
+    0.5 +0.14 (-1.5..+1.9) for k30, 2.5 +0.06 (-0.5..+0.6) for POSPRIOR;
+    every other tier-line of n >= 200 is better. Strict gate (no point
+    estimate worse) fails on those noise-level cells.
+  - Levels, 2025 holdout (actual / production / k30): star forwards 1.08 /
+    0.95 / 1.01; star forwards early 1.03 / 0.73 / 0.92; top defensemen 0.98
+    / 0.94 / 0.95; low-usage defensemen 0.21 / 0.26 / 0.24.
+  - 2026 two-sided lines (4,057): k30 -6.0 (-11.9..+0.2), POSPRIOR -6.3
+    (-13.3..+1.3); the market is still -13.3 vs production. Tiers under 200
+    rows (report only): high-scoring defensemen +25.5 (128 rows), top
+    defensemen +42.3 (72 rows, 22 games, 9 players). Those nine averaged
+    1.36 points against production 0.94; both models were under, the
+    candidate slightly more (Over 0.5 58% vs 60%, actual 72%), mostly Seth
+    Jones (prior 0.62 points/game, 2.0 actual over 3 games).
+  - POSPRIOR is not a fading position effect: with k 30 the position rate
+    keeps 25% weight at 90 games. k30 uses no position at all.
+  - OFFSET with own rate lifts the extreme stars more (McDavid 10-28: k30
+    1.28, OFFSET+OWN_k30 1.57, production 1.14) but fails more tier-lines
+    (4); 2024-only training is worse everywhere (2022 prior helps).
+  - Open for the operator: whether noise-level tier cells (interval
+    centred on zero) block, and which candidate to freeze. Not frozen.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 

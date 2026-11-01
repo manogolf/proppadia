@@ -149,6 +149,9 @@ def build_matrices(export: Path, since: str) -> dict:
         frame["is_defense"] = frame.is_defense.fillna(0).astype(int)
         out[name] = frame
     out["market_2026"] = rows
+    # Full regular-season points and games per player-season (own-rate prior research).
+    out["season_totals"] = (history.groupby(["player_id", "canonical_season"], as_index=False)
+                            .agg(season_points=("realized_points", "sum"), season_games=("game_id", "nunique")))
     out["audit"] = {"database": db_audit, "pp_zero_rule": pp_audit, "labels": outcome_audit, "history": history_audit,
                     "defense_share_historical": float(out["historical"].is_defense.mean())}
     return out
