@@ -176,6 +176,7 @@ def _authoritative_goalie_contract(
     }
     identity_teams: dict[tuple[int, int], int] = {}
     identities: list[tuple[int, int]] = []
+    flags: dict[tuple[int, int], bool | None] = {}
     for row in goalies:
         try:
             game_id = int(row["game_id"])
@@ -202,6 +203,7 @@ def _authoritative_goalie_contract(
         identity_teams[identity] = team_id
         identities.append(identity)
         by_game[game_id].append((player_id, team_id, toi))
+        flags[identity] = row.get("starter") if isinstance(row.get("starter"), bool) else None
 
     starters: list[tuple[int, int]] = []
     team_membership: dict[str, list[int]] = {}
@@ -218,11 +220,20 @@ def _authoritative_goalie_contract(
         for team_id in sorted(teams):
             team_rows = [(player_id, toi) for player_id, row_team, toi in rows
                          if row_team == team_id]
-            maximum = max(toi for unused_player, toi in team_rows)
-            winners = [player_id for player_id, toi in team_rows if toi == maximum]
-            if maximum <= 0 or len(winners) != 1:
-                raise RuntimeError(
-                    f"AUTHORITATIVE_GOALIE_STARTER_NOT_UNIQUE:{game_id}:{team_id}")
+            team_flags = [flags.get((game_id, player_id)) for player_id, unused_toi in team_rows]
+            if all(isinstance(flag, bool) for flag in team_flags):
+                # Official boxscore starter flag (a pulled starter keeps the start, P2.41).
+                winners = [player_id for (player_id, unused_toi), flag in zip(team_rows, team_flags) if flag]
+                if len(winners) != 1:
+                    raise RuntimeError(
+                        f"AUTHORITATIVE_GOALIE_STARTER_NOT_UNIQUE:{game_id}:{team_id}")
+            else:
+                # Evidence retained before the flag was recorded: most ice time, as then.
+                maximum = max(toi for unused_player, toi in team_rows)
+                winners = [player_id for player_id, toi in team_rows if toi == maximum]
+                if maximum <= 0 or len(winners) != 1:
+                    raise RuntimeError(
+                        f"AUTHORITATIVE_GOALIE_STARTER_NOT_UNIQUE:{game_id}:{team_id}")
             starters.append((game_id, winners[0]))
 
     identities.sort(); starters.sort()
@@ -332,6 +343,7 @@ def build_authoritative_staging_set(
                 game_goalies.append({
                     "game_id": game_id, "player_id": int(raw_id),
                     "team_id": int(team_id), "toi_minutes": _toi_minutes(row.get("toi")),
+                    "starter": row.get("starter") if isinstance(row.get("starter"), bool) else None,
                     "official_identity_locator":
                         f"$.playerByGameStats.{side}.goalies[{row_index}].playerId",
                 })

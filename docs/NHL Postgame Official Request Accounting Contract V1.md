@@ -428,10 +428,16 @@ Goalie post-write validation treats `(game_id, player_id)` as the complete
 staged natural identity. Nullable or incorrect `import_goalie_logs_stage.team_id`
 and staged TOI are never identity, team, or starter authority and are not
 modified by staging synchronization. Goalie team membership and the governed
-maximum-official-TOI starter for each team are derived exclusively from the
-already hash-verified authority boxscores. The evidence must contain four
-unique goalie identities and exactly two canonical teams per game, one unique
-maximum-TOI starter per official team, and exact `28`-goalie/`14`-starter totals.
+starter for each team are derived exclusively from the already hash-verified
+authority boxscores: the boxscore's `starter` flag (from 2026-11-01, P2.41;
+exactly one per team, so a pulled starter keeps the start), or the unique
+maximum official TOI for evidence retained before the flag was recorded. The
+evidence must contain four unique goalie identities and exactly two canonical
+teams per game, one unique starter per official team, and exact
+`28`-goalie/`14`-starter totals. Promotion writes
+`goalie_game_logs_raw.start_flag` from those official starters
+(`_promote_stage(..., official_starters=...)`); most ice time is used only when
+no verified official outcomes are passed.
 Missing or conflicting team membership, unusable or tied official TOI, an
 incomplete game/team group, or any missing, extra, or duplicate staged goalie
 identity fails closed and rolls back the complete skater transaction.

@@ -1326,8 +1326,15 @@ def _run(command: list[str], slate_date: str, dsn: str,
         raise safe_called_process_error(error, command) from None
 
 
-def _promote_stage(dsn: str, slate_date: str) -> None:
-    """Idempotently promote existing governed skater/goalie stage tables."""
+def _promote_stage(dsn: str, slate_date: str,
+                   official_starters: list[tuple[int, int]] | None = None) -> None:
+    """Idempotently promote existing governed skater/goalie stage tables.
+
+    ``official_starters``: (game_id, goalie_id) from the verified official
+    outcomes (boxscore starter flag). Without them the goalie with most ice
+    time on each team is marked the starter, as before (P2.41)."""
+    starter_games = [int(g) for g, unused in (official_starters or [])]
+    starter_goalies = [int(p) for unused, p in (official_starters or [])]
     attempts_conflicts = capture_stage_attempt_conflicts(
         dsn, slate_date=slate_date, stage="postgame_promotion")
     print("NHL_SHOT_ATTEMPTS_PROMOTION_CONFLICTS=" + json.dumps(
@@ -1403,7 +1410,12 @@ def _promote_stage(dsn: str, slate_date: str) -> None:
                    CASE WHEN s.resolved_team_id=g.home_team_id THEN g.away_team_id ELSE g.home_team_id END,
                    s.resolved_team_id=g.home_team_id,s.game_date,s.saves,s.shots_faced,
                    CASE WHEN s.shots_faced IS NOT NULL AND s.saves IS NOT NULL THEN s.shots_faced-s.saves END,
-                   s.toi_minutes,s.rn=1,s.start_prob,s.ev_shots_faced,s.pp_shots_faced,
+                   s.toi_minutes,
+                   CASE WHEN cardinality(%s::bigint[]) > 0
+                        THEN (s.game_id::bigint, s.player_id::bigint) IN
+                             (SELECT * FROM unnest(%s::bigint[], %s::bigint[]))
+                        ELSE s.rn=1 END,
+                   s.start_prob,s.ev_shots_faced,s.pp_shots_faced,
                    s.sh_shots_faced,s.high_danger_shots_faced,s.rebounds_allowed
             FROM ranked s JOIN nhl.games g USING(game_id)
             WHERE s.resolved_team_id IN (g.home_team_id,g.away_team_id)
@@ -1415,7 +1427,7 @@ def _promote_stage(dsn: str, slate_date: str) -> None:
               pp_shots_faced=excluded.pp_shots_faced,sh_shots_faced=excluded.sh_shots_faced,
               high_danger_shots_faced=excluded.high_danger_shots_faced,
               rebounds_allowed=excluded.rebounds_allowed
-        """, (slate_date, slate_date))
+        """, (slate_date, slate_date, starter_games, starter_games, starter_goalies))
         connection.commit()
 
 
@@ -1596,7 +1608,9 @@ def governed_collectors(
         "confirmed_discrepancy_count": pp_toi_conflicts["conflict_count"],
         "diagnostic_artifact": pp_toi_conflicts,
     }, sort_keys=True))
-    _promote_stage(dsn, slate_date)
+    _promote_stage(dsn, slate_date, official_starters=(
+        list(goalies.loc[goalies.actual_start_flag.astype(bool), ["game_id", "goalie_id"]]
+             .astype(int).itertuples(index=False, name=None)) if goalies is not None else None))
     _run([python, str(SCRIPTS / "backfill_game_manpower_segments.py"), "--start-date", slate_date,
           "--end-date", slate_date, "--season", str(authorized_season_for_date(slate_date))], slate_date, dsn)
     _run([python, str(SCRIPTS / "fill_pp_toi_minutes_for_date.py"), "--date", slate_date, "--commit"], slate_date, dsn)

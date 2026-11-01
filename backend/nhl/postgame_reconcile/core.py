@@ -1186,23 +1186,34 @@ def build_outcomes(validated: pd.DataFrame, boxscores: dict[int, dict], observed
                     "official_saves": None if saves is None else int(saves),
                     "official_shots_faced": None if shots is None else int(shots),
                     "toi": row.get("toi"), "_toi_seconds": _seconds(row.get("toi")),
+                    "_boxscore_starter": row.get("starter"),
                     "goalie_participation_state": "RELIEF_APPEARANCE",
                     "actual_start_flag": False, "outcome_source": "NHL_OFFICIAL_GAMECENTER",
                     "outcome_source_timestamp_utc": observed_at,
                 })
             if not team_goalies:
                 raise RuntimeError(f"OFFICIAL_GOALIE_TEAM_MEMBERSHIP_MISSING:{gid}:{team_id}")
-            maximum_toi = max(item["_toi_seconds"] for item in team_goalies)
-            winners = [index for index, item in enumerate(team_goalies)
-                       if item["_toi_seconds"] == maximum_toi]
-            if maximum_toi <= 0 or len(winners) != 1:
-                raise RuntimeError(f"OFFICIAL_GOALIE_STARTER_NOT_UNIQUE:{gid}:{team_id}")
+            # The boxscore's own starter flag decides (a pulled starter keeps the
+            # start, P2.41); most ice time is the fallback only when it is absent.
+            if all(isinstance(item["_boxscore_starter"], bool) for item in team_goalies):
+                winners = [index for index, item in enumerate(team_goalies) if item["_boxscore_starter"]]
+                method = "OFFICIAL_BOXSCORE_STARTER_FLAG"
+                if len(winners) != 1:
+                    raise RuntimeError(f"OFFICIAL_GOALIE_STARTER_NOT_UNIQUE:{gid}:{team_id}")
+            else:
+                maximum_toi = max(item["_toi_seconds"] for item in team_goalies)
+                winners = [index for index, item in enumerate(team_goalies)
+                           if item["_toi_seconds"] == maximum_toi]
+                method = "UNIQUE_MAX_OFFICIAL_TOI_POSTGAME"
+                if maximum_toi <= 0 or len(winners) != 1:
+                    raise RuntimeError(f"OFFICIAL_GOALIE_STARTER_NOT_UNIQUE:{gid}:{team_id}")
             starter = winners[0]
             team_goalies[starter]["goalie_participation_state"] = "STARTED"
             team_goalies[starter]["actual_start_flag"] = True
             for item in team_goalies:
-                item["starter_identity_method"] = "UNIQUE_MAX_OFFICIAL_TOI_POSTGAME"
+                item["starter_identity_method"] = method
                 item.pop("_toi_seconds")
+                item.pop("_boxscore_starter")
                 goalies.append(item)
     game_frame, skater_frame, goalie_frame = pd.DataFrame(games), pd.DataFrame(skaters), pd.DataFrame(goalies)
     if game_frame.game_id.duplicated().any() or skater_frame.duplicated(["game_id", "player_id"]).any() or goalie_frame.duplicated(["game_id", "goalie_id"]).any():

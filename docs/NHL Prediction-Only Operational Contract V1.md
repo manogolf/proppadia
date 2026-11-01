@@ -113,8 +113,12 @@ assists; nonparticipants, source exclusions, missing prospective predictions
 and unresolved rows remain explicit surfaces.
 
 Saves rows retain their conditional-on-start meaning. Official boxscore team
-membership and a unique maximum official TOI select exactly one starter per
-team. Only those starters settle the thirteen-line ladder. Predicted
+membership and the boxscore's `starter` flag select exactly one starter per
+team (from 2026-11-01, P2.41; a pulled starter keeps the start,
+`starter_identity_method` `OFFICIAL_BOXSCORE_STARTER_FLAG`). Only when a
+boxscore carries no starter flag does a unique maximum official TOI decide
+(`UNIQUE_MAX_OFFICIAL_TOI_POSTGAME`), which was the rule for packages graded
+before 2026-11-01. Only those starters settle the thirteen-line ladder. Predicted
 nonstarters, relief appearances, unpredicted starters and other unpredicted
 goalie outcomes remain separate. A tie, missing team, unusable TOI or identity
 conflict fails closed.

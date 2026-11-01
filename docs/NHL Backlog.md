@@ -2842,6 +2842,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     ice time on the team (`run_nhl_postgame_reconciliation.py`), which
     mislabels a pulled starter; the boxscore `starter` flag is the correct
     source (74 such 2025 games).
+  - **Fixed 2026-11-01 (operator: "please fix now").** The boxscore
+    `starter` flag decides in all three places: grading's official goalie
+    outcomes (`postgame_reconcile/core.build_outcomes`, method
+    `OFFICIAL_BOXSCORE_STARTER_FLAG`), the staging validation contract
+    (`staging_sync._authoritative_goalie_contract`, flag recorded in the
+    evidence rows), and promotion's `start_flag`
+    (`run_nhl_postgame_reconciliation._promote_stage` takes the official
+    starters). Most ice time remains only as the fallback when a boxscore or
+    retained evidence has no flag, so earlier evidence still verifies. Two
+    flagged starters on one team fail closed. Tests
+    `test_goalie_starter_rule.py`. Contracts updated: Prediction-Only
+    Operational Contract (Saves settlement), Postgame Official Request
+    Accounting Contract (staging starter).
+  - 2026 rows already written by the old rule (boxscores fetched read-only to
+    `goalie_log_backfill_2026-11-01/season=2026/boxscores/`): 20 rows in 9
+    games disagree with the boxscore (10 team-games with a pulled starter:
+    2026020015, 056, 067, 087, 104, 113, 185, 200, 212); in those games
+    grading scored the reliever as the starter. Graded packages are
+    immutable; the stored `start_flag` values are not changed without the
+    operator (list in `tmp/p2_41_2026_starter_mismatches.csv`).
   - Open: review the Saves model inputs (opponent ID as a number, constant
     `start_prob`), and goalie inputs for Points and team goals now that 2025
     has a holdout.
