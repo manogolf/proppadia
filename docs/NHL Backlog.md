@@ -3440,6 +3440,38 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     improves Points; game environment, linemates, PP share and opponent each
     add at most noise-level amounts. Untested: market totals (captured from
     2026-11-01) and goal/assist component models.
+- **Late-game situation and market-implied team scoring (2026-11-01,
+  operator: "season rates are not situational"; held data only, no provider
+  spend).** `backend/nhl/scripts/research_nhl_points_late_game_market.py`
+  (output `points_hgb_pp_corrected_refit/late_game_market_2026-11-01/`) and
+  scratch `tmp/p2_39_winprob.py`.
+  - Held market history: 2025 full-season moneyline and puck line (T-15
+    recovery, 2026-09-15), 2025 daily prop captures for 907 games (points,
+    SOG, saves; no totals or moneyline) in `backend/nhl/exports/odds_history`,
+    2026 moneyline and props daily (totals from 2026-11-01).
+  - Late game: empty-net points are 6% and last-five-minutes points 12% of
+    all points. 2025 holdout misses by the player's empty-net involvement and
+    the market's pregame win probability: high-involvement players 0.985 on
+    heavy underdogs vs 1.105 on heavy favourites, but the middle groups are
+    not ordered (1.074, 1.008, 1.004). Inputs on top of HGB+OWN_k30: empty-net
+    and late rates (shrunk, prior season plus this season) +0.4 at 0.5 and
+    fail the tier gate; a team-history strength gap passes but is +0.3 at
+    0.5; the market win probability as a fitted multiplier (0.080 per
+    log-odds, fitted Oct-Dec, tested Jan-Apr 2025, 24,306 rows) -0.13 /
+    -0.08 / -0.12 x1000, intervals reaching zero; with an empty-net
+    interaction +0.22 / +0.14 / -0.07. Not kept.
+  - Market-implied team scoring: each player's teammates' market expected
+    points (from 0.5 no-vig prices, own price left out) over the model's for
+    the same teammates; 13,301 priced player-games, factor for 818 games
+    (median 1.09: the market prices listed players about 9% above the model,
+    the known level gap). As mu x factor^0.627 (fitted Oct-Dec), Jan-Apr
+    -0.55 / -0.72 / -0.46 x1000, intervals reaching zero; for unlisted
+    players +0.28 / -0.39 / -0.28. Marginal.
+  - Paid historical totals: not requested; the held data already gives a
+    market team-scoring measure, and it adds little.
+  - Conclusion: the search with held data is exhausted; HGB+OWN_k30 is the
+    candidate. Still open: goal/assist component models; market totals as
+    captures accumulate.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
