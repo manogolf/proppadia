@@ -2882,6 +2882,51 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     save% shrunk to league by shots faced; negative binomial counts; trained
     on 2023-24 (complete goalie logs), tested on the now-complete 2025 and on
     2026; per-line calibration and the market as the gates.
+  - Operator 2026-11-01: no model uses a calibration layer without approval
+    (none given); calibration tables are measurement only. Saves was promoted
+    before the 2026 season without adequate analysis (operator's note).
+  - **Production Saves applies an unapproved calibration**
+    (`backend/nhl/saves_shadow/core.py`, `score_frozen`): the artifact's
+    isotonic map is used at 24.5 when its 21-day holdout looked better, and a
+    monotone step then caps 25.5-30.5 at that value. It makes production much
+    worse: 2026 log loss over all lines 1.115 published vs 0.751 raw; at 24.5
+    2.068 vs 0.879. Not changed; the refit below has no calibration layer.
+- **Saves refit research (2026-11-01, operator: "yes, build refit").**
+  `backend/nhl/scripts/research_nhl_saves_refit.py`, output
+  `artifacts/analysis/nhl/saves_refit_2026-11-01/`. Expected saves = expected
+  shots against x the goalie's save rate x one fitted scale (0.965, pulled
+  starts); negative binomial counts (variance 1.97 x mean); no calibration.
+  - Shots against: Poisson GLM on team shots-against and opponent shots-for
+    rates (shrunk to last season, last 10), the team's shots-for, the
+    opponent's shots-against, home, rest, all relative to the league's shots
+    per team-game so far this season (log offset, so league-level changes
+    pass through). Team-games 2025 / 2026: correlation 0.37 / 0.40, Poisson
+    log loss 3.229 / 3.181 vs flat 3.327 / 3.296. Shots are far more
+    predictable than goals (team goals 0.16 / 0.23).
+  - Save rate: previous season plus this season so far, shrunk toward last
+    season's league rate by K shots; K 500 / 1000 / 2000 give the same result
+    (shots dominate), K 1000 kept.
+  - Starters: boxscore `starter` (2023-24 from the retained boxscores, with
+    the goalie's team taken from the boxscore side because 2023-24 logs carry
+    legacy raw team IDs; 2025-26 `start_flag`). Train 2023-24 (5,028), test
+    2025 (2,600) and 2026 (452).
+  - Saves, 2025 / 2026: correlation 0.28 / 0.31, MAE 5.32 / 4.88, negative
+    binomial log loss 3.385 / 3.250 vs flat 3.446 / 3.321; mean 23.75 vs
+    actual 24.18 / 23.34 vs 23.79.
+  - 2026 graded starters, same goalie-games and lines (404 x 13 = 5,252):
+    log loss 0.568 refit vs 0.751 production raw vs 1.115 published; paired
+    refit minus raw -182.5 x1000 (-396.7..-33.5), minus published -547.2.
+    Better at every line 18.5-30.5. Against the market (433 rows with a
+    two-sided quote): refit 0.692 vs market 0.690, +1.6 (-29.6..+30.4), level.
+    Reliability (measurement only): 0-20% bin 14.2% vs 12.4% actual, 40-60%
+    49.8% vs 54.6%, 60-80% 69.0% vs 75.3% (a small lean to Under remains).
+  - Before any production use (operator decisions): live feature path (team
+    shots from the skater logs as the Points exporter builds them, goalie
+    save rate from the now-complete goalie logs), frozen artifact with
+    identity and rollback, live parity, removal of the unapproved
+    calibration, and whether to start without a shadow period. The goalie
+    starter is still unknown pregame (`UNKNOWN_NO_AUTHORIZED_PREGAME_STARTER_SOURCE`);
+    predictions stay conditional on the named goalie starting.
 
 ### P2.40 Same-name players share a book's prices
 
