@@ -543,31 +543,23 @@ outcomes. In prior-learning mode an absent Saves card is ungradeable, while a
 present invalid or duplicate card still blocks; direct reconciliation keeps
 its exact-one-card contract.
 
-HGB Points fitted artifact (2026-11-01, P2.39). Production scores with the
-OFFSET+DEFENSE refit:
+HGB Points OFFSET+DEFENSE refit (2026-11-01, P2.39; rolled back the same day,
+not in production). Frozen under
 `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01/`
-(`nhl_points_count_hgb_offset_defense.joblib`, artifact SHA-256 `2e33fedc…`;
-`shadow_contract.json`, model identity `37771281…`, superseding the
-PP-corrected identity `fb701c67…`; freeze script
-`backend/nhl/scripts/freeze_nhl_points_hgb_offset_defense.py`). Expected points
-are a Poisson GLM on the standardized inputs times the frozen HGB recipe
-fitted as a multiplier on it (`structure` `GLM_TIMES_HGB_OFFSET`), so top
-scorers can go above the tree ceiling. Inputs are the ten core features plus
-`is_defense` (feature contract `NHL_POINTS_LEADER_CORE_FEATURES_V2_DEFENSE`).
-`is_defense` comes from `nhl.players.position` (D = 1, else 0; a player
-without a stored position is a forward, as in training and the SOG HGB), read
-in the same read-only snapshot as the history and written onto the canonical
-slate; the source summary records `unknown_position_read_as_forward`. The
-scorer refuses a missing or non-binary `is_defense`
-(`HGB_POSITION_FEATURE_INVALID`). Each frozen artifact names its own
-`feature_columns`; `scorer.FEATURES` is the production contract's list and
-`scorer.CORE_FEATURES` the ten core inputs. Prior-day captures are validated
-against their own stored identity, so captures made before the switch grade
-unchanged. One-step rollback sets `CONTRACT_PATH` to
-`PP_CORRECTED_CONTRACT_PATH` (the paragraph below), which also restores the
-ten-feature list. The model name stays `NHL_POINTS_COUNT_HGB_V1`.
+(identity `37771281…`, local research artifact): a Poisson GLM times the HGB
+recipe plus `is_defense`. It was selected for about three hours and no daily
+scoring run used it; the operator rolled it back because the defense input is
+a single level shift that under-predicts high-scoring defensemen. The
+plumbing it added stays and is inert for the ten-feature contract: each frozen
+artifact names its own `feature_columns` (`scorer.FEATURES` is the production
+contract's list, `scorer.CORE_FEATURES` the ten core inputs), the scorer
+applies `structure` `GLM_TIMES_HGB_OFFSET` when an artifact declares it and
+refuses a missing or non-binary `is_defense` when an artifact uses it, and
+`prepare_authoritative_inputs` reads `nhl.players.position` in its read-only
+snapshot and writes `is_defense` on the canonical slate (not a model input
+under the ten-feature contract).
 
-Previous HGB Points fitted artifact (2026-10-24, P2.31; rollback target). The
+HGB Points fitted artifact (2026-10-24, P2.31; production). The
 PP-corrected refit of the `NHL_POINTS_COUNT_HGB_V1` recipe:
 `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-10-24/`
 (`nhl_points_count_hgb_v1_pp_corrected.joblib`, artifact SHA-256 `94e75216…`;

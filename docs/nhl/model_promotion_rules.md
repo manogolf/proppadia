@@ -110,3 +110,10 @@ Used when training or live data were wrong, as with the PP-TOI refit
   invalid predictions or ladder crossings, side flips 11/1/0 at
   0.5/1.5/2.5). Known limitation: the defense flag is a level shift and
   under-predicts the few defensemen scoring 1.0+ points per game.
+  **Rolled back 2026-11-01 (operator decision), before any daily scoring
+  run used it.** A known limitation on a player segment should not go live:
+  the defense input is one level shift for every defenseman, and 2025
+  holdout defensemen at 1.0-1.2 points/game scored worse than production.
+  Lesson for A4: apply the segment check to player tiers (stars,
+  high-scoring defensemen, playmakers, low-usage defensemen) as well as
+  line-and-side, and treat any tier worse than production as blocking.

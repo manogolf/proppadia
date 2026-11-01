@@ -2817,7 +2817,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.39 HGB Points star ceiling: GLM-offset candidate
 
-- Status: **PRODUCTION 2026-11-01: OFFSET+DEFENSE frozen and live; star defensemen and shadow lane open** (decided 2026-10-30) (research 2026-10-28, operator request). Production HGB Points
+- Status: **ROLLED BACK 2026-11-01: production is the 10-24 refit; own-rate research next** (OFFSET+DEFENSE frozen and rolled back the same day) (decided 2026-10-30) (research 2026-10-28, operator request). Production HGB Points
   under-predicts top scorers: trees cannot go past the training range
   (`player_points_last10` p99 1.6); McDavid 10-28 (34 points in 12 games)
   gets 1.14 expected points, Under 1.5 at -216 against a book +122.
@@ -2970,6 +2970,38 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Noticed, not changed: `cli.py` labels the Points fitted model's
     `canonical_artifact_path` with the V1 joblib path (stale since 10-24; the
     SHA beside it comes from the capture and is correct).
+- **Rolled back 2026-11-01 (operator decision).** Production is again the
+  PP-corrected refit `fb701c67…` (`CONTRACT_PATH = PP_CORRECTED_CONTRACT_PATH`;
+  integration evidence refreshed, gate J PASS). OFFSET+DEFENSE was selected
+  from about 07:40 to 10:50 PT; no scoring run used it (the 10:30 ET run was
+  `--morning-only`, Points lanes PREREQUISITES_READY only). Operator reasons:
+  a known limitation on a player segment should not be put to use, and one
+  global defense coefficient is a careless fix for players who perform at
+  different levels. The approach was not supported where it mattered: on
+  2026 two-sided lines DEFENSE alone was not significant (-2.2, interval
+  reaches zero) and defensemen were worse (+2.0, n.s.); on the 2025 holdout
+  the gain came from overrated low-scoring defensemen while 1.0-1.2
+  points/game defensemen got worse. The month-end evaluation checked lines
+  and sides but not player tiers (promotion rules A4 now say to).
+  - Data behind the defensemen counts (corrects the earlier "training-type"
+    wording): training is 2023-24 (2023-10-10..2025-04-17, 30,215 defenseman
+    rows; 1,249 rows with 10+ games and 0.8+ points/game, 37 players); the
+    736/771 figure is the 2025 holdout (2025-10-07..2026-04-15, 15,793
+    defenseman rows; 771 such rows, 29 players). October 2026 (10-16..10-31)
+    was only the second test set, never training.
+  - Retained plumbing (inert under the ten-feature contract): per-artifact
+    `feature_columns`, `GLM_TIMES_HGB_OFFSET` scoring, the position guard,
+    and `is_defense` on the canonical slate from `nhl.players`.
+  - Next (research, before any refit goes live): a player's own scoring rate
+    instead of group rules. Candidate: a shrunk points per game from prior
+    and current seasons weighted by games (as the SOG SHRUNK_180 rate), so a
+    1.3 points/game defenseman or a star is scored on his own record; then
+    position interacting with usage (TOI means less for a defenseman's
+    points). A hard star tier only as a bet guard where the model
+    extrapolates, not as a model input. Gate: no player tier (stars,
+    high-scoring defensemen, playmakers, low-usage defensemen; n >= 200)
+    worse than production on the 2025 holdout or 2026 lines. Data gap: 2023
+    training rows have no 2022 season in the restored outcomes.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
