@@ -3362,6 +3362,33 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     play-by-play shot locations instead of raw goals and shots), and lineup
     news. Pregame team scoring is noisy for everyone; the predictable part is
     about +/-0.5 goals around 3.
+- **Linemates and power-play unit (2026-11-01, operator: "start on
+  linemates first"; low-usage forwards excluded from the gate and revisited
+  later).** `backend/nhl/scripts/research_nhl_points_hgb_linemates.py`,
+  output `points_hgb_pp_corrected_refit/linemates_2026-11-01/`.
+  - MATES: the two most-overlapping skater linemates in the player's
+    previous game this season (second-by-second shared ice time, goalies
+    excluded; 2023-24 from the retained shift charts, 2025-26 from
+    `nhl.shiftcharts_shifts`; 134,450 player-games, 3,751 games), scored by
+    their own rate tonight, plus the share of ice time with the top linemate.
+    PP: share of the team's power-play time, last 10 games. Coverage: train
+    95-98%, 2025 holdout 75% (shifts stored for 1,036 of 1,312 games), 2026
+    95-100%.
+  - On top of HGB+OWN_k30, 2025 holdout x1000 at 0.5/1.5/2.5: MATES -0.09 /
+    -0.20 / -0.25, PP -0.07 / +0.14 / +0.08, both +0.21 / +0.27 / +0.17;
+    tiers mixed (MATES early-season stars 1.5 +6.1, high-scoring defensemen
+    early +5.7/+7.8). 2026 lines vs production: k30 -6.0, MATES -4.5, PP -5.4.
+    **Neither adds anything beyond the own rate**, which already carries the
+    player's deployment history.
+  - With low-usage forwards excluded, **HGB+OWN_k30 passes the tier gate**
+    (0 of 30 tier-lines worse than production on the 2025 holdout).
+- Pregame starting goalie (operator asked what the options are; recorded for
+  later): (1) NHL.com daily projected-lineup articles, already accepted by
+  `saves_shadow.core.qualify_starter_evidence` (24-hour freshness) but not
+  collected; (2) the goalie a book lists for `player_total_saves`, already in
+  every odds capture (a concordance study against actual starters is
+  possible on 2026 captures); (3) third-party starting-goalie sites (terms of
+  use); (4) the NHL gamecenter near puck drop (confirmed starters only, late).
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
