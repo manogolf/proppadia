@@ -3085,6 +3085,50 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     now. (b) Linemates and PP unit: needs 2023-24 shift charts (NHL API,
     free) to train. (c) Market game totals: add `totals` to odds capture
     (about +10% credits) and obtain history for training.
+- **Operator 2026-11-01: team goals agreed; obtain shift charts; add totals.**
+  - Totals: `totals` added to `backend/nhl/odds_markets.py` (commit
+    6d063e22), shared by the daily and CLOSING captures; 24 credits per paid
+    event (was 21), 384 at the 16-game cap. Retained only; no lane reads it.
+    Testing market totals as a Points input needs some weeks of captures.
+  - Shift charts: already retained by the 2026-10-16 PP-TOI recovery under
+    `artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/official_sources/game=<id>/`
+    (shiftcharts, pbp, boxscore) for every 2023 and 2024 game with skater
+    logs (1,312 and 1,230); 2025-26 are in `nhl.shiftcharts_shifts`. 53 late
+    2024-25 games (2024021235 onward) have empty payloads; a refetch on
+    2026-11-01 (`official_sources_refetch_2026-11-01/`) is still empty, so the
+    NHL does not publish them. No download was needed.
+  - Goals vs assists (operator question; `tmp/p2_39_granularity.py`, 2025
+    holdout, 10+ games): at equal expected points, goal-heavy, balanced and
+    assist-heavy players reach 2+ and 3+ points at the Poisson rate within
+    about one point (P(2+) observed vs Poisson in the 0.65-0.9 band: 19.8 vs
+    17.8, 18.3 vs 17.9, 19.1 vs 17.5), variance/mean about 1.0 in every band;
+    P(2+ | 1+) is lower for assist-heavy players (24% vs 27%). The goal and
+    assist mix does not change the count shape, so separate goal and assist
+    models are not indicated; the small under-prediction at 2+ is shared by
+    all mixes (level and game environment).
+  - Team goals (`backend/nhl/scripts/research_nhl_team_goals_model.py`,
+    output `points_hgb_pp_corrected_refit/team_goals_2026-11-01/`; team
+    2022-23 totals from the NHL stats API team summary via
+    `fetch_nhl_skater_season_totals.py --teams`). Team and opponent goals
+    and shots for/against, shrunk to the previous season (k 20 games), last
+    10, rest, home, league level to date. 2025 team-games (2,612): Poisson
+    GLM log loss 1.9245 vs league-and-home baseline 1.9335, correlation with
+    goals 0.16; top and bottom predicted fifths scored 3.54 and 2.75. 2026
+    (452): 1.9470 vs 1.9604, correlation 0.23. HGB was worse than the
+    baseline. Pregame team scoring is only weakly predictable from team
+    history.
+  - Expected team goals as a Points input on top of HGB+OWN_k30: 2025
+    holdout +0.12/+0.04/-0.05 x1000 at 0.5/1.5/2.5 (no gain; star forwards
+    0.5 +3.95, top defensemen +9.7), with the player's share of team goals
+    no better; 2026 lines -2.4 vs production against -6.0 for k30 alone.
+    **Dropped.** The player's own rate already carries most of what team
+    history says about his scoring; the market's remaining edge is more
+    likely same-day information (lines, PP units, goalie starts, injuries)
+    and its own totals.
+  - Next: linemates and PP unit from the retained 2023-25 shift charts
+    (skater-only, goalies excluded; the stored pairing table is unusable),
+    and market totals once enough captures exist. HGB+OWN_k30 remains the
+    best candidate; not frozen.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
