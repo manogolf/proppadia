@@ -2790,7 +2790,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.41 Goalie game logs missing for most of 2025-26; Saves model reads team ID as a number
 
-- Status: **OPEN 2026-11-01** (found during P2.39 team-goals research; operator:
+- Status: **2025 GAP FILLED 2026-11-01; Saves input review and reconciliation
+  starter rule open** (found during P2.39 team-goals research; operator:
   "goalie logs are too sparse; unreasonable considering we predict saves").
 - `nhl.goalie_game_logs_raw` by regular season (read-only, research login):
   2023 and 2024 every game with skater logs (1,312 and 1,230); 2025 only
@@ -2812,6 +2813,38 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   untouched), then review the Saves model inputs. 2023-24 boxscores are
   already retained under
   `artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/official_sources/`.
+- **Filled 2026-11-01 (operator: "Yes, fill them").**
+  `backend/nhl/scripts/backfill_nhl_goalie_logs_from_boxscores.py` fetched
+  all 1,312 2025 regular-season boxscores (gzip with SHA-256 under
+  `artifacts/analysis/nhl/goalie_log_backfill_2026-11-01/season=2025/boxscores/`),
+  validated the rebuild against the 359 games already stored, then inserted
+  with `ON CONFLICT DO NOTHING` through `proppadia_nhl_daily_login`
+  (ingestion): 953 games, 3,789 rows, 0 conflicts. Receipt, exact rollback
+  SQL, source rows and `goalie_backfill_2025_verify.sql` in
+  `season=2025/apply_2026-11-01T181621Z/`. After: 1,312 of 1,312 games, 5,225
+  rows, 2,611 starters; every month covered.
+  - Validation on stored games (1,436 rows, values where both are known):
+    team, opponent, home, date exact; saves 4, shots faced 2, goals allowed
+    11, TOI 2, starter 2 differ (later NHL corrections; 2025020874 is stored
+    with 0 TOI for both starters, a stored defect left as is).
+  - Conventions: `start_flag` = the boxscore's `starter` (matches stored
+    rows 1,414 of 1,416); a goalie with no ice time keeps NULL shots faced
+    and 0 saves and goals allowed; the strength split (`ev/pp/sh_shots_faced`)
+    is left NULL because stored rows use a different derivation (a shot moves
+    between even strength and short-handed in about 28% of rows; 693 stored
+    2025 rows are NULL already). The Saves model does not read it.
+  - Not written: 10 goalies not bound in `nhl.player_external_ids` (the
+    daily seed's identity rule; 3 of them are in `nhl.players`): 32 rows
+    season-wide, 3 with ice time, 1 starter (2025021312). Games without two
+    starters: 7 (2025020514-518 stored with NULL start flags, 2025020874,
+    2025021312).
+  - Noticed, not changed: postgame reconciliation sets `start_flag` by most
+    ice time on the team (`run_nhl_postgame_reconciliation.py`), which
+    mislabels a pulled starter; the boxscore `starter` flag is the correct
+    source (74 such 2025 games).
+  - Open: review the Saves model inputs (opponent ID as a number, constant
+    `start_prob`), and goalie inputs for Points and team goals now that 2025
+    has a holdout.
 
 ### P2.40 Same-name players share a book's prices
 
