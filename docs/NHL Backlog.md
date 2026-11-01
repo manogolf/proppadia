@@ -2788,6 +2788,31 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.41 Goalie game logs missing for most of 2025-26; Saves model reads team ID as a number
+
+- Status: **OPEN 2026-11-01** (found during P2.39 team-goals research; operator:
+  "goalie logs are too sparse; unreasonable considering we predict saves").
+- `nhl.goalie_game_logs_raw` by regular season (read-only, research login):
+  2023 and 2024 every game with skater logs (1,312 and 1,230); 2025 only
+  354 of 1,312 games, all between mid-December 2025 and 2026-02-01
+  (created 2026-01-09..02-01; October, November, early December and
+  February-April have none); 2026 complete (226, written daily by postgame
+  reconciliation's insert from the official boxscore).
+- Effect: Saves features (`d5/d10_saves_per60`, `d5_shots_faced_per60`,
+  `season_save_pct`, rest) come from goalie history, so 2026 slates early in
+  the season scored with 2025 history missing its last two months; any
+  goalie input for Points or a team-goals model has no 2025 holdout.
+- Saves model (`backend/nhl/models/latest/goalie_saves/`, Poisson, fitted
+  2025-10-09): `opponent_id` is in `feature_order` as a numeric input
+  (coefficient -0.0010), i.e. a team ID used as a quantity; `start_prob` is
+  a constant 1.0 at scoring. Not changed.
+- Fix candidates (operator decision): fill the missing 2025 goalie rows from
+  the official gamecenter boxscores (NHL API, free; the same source and
+  insert as postgame reconciliation; only missing rows, populated values
+  untouched), then review the Saves model inputs. 2023-24 boxscores are
+  already retained under
+  `artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/official_sources/`.
+
 ### P2.40 Same-name players share a book's prices
 
 - Status: **RESOLVED 2026-10-29** (found by the P2.38 input watch on the
@@ -3129,6 +3154,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     (skater-only, goalies excluded; the stored pairing table is unusable),
     and market totals once enough captures exist. HGB+OWN_k30 remains the
     best candidate; not frozen.
+  - Operator 2026-11-01: goals and assists are their own bet markets, so
+    goal and assist models feeding Points are worth testing even though the
+    count shape does not depend on the mix (the gain would be a better
+    expected total: goals follow shots and finishing, assists follow
+    linemates and the power play). Untested so far; the month-end ASSISTS
+    test only added assist inputs to the Points model.
+  - Stronger team-scoring signals than season history, to test: market
+    totals and implied team totals (captured from 2026-11-01), the starting
+    goalies (needs P2.41), shot quality (expected goals from the retained
+    play-by-play shot locations instead of raw goals and shots), and lineup
+    news. Pregame team scoring is noisy for everyone; the predictable part is
+    about +/-0.5 goals around 3.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
