@@ -120,7 +120,11 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
     work_dir = Path(work_dir)
     work_dir.mkdir(parents=True, exist_ok=True)
     target_day = pd.Timestamp(slate_date)
-    lower = target_day - pd.Timedelta(days=120)
+    # History reaches back to the season's start (September 1) or 120 days, whichever is
+    # earlier, so season-to-date counts are complete all season; the 10-game windows
+    # still apply their own 120-day bound in the exporter (P2.39).
+    season_start = pd.Timestamp(year=target_day.year if target_day.month >= 7 else target_day.year - 1, month=9, day=1)
+    lower = min(target_day - pd.Timedelta(days=120), season_start)
     outcomes_root = ROOT / "artifacts/operational/nhl/postgame_reconciliation"
     outcome_frames = []
     for outcome_path in sorted(outcomes_root.glob("????-??-??/reconciliation=*/canonical_skater_outcomes.csv")):

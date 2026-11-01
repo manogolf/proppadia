@@ -3496,6 +3496,36 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     defencemen +0.95 (k30 +25.5); early-season stars -55.1 (k30 -29.8).
   - Candidate for freeze: GOALS+ASSISTS (also gives anytime-goal and assist
     expectations directly). Not frozen.
+- **Frozen and parity-checked 2026-11-01 (operator: "Yes, freeze it"; not in
+  production).** One definition for training and live:
+  `backend/nhl/points_component_features.py` (counts from official outcomes
+  only). `freeze_nhl_points_goals_assists.py` wrote
+  `points_hgb_pp_corrected_refit/production_2026-11-01_goals_assists/`
+  (training frame 90,486 rows, prior-season totals 2022-2025 and league rates
+  with SHA-256, artifact `c9ac141d…`, identity `8cda6061…`); two refits and the
+  artifact identical on 47,023 holdout rows (PASS). Holdout vs production
+  -5.24 (-6.67..-3.88), -5.26 (-6.76..-3.89), -2.16 (-3.06..-1.31) x1000 at
+  0.5/1.5/2.5. Scorer structure `GOALS_PLUS_ASSISTS`; exporter
+  `add_component_features` under a contract that lists the inputs.
+  - Live parity (`backend/nhl/scripts/parity_nhl_points_goals_assists.py`,
+    production input step through the research login, frozen contract
+    selected in-process only): replay 2026-10-31, 502 player-games, component
+    inputs equal the freeze path (max difference 1e-16); 2026-11-01, 258
+    player-games, 0 invalid, 0 missing inputs, ladders monotone, side flips
+    vs production 14 / 0 / 0; mean expected 0.401 -> 0.413; 1.2+ points/game
+    0.98 -> 1.07, 0.8-1.2 0.85 -> 0.81. Examples: McDavid 1.07 -> 1.66; Troy
+    Terry (first game of the season) 0.22 -> 0.76 from last season; Neal
+    Pionk (D) 0.71 -> 0.51.
+  - Found while wiring: live Points history was 120 days only, so
+    season-to-date counts would truncate from about late December while
+    training counted full seasons. `prepare_authoritative_inputs` now reads
+    from the earlier of 120 days back and September 1 (no change before late
+    December). Contract: capture contract "Points history window".
+  - Season rollover: the frozen prior-season table holds 2022-2025; scoring a
+    2027 slate needs 2026 totals added (fails closed until then).
+  - Tests `test_points_goals_assists.py`. Integration evidence refreshed.
+  - Open for the operator: cutover (`CONTRACT_PATH`, PP-corrected refit as
+    rollback), committing the frozen folder (git-ignored), shadow or not.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 

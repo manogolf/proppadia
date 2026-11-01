@@ -91,6 +91,12 @@ def score(features: pd.DataFrame, model) -> pd.DataFrame:
         raise ValueError("HGB_POSITION_FEATURE_INVALID")
     x["attempts_d10_per60"] = impute_unknown_attempts(x)
     x = x.fillna(0).astype(float)
+    if isinstance(model, dict) and model.get("structure") == "GOALS_PLUS_ASSISTS":
+        # P2.39: expected points = goals model + assists model, each with its own scaler.
+        values = x.to_numpy()
+        mu = sum(np.maximum(np.asarray(part["model"].predict(part["scaler"].transform(values)), dtype=float), 1e-8)
+                 for part in (model["goals"], model["assists"]))
+        return _ladder(features, np.maximum(mu, 1e-8))
     if isinstance(model, dict):
         scaler = model["scaler"]
         estimator = model["model"]
@@ -101,6 +107,10 @@ def score(features: pd.DataFrame, model) -> pd.DataFrame:
     if isinstance(model, dict) and model.get("structure") == "GLM_TIMES_HGB_OFFSET":
         # P2.39: the HGB is a multiplier on the GLM level, so stars can exceed the tree ceiling.
         mu = np.maximum(np.asarray(model["glm"].predict(x), dtype=float) * mu, 1e-8)
+    return _ladder(features, mu)
+
+
+def _ladder(features: pd.DataFrame, mu: np.ndarray) -> pd.DataFrame:
     out = features[[c for c in ("game_id", "player_id", "player_name", "game_date", "game_start_utc") if c in features]].copy()
     out["expected_points"] = mu
     for threshold, name in zip((1, 2, 3), ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5")):

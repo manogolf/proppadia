@@ -544,6 +544,31 @@ outcomes. In prior-learning mode an absent Saves card is ungradeable, while a
 present invalid or duplicate card still blocks; direct reconciliation keeps
 its exact-one-card contract.
 
+HGB Points goals + assists model (2026-11-01, P2.39; frozen and
+parity-checked, not in production). Frozen under
+`artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01_goals_assists/`
+(`nhl_points_goals_assists_v1.joblib`, artifact SHA-256 `c9ac141d…`,
+`shadow_contract.json` identity `8cda6061…`, freeze script
+`backend/nhl/scripts/freeze_nhl_points_goals_assists.py`): expected points are
+a goals HGB plus an assists HGB (production recipe each, `structure`
+`GOALS_PLUS_ASSISTS`), on the ten core inputs plus `own_rate_k30`, `own_games`,
+`goal_rate` and `assist_rate` (`backend/nhl/points_component_features.py`: the
+player's official points, goals and assists, previous season plus this season
+so far, shrunk to last season's league per-game rate by 30 games). Under that
+contract the exporter adds those inputs from the slate's official outcome
+history and the contract's frozen `prior_season_totals.csv` and
+`league_rates.csv` (hashes checked; a season with no prior-season row fails
+closed). Selecting it is `CONTRACT_PATH` in
+`score_nhl_points_hgb_shadow.py`.
+
+Points history window (2026-11-01, P2.39). `prepare_authoritative_inputs`
+reads official outcomes from the earlier of 120 days before the slate and
+September 1 of the season, so season-to-date counts (`current_season_*` and
+the component rates) cover the whole season; the 10-game windows and team
+shots keep their own 120-day bound in the exporter. Before this the history
+was 120 days only, so season-to-date counts would have been truncated from
+about late December.
+
 HGB Points OFFSET+DEFENSE refit (2026-11-01, P2.39; rolled back the same day,
 not in production). Frozen under
 `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01/`

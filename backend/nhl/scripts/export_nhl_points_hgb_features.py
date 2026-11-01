@@ -14,6 +14,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from backend.nhl.daily_capture import canonical_game_set_hash
+from backend.nhl import points_component_features as component
 from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
 
 # The production artifact's inputs (the ten core features, plus is_defense
@@ -223,7 +224,31 @@ def build_features(history: pd.DataFrame, slate: pd.DataFrame) -> pd.DataFrame:
             "is_defense": getattr(target, "is_defense", np.nan),
             "history_contract": HISTORY, "history_cutoff_exclusive": d.date().isoformat()})
     result = pd.DataFrame(rows)
+    if set(component.FEATURES) & set(FEATURES):
+        result = add_component_features(result, history, slate)
     return result[["slate_date", "game_id", "player_id", "game_date", "game_start_utc", *FEATURES, "history_contract", "history_cutoff_exclusive"]]
+
+
+def add_component_features(result: pd.DataFrame, history: pd.DataFrame, slate: pd.DataFrame) -> pd.DataFrame:
+    """Own points, goal and assist rates (P2.39) from official outcome history and the
+    production contract's frozen prior-season totals and league rates."""
+    contract = json.loads(scorer.CONTRACT_PATH.read_text())
+    folder = scorer.CONTRACT_PATH.parent
+    tables = {}
+    for key in ("prior_season_totals", "league_rates"):
+        path = folder / contract[key]
+        if sha(path) != contract[f"{key}_sha256"]:
+            raise ValueError(f"POINTS_COMPONENT_{key.upper()}_HASH_DRIFT")
+        tables[key] = pd.read_csv(path)
+    league = tables["league_rates"].set_index("season")
+    seasons = slate[["game_id", "player_id", "canonical_season"]].rename(columns={"canonical_season": "season"})
+    targets = result[["game_id", "player_id", "game_date"]].merge(seasons, on=["game_id", "player_id"], how="left",
+                                                                   validate="one_to_one")
+    hist = history[["player_id", "game_id", "canonical_season", "game_date", "goals", "assists"]].rename(
+        columns={"canonical_season": "season"})
+    features = component.add_features(targets, hist, tables["prior_season_totals"], league)
+    return result.merge(features[["game_id", "player_id", *component.FEATURES]], on=["game_id", "player_id"],
+                        how="left", validate="one_to_one")
 
 
 def main() -> None:

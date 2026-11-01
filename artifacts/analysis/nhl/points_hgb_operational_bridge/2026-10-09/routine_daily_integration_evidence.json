@@ -5,7 +5,7 @@
   "database_mutations": 0,
   "deterministic_replay": "DETERMINISTIC_REPLAY_PASS",
   "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V1",
-  "feature_exporter_sha256": "0a503a989aac4b2bd0ccbefb0e109ed548fb584ae17a6e2ff64d86585cda6704",
+  "feature_exporter_sha256": "07c89ed3297b59d12ca1e1098d7cb1585b8e38b9a17c28902644102036213736",
   "history_contract": "120_DAY_LEGACY_BOUND",
   "model_artifact_sha256": "94e75216d278d99dd54193b448476e43884c8170115e7e787df4b8d4d9da8533",
   "model_identity_sha256": "fb701c671f24acc894ec8195c5f951136f2b521036f0f37e966b85ba726fa4ca",
@@ -14,9 +14,9 @@
   "phoenix_control_prediction_sha256": "730cb908bac956b090683dce15d9e24631920231a3933c2101e60e7041396cf4",
   "prediction_sha256": "746390d7e138b8d29382bdc00e70bd07aef4d6b88d33569a6c2a6c32dde8cbaa",
   "production_orchestration_helper": "backend/nhl/points_hgb_shadow.py:capture_from_files",
-  "production_orchestration_helper_sha256": "4ba35447fcd61886de514e1cbe14b3f1eec0bc88190a6436cc8c73818e34353f",
+  "production_orchestration_helper_sha256": "cb6e4496fc70b246e1681c34c3c0fe956d0eecfc7d35371295e34bbe7eca5392",
   "proof_scope": "BOUNDED_DRY_RUN_SHARED_PRODUCTION_CAPTURE_HELPER",
   "provider_calls": 0,
   "schema_version": "NHL_POINTS_HGB_ROUTINE_DAILY_INTEGRATION_EVIDENCE_V1",
-  "scorer_sha256": "751bc8c5b21088b743fdbb782ff53d7cd55922b5ccb22d8f47ff99e1a0b19690"
+  "scorer_sha256": "6e737634c8112c11a0a38a114258daefddde53f53b922d14dc6e579e7808709d"
 }
