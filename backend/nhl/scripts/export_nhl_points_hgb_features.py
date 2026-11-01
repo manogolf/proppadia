@@ -14,10 +14,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from backend.nhl.daily_capture import canonical_game_set_hash
+from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
 
-FEATURES = ["is_home", "d10_sog_per60", "attempts_d10_per60", "player_points_last10",
-            "current_season_points_prior", "current_season_games_prior", "mean_toi_last10",
-            "mean_pp_toi_last10", "team_d10_sf_per_game", "last10_team_sog_share"]
+# The production artifact's inputs (the ten core features, plus is_defense
+# from 2026-11-01, P2.39). is_defense comes from the slate spine.
+FEATURES = list(scorer.FEATURES)
 HISTORY = "120_DAY_LEGACY_BOUND"
 TEAM_SHOT_FEATURE_CONTRACT = "NHL_POINTS_TEAM_D10_OFFICIAL_CANONICAL_V1"
 ROOT = Path(__file__).resolve().parents[3]
@@ -219,6 +220,7 @@ def build_features(history: pd.DataFrame, slate: pd.DataFrame) -> pd.DataFrame:
             "mean_pp_toi_last10": h.pp_toi_minutes.mean() if len(h) else np.nan,
             "team_d10_sf_per_game": float(official_th.team_sog.mean()) if len(official_th) else 0.0,
             "last10_team_sog_share": sog10 / team_sog if team_sog > 0 else 0.0,
+            "is_defense": getattr(target, "is_defense", np.nan),
             "history_contract": HISTORY, "history_cutoff_exclusive": d.date().isoformat()})
     result = pd.DataFrame(rows)
     return result[["slate_date", "game_id", "player_id", "game_date", "game_start_utc", *FEATURES, "history_contract", "history_cutoff_exclusive"]]

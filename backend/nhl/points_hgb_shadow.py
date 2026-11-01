@@ -28,11 +28,12 @@ from backend.nhl.reconciliation_certificate import (
 )
 from backend.nhl.scripts import export_nhl_points_hgb_features as exporter
 from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
+from backend.nhl.sog_hgb_features import position_groups
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTRACT = scorer.CONTRACT_PATH
 MODEL = scorer.MODEL_PATH
-FEATURE_CONTRACT = "NHL_POINTS_LEADER_CORE_FEATURES_V1"
+FEATURE_CONTRACT = json.loads(scorer.CONTRACT_PATH.read_text())["feature_contract"]
 HISTORY_CONTRACT = "120_DAY_LEGACY_BOUND"
 HGB_AUTHORITY_LOCAL = "NHL_POINTS_COUNT_HGB_V1"
 FEATURES = tuple(scorer.FEATURES)
@@ -193,6 +194,10 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
             ORDER BY r.game_id,r.player_id,r.asof_ts DESC""", (list(map(int, [g.game_id for g in canonical_games])),))
         roster_rows = cur.fetchall()
         roster_columns = [column.name for column in cur.description]
+        # Position for is_defense (P2.39), from the same table the model trained on.
+        cur.execute("SELECT player_id::bigint, position FROM nhl.players WHERE player_id = ANY(%s)",
+                    (sorted({int(row[roster_columns.index("player_id")]) for row in roster_rows}),))
+        position_rows = cur.fetchall()
     logs = pd.DataFrame(log_rows, columns=log_columns)
     if logs.empty:
         raise RuntimeError("HGB_OFFICIAL_SKATER_LOGS_UNAVAILABLE")
@@ -226,12 +231,19 @@ def prepare_authoritative_inputs(*, db_url: str, canonical_games: list[Any],
     if slate.team_id.isna().any() or slate.game_start_utc.isna().any():
         raise RuntimeError("HGB_CANONICAL_SLATE_IDENTITY_UNAVAILABLE")
     slate["is_home"] = slate.team_id.astype(int).eq(slate.home_team_id.astype(int))
+    # As in training and the SOG HGB, a player without a stored position is a forward.
+    groups = position_groups(pd.DataFrame(position_rows, columns=["player_id", "position"]))
+    slate = slate.merge(groups, on="player_id", how="left", validate="many_to_one")
+    unknown_position = int(slate.group.isna().sum())
+    slate["is_defense"] = slate.group.eq("D").astype(int)
+    slate = slate.drop(columns=["group"])
     slate_path = work_dir / "canonical_slate.csv"
     slate.to_csv(slate_path, index=False)
     return logs_path, [outcomes_path], slate_path, {
         "history_game_count": len(game_ids), "history_player_game_count": len(outcomes),
         "source_outcome_package_count": len(outcome_frames),
         "slate_identity_count": len(slate), "source_history_cutoff_exclusive": slate_date,
+        "unknown_position_read_as_forward": unknown_position,
         "canonical_game_ids": canonical_ids,
         "canonical_game_count": len(canonical_ids),
         "canonical_game_set_hash": canonical_game_set_hash(canonical_ids),

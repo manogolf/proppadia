@@ -37,7 +37,8 @@ ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT))
 from backend.nhl.database_access import database_url  # noqa: E402
 from backend.nhl.scripts.export_nhl_points_hgb_features import (  # noqa: E402
-    FEATURES, build_features, normalize_history, normalize_slate)
+    build_features, normalize_history, normalize_slate)
+from backend.nhl.scripts.score_nhl_points_hgb_shadow import CORE_FEATURES as FEATURES  # noqa: E402
 from backend.nhl.scripts.run_nhl_points_hgb_v2_direct_repair import KW, metric_rows  # noqa: E402
 from backend.nhl.scripts.score_nhl_points_hgb_shadow import MODEL_PATH as V1_MODEL_PATH  # noqa: E402
 from backend.nhl.scripts.build_nhl_player_performance_pulse import find_outcome  # noqa: E402

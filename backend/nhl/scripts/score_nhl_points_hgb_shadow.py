@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Score and retain isolated, prospective NHL Points HGB research shadows.
 
-This scorer deliberately accepts only the frozen 10-column HGB contract. It
-does not construct features from Phoenix inputs or write to production systems.
+Each frozen artifact declares its own feature columns; the production
+contract decides which artifact and columns are live. It does not construct
+features from Phoenix inputs or write to production systems.
 """
 from __future__ import annotations
 
@@ -21,20 +22,24 @@ from backend.nhl.game_phase import authorized_season_for_date
 from backend.nhl.daily_capture import canonical_game_set_hash
 
 ROOT = Path(__file__).resolve().parents[3]
-# Frozen HGB fitted artifacts. Both use the NHL_POINTS_COUNT_HGB_V1 recipe and
-# features; the PP-corrected revision is refit on source-corrected history
-# (P2.31). Each contract carries its own model_identity_sha256.
+# Frozen HGB fitted artifacts. V1 and the PP-corrected revision (P2.31) use the
+# NHL_POINTS_COUNT_HGB_V1 recipe and the ten core features; the OFFSET+DEFENSE
+# revision (P2.39) is a Poisson GLM times that recipe and adds is_defense.
+# Each contract carries its own model_identity_sha256 and feature_columns.
 V1_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/shadow_contract.json"
 PP_CORRECTED_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-10-24/shadow_contract.json"
-# Production artifact. One-step rollback: set CONTRACT_PATH = V1_CONTRACT_PATH.
-CONTRACT_PATH = PP_CORRECTED_CONTRACT_PATH
+OFFSET_DEFENSE_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01/shadow_contract.json"
+# Production artifact. One-step rollback: set CONTRACT_PATH = PP_CORRECTED_CONTRACT_PATH.
+CONTRACT_PATH = OFFSET_DEFENSE_CONTRACT_PATH
 MODEL_PATH = CONTRACT_PATH.parent / json.loads(CONTRACT_PATH.read_text())["fitted_artifact"]
-FEATURES = [
+CORE_FEATURES = [
     "is_home", "d10_sog_per60", "attempts_d10_per60", "player_points_last10",
     "current_season_points_prior", "current_season_games_prior",
     "mean_toi_last10", "mean_pp_toi_last10", "team_d10_sf_per_game",
     "last10_team_sog_share",
 ]
+# The production artifact's model inputs, in order.
+FEATURES = list(json.loads(CONTRACT_PATH.read_text())["feature_columns"])
 HISTORY_CONTRACT = "NHL_POINTS_COUNT_HGB_V1_HISTORY_120_DAY_VALIDATED"
 # Median attempts_d10_per60 / d10_sog_per60 in the 2023-24 training matrix
 # (rebuilt_training_matrix_2023_2024.csv.gz, 87,569 rows with a positive SOG rate).
@@ -63,14 +68,25 @@ def sha(path: Path) -> str:
     return h.hexdigest()
 
 
+def model_features(model) -> list[str]:
+    """The artifact's own inputs; artifacts without a list use the ten core features."""
+    if isinstance(model, dict) and model.get("feature_columns"):
+        return list(model["feature_columns"])
+    return list(CORE_FEATURES)
+
+
 def score(features: pd.DataFrame, model) -> pd.DataFrame:
-    required = {"game_id", "player_id", *FEATURES}
+    columns = model_features(model)
+    required = {"game_id", "player_id", *columns}
     missing = sorted(required.difference(features.columns))
     if missing:
         raise ValueError(f"MISSING_FROZEN_HGB_FEATURES:{','.join(missing)}")
     if features.duplicated(["game_id", "player_id"]).any():
         raise ValueError("DUPLICATE_PLAYER_GAME_KEY")
-    x = features[FEATURES].apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan)
+    x = features[columns].apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan)
+    # Position is never unknown-as-forward: a missing value stops scoring.
+    if "is_defense" in x and (x.is_defense.isna().any() or not x.is_defense.isin([0, 1]).all()):
+        raise ValueError("HGB_POSITION_FEATURE_INVALID")
     x["attempts_d10_per60"] = impute_unknown_attempts(x)
     x = x.fillna(0).astype(float)
     if isinstance(model, dict):
@@ -80,6 +96,9 @@ def score(features: pd.DataFrame, model) -> pd.DataFrame:
     else:
         estimator = model
     mu = np.maximum(np.asarray(estimator.predict(x), dtype=float), 1e-8)
+    if isinstance(model, dict) and model.get("structure") == "GLM_TIMES_HGB_OFFSET":
+        # P2.39: the HGB is a multiplier on the GLM level, so stars can exceed the tree ceiling.
+        mu = np.maximum(np.asarray(model["glm"].predict(x), dtype=float) * mu, 1e-8)
     out = features[[c for c in ("game_id", "player_id", "player_name", "game_date", "game_start_utc") if c in features]].copy()
     out["expected_points"] = mu
     for threshold, name in zip((1, 2, 3), ("prob_over_0_5", "prob_over_1_5", "prob_over_2_5")):

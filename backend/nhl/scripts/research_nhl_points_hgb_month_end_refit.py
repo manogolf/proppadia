@@ -46,7 +46,7 @@ from backend.nhl.scripts.research_nhl_points_hgb_star_ceiling import (  # noqa: 
 from backend.nhl.sog_hgb_features import position_groups  # noqa: E402
 
 OUT = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/month_end_2026-11-01"
-BASE = list(scorer.FEATURES)
+BASE = list(scorer.CORE_FEATURES)
 HGB_KW = json.loads(scorer.CONTRACT_PATH.read_text())["hyperparameters"]
 KEYS = ["game_id", "player_id"]
 LINES = (0.5, 1.5, 2.5)
@@ -145,7 +145,7 @@ def build_matrices(export: Path, since: str) -> dict:
     for name, frame in (("historical", rebuilt), ("2026", f26)):
         targets = frame[KEYS + ["game_date", "canonical_season"]]
         frame = frame.merge(extra_features(history, targets), on=KEYS, validate="one_to_one")
-        frame = frame.merge(pos, on="player_id", how="left")
+        frame = frame.drop(columns=["is_defense"], errors="ignore").merge(pos, on="player_id", how="left")
         frame["is_defense"] = frame.is_defense.fillna(0).astype(int)
         out[name] = frame
     out["market_2026"] = rows

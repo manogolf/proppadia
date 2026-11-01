@@ -34,7 +34,7 @@ class HgbOfficialTeamShotCaptureTests(unittest.TestCase):
             ])
             slate = pd.DataFrame([{"game_id": 2026020900, "player_id": 21, "game_date": "2026-04-30",
                 "game_start_utc": "2026-04-30T23:00:00Z", "team_id": 1, "is_home": True,
-                "home_team_id": 1, "away_team_id": 2}])
+                "home_team_id": 1, "away_team_id": 2, "is_defense": 0}])
             logs.to_csv(logs_path, index=False)
             outcomes.to_csv(outcomes_path, index=False)
             slate.to_csv(slate_path, index=False)

@@ -98,3 +98,15 @@ Used when training or live data were wrong, as with the PP-TOI refit
   A1-A4 were not run. The formula and SHRUNK_180 continue as shadows; the
   weekly evaluation tracks them against production.
 
+- **2026-11-01, Points: OFFSET+DEFENSE refit promoted without a shadow
+  period.** Operator decision (2026-10-30, approved to freeze 2026-11-01):
+  the star ceiling and the defensemen level were shown over the whole 2025
+  season, so they are corrected rather than observed. Evidence (NHL Backlog
+  P2.39): 2025 holdout (47,023 rows) paired log loss vs production x1000
+  0.5 -3.9, 1.5 -3.0, 2.5 -1.2, all intervals excluding zero; 2026 two-sided
+  lines 10-16..10-31 (4,057) -2.4 (interval reaches zero). A5 and A6 hold:
+  two refits identical, frozen artifact with identity `37771281…`, one-step
+  rollback to `fb701c67…`, live parity on 2026-11-01 (257 player-games, no
+  invalid predictions or ladder crossings, side flips 11/1/0 at
+  0.5/1.5/2.5). Known limitation: the defense flag is a level shift and
+  under-predicts the few defensemen scoring 1.0+ points per game.

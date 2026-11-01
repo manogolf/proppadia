@@ -42,7 +42,7 @@ from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer  # noqa: E
 
 REFIT = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/2026-10-24"
 OUT = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/star_ceiling_2026-10-28"
-FEATURES = scorer.FEATURES
+FEATURES = scorer.CORE_FEATURES
 HGB_KW = json.loads(scorer.CONTRACT_PATH.read_text())["hyperparameters"]
 LINES = (0.5, 1.5, 2.5)
 STAR_PPG = 1.2

@@ -2817,7 +2817,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.39 HGB Points star ceiling: GLM-offset candidate
 
-- Status: **MONTH-END REVIEW DONE 2026-11-01; OFFSET+DEFENSE recommended, awaiting freeze approval** (decided 2026-10-30) (research 2026-10-28, operator request). Production HGB Points
+- Status: **PRODUCTION 2026-11-01: OFFSET+DEFENSE frozen and live; star defensemen and shadow lane open** (decided 2026-10-30) (research 2026-10-28, operator request). Production HGB Points
   under-predicts top scorers: trees cannot go past the training range
   (`player_points_last10` p99 1.6); McDavid 10-28 (34 points in 12 games)
   gets 1.14 expected points, Under 1.5 at -216 against a book +122.
@@ -2932,11 +2932,44 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     model 59%), so it is calibration, not a star ceiling. The formula went
     420-174 (70.7%) on the same line 10-10..10-24. WATCH: recheck after the
     11-07 weekly; a SOG calibration fix would be its own item.
-  - Next (needs operator approval, production change): freeze OFFSET+DEFENSE
-    (reproducible refit, own identity, rollback to the 10-24 artifact), add
-    `is_defense` and the GLM-times-HGB structure to the live Points scorer,
-    live parity on a current slate with the 112-style 0.5 flips reviewed,
-    current HGB kept as a shadow.
+  - Superseded 2026-11-01: next step was freeze and parity (done below).
+- **Frozen and live 2026-11-01 (operator approval "Yes, freeze it").**
+  `freeze_nhl_points_hgb_offset_defense.py` wrote
+  `points_hgb_pp_corrected_refit/production_2026-11-01/`: training frame
+  (90,486 rows, SHA in contract), artifact SHA-256 `2e33fedc…`, model identity
+  `37771281…`; two refits and the frozen artifact identical on the 47,023-row
+  holdout (reproducibility PASS). Live wiring: `prepare_authoritative_inputs`
+  reads `nhl.players.position` in its read-only snapshot and writes
+  `is_defense` on the canonical slate; the exporter passes it through; the
+  scorer takes each artifact's `feature_columns` and applies
+  `GLM_TIMES_HGB_OFFSET`; `FEATURE_CONTRACT` comes from the contract
+  (`NHL_POINTS_LEADER_CORE_FEATURES_V2_DEFENSE`). Rollback: `CONTRACT_PATH =
+  PP_CORRECTED_CONTRACT_PATH`. Routine-integration evidence refreshed (gate J
+  PASS). Contract: capture contract "HGB Points fitted artifact"; promotion
+  rules "Operator decisions outside these routes".
+  - Live parity 2026-11-01 (production prepare and capture path, research
+    login, output under `tmp/p2_39_parity/`): 257 player-games, positions all
+    resolved (81 defensemen), deterministic replay PASS, 0 invalid, 0 ladder
+    crossings; this morning's production capture equals the old model on the
+    same features (max difference 2e-16). Flips 11/257 at 0.5 (6 defensemen
+    to Under, 5 forwards to Over), 1 at 1.5, 0 at 2.5. Mean expected:
+    forwards 0.424 -> 0.445, defensemen 0.355 -> 0.321. McDavid (8478402,
+    2.64 points/game) 1.07 -> 1.84.
+  - Known limitation: `is_defense` is a level shift, so the few high-scoring
+    defensemen are pulled down too far. 2025 holdout, defensemen with 10+
+    games: 0.8-1.0 points/game actual 0.88, old 0.77, new 0.74; 1.0-1.2
+    (199 rows) actual 1.01, old 0.96, new 0.88, 0.5 log loss 0.665 vs 0.653.
+    Live example 8480800 (1.33 points/game) 0.97 -> 0.64, Over 0.5 -> Under.
+    Possible fix at a later refit: a defense-by-scoring interaction (the
+    holdout has few such rows). WATCH in the weekly report.
+  - Shadow: the previous artifact is not yet a graded daily shadow lane. Its
+    predictions are a pure function of each capture's retained
+    `features.csv` (core ten columns) and the frozen artifact, so a paired
+    comparison can be rescored at any time; adding it to the weekly report is
+    open work.
+  - Noticed, not changed: `cli.py` labels the Points fitted model's
+    `canonical_artifact_path` with the V1 joblib path (stale since 10-24; the
+    SHA beside it comes from the capture and is correct).
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 

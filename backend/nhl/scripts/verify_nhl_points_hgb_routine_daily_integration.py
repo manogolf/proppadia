@@ -33,7 +33,7 @@ def build_evidence() -> dict:
             "official_final":True,"outcome_source_timestamp_utc":"2026-10-09T12:00:00Z"}
             for pid, goals, sog in ((11, 1, 4), (12, 0, 1))]).to_csv(outcomes_path,index=False)
         pd.DataFrame([{"game_id":2026020066,"player_id":11,"game_date":"2026-10-09",
-            "game_start_utc":"2026-10-10T01:00:00Z","team_id":1,"is_home":True,"home_team_id":1,"away_team_id":2}]).to_csv(slate_path,index=False)
+            "game_start_utc":"2026-10-10T01:00:00Z","team_id":1,"is_home":True,"home_team_id":1,"away_team_id":2,"is_defense":0}]).to_csv(slate_path,index=False)
         pd.DataFrame([{"game_id":2026020066,"player_id":11,"line":0.5,"prob_over":0.7}]).to_csv(phoenix_path,index=False)
         phoenix_sha = hashlib.sha256(phoenix_path.read_bytes()).hexdigest()
         capture = capture_from_files(logs_path=logs_path,outcomes_paths=[outcomes_path],slate_path=slate_path,
@@ -57,7 +57,7 @@ def build_evidence() -> dict:
             "scorer_sha256":sha(ROOT/"backend/nhl/scripts/score_nhl_points_hgb_shadow.py"),
             "model_artifact_sha256":sha(scorer.MODEL_PATH),
             "model_identity_sha256":json.loads(scorer.CONTRACT_PATH.read_text())["model_identity_sha256"],
-            "feature_contract":"NHL_POINTS_LEADER_CORE_FEATURES_V1",
+            "feature_contract":json.loads(scorer.CONTRACT_PATH.read_text())["feature_contract"],
             "history_contract":"120_DAY_LEGACY_BOUND",
             "deterministic_replay":capture["deterministic_replay"],
             "prediction_sha256":capture["prediction_sha256"],

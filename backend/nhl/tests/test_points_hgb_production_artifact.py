@@ -1,8 +1,13 @@
-"""HGB Points production artifact selection (P2.31): PP-corrected refit with V1 rollback."""
+"""HGB Points production artifact selection: OFFSET+DEFENSE (P2.39) with the
+PP-corrected refit (P2.31) as one-step rollback and V1 behind it."""
 import hashlib
 import json
 import unittest
 from pathlib import Path
+
+import joblib
+import numpy as np
+import pandas as pd
 
 from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
 
@@ -17,29 +22,52 @@ def identity(contract: dict) -> str:
 
 
 class ProductionArtifactTests(unittest.TestCase):
-    def test_production_uses_the_pp_corrected_refit(self):
-        self.assertEqual(scorer.CONTRACT_PATH, scorer.PP_CORRECTED_CONTRACT_PATH)
+    def test_production_uses_the_offset_defense_refit(self):
+        self.assertEqual(scorer.CONTRACT_PATH, scorer.OFFSET_DEFENSE_CONTRACT_PATH)
         contract = json.loads(scorer.CONTRACT_PATH.read_text())
         self.assertEqual(scorer.MODEL_PATH.name, contract["fitted_artifact"])
         self.assertEqual(sha(scorer.MODEL_PATH), contract["fitted_artifact_sha256"])
         self.assertEqual(identity(contract), contract["model_identity_sha256"])
-        self.assertTrue(contract["model_identity_sha256"].startswith("fb701c67"))
+        self.assertTrue(contract["model_identity_sha256"].startswith("37771281"))
         self.assertEqual(contract["reproducibility"]["status"], "PASS")
+        self.assertEqual(contract["feature_columns"], scorer.CORE_FEATURES + ["is_defense"])
+        self.assertEqual(scorer.FEATURES, contract["feature_columns"])
+        self.assertEqual(joblib.load(scorer.MODEL_PATH)["feature_columns"], contract["feature_columns"])
 
-    def test_same_recipe_and_role_as_v1(self):
-        new = json.loads(scorer.PP_CORRECTED_CONTRACT_PATH.read_text())
-        v1 = json.loads(scorer.V1_CONTRACT_PATH.read_text())
-        for key in ("research_model_id", "feature_columns", "history_contract", "hyperparameters", "thresholds", "target"):
-            self.assertEqual(new[key], v1[key], key)
-        self.assertEqual(new["feature_columns"], scorer.FEATURES)
-        self.assertEqual(new["supersedes_model_identity_sha256"], v1["model_identity_sha256"])
-        self.assertNotEqual(new["model_identity_sha256"], v1["model_identity_sha256"])
+    def test_same_recipe_role_and_targets_as_the_rollback(self):
+        new = json.loads(scorer.OFFSET_DEFENSE_CONTRACT_PATH.read_text())
+        old = json.loads(scorer.PP_CORRECTED_CONTRACT_PATH.read_text())
+        for key in ("research_model_id", "history_contract", "hyperparameters", "thresholds", "target"):
+            self.assertEqual(new[key], old[key], key)
+        self.assertEqual(new["supersedes_model_identity_sha256"], old["model_identity_sha256"])
+        self.assertNotEqual(new["model_identity_sha256"], old["model_identity_sha256"])
 
-    def test_v1_rollback_target_is_intact(self):
-        v1 = json.loads(scorer.V1_CONTRACT_PATH.read_text())
-        artifact = scorer.V1_CONTRACT_PATH.parent / v1["fitted_artifact"]
-        self.assertEqual(sha(artifact), v1["fitted_artifact_sha256"])
-        self.assertTrue(v1["model_identity_sha256"].startswith("a53f43d5"))
+    def test_rollback_targets_are_intact(self):
+        for path, prefix in ((scorer.PP_CORRECTED_CONTRACT_PATH, "fb701c67"), (scorer.V1_CONTRACT_PATH, "a53f43d5")):
+            contract = json.loads(path.read_text())
+            self.assertEqual(sha(path.parent / contract["fitted_artifact"]), contract["fitted_artifact_sha256"])
+            self.assertTrue(contract["model_identity_sha256"].startswith(prefix))
+            self.assertEqual(scorer.model_features(joblib.load(path.parent / contract["fitted_artifact"])),
+                             scorer.CORE_FEATURES)
+
+    def test_offset_lifts_stars_and_position_lowers_defensemen(self):
+        model = joblib.load(scorer.MODEL_PATH)
+        row = {"game_id": 1, "player_id": 1, "is_home": 1, "d10_sog_per60": 6.7, "attempts_d10_per60": 14.6,
+               "player_points_last10": 2.7, "current_season_points_prior": 34, "current_season_games_prior": 12,
+               "mean_toi_last10": 24.2, "mean_pp_toi_last10": 3.5, "team_d10_sf_per_game": 23.9,
+               "last10_team_sog_share": 0.113, "is_defense": 0}
+        star = scorer.score(pd.DataFrame([row]), model).expected_points.iloc[0]
+        previous = scorer.score(pd.DataFrame([row]), joblib.load(
+            scorer.PP_CORRECTED_CONTRACT_PATH.parent / "nhl_points_count_hgb_v1_pp_corrected.joblib")).expected_points.iloc[0]
+        self.assertGreater(star, previous)
+        defense = scorer.score(pd.DataFrame([{**row, "is_defense": 1}]), model).expected_points.iloc[0]
+        self.assertLess(defense, star)
+
+    def test_missing_position_stops_scoring(self):
+        row = {name: 1.0 for name in scorer.FEATURES}
+        row.update({"game_id": 1, "player_id": 1, "is_defense": np.nan})
+        with self.assertRaisesRegex(ValueError, "HGB_POSITION_FEATURE_INVALID"):
+            scorer.score(pd.DataFrame([row]), joblib.load(scorer.MODEL_PATH))
 
 
 if __name__ == "__main__":
