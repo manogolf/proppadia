@@ -1,4 +1,13 @@
 {
-  "python.defaultInterpreterPath": "/Users/jerrystrain/Projects/.proppadia-py311-scipy1152-macos12-arm64-candidate/bin/python",
-  "python.testing.pytestEnabled": true
+  "python.defaultInterpreterPath": "${workspaceFolder}/bin/python",
+  "python.testing.pytestEnabled": true,
+  "python.analysis.exclude": [
+    "**/.claude/worktrees",
+    "**/.venv",
+    "**/tmp",
+    "**/artifacts",
+    "**/backend/_legacy",
+    "**/node_modules",
+    "**/__pycache__"
+  ]
 }
