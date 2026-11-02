@@ -13,6 +13,14 @@ separately, BetOnline alone) is settled at one unit. EV uses the model's
 probability for that side. "Against the model" rows are the side the model
 did not pick; plus-money sides with positive model EV are the underdog-value
 set a win/loss table cannot show. Read-only; writes CSVs and a summary.
+
+Weekly mode (``--weekly-as-of``, from 2026-11-02; run by the weekly model
+evaluation schedule): the same settlement for the current production models'
+governed picks, read from the weekly evaluation's per-slate row cache, priced
+with each slate's retained quotes (``two_sided_lines.production_quotes``) at the
+best price across all books and at the operator's books. It tracks plus-money
+prices by band until there are enough picks to evaluate, and rewrites
+``docs/nhl/plus_money_price_view.md``.
 """
 from __future__ import annotations
 
@@ -21,7 +29,10 @@ import hashlib
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[3]
 
 MARKETS = {
     "sog": ("sog_rows.csv", "shots_on_goal", "baseline_v1"),
@@ -49,6 +60,31 @@ def _american(decimal: float) -> float:
     return round((decimal - 1) * 100) if decimal >= 2 else round(-100 / (decimal - 1))
 
 
+def settle_sides(rows: pd.DataFrame, best: pd.DataFrame, *, market: str, scope: str) -> list[pd.DataFrame]:
+    """Settle both sides of every graded row at one unit, at ``best``'s price for that side."""
+    keys = ["slate_date", "game_id", "player_id", "line"]
+    out = []
+    for side in ("OVER", "UNDER"):
+        priced = rows.merge(best[best.quote_side == side][keys + ["decimal_price", "sportsbook_key"]],
+                            on=keys, how="inner")
+        if priced.empty:
+            continue
+        p_side = priced.p_over if side == "OVER" else 1 - priced.p_over
+        actual = priced.selected_side.where(priced.grading_state == "WIN",
+                                            priced.selected_side.map({"OVER": "UNDER", "UNDER": "OVER"}))
+        won = actual == side
+        out.append(pd.DataFrame({
+            "market": market, "price_scope": scope, "slate_date": priced.slate_date, "game_id": priced.game_id,
+            "player_id": priced.player_id, "line": priced.line, "side": side,
+            "relation": (priced.selected_side == side).map({True: "MODEL_PICK", False: "AGAINST_MODEL"}),
+            "model_probability": p_side.round(4), "decimal_price": priced.decimal_price,
+            "american_price": priced.decimal_price.map(_american), "sportsbook_key": priced.sportsbook_key,
+            "model_ev": (p_side * priced.decimal_price - 1).round(4), "won": won,
+            "profit": won * (priced.decimal_price - 1) - (~won) * 1.0,
+        }))
+    return out
+
+
 def priced_rows(baseline: Path, export: Path, market: str) -> pd.DataFrame:
     rows_file, market_key, model_version = MARKETS[market]
     rows = pd.read_csv(baseline / rows_file)
@@ -70,24 +106,7 @@ def priced_rows(baseline: Path, export: Path, market: str) -> pd.DataFrame:
     out = []
     for scope, subset in (("best_price", quotes), ("betonline", quotes[quotes.sportsbook_key == "betonlineag"])):
         best = subset.sort_values("decimal_price").groupby(keys + ["quote_side"], as_index=False).tail(1)
-        for side in ("OVER", "UNDER"):
-            priced = rows.merge(best[best.quote_side == side][keys + ["decimal_price", "sportsbook_key"]],
-                                on=keys, how="inner")
-            if priced.empty:
-                continue
-            p_side = priced.p_over if side == "OVER" else 1 - priced.p_over
-            actual = priced.selected_side.where(priced.grading_state == "WIN",
-                                                priced.selected_side.map({"OVER": "UNDER", "UNDER": "OVER"}))
-            won = actual == side
-            out.append(pd.DataFrame({
-                "market": market, "price_scope": scope, "slate_date": priced.slate_date, "game_id": priced.game_id,
-                "player_id": priced.player_id, "line": priced.line, "side": side,
-                "relation": (priced.selected_side == side).map({True: "MODEL_PICK", False: "AGAINST_MODEL"}),
-                "model_probability": p_side.round(4), "decimal_price": priced.decimal_price,
-                "american_price": priced.decimal_price.map(_american), "sportsbook_key": priced.sportsbook_key,
-                "model_ev": (p_side * priced.decimal_price - 1).round(4), "won": won,
-                "profit": won * (priced.decimal_price - 1) - (~won) * 1.0,
-            }))
+        out.extend(settle_sides(rows, best, market=market, scope=scope))
     priced = pd.concat(out, ignore_index=True)
     priced["price_bucket"] = pd.Categorical(priced.american_price.map(_bucket), [b[2] for b in PRICE_BUCKETS], ordered=True)
     return priced
@@ -105,12 +124,226 @@ def summarize(frame: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
     return out[keys + ["n", "wins", "losses", "win_rate", "profit", "roi", "mean_model_ev"]]
 
 
+# --- Weekly plus-money view (2026-11-02) -------------------------------------
+# The operator's books (BetOnline, Novig, Kalshi; Pinnacle from 2026-11-02).
+MY_BOOKS = ("betonlineag", "novig", "kalshi", "pinnacle")
+PLUS_BANDS = ((100, 129, "+100 to +129"), (130, 169, "+130 to +169"), (170, 249, "+170 to +249"),
+              (250, 100000, "+250 or longer"))
+# Model fair odds for the side: the 8rain fair-odds filter starts at -133 (57.1%).
+FAIR_BANDS = ((0.0, 0.5714, "longer than -133"), (0.5714, 0.6667, "-133 to -200"), (0.6667, 1.01, "-200 or shorter"))
+SOG_HGB_START = "2026-10-25"   # production SOG became NHL_SOG_COUNT_HGB_V1
+LANE_MARKETS = {"sog": "shots_on_goal", "points": "player_points"}
+# Plus-money model picks at fair -133 or shorter, at the operator's books, per lane:
+# about +/-7 points of return noise at 200 picks.
+READY_PICKS = 200
+WEEKLY_OUT = ROOT / "artifacts/analysis/nhl/price_view"
+WEEKLY_DOC = ROOT / "docs/nhl/plus_money_price_view.md"
+
+
+def _band(value: float, bands) -> str | None:
+    return next((label for lo, hi, label in bands if lo <= value <= hi), None)
+
+
+def _fair_band(p: float) -> str:
+    return next(label for lo, hi, label in FAIR_BANDS if lo <= p < hi)
+
+
+def current_points_identity() -> str:
+    from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
+    return json.loads(scorer.CONTRACT_PATH.read_text())["model_identity_sha256"]
+
+
+def points_identity(summary: dict) -> str | None:
+    return (((summary.get("models") or {}).get("points") or {}).get("authority_context") or {}) \
+        .get("production", {}).get("fitted_model_identity_sha256")
+
+
+def lane_days(summaries: dict[str, dict], as_of: str) -> dict[str, list[str]]:
+    """Slates scored by the current production model of each lane."""
+    identity = current_points_identity()
+    return {"points": sorted(d for d, s in summaries.items() if d <= as_of and points_identity(s) == identity),
+            "sog": sorted(d for d in summaries if SOG_HGB_START <= d <= as_of)}
+
+
+def best_prices(quotes: list[dict]) -> pd.DataFrame:
+    """Best decimal price per player line and side, across all books and at the operator's books."""
+    frame = pd.DataFrame(quotes)
+    columns = ["lane", "game_id", "player_id", "line", "quote_side", "price_scope", "decimal_price", "sportsbook_key"]
+    if frame.empty:
+        return pd.DataFrame(columns=columns)
+    lanes = {market: lane for lane, market in LANE_MARKETS.items()}
+    frame = frame[frame.market_key.isin(lanes)].copy()
+    frame["lane"] = frame.market_key.map(lanes)
+    frame["decimal_price"] = pd.to_numeric(frame.decimal_price, errors="coerce")
+    frame["line"] = pd.to_numeric(frame.market_line, errors="coerce")
+    frame["game_id"] = pd.to_numeric(frame.game_id, errors="coerce")
+    frame["player_id"] = pd.to_numeric(frame.player_id, errors="coerce")
+    frame = frame.dropna(subset=["decimal_price", "line", "game_id", "player_id"])
+    frame = frame[frame.decimal_price > 1].astype({"game_id": "int64", "player_id": "int64"})
+    keys = ["lane", "game_id", "player_id", "line", "quote_side"]
+    out = []
+    for scope, subset in (("all_books", frame), ("my_books", frame[frame.sportsbook_key.isin(MY_BOOKS)])):
+        best = subset.sort_values(["decimal_price", "sportsbook_key"]).groupby(keys, as_index=False).tail(1)
+        out.append(best.assign(price_scope=scope))
+    return pd.concat(out, ignore_index=True)[columns] if out else pd.DataFrame(columns=columns)
+
+
+def _cached_prices(day: str, load_candidates) -> pd.DataFrame:
+    from backend.nhl import two_sided_lines
+    from backend.nhl.scripts import build_nhl_weekly_model_evaluation as weekly
+    snapshots = len(list((weekly.OPERATIONAL / "odds_observations" / "season=2026" / f"slate_date={day}").glob("observation=*")))
+    path = weekly.CACHE / "prices" / f"{day}_{snapshots}_v1.csv"
+    if path.is_file():
+        return pd.read_csv(path)
+    _, quotes = two_sided_lines.production_quotes(weekly.OPERATIONAL, day, candidates=load_candidates())
+    prices = best_prices(quotes)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    prices.to_csv(path, index=False)
+    return prices
+
+
+def weekly_priced(rows: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
+    """Settle one lane-day's graded rows on both sides at both price scopes."""
+    out = []
+    for lane in LANE_MARKETS:
+        lane_rows = rows[rows.lane == lane]
+        for scope in ("all_books", "my_books"):
+            best = prices[(prices.lane == lane) & (prices.price_scope == scope)].assign(
+                slate_date=lane_rows.slate_date.iloc[0] if len(lane_rows) else "")
+            if lane_rows.empty or best.empty:
+                continue
+            out.extend(settle_sides(lane_rows, best, market=lane, scope=scope))
+    if not out:
+        return pd.DataFrame()
+    priced = pd.concat(out, ignore_index=True)
+    priced["plus_band"] = priced.american_price.map(lambda a: _band(a, PLUS_BANDS))
+    priced["fair_band"] = priced.model_probability.map(_fair_band)
+    priced["price_bucket"] = priced.american_price.map(lambda a: _band(a, PRICE_BUCKETS) or "-100")
+    return priced
+
+
+def readiness(priced: pd.DataFrame) -> pd.DataFrame:
+    target = priced[(priced.relation == "MODEL_PICK") & (priced.price_scope == "my_books")
+                    & (priced.american_price >= 100) & (priced.model_probability >= 0.5714)]
+    rows = [{"market": lane, "picks": int((target.market == lane).sum()), "needed": READY_PICKS,
+             "ready": bool((target.market == lane).sum() >= READY_PICKS)} for lane in LANE_MARKETS]
+    return pd.DataFrame(rows)
+
+
+def _md_table(frame: pd.DataFrame, columns: list[str]) -> list[str]:
+    if frame.empty:
+        return ["", "No settled plus-money picks yet."]
+    head = ["", "| " + " | ".join(columns) + " | Picks | W-L | Win % | Model % | Return |",
+            "|" + "---|" * (len(columns) + 5)]
+    body = [f"| {' | '.join(str(getattr(r, c)) for c in columns)} | {r.n} | {r.wins}-{r.losses} | "
+            f"{100 * r.win_rate:.1f} | {100 * r.mean_probability:.1f} | {100 * r.roi:+.1f}% |"
+            for r in frame.itertuples()]
+    return head + body
+
+
+def plus_summary(frame: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
+    out = summarize(frame, keys)
+    mean_p = frame.groupby(keys, observed=True).model_probability.mean().reset_index(name="mean_probability")
+    return out.merge(mean_p, on=keys)
+
+
+def render_weekly(as_of: str, priced: pd.DataFrame, days: dict[str, list[str]], ready: pd.DataFrame) -> str:
+    plus = priced[priced.american_price >= 100]
+    picks = plus[plus.relation == "MODEL_PICK"]
+    lines = [f"# NHL plus-money price view (through {as_of})", "",
+             "Rebuilt weekly with the model evaluation. Every graded production pick of the current SOG and "
+             "Points models, settled at one unit on both sides at the best quoted price before the prediction: "
+             "across all books (members' view) and at the operator's books (BetOnline, Novig, Kalshi, Pinnacle). "
+             "Only plus-money prices are shown here; every price is in `priced_rows.csv` under "
+             f"`artifacts/analysis/nhl/price_view/weekly_{as_of}/`. Collection only: no filter or threshold "
+             "is chosen from these tables until the readiness counts are met.", "",
+             f"- Points: goals + assists model (`{current_points_identity()[:8]}…`), "
+             f"{len(days['points'])} slates ({days['points'][0] if days['points'] else '—'} to "
+             f"{days['points'][-1] if days['points'] else '—'}).",
+             f"- SOG: `NHL_SOG_COUNT_HGB_V1`, {len(days['sog'])} slates from {SOG_HGB_START}.", "",
+             "## Readiness", "",
+             "Plus-money model picks at fair -133 or shorter (8rain's fair-odds floor) at the operator's books; "
+             f"an evaluation is due once a market has {READY_PICKS}.", "",
+             "| Market | Picks | Needed | Ready |", "|---|---|---|---|"]
+    lines += [f"| {r.market} | {r.picks} | {r.needed} | {'yes' if r.ready else 'no'} |" for r in ready.itertuples()]
+    for scope, title in (("my_books", "Operator's books"), ("all_books", "All books")):
+        sub = picks[picks.price_scope == scope]
+        lines += ["", f"## Model picks at plus money — {title}", "", "By model fair odds and price:"]
+        lines += _md_table(plus_summary(sub, ["market", "side", "fair_band", "plus_band"]),
+                           ["market", "side", "fair_band", "plus_band"])
+        lines += ["", "By line:"]
+        lines += _md_table(plus_summary(sub, ["market", "line", "side"]), ["market", "line", "side"])
+    against = plus[(plus.relation == "AGAINST_MODEL") & (plus.price_scope == "my_books")]
+    lines += ["", "## Against the model at plus money — operator's books", ""]
+    lines += _md_table(plus_summary(against, ["market", "side", "plus_band"]), ["market", "side", "plus_band"])
+    lines += ["", "Return is profit per unit staked at the stated price; Model % is the model's mean probability "
+              "for the side. Small cells move by chance: about +/-10 points of return at 100 picks.", ""]
+    return "\n".join(lines)
+
+
+def run_weekly(as_of: str) -> dict:
+    from backend.nhl import two_sided_lines
+    from backend.nhl.scripts import build_nhl_weekly_model_evaluation as weekly
+    summaries = {d: s for d in weekly._days("2026-10-01", as_of) if (s := weekly._summary(d))}
+    days = lane_days(summaries, as_of)
+    loaded: list = []
+
+    def load_candidates() -> list:
+        if not loaded:
+            loaded.append(two_sided_lines.candidate_export.load_candidates(weekly.OPERATIONAL)[0])
+        return loaded[0]
+
+    frames = []
+    for day in sorted(set(days["points"]) | set(days["sog"])):
+        rows = [weekly._cached_rows(lane, day, summaries[day]["summary_identity"]).assign(lane=lane)
+                for lane in LANE_MARKETS if day in days[lane]]
+        rows = pd.concat(rows, ignore_index=True)
+        if rows.empty:
+            continue
+        rows = rows[rows.grading_state.isin(["WIN", "LOSS"])].copy()
+        rows["slate_date"] = rows.slate_date.astype(str)
+        rows["game_id"] = rows.game_id.astype("int64")
+        rows["player_id"] = rows.player_id.astype("int64")
+        rows["line"] = pd.to_numeric(rows.line).astype(float)
+        priced = weekly_priced(rows, _cached_prices(day, load_candidates))
+        if not priced.empty:
+            frames.append(priced)
+    priced = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=[
+        "market", "price_scope", "relation", "side", "line", "american_price", "model_probability",
+        "plus_band", "fair_band", "price_bucket", "won", "profit", "model_ev"])
+    out = WEEKLY_OUT / f"weekly_{as_of}"
+    out.mkdir(parents=True, exist_ok=True)
+    priced.to_csv(out / "priced_rows.csv", index=False)
+    ready = readiness(priced)
+    ready.to_csv(out / "readiness.csv", index=False)
+    plus = priced[priced.american_price >= 100]
+    summarize(plus, ["market", "price_scope", "relation", "side", "fair_band", "plus_band"]).to_csv(
+        out / "plus_money_bands.csv", index=False)
+    summarize(priced, ["market", "price_scope", "relation", "price_bucket"]).to_csv(
+        out / "by_relation_price.csv", index=False)
+    WEEKLY_DOC.write_text(render_weekly(as_of, priced, days, ready))
+    summary = {"contract": "NHL_PLUS_MONEY_PRICE_VIEW_WEEKLY_V1", "as_of": as_of,
+               "points_model_identity_sha256": current_points_identity(), "sog_model": "NHL_SOG_COUNT_HGB_V1",
+               "slates": days, "my_books": list(MY_BOOKS), "ready_picks": READY_PICKS,
+               "readiness": ready.to_dict(orient="records"), "doc": str(WEEKLY_DOC.relative_to(ROOT)),
+               "price_rule": "each book's latest quote preceding the prediction (EARLY/FINAL_PREGAME); best decimal per side"}
+    (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print("NHL_PLUS_MONEY_PRICE_VIEW=" + json.dumps({"as_of": as_of, "readiness": summary["readiness"]}))
+    return summary
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--baseline", type=Path, required=True)
-    parser.add_argument("--export", type=Path, required=True)
-    parser.add_argument("--out", type=Path, required=True)
+    parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--export", type=Path)
+    parser.add_argument("--out", type=Path)
+    parser.add_argument("--weekly-as-of", help="weekly plus-money view through this slate date")
     args = parser.parse_args()
+    if args.weekly_as_of:
+        run_weekly(args.weekly_as_of)
+        return 0
+    if not (args.baseline and args.export and args.out):
+        parser.error("--baseline, --export and --out are required without --weekly-as-of")
     args.out.mkdir(parents=True, exist_ok=False)
     priced = pd.concat([priced_rows(args.baseline, args.export, m) for m in MARKETS], ignore_index=True)
     priced.to_csv(args.out / "priced_rows.csv", index=False)

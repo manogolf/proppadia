@@ -2788,6 +2788,33 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.43 Plus-money picks: weekly collection until an evaluation is due
+
+- Status: **COLLECTING (from 2026-11-02)**. Operator: plus-money picks they
+  chose in the past "seem to do well enough to support including"; the
+  price view should "start using our newer model versions and run weekly
+  until enough collected data for an evaluation is obtained". Their own bets
+  are a separate question (8rain downloads; no report yet).
+- October evidence (updated Points model rescored, 0.5 line, best price at
+  BetOnline/Novig/Kalshi; retrospective and in-sample): every plus-money
+  model pick lost (Overs +100 to +130 15-27, Unders 35-51), mostly coin-flip
+  picks below fair -133; plus-money picks at fair -133 or shorter went 14-8
+  (too few). Heavy-favorite Unders (shorter than -300) 65-32, -22.4%.
+- Collection: `report_nhl_sog_points_price_view.py --weekly-as-of`, run by the
+  weekly evaluation schedule; `docs/nhl/plus_money_price_view.md`. Rows are
+  the governed graded picks of the current production models (Points slates
+  whose summary records the production identity `8cda6061…`; SOG HGB from
+  2026-10-25). Prices: each book's latest EARLY/FINAL_PREGAME quote before the
+  prediction (shared loader `two_sided_lines.production_quotes`), best across
+  all books and at the operator's books. Per-slate prices cached under the
+  weekly row cache (`prices/`).
+- First build through 2026-11-01: Points 1 slate (2 plus-money picks), SOG 8
+  slates; readiness SOG 10/200, Points 0/200.
+- Done when a market reaches 200 plus-money model picks at fair -133 or
+  shorter at the operator's books (the weekly console line says READY): then
+  evaluate by price band, side, line and fair odds, and propose a saved-search
+  setting or none. No threshold is chosen from the weekly tables before that.
+
 ### P2.42 Pinnacle in the NHL odds capture
 
 - Status: **ADDED 2026-11-02; first live captures to check** (operator: "I

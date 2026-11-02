@@ -36,18 +36,7 @@ def load_evidence(operational_root: Path, slate_date: str, *,
 
     ``candidates`` lets a multi-slate caller load the export candidates once.
     """
-    if candidates is None:
-        candidates, _ = candidate_export.load_candidates(Path(operational_root))
-    # Production SOG candidates come from the slate's retained production capture.
-    candidates = candidate_export.add_captured_sog_arms(
-        [row for row in candidates if row["slate_date"] == slate_date], Path(operational_root), slate_date)
-    candidates = [row for row in candidates
-                  if row["market_key"] in MARKETS.values() and row["model_role"] == "PRODUCTION"]
-    scoped, _ = candidate_export.scope_regular_season_pregame(candidates)
-    candidates = candidate_export.deduplicate_candidates(scoped)
-    quotes, _ = candidate_export.load_retained_quotes(
-        Path(operational_root), candidates, price_both_sides=True)
-    quotes = candidate_export.deduplicate_quotes(quotes)
+    candidates, quotes = production_quotes(operational_root, slate_date, candidates=candidates)
     sides: dict[tuple, set[str]] = {}
     implied: dict[tuple, dict[str, list[float]]] = {}
     for quote in quotes:
@@ -77,6 +66,24 @@ def load_evidence(operational_root: Path, slate_date: str, *,
     points = pd.DataFrame([row for row in candidates if row["market_key"] == MARKETS["points"]])
     return {"keys": keys, "market_p_over": market_p_over, "points_rows": _export_rows(points),
             "quote_count": len(quotes), "candidate_count": len(candidates)}
+
+
+def production_quotes(operational_root: Path, slate_date: str, *,
+                      candidates: list[dict[str, Any]] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Production SOG and Points candidates for one slate and each book's latest
+    quote on both sides that precedes the prediction (shared with the price view)."""
+    if candidates is None:
+        candidates, _ = candidate_export.load_candidates(Path(operational_root))
+    # Production SOG candidates come from the slate's retained production capture.
+    candidates = candidate_export.add_captured_sog_arms(
+        [row for row in candidates if row["slate_date"] == slate_date], Path(operational_root), slate_date)
+    candidates = [row for row in candidates
+                  if row["market_key"] in MARKETS.values() and row["model_role"] == "PRODUCTION"]
+    scoped, _ = candidate_export.scope_regular_season_pregame(candidates)
+    candidates = candidate_export.deduplicate_candidates(scoped)
+    quotes, _ = candidate_export.load_retained_quotes(
+        Path(operational_root), candidates, price_both_sides=True)
+    return candidates, candidate_export.deduplicate_quotes(quotes)
 
 
 def _export_rows(frame: pd.DataFrame) -> pd.DataFrame:

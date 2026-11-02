@@ -8,5 +8,11 @@
     "builder": "backend/nhl/scripts/build_nhl_weekly_model_evaluation.py"
   },
   "notes": "Enabled 2026-10-25 (operator). The daily run builds the weekly report on Sundays for the week ending Saturday; set enabled to false to stop automatic builds (status is still reported).",
-  "enabled_on": "2026-10-25"
+  "enabled_on": "2026-10-25",
+  "price_view": {
+    "enabled": true,
+    "builder": "backend/nhl/scripts/report_nhl_sog_points_price_view.py",
+    "summary_glob": "artifacts/analysis/nhl/price_view/weekly_*/summary.json",
+    "notes": "Enabled 2026-11-02 (operator: run weekly with the newer models until enough plus-money picks are collected for an evaluation). Runs after the weekly report for the same week; readiness in docs/nhl/plus_money_price_view.md. Set enabled to false to stop."
+  }
 }

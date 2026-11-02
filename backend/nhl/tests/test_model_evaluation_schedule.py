@@ -54,14 +54,32 @@ class ScheduleTests(unittest.TestCase):
 
         def runner(cmd, **kwargs):
             calls.append(cmd)
+            if "--weekly-as-of" in cmd:  # the plus-money price view for the same week
+                out = root / "artifacts/analysis/nhl/price_view/weekly_2026-10-31"
+                out.mkdir(parents=True)
+                (out / "summary.json").write_text("{}")
+                line = 'NHL_PLUS_MONEY_PRICE_VIEW={"readiness": [{"market": "sog", "picks": 12, "needed": 200, "ready": false}]}'
+                return SimpleNamespace(returncode=0, stdout=line, stderr="")
             (root / "docs/nhl/weekly_model_evaluation_2026-10-31.md").write_text("built")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         result = sched.check_and_run("2026-11-01", config_path=root / "config.json", root=root, runner=runner)
         self.assertEqual(result["status"], "BUILT")
         self.assertIn("2026-10-31", calls[0])
-        self.assertEqual(sched.check_and_run("2026-11-01", config_path=root / "config.json", root=root,
-                                             runner=runner)["status"], "CURRENT")
-        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[1][-2:], ["--weekly-as-of", "2026-10-31"])
+        self.assertEqual(result["price_view"]["status"], "BUILT")
+        self.assertIn("sog 12/200", sched.console_line(result))
+        again = sched.check_and_run("2026-11-01", config_path=root / "config.json", root=root, runner=runner)
+        self.assertEqual((again["status"], again["price_view"]["status"]), ("CURRENT", "CURRENT"))
+        self.assertEqual(len(calls), 2)
+
+    def test_price_view_runs_for_a_current_report_and_its_failure_does_not_block(self):
+        root = make_root(self, True, ["2026-10-31"])
+        result = sched.check_and_run("2026-11-02", config_path=root / "config.json", root=root,
+                                     runner=lambda *a, **k: SimpleNamespace(returncode=1, stdout="", stderr="boom"))
+        self.assertEqual(result["status"], "CURRENT")
+        self.assertEqual(result["price_view"], {"status": "BUILD_FAILED_NONBLOCKING", "as_of": "2026-10-31",
+                                                "error": "boom"})
+        self.assertIn("failed (non-blocking)", sched.console_line(result))
 
     def test_build_failure_and_bad_config_do_not_raise(self):
         root = make_root(self, True, [])

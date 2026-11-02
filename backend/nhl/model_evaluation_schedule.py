@@ -67,11 +67,12 @@ def check_and_run(today_et: str, *, config_path: Path = CONFIG, root: Path = ROO
         state = status(today_et, config, root)
     except Exception as error:  # schedule problems must not stop the daily run
         return {"status": "SCHEDULE_ERROR", "error": f"{type(error).__name__}:{error}"}
+    env = {**os.environ, "TMPDIR": str(root / "tmp")}
     if state["current"]:
-        return {**state, "status": "CURRENT"}
+        return {**state, "status": "CURRENT",
+                "price_view": run_price_view(state["latest_report_as_of"], config, root, runner, env)}
     if not state["enabled"]:
         return {**state, "status": "OVERDUE_SCHEDULE_DISABLED" if state["overdue"] or state["due_today"] else "NOT_DUE"}
-    env = {**os.environ, "TMPDIR": str(root / "tmp")}
     builder = root / config["weekly"]["builder"]
     result = runner([sys.executable, str(builder), "--as-of", state["expected_report_as_of"],
                      "--days", str(config["weekly"]["covers_days"])],
@@ -80,11 +81,46 @@ def check_and_run(today_et: str, *, config_path: Path = CONFIG, root: Path = ROO
         tail = (result.stderr or result.stdout or "").strip().splitlines()[-1:] or [""]
         return {**state, "status": "BUILD_FAILED_NONBLOCKING", "error": tail[0][:300]}
     return {**status(today_et, config, root), "status": "BUILT",
-            "report": f"docs/nhl/weekly_model_evaluation_{state['expected_report_as_of']}.md"}
+            "report": f"docs/nhl/weekly_model_evaluation_{state['expected_report_as_of']}.md",
+            "price_view": run_price_view(state["expected_report_as_of"], config, root, runner, env)}
+
+
+def run_price_view(as_of: str | None, config: dict[str, Any], root: Path, runner, env) -> dict[str, Any]:
+    """Weekly plus-money price view for the same week as the report, once per week; never raises."""
+    view = config.get("price_view") or {}
+    if not view.get("enabled") or not config.get("enabled") or not as_of:
+        return {"status": "DISABLED"}
+    try:
+        built = {re.search(r"weekly_(\d{4}-\d{2}-\d{2})", str(p)).group(1)
+                 for p in root.glob(view["summary_glob"])}
+        if built and max(built) >= as_of:  # a view through a later slate also covers this week
+            return {"status": "CURRENT", "as_of": max(built)}
+        result = runner([sys.executable, str(root / view["builder"]), "--weekly-as-of", as_of],
+                        cwd=root, env=env, capture_output=True, text=True, check=False)
+    except Exception as error:
+        return {"status": "BUILD_FAILED_NONBLOCKING", "as_of": as_of, "error": f"{type(error).__name__}:{error}"[:300]}
+    if result.returncode != 0:
+        tail = (result.stderr or result.stdout or "").strip().splitlines()[-1:] or [""]
+        return {"status": "BUILD_FAILED_NONBLOCKING", "as_of": as_of, "error": tail[0][:300]}
+    line = next((l for l in (result.stdout or "").splitlines() if l.startswith("NHL_PLUS_MONEY_PRICE_VIEW=")), "")
+    readiness = json.loads(line.split("=", 1)[1]).get("readiness", []) if line else []
+    return {"status": "BUILT", "as_of": as_of, "readiness": readiness}
 
 
 def console_line(result: dict[str, Any]) -> str:
     """One line for the daily console and receipt."""
+    line = _report_line(result)
+    view = result.get("price_view") or {}
+    if view.get("status") == "BUILT":
+        counts = ", ".join(f"{r['market']} {r['picks']}/{r['needed']}" + (" READY" if r["ready"] else "")
+                           for r in view.get("readiness", []))
+        line += f" Plus-money price view built ({counts}); docs/nhl/plus_money_price_view.md."
+    elif view.get("status") == "BUILD_FAILED_NONBLOCKING":
+        line += f" Plus-money price view failed (non-blocking): {view.get('error', '')}"
+    return line
+
+
+def _report_line(result: dict[str, Any]) -> str:
     s = result.get("status")
     if s == "CURRENT":
         return f"Weekly model evaluation: current (as of {result['latest_report_as_of']}); next {result['next_run_et']}."
