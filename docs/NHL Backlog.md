@@ -3025,6 +3025,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     (slate 11-01, 5 goalies): the Saves fitted-model evidence names
     `NHL_SAVES_SHOTS_X_SAVE_RATE_V1` (`saves_refit / shots_x_save_rate_v1`),
     and the 8rain export used that prediction file (same SHA-256).
+  - October month-end, refit vs published on the same 5,252 settled
+    starter-lines (404 starters; `month_end_model_evaluation_2026-10.md`):
+    log loss 0.568 vs 1.115, W-L 3677-1575 vs 3585-1667, largest band miss
+    14.1 vs 36.6 points (Phoenix's isotonic 24.5 map gave Unders 98% that won
+    62-68%). Open finding, not fixed: the refit runs low, 23.35 expected vs
+    23.79 actual saves (10-01..15 23.36 vs 23.45; 10-16..31 23.33 vs 24.21),
+    so Overs win above their confidence and near-even Unders at 21.5-25.5 lose
+    7-14 points more than predicted. A level change is a model change (no
+    calibration layer); revisit with November's starters.
   - Fixed 2026-11-01: the 8rain selector labelled every Saves row
     `NHL_SAVES_PHOENIX_PHOENIX_V2_REFERENCE` (a default, not the run's model;
     lineage only, the upload CSV has no model column).
@@ -3544,6 +3553,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     step (empty columns are not numeric); the exporter now casts the history
     counts first, so no history means zero counts. Found by
     `test_points_team_shots_evidence`.
+  - October month-end, goals + assists vs published on the same graded rows
+    (16,533 picks, every published player-game traced to its capture inputs;
+    `month_end_model_evaluation_2026-10.md`): log loss 0.3129 vs 0.3239, W-L
+    14212-2321 vs 14147-2386; two-sided 0.5127 vs 0.5322, 4393-1466 vs
+    4355-1504. Bands: two-sided Under 0.5 below .30 -3.4 (was -7.3); 1.5 and
+    2.5 Unders -2.6 (were -4.4 and -4.3). Still flagged: 0.5 Overs at
+    .50-.60 win 6-7 points above confidence; 0.5 Overs above .70 -5.8 (79
+    picks); 0.5 Unders at .45-.50 -5.1 (333). The model still trails the
+    market where it is 10+ above it on Unders. Retrospective (October lines
+    were also seen in the research).
   - Deferred: input watch training ranges for the four component inputs
     (it checks the ten core inputs only); 2026 totals into the prior-season
     table before the 2027 season; first natural run to confirm the receipt's
