@@ -3021,8 +3021,17 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Tests: `test_saves_production.py` (selection and rollback labels, long
     rows without calibration, frozen identity, lane layout with lineage) and
     `test_saves_refit_model.py`.
-  - First natural use: the next daily run and prediction-only poll; check the
-    receipt's Saves fitted-model evidence and `run_metadata.saves_model`.
+  - First natural use: daily run `nhldaily_20261102T001453851725Z_74ffe1ba`
+    (slate 11-01, 5 goalies): the Saves fitted-model evidence names
+    `NHL_SAVES_SHOTS_X_SAVE_RATE_V1` (`saves_refit / shots_x_save_rate_v1`),
+    and the 8rain export used that prediction file (same SHA-256).
+  - Fixed 2026-11-01: the 8rain selector labelled every Saves row
+    `NHL_SAVES_PHOENIX_PHOENIX_V2_REFERENCE` (a default, not the run's model;
+    lineage only, the upload CSV has no model column).
+    `select_nhl_points_saves_8rain_candidates.bind_saves_model_label` now reads
+    the family and version from the daily run's Saves evidence for the same
+    prediction artifact and fails closed if they are missing. Saves
+    `prediction_identity` hashes in lineage files change once with the label.
   - Line ladder 18.5-30.5 was set from observation without research
     (operator); unchanged, untested.
 

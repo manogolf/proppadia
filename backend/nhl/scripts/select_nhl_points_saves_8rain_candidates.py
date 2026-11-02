@@ -77,6 +77,29 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def bind_saves_model_label(source: pd.DataFrame, *, parent_run_id: str,
+                           daily_run_root: Path | None = None) -> dict[str, str]:
+    """The Saves model family and version recorded by the daily run that scored the source.
+
+    Read from the run's Saves fitted-model evidence for the same prediction
+    artifact, so the label follows the model that produced the numbers (the
+    refit from 2026-11-01, Phoenix V2 before; NHL Backlog P2.41)."""
+    if "prediction_artifact_sha256" not in source:
+        raise ValueError("SAVES_SOURCE_PROVENANCE_MISSING")
+    hashes = set(source.prediction_artifact_sha256.dropna().astype(str))
+    if len(hashes) != 1:
+        raise ValueError("SAVES_SOURCE_PROVENANCE_NOT_UNIFORM")
+    root = Path(daily_run_root or ROOT / "artifacts/operational/nhl/daily_runs")
+    receipt = json.loads((root / f"run_id={parent_run_id}" / "parent_receipt.json").read_text())
+    lane = (receipt.get("lanes") or {}).get("saves") or {}
+    evidence = next((item.get("fitted_model_evidence") or {} for item in lane.get("outputs", [])
+                     if item.get("sha256") in hashes), {})
+    if (not evidence.get("model_family") or not evidence.get("model_version")
+            or evidence.get("prediction_artifact_sha256") not in hashes):
+        raise ValueError("SAVES_DAILY_MODEL_IDENTITY_MISSING")
+    return {"model_family": str(evidence["model_family"]), "model_version": str(evidence["model_version"])}
+
+
 def bind_current_points_authority(source: pd.DataFrame, *, parent_run_id: str,
                                   daily_run_root: Path | None = None) -> dict[str, Any]:
     """Require the attached Points population to be the selected production artifact."""
@@ -679,6 +702,7 @@ def main() -> None:
     parent_run_id = next(iter(run_ids))
     points_source = pd.read_csv(args.points_csv)
     points_authority = bind_current_points_authority(points_source, parent_run_id=parent_run_id)
+    saves_label = bind_saves_model_label(pd.read_csv(args.saves_csv), parent_run_id=parent_run_id)
     output_dir = Path(args.out_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     prop_outputs: list[pd.DataFrame] = []
@@ -700,7 +724,7 @@ def main() -> None:
                 ambiguous_names=ambiguous_names, allowed_bets=allowed_bets,
                 parent_run_id=parent_run_id,
                 **({"model_family": points_authority["model_family"],
-                   "model_version": points_authority["model_version"]} if lane == "points" else {}),
+                   "model_version": points_authority["model_version"]} if lane == "points" else saves_label),
             )
             decisions_path = output_dir / f"nhl_{lane}_raw_prediction_decisions_{args.slate_date}.csv"
             selected_path = output_dir / f"nhl_{lane}_raw_mapped_predictions_{args.slate_date}.csv"
@@ -721,7 +745,7 @@ def main() -> None:
                 team_map=team_map, player_map=player_map,
                 ambiguous_player_keys=ambiguous, allowed_bets=allowed_bets,
                 **({"model_family": points_authority["model_family"],
-                   "model_version": points_authority["model_version"]} if lane == "points" else {}),
+                   "model_version": points_authority["model_version"]} if lane == "points" else saves_label),
             )
             decisions_path = output_dir / f"nhl_{lane}_candidate_decisions_{args.slate_date}.csv"
             selected_path = output_dir / f"nhl_{lane}_candidates_{args.slate_date}.csv"
@@ -737,6 +761,8 @@ def main() -> None:
         })
         if lane == "points":
             summary["production_authority_evidence"] = points_authority
+        else:
+            summary["model_label_evidence"] = saves_label
         summary_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
         lane_summaries[lane] = summary
         prop_outputs.append(selected)

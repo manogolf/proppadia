@@ -10,7 +10,7 @@ import pandas as pd
 
 from backend.nhl.eightrain_adapter import build_rows, UPLOAD_COLUMNS, validate_upload
 from backend.nhl.scripts.select_nhl_points_saves_8rain_candidates import (
-    DEFAULT_POLICIES, bind_current_points_authority, load_active_policy,
+    DEFAULT_POLICIES, bind_current_points_authority, bind_saves_model_label, load_active_policy,
     require_current_slate, select_lane, select_raw_lane,
 )
 from backend.nhl.scripts.build_points_with_market import parse_points_odds
@@ -271,6 +271,22 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
                 source.loc[0, "p_over"] = 0.4
                 with self.assertRaisesRegex(ValueError, "VALUES_NOT_HGB"):
                     bind_current_points_authority(source, parent_run_id=run_id, daily_run_root=root)
+
+    def test_saves_label_comes_from_the_run_that_scored_the_source(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            run_dir = root / "run_id=daily-saves"
+            run_dir.mkdir()
+            evidence = {"model_family": "saves_refit", "model_version": "shots_x_save_rate_v1",
+                        "prediction_artifact_sha256": "refit-sha"}
+            (run_dir / "parent_receipt.json").write_text(json.dumps({"lanes": {"saves": {
+                "status": "COMPLETE", "outputs": [{"sha256": "refit-sha", "fitted_model_evidence": evidence}]}}}))
+            source = pd.DataFrame({"prediction_artifact_sha256": ["refit-sha", "refit-sha"]})
+            self.assertEqual(bind_saves_model_label(source, parent_run_id="daily-saves", daily_run_root=root),
+                             {"model_family": "saves_refit", "model_version": "shots_x_save_rate_v1"})
+            with self.assertRaisesRegex(ValueError, "SAVES_DAILY_MODEL_IDENTITY_MISSING"):
+                bind_saves_model_label(source.assign(prediction_artifact_sha256="other-sha"),
+                                       parent_run_id="daily-saves", daily_run_root=root)
 
     def test_raw_sog_accepts_valid_probability_without_policy_or_market_quote(self):
         source = self.source(lines=(1.5, 2.5)).drop(columns=["price_over", "price_under", "p_over_mkt", "p_under_mkt", "attachment_status"])
