@@ -2800,9 +2800,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   until enough collected data for an evaluation is obtained". Their own bets
   are a separate question: `report_nhl_8rain_bets.py` (2026-11-02) reports them
   from the 8rain downloads, locally under `artifacts/analysis/nhl/8rain_bets/`
-  (not committed). First run, 10-23 to 11-01: 222 NHL bets, 6 Points/SOG
-  plus-money bets at a model underdog fair price or 18 plus-money prices in
-  all; 8rain closing-line value on 208 prop bets, mean +0.47%.
+  (not committed). First run, 10-23 to 11-01: 222 NHL bets; 19 prop bets at
+  plus-money prices, 3 of them at a model-underdog fair price; 8rain
+  closing-line value on 208 prop bets, mean +0.47%.
 - October evidence (updated Points model rescored, 0.5 line, best price at
   BetOnline/Novig/Kalshi; retrospective and in-sample): every plus-money
   model pick lost (Overs +100 to +130 15-27, Unders 35-51), mostly coin-flip
