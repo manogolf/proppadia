@@ -18,9 +18,11 @@ Weekly mode (``--weekly-as-of``, from 2026-11-02; run by the weekly model
 evaluation schedule): the same settlement for the current production models'
 governed picks, read from the weekly evaluation's per-slate row cache, priced
 with each slate's retained quotes (``two_sided_lines.production_quotes``) at the
-best price across all books and at the operator's books. It tracks plus-money
-prices by band until there are enough picks to evaluate, and rewrites
-``docs/nhl/plus_money_price_view.md``.
+best price across all books and at the operator's books. Its subject is the
+model's underdog side: sides whose model fair odds are plus money (the model
+gives them under 50%), banded by those fair odds, the 8rain fair-odds filter
+set to +100 or longer. It collects until every band has enough positive-EV
+picks at the operator's books, and rewrites ``docs/nhl/plus_money_price_view.md``.
 """
 from __future__ import annotations
 
@@ -129,13 +131,14 @@ def summarize(frame: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
 MY_BOOKS = ("betonlineag", "novig", "kalshi", "pinnacle")
 PLUS_BANDS = ((100, 129, "+100 to +129"), (130, 169, "+130 to +169"), (170, 249, "+170 to +249"),
               (250, 100000, "+250 or longer"))
-# Model fair odds for the side: the 8rain fair-odds filter starts at -133 (57.1%).
-FAIR_BANDS = ((0.0, 0.5714, "longer than -133"), (0.5714, 0.6667, "-133 to -200"), (0.6667, 1.01, "-200 or shorter"))
+# Model fair odds for the side. Plus money (model under 50%) uses the price bands;
+# the favorite side keeps the 8rain fair-odds floor at -133 (57.1%).
+FAIR_BANDS = ((0.5, 0.5714, "-100 to -132"), (0.5714, 0.6667, "-133 to -200"), (0.6667, 1.01, "-200 or shorter"))
 SOG_HGB_START = "2026-10-25"   # production SOG became NHL_SOG_COUNT_HGB_V1
 LANE_MARKETS = {"sog": "shots_on_goal", "points": "player_points"}
-# Plus-money model picks at fair -133 or shorter, at the operator's books, per lane:
-# about +/-7 points of return noise at 200 picks.
-READY_PICKS = 200
+# Positive-EV underdog sides at the operator's books, per lane and fair-odds band:
+# about +/-10 points of return noise at 100 picks. A lane is ready when every band is.
+READY_PER_BAND = 100
 WEEKLY_OUT = ROOT / "artifacts/analysis/nhl/price_view"
 WEEKLY_DOC = ROOT / "docs/nhl/plus_money_price_view.md"
 
@@ -144,7 +147,13 @@ def _band(value: float, bands) -> str | None:
     return next((label for lo, hi, label in bands if lo <= value <= hi), None)
 
 
+def fair_american(p: float) -> float:
+    return round(100 * (1 - p) / p) if p < 0.5 else round(-100 * p / (1 - p))
+
+
 def _fair_band(p: float) -> str:
+    if p < 0.5:
+        return _band(max(fair_american(p), 100), PLUS_BANDS)
     return next(label for lo, hi, label in FAIR_BANDS if lo <= p < hi)
 
 
@@ -217,17 +226,32 @@ def weekly_priced(rows: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     priced = pd.concat(out, ignore_index=True)
     priced["plus_band"] = priced.american_price.map(lambda a: _band(a, PLUS_BANDS))
+    priced["fair_american"] = priced.model_probability.map(fair_american)
     priced["fair_band"] = priced.model_probability.map(_fair_band)
     priced["price_bucket"] = priced.american_price.map(lambda a: _band(a, PRICE_BUCKETS) or "-100")
     return priced
 
 
+def underdogs(priced: pd.DataFrame) -> pd.DataFrame:
+    """Sides whose model fair odds are plus money (the model gives them under 50%)."""
+    return priced[priced.model_probability < 0.5]
+
+
 def readiness(priced: pd.DataFrame) -> pd.DataFrame:
-    target = priced[(priced.relation == "MODEL_PICK") & (priced.price_scope == "my_books")
-                    & (priced.american_price >= 100) & (priced.model_probability >= 0.5714)]
-    rows = [{"market": lane, "picks": int((target.market == lane).sum()), "needed": READY_PICKS,
-             "ready": bool((target.market == lane).sum() >= READY_PICKS)} for lane in LANE_MARKETS]
-    return pd.DataFrame(rows)
+    """Positive-EV underdog sides at the operator's books per lane and fair-odds band."""
+    target = underdogs(priced)
+    target = target[(target.price_scope == "my_books") & (target.model_ev > 0)]
+    rows = [{"market": lane, "fair_band": band, "picks": int(((target.market == lane) & (target.fair_band == band)).sum()),
+             "needed": READY_PER_BAND} for lane in LANE_MARKETS for _, _, band in PLUS_BANDS]
+    out = pd.DataFrame(rows)
+    out["ready"] = out.picks >= out.needed
+    return out
+
+
+def lane_readiness(ready: pd.DataFrame) -> list[dict]:
+    """One entry per lane for the console: picks in the thinnest band, and whether every band is ready."""
+    return [{"market": lane, "picks": int(g.picks.min()), "needed": READY_PER_BAND, "ready": bool(g.ready.all())}
+            for lane, g in ready.groupby("market", sort=False)]
 
 
 def _md_table(frame: pd.DataFrame, columns: list[str]) -> list[str]:
@@ -248,36 +272,39 @@ def plus_summary(frame: pd.DataFrame, keys: list[str]) -> pd.DataFrame:
 
 
 def render_weekly(as_of: str, priced: pd.DataFrame, days: dict[str, list[str]], ready: pd.DataFrame) -> str:
-    plus = priced[priced.american_price >= 100]
-    picks = plus[plus.relation == "MODEL_PICK"]
+    dogs = underdogs(priced)
+    keys = ["market", "line", "side", "fair_band"]
     lines = [f"# NHL plus-money price view (through {as_of})", "",
-             "Rebuilt weekly with the model evaluation. Every graded production pick of the current SOG and "
-             "Points models, settled at one unit on both sides at the best quoted price before the prediction: "
-             "across all books (members' view) and at the operator's books (BetOnline, Novig, Kalshi, Pinnacle). "
-             "Only plus-money prices are shown here; every price is in `priced_rows.csv` under "
-             f"`artifacts/analysis/nhl/price_view/weekly_{as_of}/`. Collection only: no filter or threshold "
-             "is chosen from these tables until the readiness counts are met.", "",
+             "Rebuilt weekly with the model evaluation. The subject is the model's underdog side: every side of a "
+             "graded production pick whose model fair odds are plus money (the model gives it under 50%), "
+             "banded by those fair odds, as the 8rain fair-odds filter would show it at +100 or longer. Each side "
+             "is settled at one unit at the best quoted price before the prediction, at the operator's books "
+             "(BetOnline, Novig, Kalshi, Pinnacle) and across all books (members' view). Positive EV means the "
+             "book's price is longer than the model's fair price. Every side and price is in `priced_rows.csv` "
+             f"under `artifacts/analysis/nhl/price_view/weekly_{as_of}/`. Collection only: no filter is chosen "
+             "from these tables until the readiness counts are met.", "",
              f"- Points: goals + assists model (`{current_points_identity()[:8]}…`), "
              f"{len(days['points'])} slates ({days['points'][0] if days['points'] else '—'} to "
              f"{days['points'][-1] if days['points'] else '—'}).",
              f"- SOG: `NHL_SOG_COUNT_HGB_V1`, {len(days['sog'])} slates from {SOG_HGB_START}.", "",
              "## Readiness", "",
-             "Plus-money model picks at fair -133 or shorter (8rain's fair-odds floor) at the operator's books; "
-             f"an evaluation is due once a market has {READY_PICKS}.", "",
-             "| Market | Picks | Needed | Ready |", "|---|---|---|---|"]
-    lines += [f"| {r.market} | {r.picks} | {r.needed} | {'yes' if r.ready else 'no'} |" for r in ready.itertuples()]
-    for scope, title in (("my_books", "Operator's books"), ("all_books", "All books")):
-        sub = picks[picks.price_scope == scope]
-        lines += ["", f"## Model picks at plus money — {title}", "", "By model fair odds and price:"]
-        lines += _md_table(plus_summary(sub, ["market", "side", "fair_band", "plus_band"]),
-                           ["market", "side", "fair_band", "plus_band"])
-        lines += ["", "By line:"]
-        lines += _md_table(plus_summary(sub, ["market", "line", "side"]), ["market", "line", "side"])
-    against = plus[(plus.relation == "AGAINST_MODEL") & (plus.price_scope == "my_books")]
-    lines += ["", "## Against the model at plus money — operator's books", ""]
-    lines += _md_table(plus_summary(against, ["market", "side", "plus_band"]), ["market", "side", "plus_band"])
-    lines += ["", "Return is profit per unit staked at the stated price; Model % is the model's mean probability "
-              "for the side. Small cells move by chance: about +/-10 points of return at 100 picks.", ""]
+             f"Positive-EV underdog sides at the operator's books; a market is ready for evaluation when every "
+             f"fair-odds band has {READY_PER_BAND}.", "",
+             "| Market | Fair odds | Picks | Needed | Ready |", "|---|---|---|---|---|"]
+    lines += [f"| {r.market} | {r.fair_band} | {r.picks} | {r.needed} | {'yes' if r.ready else 'no'} |"
+              for r in ready.itertuples()]
+    for scope, title in (("my_books", "operator's books"), ("all_books", "all books")):
+        sub = dogs[(dogs.price_scope == scope) & (dogs.model_ev > 0)]
+        lines += ["", f"## Underdog sides with positive EV — {title}", "", "By fair odds:"]
+        lines += _md_table(plus_summary(sub, ["market", "side", "fair_band"]), ["market", "side", "fair_band"])
+        lines += ["", "By line, side and fair odds:"]
+        lines += _md_table(plus_summary(sub, keys), keys)
+    every = dogs[dogs.price_scope == "my_books"]
+    lines += ["", "## Every underdog side, any EV — operator's books", "",
+              "Context: the same sides without the positive-EV condition."]
+    lines += _md_table(plus_summary(every, ["market", "side", "fair_band"]), ["market", "side", "fair_band"])
+    lines += ["", "Return is profit per unit at the stated price; Model % is the model's mean probability for the "
+              "side. Small cells move by chance: about +/-10 points of return at 100 picks.", ""]
     return "\n".join(lines)
 
 
@@ -317,15 +344,18 @@ def run_weekly(as_of: str) -> dict:
     ready = readiness(priced)
     ready.to_csv(out / "readiness.csv", index=False)
     plus = priced[priced.american_price >= 100]
+    summarize(underdogs(priced).assign(positive_ev=lambda f: f.model_ev > 0),
+              ["market", "price_scope", "positive_ev", "line", "side", "fair_band"]).to_csv(
+        out / "underdog_fair_bands.csv", index=False)
     summarize(plus, ["market", "price_scope", "relation", "side", "fair_band", "plus_band"]).to_csv(
-        out / "plus_money_bands.csv", index=False)
+        out / "plus_price_bands.csv", index=False)
     summarize(priced, ["market", "price_scope", "relation", "price_bucket"]).to_csv(
         out / "by_relation_price.csv", index=False)
     WEEKLY_DOC.write_text(render_weekly(as_of, priced, days, ready))
     summary = {"contract": "NHL_PLUS_MONEY_PRICE_VIEW_WEEKLY_V1", "as_of": as_of,
                "points_model_identity_sha256": current_points_identity(), "sog_model": "NHL_SOG_COUNT_HGB_V1",
-               "slates": days, "my_books": list(MY_BOOKS), "ready_picks": READY_PICKS,
-               "readiness": ready.to_dict(orient="records"), "doc": str(WEEKLY_DOC.relative_to(ROOT)),
+               "slates": days, "my_books": list(MY_BOOKS), "ready_per_band": READY_PER_BAND,
+               "readiness": lane_readiness(ready), "readiness_by_band": ready.to_dict(orient="records"), "doc": str(WEEKLY_DOC.relative_to(ROOT)),
                "price_rule": "each book's latest quote preceding the prediction (EARLY/FINAL_PREGAME); best decimal per side"}
     (out / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     print("NHL_PLUS_MONEY_PRICE_VIEW=" + json.dumps({"as_of": as_of, "readiness": summary["readiness"]}))

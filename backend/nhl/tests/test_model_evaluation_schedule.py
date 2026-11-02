@@ -58,7 +58,7 @@ class ScheduleTests(unittest.TestCase):
                 out = root / "artifacts/analysis/nhl/price_view/weekly_2026-10-31"
                 out.mkdir(parents=True)
                 (out / "summary.json").write_text("{}")
-                line = 'NHL_PLUS_MONEY_PRICE_VIEW={"readiness": [{"market": "sog", "picks": 12, "needed": 200, "ready": false}]}'
+                line = 'NHL_PLUS_MONEY_PRICE_VIEW={"readiness": [{"market": "sog", "picks": 12, "needed": 100, "ready": false}]}'
                 return SimpleNamespace(returncode=0, stdout=line, stderr="")
             (root / "docs/nhl/weekly_model_evaluation_2026-10-31.md").write_text("built")
             return SimpleNamespace(returncode=0, stdout="", stderr="")
@@ -67,7 +67,7 @@ class ScheduleTests(unittest.TestCase):
         self.assertIn("2026-10-31", calls[0])
         self.assertEqual(calls[1][-2:], ["--weekly-as-of", "2026-10-31"])
         self.assertEqual(result["price_view"]["status"], "BUILT")
-        self.assertIn("sog 12/200", sched.console_line(result))
+        self.assertIn("thinnest fair-odds band: sog 12/100", sched.console_line(result))
         again = sched.check_and_run("2026-11-01", config_path=root / "config.json", root=root, runner=runner)
         self.assertEqual((again["status"], again["price_view"]["status"]), ("CURRENT", "CURRENT"))
         self.assertEqual(len(calls), 2)

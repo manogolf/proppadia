@@ -2790,7 +2790,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.43 Plus-money picks: weekly collection until an evaluation is due
 
-- Status: **COLLECTING (from 2026-11-02)**. Operator: plus-money picks they
+- Status: **COLLECTING (from 2026-11-02)**. Subject (operator, 2026-11-02:
+  "I'm looking for fair odds plus money bands"): the model's underdog sides,
+  whose model fair odds are plus money (model under 50%), banded by those
+  fair odds, i.e. 8rain's fair-odds filter at +100 or longer, settled at the
+  book's price; positive EV when the book is longer than fair. Operator: plus-money picks they
   chose in the past "seem to do well enough to support including"; the
   price view should "start using our newer model versions and run weekly
   until enough collected data for an evaluation is obtained". Their own bets
@@ -2808,12 +2812,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   prediction (shared loader `two_sided_lines.production_quotes`), best across
   all books and at the operator's books. Per-slate prices cached under the
   weekly row cache (`prices/`).
-- First build through 2026-11-01: Points 1 slate (2 plus-money picks), SOG 8
-  slates; readiness SOG 10/200, Points 0/200.
-- Done when a market reaches 200 plus-money model picks at fair -133 or
-  shorter at the operator's books (the weekly console line says READY): then
-  evaluate by price band, side, line and fair odds, and propose a saved-search
-  setting or none. No threshold is chosen from the weekly tables before that.
+- First build through 2026-11-01: Points 1 slate, SOG 8 slates. Positive-EV
+  underdog sides at the operator's books by fair band: SOG 84 / 61 / 57 / 58,
+  Points 3 / 3 / 0 / 1 (+100 to +129, +130 to +169, +170 to +249, +250+).
+- Done when every fair-odds band of a market has 100 positive-EV underdog
+  sides at the operator's books (the weekly console line shows the thinnest
+  band and says READY): then evaluate by fair band, side and line, and propose
+  a saved-search setting (fair odds range, EV) or none. No threshold is chosen
+  from the weekly tables before that. The price-band tables of model picks at
+  plus prices stay in the data (`plus_price_bands.csv`) as context.
 
 ### P2.42 Pinnacle in the NHL odds capture
 

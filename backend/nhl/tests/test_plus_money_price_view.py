@@ -26,16 +26,22 @@ class PlusMoneyPriceViewTests(unittest.TestCase):
     def test_settlement_bands_and_readiness(self):
         rows = pd.DataFrame([{"slate_date": "2026-11-03", "game_id": 2026020300, "player_id": 7, "line": 0.5,
                               "p_over": 0.40, "selected_side": "UNDER", "grading_state": "WIN", "lane": "points"}])
-        prices = view.best_prices([quote("novig", "UNDER", 2.10), quote("novig", "OVER", 1.80)])
+        prices = view.best_prices([quote("novig", "UNDER", 1.80), quote("novig", "OVER", 2.80)])
         priced = view.weekly_priced(rows, prices)
         pick = priced[(priced.price_scope == "my_books") & (priced.relation == "MODEL_PICK")].iloc[0]
-        self.assertEqual((pick.side, pick.american_price, pick.plus_band, pick.fair_band),
-                         ("UNDER", 110, "+100 to +129", "-133 to -200"))
-        self.assertAlmostEqual(pick.profit, 1.10)
-        against = priced[(priced.price_scope == "my_books") & (priced.relation == "AGAINST_MODEL")].iloc[0]
-        self.assertEqual((against.side, bool(against.won), against.profit), ("OVER", False, -1.0))
-        ready = view.readiness(priced).set_index("market")
-        self.assertEqual((ready.loc["points", "picks"], bool(ready.loc["points", "ready"])), (1, False))
+        self.assertEqual((pick.side, pick.fair_american, pick.fair_band), ("UNDER", -150, "-133 to -200"))
+        self.assertAlmostEqual(pick.profit, 0.80)
+        # The model's underdog side: 40% is fair +150; the book's +180 is longer, so positive EV.
+        dog = view.underdogs(priced[priced.price_scope == "my_books"]).iloc[0]
+        self.assertEqual((dog.side, dog.fair_american, dog.fair_band, dog.american_price),
+                         ("OVER", 150, "+130 to +169", 180))
+        self.assertAlmostEqual(dog.model_ev, 0.12)
+        self.assertEqual((bool(dog.won), dog.profit), (False, -1.0))
+        ready = view.readiness(priced).set_index(["market", "fair_band"])
+        self.assertEqual(ready.loc[("points", "+130 to +169"), "picks"], 1)
+        self.assertEqual(ready.loc[("points", "+100 to +129"), "picks"], 0)
+        self.assertEqual(view.lane_readiness(ready.reset_index())[1],
+                         {"market": "points", "picks": 0, "needed": 100, "ready": False})
 
     def test_points_slates_follow_the_production_identity(self):
         current = view.current_points_identity()

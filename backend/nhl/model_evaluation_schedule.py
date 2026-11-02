@@ -114,7 +114,8 @@ def console_line(result: dict[str, Any]) -> str:
     if view.get("status") == "BUILT":
         counts = ", ".join(f"{r['market']} {r['picks']}/{r['needed']}" + (" READY" if r["ready"] else "")
                            for r in view.get("readiness", []))
-        line += f" Plus-money price view built ({counts}); docs/nhl/plus_money_price_view.md."
+        line += (f" Plus-money price view built (thinnest fair-odds band: {counts}); "
+                 "docs/nhl/plus_money_price_view.md.")
     elif view.get("status") == "BUILD_FAILED_NONBLOCKING":
         line += f" Plus-money price view failed (non-blocking): {view.get('error', '')}"
     return line
