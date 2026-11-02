@@ -54,6 +54,10 @@ def format_win_probability(p: float, representation: str = "american") -> str:
         return fair_american_d(p)
     if representation == "american":
         value = fair_american(p)
+        # 8rain shows an even "+100"/"-100" as fair -9900 (a 99-100% read), seen
+        # 2026-11-02; send +101/-101 instead (0.25 points, the pair still sums to 1).
+        if abs(value) == 100:
+            value = 101 if value > 0 else -101
         return f"{value:+d}" if value > 0 else str(value)
     raise ValueError("UNKNOWN_WIN_PERCENT_REPRESENTATION")
 

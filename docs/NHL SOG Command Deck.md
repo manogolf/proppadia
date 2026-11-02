@@ -125,6 +125,10 @@ authority.
 - `IMPORTER_ACCEPTANCE_D_SUFFIX = CONFIRMED` for d-suffixed American `WIN %` input.
 - Semantic equivalence on a current slate remains unverified. Keep the
   operational default unchanged until that check is completed.
+- Even odds: 8rain displayed a plain `+100`/`-100` `WIN %` as fair -9900
+  (2026-11-02, two SOG Over 1.5 rows at 49.97%). The default American
+  representation now sends `+101`/`-101` for any probability that rounds to
+  even (0.25 points; the pair still sums to 1). `eightrain_adapter.format_win_probability`.
 
 For an explicit inspectable run, invoke `select_sog_candidates_live.py` once
 with `--game-date "$SLATE"`, then pass that card to

@@ -98,6 +98,14 @@ class EightRainAdapterTests(unittest.TestCase):
         self.assertEqual(fair_american(.35), 186)
         self.assertEqual(fair_american(.65), -round(100 * .65 / .35))
 
+    def test_even_odds_are_sent_as_101_so_8rain_does_not_read_100_percent(self):
+        # 2026-11-02: SOG Over 1.5 at 49.97% went up as "+100" and 8rain showed fair -9900.
+        from backend.nhl.eightrain_adapter import parse_win_probability
+        over, under = format_win_probability(0.499669), format_win_probability(0.500331)
+        self.assertEqual((over, under), ("+101", "-101"))
+        self.assertAlmostEqual(parse_win_probability(over) + parse_win_probability(under), 1.0)
+        self.assertEqual(format_win_probability(0.51), "-104")
+
     def test_prop_code_selector_and_complementary_side(self):
         props = pd.DataFrame([{
             "game_id": 101, "game_date": "2026-09-30", "player_name": "Alex Example",
