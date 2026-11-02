@@ -28,11 +28,14 @@ ROOT = Path(__file__).resolve().parents[3]
 # Each contract carries its own model_identity_sha256 and feature_columns.
 # OFFSET+DEFENSE ran live 2026-11-01 morning only and was rolled back the same
 # day (operator decision; NHL Backlog P2.39); its artifact is kept for research.
+# GOALS_PLUS_ASSISTS (P2.39, 2026-11-01) sums a goals and an assists model, each
+# the production recipe on the core inputs plus the own-rate component inputs.
 V1_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_leader_validation/2026-10-09/evaluation_season=2025/shadow_contract.json"
 PP_CORRECTED_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-10-24/shadow_contract.json"
 OFFSET_DEFENSE_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01/shadow_contract.json"
-# Production artifact. One-step rollback: set CONTRACT_PATH = V1_CONTRACT_PATH.
-CONTRACT_PATH = PP_CORRECTED_CONTRACT_PATH
+GOALS_ASSISTS_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01_goals_assists/shadow_contract.json"
+# Production artifact. One-step rollback: set CONTRACT_PATH = PP_CORRECTED_CONTRACT_PATH.
+CONTRACT_PATH = GOALS_ASSISTS_CONTRACT_PATH
 MODEL_PATH = CONTRACT_PATH.parent / json.loads(CONTRACT_PATH.read_text())["fitted_artifact"]
 CORE_FEATURES = [
     "is_home", "d10_sog_per60", "attempts_d10_per60", "player_points_last10",

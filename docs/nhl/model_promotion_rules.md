@@ -117,6 +117,18 @@ Used when training or live data were wrong, as with the PP-TOI refit
   Lesson for A4: apply the segment check to player tiers (stars,
   high-scoring defensemen, playmakers, low-usage defensemen) as well as
   line-and-side, and treat any tier worse than production as blocking.
+- **2026-11-01, Points: goals + assists model promoted without a shadow
+  period.** Operator decision ("Yes, freeze it", then "Yes, cut over"), after
+  the P2.39 search for contributing data: modelling goals and assists
+  separately with each player's own goal and assist rates was the one
+  meaningful contributor. Evidence (NHL Backlog P2.39): 2025 holdout (47,023
+  rows) paired log loss vs production x1000 0.5 -5.24, 1.5 -5.26, 2.5 -2.16,
+  all intervals excluding zero; the A4 tier check (tiers with n>=200, low-usage
+  forwards excluded by operator decision) has no tier-line worse than
+  production. A5 and A6: two refits and the artifact identical, identity
+  `8cda6061…`, one-step rollback to `fb701c67…`, live parity (10-31 replay
+  inputs equal the freeze path to 1e-16; 11-01, 258 player-games, no invalid
+  values, monotone ladders, side flips 14/0/0). No calibration layer.
 - **2026-11-01, Saves: `NHL_SAVES_SHOTS_X_SAVE_RATE_V1` promoted without a
   shadow period.** Operator decision ("yes, cut over"). Production Phoenix V2
   predicted worse than a flat league mean on 2026 starters and was promoted

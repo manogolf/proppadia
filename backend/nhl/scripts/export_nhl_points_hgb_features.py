@@ -246,6 +246,8 @@ def add_component_features(result: pd.DataFrame, history: pd.DataFrame, slate: p
                                                                    validate="one_to_one")
     hist = history[["player_id", "game_id", "canonical_season", "game_date", "goals", "assists"]].rename(
         columns={"canonical_season": "season"})
+    # An empty history has object columns; counts are numbers (no history = zero counts).
+    hist = hist.astype({"player_id": "int64", "game_id": "int64", "season": "int64", "goals": float, "assists": float})
     features = component.add_features(targets, hist, tables["prior_season_totals"], league)
     return result.merge(features[["game_id", "player_id", *component.FEATURES]], on=["game_id", "player_id"],
                         how="left", validate="one_to_one")

@@ -9,9 +9,10 @@ selected in this process only, and scores the frozen model and production.
 - ``--replay-date``: a completed slate; component inputs and expected points
   from the live path must equal the freeze path (official outcomes through
   ``points_component_features``) for the same player-games.
-- ``--slate-date``: today's slate; validity, ladder, side flips vs production,
+- ``--slate-date``: today's slate; validity, ladder, side flips vs the PP-corrected
+  refit it replaced (production until 2026-11-01, now the rollback),
   levels for stars and defensemen.
-Writes only under ``--out``. Production is unchanged.
+Writes only under ``--out``; read-only.
 """
 from __future__ import annotations
 
@@ -70,7 +71,9 @@ def main() -> None:
     a = ap.parse_args()
     a.out.mkdir(parents=True, exist_ok=True)
     model = joblib.load(freeze.OUT / freeze.ARTIFACT)
-    production = joblib.load(scorer.MODEL_PATH)
+    # The model it replaced (now the rollback), so the comparison holds after cutover.
+    previous = json.loads(scorer.PP_CORRECTED_CONTRACT_PATH.read_text())
+    production = joblib.load(scorer.PP_CORRECTED_CONTRACT_PATH.parent / previous["fitted_artifact"])
     report = {"model_identity_sha256": json.loads(FROZEN_CONTRACT.read_text())["model_identity_sha256"]}
     if a.replay_date:
         live = live_features(a.replay_date, a.replay_asof_utc, a.out / f"work_{a.replay_date}")

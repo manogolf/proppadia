@@ -3055,7 +3055,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.39 HGB Points star ceiling: GLM-offset candidate
 
-- Status: **ROLLED BACK 2026-11-01: production is the 10-24 refit; own-rate research done, awaiting operator choice** (OFFSET+DEFENSE frozen and rolled back the same day) (decided 2026-10-30) (research 2026-10-28, operator request). Production HGB Points
+- Status: **IN PRODUCTION 2026-11-01: goals + assists model (identity `8cda6061…`), PP-corrected refit as rollback** (OFFSET+DEFENSE frozen and rolled back the same day) (decided 2026-10-30) (research 2026-10-28, operator request). Production HGB Points
   under-predicts top scorers: trees cannot go past the training range
   (`player_points_last10` p99 1.6); McDavid 10-28 (34 points in 12 games)
   gets 1.14 expected points, Under 1.5 at -216 against a book +122.
@@ -3496,8 +3496,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     defencemen +0.95 (k30 +25.5); early-season stars -55.1 (k30 -29.8).
   - Candidate for freeze: GOALS+ASSISTS (also gives anytime-goal and assist
     expectations directly). Not frozen.
-- **Frozen and parity-checked 2026-11-01 (operator: "Yes, freeze it"; not in
-  production).** One definition for training and live:
+- **Frozen and parity-checked 2026-11-01 (operator: "Yes, freeze it").** One definition for training and live:
   `backend/nhl/points_component_features.py` (counts from official outcomes
   only). `freeze_nhl_points_goals_assists.py` wrote
   `points_hgb_pp_corrected_refit/production_2026-11-01_goals_assists/`
@@ -3524,8 +3523,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Season rollover: the frozen prior-season table holds 2022-2025; scoring a
     2027 slate needs 2026 totals added (fails closed until then).
   - Tests `test_points_goals_assists.py`. Integration evidence refreshed.
-  - Open for the operator: cutover (`CONTRACT_PATH`, PP-corrected refit as
-    rollback), committing the frozen folder (git-ignored), shadow or not.
+  - **Cut over 2026-11-01 (operator: "Yes, cut over"; no shadow period).**
+    `CONTRACT_PATH = GOALS_ASSISTS_CONTRACT_PATH`; rollback
+    `PP_CORRECTED_CONTRACT_PATH`. Runtime files committed (model, contract,
+    prior-season totals, league rates); training and holdout frames stay
+    local. Integration evidence refreshed (gate J PASS). Rerun of live parity
+    through the unpatched production path: 11-01 predictions identical to the
+    pre-cutover parity (258 rows, difference 0). The parity script now
+    compares against the PP-corrected refit by path.
+  - Fixed in the cutover: a slate with no history rows crashed the component
+    step (empty columns are not numeric); the exporter now casts the history
+    counts first, so no history means zero counts. Found by
+    `test_points_team_shots_evidence`.
+  - Deferred: input watch training ranges for the four component inputs
+    (it checks the ten core inputs only); 2026 totals into the prior-season
+    table before the 2027 season; first natural run to confirm the receipt's
+    `model_identity` is `8cda6061…`.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 

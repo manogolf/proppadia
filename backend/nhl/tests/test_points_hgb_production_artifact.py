@@ -1,6 +1,7 @@
-"""HGB Points production artifact selection: the PP-corrected refit (P2.31) with
-V1 as rollback. OFFSET+DEFENSE (P2.39) was rolled back 2026-11-01; its local
-research artifact, when present, still scores through the same scorer."""
+"""HGB Points production artifact selection: the goals + assists model (P2.39)
+with the PP-corrected refit (P2.31) as one-step rollback and V1 behind it.
+OFFSET+DEFENSE (P2.39) was rolled back 2026-11-01; its local research
+artifact, when present, still scores through the same scorer."""
 import hashlib
 import json
 import unittest
@@ -26,16 +27,32 @@ OFFSET_ARTIFACT = scorer.OFFSET_DEFENSE_CONTRACT_PATH.parent / "nhl_points_count
 
 
 class ProductionArtifactTests(unittest.TestCase):
-    def test_production_uses_the_pp_corrected_refit(self):
-        self.assertEqual(scorer.CONTRACT_PATH, scorer.PP_CORRECTED_CONTRACT_PATH)
+    def test_production_uses_the_goals_assists_model(self):
+        from backend.nhl import points_component_features as pcf
+        self.assertEqual(scorer.CONTRACT_PATH, scorer.GOALS_ASSISTS_CONTRACT_PATH)
         contract = json.loads(scorer.CONTRACT_PATH.read_text())
         self.assertEqual(scorer.MODEL_PATH.name, contract["fitted_artifact"])
         self.assertEqual(sha(scorer.MODEL_PATH), contract["fitted_artifact_sha256"])
         self.assertEqual(identity(contract), contract["model_identity_sha256"])
-        self.assertTrue(contract["model_identity_sha256"].startswith("fb701c67"))
+        self.assertTrue(contract["model_identity_sha256"].startswith("8cda6061"))
+        self.assertEqual(contract["structure"], "GOALS_PLUS_ASSISTS")
+        self.assertEqual(contract["calibration_layer"], "NONE")
         self.assertEqual(contract["reproducibility"]["status"], "PASS")
-        self.assertEqual(scorer.FEATURES, scorer.CORE_FEATURES)
+        self.assertEqual(scorer.FEATURES, scorer.CORE_FEATURES + pcf.FEATURES)
         self.assertEqual(contract["feature_columns"], scorer.FEATURES)
+        for name in ("prior_season_totals", "league_rates"):
+            self.assertEqual(sha(scorer.CONTRACT_PATH.parent / contract[name]), contract[f"{name}_sha256"], name)
+        self.assertEqual(contract["supersedes_model_identity_sha256"],
+                         json.loads(scorer.PP_CORRECTED_CONTRACT_PATH.read_text())["model_identity_sha256"])
+
+    def test_pp_corrected_rollback_target_is_intact(self):
+        contract = json.loads(scorer.PP_CORRECTED_CONTRACT_PATH.read_text())
+        artifact = scorer.PP_CORRECTED_CONTRACT_PATH.parent / contract["fitted_artifact"]
+        self.assertEqual(sha(artifact), contract["fitted_artifact_sha256"])
+        self.assertEqual(identity(contract), contract["model_identity_sha256"])
+        self.assertTrue(contract["model_identity_sha256"].startswith("fb701c67"))
+        self.assertEqual(contract["feature_columns"], scorer.CORE_FEATURES)
+        self.assertEqual(scorer.model_features(joblib.load(artifact)), scorer.CORE_FEATURES)
 
     def test_same_recipe_and_role_as_v1(self):
         new = json.loads(scorer.PP_CORRECTED_CONTRACT_PATH.read_text())

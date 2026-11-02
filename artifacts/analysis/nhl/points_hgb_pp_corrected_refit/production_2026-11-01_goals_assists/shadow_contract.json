@@ -1,0 +1,108 @@
+{
+  "schema_version": "NHL_POINTS_RESEARCH_SHADOW_CONTRACT_V1",
+  "research_model_id": "NHL_POINTS_COUNT_HGB_V1",
+  "authority": "PRODUCTION_GOALS_PLUS_ASSISTS_REFIT",
+  "structure": "GOALS_PLUS_ASSISTS",
+  "structure_semantics": "expected points = goals HGB + assists HGB (production recipe each); Poisson ladder on the sum",
+  "training_seasons": [
+    2023,
+    2024
+  ],
+  "training_rows": 90486,
+  "evaluation_season_confirmation": 2025,
+  "training_source_frame_sha256": "c05d3102fa001e93e456cf1cfe1005ca916ff55c0fa04148743e5607016ff7af",
+  "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V3_COMPONENT_RATES",
+  "feature_columns": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share",
+    "own_rate_k30",
+    "own_games",
+    "goal_rate",
+    "assist_rate"
+  ],
+  "component_feature_module": "backend/nhl/points_component_features.py",
+  "component_feature_module_sha256": "38d237a24e83a949c7e3d61348f1a70d4f449403209c87a50993bcdd17662ac0",
+  "prior_season_totals": "prior_season_totals.csv",
+  "prior_season_totals_sha256": "fa69d10178adce0578580cb894b71c3d4db766b1a5f840d730d8c1be10ed6194",
+  "league_rates": "league_rates.csv",
+  "league_rates_sha256": "01a6cff7dc9e3cb69164274c7d43a11e051513dcf2dfbe33bb8a7bdb1cf3f323",
+  "prior_totals_seasons": [
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "history_contract": "120_DAY_LEGACY_BOUND",
+  "history_semantics": "strict prior game_date; same-day excluded; 120-day bound; last 10 player games",
+  "current_season_history": "official outcomes from the season's first game (not only 120 days) for the component rates",
+  "target": "official goals + official assists",
+  "distribution": "Poisson observation distribution",
+  "thresholds": {
+    "over_0_5": "P(X >= 1)",
+    "over_1_5": "P(X >= 2)",
+    "over_2_5": "P(X >= 3)"
+  },
+  "hyperparameters": {
+    "loss": "poisson",
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "l2_regularization": 1.0,
+    "early_stopping": false,
+    "random_state": 42
+  },
+  "calibration_layer": "NONE",
+  "fitted_artifact": "nhl_points_goals_assists_v1.joblib",
+  "fitted_artifact_sha256": "c9ac141db12e2c5e0a8bb4fd4e0db658bd0da2f2d1acd4d6f9f1c93c0d6fbeec",
+  "scorer": "backend/nhl/scripts/freeze_nhl_points_goals_assists.py",
+  "scorer_sha256": "ce6ad2be084287f4424c9e603f34c2d8fcd07450559db087949e098adbc7b054",
+  "prospective_only": false,
+  "production_replacement": true,
+  "initial_shadow_prediction": "NOT_APPLICABLE",
+  "fitted_revision": "GOALS_ASSISTS_2026_11_01",
+  "revision_reason": "P2.39: goals and assists modelled separately with own goal and assist rates; beat the own-rate model at every line on the 2025 holdout",
+  "missing_value_policy": "fill zero before scaling (frozen recipe); unknown attempts from SOG rate",
+  "supersedes_model_identity_sha256": "fb701c671f24acc894ec8195c5f951136f2b521036f0f37e966b85ba726fa4ca",
+  "supersedes_fitted_artifact_sha256": "94e75216d278d99dd54193b448476e43884c8170115e7e787df4b8d4d9da8533",
+  "holdout_2025_vs_production_x1000": {
+    "0.5": {
+      "diff_x1000": -5.24,
+      "ci": [
+        -6.67,
+        -3.88
+      ]
+    },
+    "1.5": {
+      "diff_x1000": -5.26,
+      "ci": [
+        -6.76,
+        -3.89
+      ]
+    },
+    "2.5": {
+      "diff_x1000": -2.16,
+      "ci": [
+        -3.06,
+        -1.31
+      ]
+    }
+  },
+  "reproducibility": {
+    "refit_runs": 2,
+    "csv_parsing": "float_precision=round_trip",
+    "max_abs_diff_between_refits": 0.0,
+    "max_abs_diff_vs_frozen": 0.0,
+    "holdout_rows": 47023,
+    "frozen_prediction_sha256": "70715ec138191bff4c9d3a3d7cb8911b645d30c54e82523ef2c96cb0932041c3",
+    "status": "PASS"
+  },
+  "production_status": "NOT_IN_PRODUCTION",
+  "model_identity_sha256": "8cda606196cc9d37b34c8a2fc633065c781e228361d32f651510c5ed4bc0a155"
+}
