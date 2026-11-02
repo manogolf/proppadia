@@ -2788,6 +2788,40 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.42 Pinnacle in the NHL odds capture
+
+- Status: **ADDED 2026-11-02; first live captures to check** (operator: "I
+  want it for mainlines and props if available ... it's quality" driving it,
+  not cost; members with wider book access are the primary audience, and the
+  operator reaches Pinnacle prices through its clone bet105).
+- Before: the NHL capture asked only for regions `us`, `us2`, `us_ex`, so
+  Pinnacle (the provider's `eu` region) was never in NHL data. MLB pulled it
+  by name for game lines only (`acquire_mlb_pinnacle_movement_panel_v1.py`).
+- Probe 2026-11-02 (9 credits, `tmp/pinnacle_probe/`, not committed): Pinnacle
+  returned h2h/spreads/totals for all 4 games and player points, SOG and
+  assists for both games tested (26-32 outcomes per market); no saves or
+  goals for those games. Against the morning capture: props margin 7.0%
+  (typical book 7.0%, Novig 3.5%, BetOnline 6.4%), no-vig within about 1.4
+  pts of consensus, best price across all books on 3% of prop sides and 12%
+  among the operator's books (about 3 cents); game-line margin 2.8% (books
+  4-5%, Novig 0.5%, Kalshi 1.0%), no-vig within 0.5 pts of consensus.
+- Change: a second per-event call by bookmaker name, merged into the same
+  event (capture contract, "Odds observations"; plan contract V3). The `eu`
+  region was rejected because no reader filters books, so every market
+  average would have taken in a dozen other books. +8 credits per paid
+  event (32; 512 at the 16-game ceiling). The four stale capture tests from
+  the `totals` addition (21 -> 24 credits per event) were corrected in the
+  same change, along with three scorer tests left stale by the 2026-11-01
+  cutovers (Points core-feature fixture; Saves lineage test pinned to the
+  Phoenix V2 rollback path).
+- Moneyline: the models' inputs are team statistics, so Pinnacle's h2h only
+  joins the prices the lane records and evaluates against.
+- Next: on the next daily, CLOSING and EARLY_TRIAL captures, confirm
+  `supplemental_merged_count` equals the bound events and Pinnacle rows
+  appear in `normalized_odds.jsonl`. Then compare, over a week, Pinnacle prop
+  coverage by time of day (props may post later) and Saves coverage, and use
+  its CLOSING prices as a closing-line benchmark beside the consensus.
+
 ### P2.41 Goalie game logs missing for most of 2025-26; Saves model reads team ID as a number
 
 - Status: **2025 GAP FILLED; SAVES REFIT IN PRODUCTION 2026-11-01 (Phoenix V2 rollback); reconciliation

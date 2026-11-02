@@ -9,7 +9,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from backend.nhl.scripts.grade_nhl_points_hgb_shadow import grade
-from backend.nhl.scripts.score_nhl_points_hgb_shadow import FEATURES, score
+from backend.nhl.scripts.score_nhl_points_hgb_shadow import CORE_FEATURES, score
 from backend.nhl.scripts.export_nhl_points_hgb_features import build_features, normalize_history, normalize_slate
 from backend.nhl.points_hgb_shadow import (
     build_production_prediction_artifact, capture_from_files,
@@ -23,15 +23,16 @@ from backend.nhl.points_hgb_promotion import (
     selected_production_authority,
 )
 
+# A bare estimator scores the ten core inputs; production artifacts list their own (P2.39).
 
 class FixedCountModel:
     def predict(self, x):
-        assert list(x.columns) == FEATURES
+        assert list(x.columns) == CORE_FEATURES
         return np.array([0.5, 1.5])
 
 
 def test_frozen_feature_order_scoring_and_poisson_coherence():
-    frame = pd.DataFrame({"game_id": [1, 2], "player_id": [11, 22], **{c: [0.0, 1.0] for c in FEATURES}})
+    frame = pd.DataFrame({"game_id": [1, 2], "player_id": [11, 22], **{c: [0.0, 1.0] for c in CORE_FEATURES}})
     result = score(frame, FixedCountModel())
     assert list(result.columns[-4:]) == ["expected_points", "prob_over_0_5", "prob_over_1_5", "prob_over_2_5"]
     assert np.all(result.prob_over_0_5 >= result.prob_over_1_5)
@@ -39,7 +40,7 @@ def test_frozen_feature_order_scoring_and_poisson_coherence():
 
 
 def test_shadow_scorer_fails_closed_on_missing_frozen_feature():
-    frame = pd.DataFrame({"game_id": [1], "player_id": [11], **{c: [1.0] for c in FEATURES[:-1]}})
+    frame = pd.DataFrame({"game_id": [1], "player_id": [11], **{c: [1.0] for c in CORE_FEATURES[:-1]}})
     with pytest.raises(ValueError, match="MISSING_FROZEN_HGB_FEATURES"):
         score(frame, FixedCountModel())
 

@@ -36,6 +36,9 @@ There is still one odds acquisition in the daily path; the Moneyline capture
 reuses that immutable observation.
 On 2026-11-01 `totals` was added (8 markets per region, 24 credits per paid
 event, 384 at the cap); the Moneyline lane does not read it.
+On 2026-11-02 Pinnacle was added by name in a second per-event call (8 more
+credits per paid event, 512 at the cap; Daily Capture Contract, Odds
+observations). Its `h2h` prices join the observation like any book.
 
 ## Target-specific chronology
 

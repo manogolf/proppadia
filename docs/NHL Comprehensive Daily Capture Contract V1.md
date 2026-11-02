@@ -926,6 +926,31 @@ per-game CLOSING capture): `h2h`, `totals` (game total goals, from 2026-11-01),
 retained in the observation's `normalized_odds.jsonl` like every market; no lane
 reads them yet (input for the Points team-goals research, NHL Backlog P2.39).
 
+Regions are `us`, `us2` and `us_ex` (`backend/nhl/odds_regions.py`). Books
+outside those regions are requested by name in a second call per event
+(`NHL_ODDS_SUPPLEMENTAL_BOOKMAKERS`, currently `pinnacle`, operator-approved
+2026-11-02 for game lines and props). The provider ignores `regions` when
+`bookmakers` is given, so this second call leaves the region books exactly as
+before; adding the `eu` region instead would have brought a dozen other books
+into every market average. Request plan contract
+`NHL_CANONICAL_EVENT_ODDS_REQUEST_PLAN_V3`:
+- Credits per paid event are markets x regions plus markets x one region per
+  ten named books: 24 + 8 = 32, 512 at the 16-game ceiling. The attempt
+  ceiling is 1 + 2 x events.
+- The named books' response is merged into the same event's `bookmakers`
+  (only the books asked for, never a duplicate key), so `normalized_odds.jsonl`
+  and every reader see one more book.
+- A failed or malformed named-book response does not fail the observation:
+  the region books are already complete. The summary records
+  `supplemental_request_count`, `supplemental_merged_count` and
+  `supplemental_failed_event_ids`. A named-book credit header above its plan
+  fails the observation closed (`FAILED_BUDGET_GUARD`), as for the region call.
+- `paid_event_odds_request_count` still counts region calls only.
+- An explicit replay (`reuse_observation_dir`) must match the books too, so a
+  package captured before 2026-11-02 cannot be reused under the new default.
+- The CLOSING and EARLY_TRIAL captures use the same function and also get
+  Pinnacle.
+
 The classifications are:
 
 - `CAPTURED_NONEMPTY`: usable price rows exist and at least one provider event

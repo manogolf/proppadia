@@ -824,7 +824,8 @@ class BoundedOddsTopologyTests(unittest.TestCase):
         }]}
 
     def run_http(self, root, canonical, events, *, phase="EARLY", paid_headers=None,
-                 credit_rules=None, paid_statuses=None):
+                 credit_rules=None, paid_statuses=None, bookmakers=""):
+        # The region request alone, unless a test names supplemental books.
         discovery = self.Response(events, headers={
             "content-type": "application/json", "x-requests-last": "0",
             "x-requests-remaining": "1000",
@@ -850,6 +851,7 @@ class BoundedOddsTopologyTests(unittest.TestCase):
                 parent_daily_run_id="bounded-run", canonical_games=canonical,
                 provider=RequestsOddsProvider("secret", session=session), authorized=True,
                 now=datetime(2026, 9, 24, 8, tzinfo=UTC), credit_rules=credit_rules,
+                bookmakers=bookmakers,
             )
         return result, transport
 
@@ -871,7 +873,7 @@ class BoundedOddsTopologyTests(unittest.TestCase):
             self.assertEqual(claim["canonical_game_set_hash"],
                              "92d828be583187109116de1eccda70c2bf8563288ec6ad39ce3976da43a9eec3")
             self.assertEqual(claim["regions"], ["us", "us2", "us_ex"])
-            self.assertEqual(claim["maximum_credits"], 231)
+            self.assertEqual(claim["maximum_credits"], 264)
             self.assertEqual(len(claim["selected_provider_event_ids"]), 11)
 
     def test_empty_unmatched_and_partial_discovery_never_expand_paid_plan(self):
@@ -1010,11 +1012,17 @@ class BoundedOddsTopologyTests(unittest.TestCase):
         self.assertEqual(derive_odds_credit_bound(
             paid_request_count=11,
             markets=NHL_COMPREHENSIVE_PROP_MARKETS,
-            regions=("us", "us2", "us_ex")), (0, 21, 231))
+            regions=("us", "us2", "us_ex")), (0, 24, 264))
+        # Named books: one region's cost per group of ten, in their own request.
+        self.assertEqual(derive_odds_credit_bound(
+            paid_request_count=11, markets=NHL_COMPREHENSIVE_PROP_MARKETS,
+            regions=("us", "us2", "us_ex"), bookmakers=("pinnacle",)), (0, 32, 352))
+        self.assertEqual(inspect.signature(capture_odds_observation).parameters["bookmakers"].default,
+                         "pinnacle")
 
     def test_comprehensive_market_defaults_include_alternates_and_update_credit_ceiling(self):
         expected = (
-            "h2h",
+            "h2h", "totals",
             "player_shots_on_goal", "player_shots_on_goal_alternate",
             "player_total_saves", "player_total_saves_alternate",
             "player_points", "player_points_alternate",
@@ -1026,7 +1034,7 @@ class BoundedOddsTopologyTests(unittest.TestCase):
                          ",".join(expected))
         self.assertEqual(derive_odds_credit_bound(
             paid_request_count=NHL_ABSOLUTE_GAME_REQUEST_CEILING,
-            markets=expected, regions=("us", "us2", "us_ex")), (0, 21, 336))
+            markets=expected, regions=("us", "us2", "us_ex")), (0, 24, 384))
 
     def test_exact_alternate_market_keys_keep_kalshi_identity_and_do_not_conflate(self):
         payload = [{"id": "event", "bookmakers": [{"key": "kalshi", "markets": [
@@ -1055,10 +1063,10 @@ class BoundedOddsTopologyTests(unittest.TestCase):
             ([{"content-type": "application/json"}, {"content-type": "application/json"}],
              "CAPTURED_NONEMPTY", 2),
             ([{"content-type": "application/json", "x-requests-last": "bad"},
-             {"content-type": "application/json", "x-requests-last": "21"}],
+             {"content-type": "application/json", "x-requests-last": "24"}],
              "FAILED_BUDGET_GUARD", 1),
-            ([{"content-type": "application/json", "x-requests-last": "22"},
-              {"content-type": "application/json", "x-requests-last": "21"}],
+            ([{"content-type": "application/json", "x-requests-last": "25"},
+              {"content-type": "application/json", "x-requests-last": "24"}],
              "FAILED_BUDGET_GUARD", 1),
         ]
         for index, (headers, classification, paid) in enumerate(cases):
@@ -1067,6 +1075,57 @@ class BoundedOddsTopologyTests(unittest.TestCase):
                 self.assertEqual(result.classification, classification)
                 self.assertEqual(result.summary["paid_event_odds_request_count"], paid)
                 self.assertEqual(transport.call_count, 1 + paid)
+
+    def run_supplemental(self, root, *, pinnacle_responses):
+        canonical, events = self.canonical(2), [self.event(0), self.event(1)]
+        headers = lambda credits: {"content-type": "application/json", "x-requests-last": str(credits)}
+        responses = [self.Response(events, headers=headers(0))]
+        for event, pinnacle in zip(events, pinnacle_responses):
+            responses.append(self.Response(self.odds(event), headers=headers(24)))
+            responses.append(pinnacle(event))
+        import requests
+        session = requests.Session()
+        with patch.object(session, "get", side_effect=responses) as transport:
+            result = capture_odds_observation(
+                root=Path(root), season=2026, slate_date=SLATE, phase="EARLY",
+                parent_daily_run_id="pinnacle-run", canonical_games=canonical,
+                provider=RequestsOddsProvider("secret", session=session), authorized=True,
+                now=datetime(2026, 9, 24, 8, tzinfo=UTC), bookmakers="pinnacle")
+        return result, transport
+
+    def test_supplemental_books_are_requested_by_name_and_merged_per_event(self):
+        ok = lambda event: self.Response({**event, "bookmakers": [
+            {"key": "pinnacle", "markets": [{"key": "h2h", "outcomes": [{"name": "Home 0", "price": -120}]}]},
+            {"key": "book", "markets": []},  # a book that was not asked for is dropped
+        ]}, headers={"content-type": "application/json", "x-requests-last": "8"})
+        down = lambda event: self.Response({"message": "unavailable"}, status=500,
+                                           headers={"content-type": "application/json"})
+        with tempfile.TemporaryDirectory() as temp:
+            result, transport = self.run_supplemental(temp, pinnacle_responses=[ok, down])
+            self.assertEqual(result.classification, "CAPTURED_NONEMPTY")
+            self.assertEqual(transport.call_count, 5)
+            calls = [c.kwargs["params"] for c in transport.call_args_list[1:]]
+            self.assertEqual([c.get("regions") for c in calls], ["us,us2,us_ex", None] * 2)
+            self.assertEqual([c.get("bookmakers") for c in calls], [None, "pinnacle"] * 2)
+            summary = result.summary
+            self.assertEqual(summary["paid_event_odds_request_count"], 2)
+            self.assertEqual(summary["supplemental_request_count"], 2)
+            self.assertEqual(summary["supplemental_merged_count"], 1)
+            self.assertEqual(summary["supplemental_failed_event_ids"], ["event-1"])
+            self.assertEqual(summary["maximum_total_attempts"], 5)
+            self.assertEqual(summary["maximum_credits"], 64)
+            rows = [json.loads(line) for line in
+                    (result.observation_dir / "normalized_odds.jsonl").read_text().splitlines()]
+            self.assertEqual(sorted({(r["provider_event_id"], r["bookmaker"]) for r in rows}),
+                             [("event-0", "book"), ("event-0", "pinnacle"), ("event-1", "book")])
+
+    def test_supplemental_credit_overrun_fails_closed(self):
+        over = lambda event: self.Response({**event, "bookmakers": []},
+                                           headers={"content-type": "application/json", "x-requests-last": "9"})
+        with tempfile.TemporaryDirectory() as temp:
+            result, transport = self.run_supplemental(temp, pinnacle_responses=[over, over])
+            self.assertEqual(result.classification, "FAILED_BUDGET_GUARD")
+            self.assertEqual(transport.call_count, 3)
 
 
 if __name__ == "__main__":

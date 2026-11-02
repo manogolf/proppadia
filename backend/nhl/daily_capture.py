@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 import requests
 from requests.adapters import HTTPAdapter
 
-from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV
+from backend.nhl.odds_regions import NHL_ODDS_REGIONS_CSV, NHL_ODDS_SUPPLEMENTAL_BOOKMAKERS_CSV
 from backend.nhl.odds_markets import NHL_COMPREHENSIVE_PROP_MARKETS_CSV
 
 
@@ -46,7 +46,8 @@ ROSTER_TEAM_REASONS = (
     "TEAM_NATURAL_KEY_CONFLICT", "TEAM_DIVERGENT_SNAPSHOTS", "TEAM_RESPONSE_FAILED",
     "TEAM_RESPONSE_MISSING", "TEAM_RESPONSE_EMPTY")
 PLANNER_CONTRACT = "NHL_FIRST_PUCK_PHASE_PLANNER_V1"
-ODDS_REQUEST_PLANNER_CONTRACT = "NHL_CANONICAL_EVENT_ODDS_REQUEST_PLAN_V2"
+# V3 adds an optional per-event request for named books outside the regions.
+ODDS_REQUEST_PLANNER_CONTRACT = "NHL_CANONICAL_EVENT_ODDS_REQUEST_PLAN_V3"
 # The NHL has 32 clubs, so a normal full-league slate can contain no more than
 # 16 games.  This is an absolute corruption guard, not a target request count;
 # the per-capture limit is always the smaller canonical/selected count.
@@ -323,6 +324,12 @@ class OddsRequestPlan:
     maximum_credits: int
     absolute_paid_request_ceiling: int
     missing_canonical_game_ids: tuple[int, ...]
+    supplemental_bookmakers: tuple[str, ...] = ()
+    supplemental_credits_per_request: int = 0
+
+    @property
+    def requests_per_event(self) -> int:
+        return 1 + (1 if self.supplemental_bookmakers else 0)
 
     def as_dict(self) -> dict[str, Any]:
         value = asdict(self)
@@ -336,6 +343,7 @@ class OddsRequestPlan:
         value["markets"] = list(self.markets)
         value["regions"] = list(self.regions)
         value["missing_canonical_game_ids"] = list(self.missing_canonical_game_ids)
+        value["supplemental_bookmakers"] = list(self.supplemental_bookmakers)
         return value
 
 
@@ -444,6 +452,60 @@ class RequestsOddsProvider:
             return "MALFORMED", None
         return ("VALID", value) if value >= 0 else ("MALFORMED", None)
 
+    def _capture_supplemental(
+        self, *, plan: OddsRequestPlan, game_id: int, event_id: str,
+        payload: dict[str, Any], odds_format: str, exchanges: list[HttpExchange],
+        bodies: list[bytes], accounting: list[dict[str, Any]], consumed: int,
+    ) -> bool:
+        """Request the named books for one event and merge them into ``payload``.
+
+        A provider or response failure only records the books as missing, since the
+        region books are already complete. A credit contradiction returns True so the
+        capture fails closed, as for the region request.
+        """
+        params = {
+            "bookmakers": ",".join(plan.supplemental_bookmakers),
+            "markets": ",".join(plan.markets), "oddsFormat": odds_format, "apiKey": self.api_key,
+        }
+        extra, exchange, body = self._get_json(f"{self.BASE}/events/{event_id}/odds", params)
+        exchanges.append(exchange)
+        bodies.append(body)
+        header_status, actual = self._quota_header(exchange, "x-requests-last")
+        accounted = actual if actual is not None else plan.supplemental_credits_per_request
+        consumed += accounted
+        remaining_status, parsed_remaining = self._quota_header(exchange, "x-requests-remaining")
+        status = "MERGED"
+        if exchange.status is None or not (200 <= exchange.status < 300):
+            status = "FAILED_PROVIDER"
+        elif not isinstance(extra, dict) or str(extra.get("id") or event_id).strip() != event_id:
+            status = "FAILED_MALFORMED_RESPONSE"
+        merged: list[str] = []
+        if status == "MERGED":
+            present = {b.get("key") for b in payload.get("bookmakers", []) if isinstance(b, Mapping)}
+            wanted = set(plan.supplemental_bookmakers)
+            books = payload.setdefault("bookmakers", [])
+            for book in extra.get("bookmakers", []) if isinstance(extra.get("bookmakers"), list) else []:
+                key = book.get("key") if isinstance(book, Mapping) else None
+                if key in wanted and key not in present:
+                    books.append(book)
+                    merged.append(str(key))
+                    present.add(key)
+        accounting.append({
+            "request_kind": "EVENT_ODDS_SUPPLEMENTAL", "request_index": len(accounting),
+            "canonical_game_id": game_id, "provider_event_id": event_id,
+            "bookmakers": list(plan.supplemental_bookmakers), "supplemental_status": status,
+            "merged_bookmakers": merged, "header_status": header_status,
+            "planned_credits": plan.supplemental_credits_per_request,
+            "actual_credits": actual, "accounted_credits": accounted,
+            "cumulative_credits": consumed,
+            "remaining_header_status": remaining_status, "credits_remaining": parsed_remaining,
+        })
+        return (
+            header_status == "MALFORMED"
+            or (actual is not None and actual > plan.supplemental_credits_per_request)
+            or consumed > plan.maximum_credits
+        )
+
     def capture_plan(
         self, *, plan: OddsRequestPlan, discovery: ProviderCapture, odds_format: str,
     ) -> ProviderCapture:
@@ -458,9 +520,11 @@ class RequestsOddsProvider:
             or tuple(event_id for _, event_id in pairs) != plan.selected_provider_event_ids
             or plan.maximum_paid_requests > min(
                 plan.canonical_game_count, plan.absolute_paid_request_ceiling)
-            or plan.maximum_total_attempts != plan.maximum_discovery_requests + len(pairs)
+            or plan.maximum_total_attempts != (
+                plan.maximum_discovery_requests + len(pairs) * plan.requests_per_event)
             or plan.maximum_credits != (
-                plan.discovery_credit_cost + len(pairs) * plan.credits_per_paid_request)
+                plan.discovery_credit_cost + len(pairs) * (
+                    plan.credits_per_paid_request + plan.supplemental_credits_per_request))
         ):
             raise BudgetGuardError("ODDS_REQUEST_PLAN_CONTRACT_INVALID")
 
@@ -506,8 +570,8 @@ class RequestsOddsProvider:
                 raise BudgetGuardError("ODDS_REQUEST_OUTSIDE_IMMUTABLE_PLAN")
             if request_index > plan.maximum_paid_requests:
                 raise BudgetGuardError("ODDS_PAID_REQUEST_COUNT_CEILING_REACHED")
-            planned_cumulative = (
-                plan.discovery_credit_cost + request_index * plan.credits_per_paid_request)
+            planned_cumulative = plan.discovery_credit_cost + request_index * (
+                plan.credits_per_paid_request + plan.supplemental_credits_per_request)
             if planned_cumulative > plan.maximum_credits:
                 raise BudgetGuardError("ODDS_PLANNED_CREDIT_CEILING_REACHED")
             if not re.fullmatch(r"[A-Za-z0-9_-]+", event_id):
@@ -581,6 +645,24 @@ class RequestsOddsProvider:
                     transport_response_bodies=bodies, request_plan=plan_dict,
                     credit_accounting=accounting,
                 )
+            if plan.supplemental_bookmakers:
+                failure = self._capture_supplemental(
+                    plan=plan, game_id=game_id, event_id=event_id, payload=payload,
+                    odds_format=odds_format, exchanges=exchanges, bodies=bodies,
+                    accounting=accounting, consumed=consumed)
+                consumed = accounting[-1]["cumulative_credits"]
+                if accounting[-1].get("credits_remaining") is not None:
+                    remaining = accounting[-1]["credits_remaining"]
+                if failure:
+                    return ProviderCapture(
+                        "FAILED_BUDGET_GUARD", discovery.events, odds_payload, exchanges,
+                        _json_bytes(odds_payload),
+                        error_type="SUPPLEMENTAL_CREDIT_ACCOUNTING_CONTRADICTION",
+                        error_message="supplemental book credit header exceeds or contradicts the immutable plan",
+                        credits_consumed=consumed, credits_remaining=remaining,
+                        transport_response_bodies=bodies, request_plan=plan_dict,
+                        credit_accounting=accounting,
+                    )
             odds_payload.append(payload)
 
         raw_response = (
@@ -753,9 +835,12 @@ def _request_values(raw: str, *, label: str) -> tuple[str, ...]:
 
 def derive_odds_credit_bound(
     *, paid_request_count: int, markets: Sequence[str], regions: Sequence[str],
-    credit_rules: Mapping[str, Any] | None = None,
+    credit_rules: Mapping[str, Any] | None = None, bookmakers: Sequence[str] = (),
 ) -> tuple[int, int, int]:
-    """Return discovery, per-event, and total deterministic credit ceilings."""
+    """Return discovery, per-event, and total deterministic credit ceilings.
+
+    Named books cost one region per group of ten (provider rule), in their own call.
+    """
     rules = dict(DEFAULT_ODDS_CREDIT_RULES if credit_rules is None else credit_rules)
     discovery = rules.get("events_discovery")
     event_rule = rules.get("event_odds")
@@ -766,12 +851,18 @@ def derive_odds_credit_bound(
     per_paid = len(tuple(markets)) * len(tuple(regions))
     if per_paid <= 0 or paid_request_count < 0:
         raise BudgetGuardError("ODDS_CREDIT_INPUT_INVALID")
+    per_paid += supplemental_credit_cost(markets=markets, bookmakers=bookmakers)
     return discovery, per_paid, discovery + int(paid_request_count) * per_paid
+
+
+def supplemental_credit_cost(*, markets: Sequence[str], bookmakers: Sequence[str]) -> int:
+    books = tuple(bookmakers)
+    return len(tuple(markets)) * -(-len(books) // 10) if books else 0
 
 
 def preflight_odds_request_budget(
     *, canonical_games: Sequence[CanonicalGame], markets: str, regions: str,
-    credit_rules: Mapping[str, Any] | None = None,
+    credit_rules: Mapping[str, Any] | None = None, bookmakers: str = "",
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Prove the worst-case bound before even the discovery request is allowed."""
     game_ids = [int(game.game_id) for game in canonical_games]
@@ -783,18 +874,27 @@ def preflight_odds_request_budget(
     region_values = _request_values(regions, label="REGIONS")
     derive_odds_credit_bound(
         paid_request_count=len(game_ids), markets=market_values,
-        regions=region_values, credit_rules=credit_rules)
+        regions=region_values, credit_rules=credit_rules,
+        bookmakers=_bookmaker_values(bookmakers))
     return market_values, region_values
+
+
+def _bookmaker_values(bookmakers: str) -> tuple[str, ...]:
+    values = tuple(dict.fromkeys(x.strip() for x in str(bookmakers or "").split(",") if x.strip()))
+    if any(not re.fullmatch(r"[a-z0-9_]+", value) for value in values):
+        raise BudgetGuardError("ODDS_BOOKMAKERS_CONTRACT_INVALID")
+    return values
 
 
 def build_odds_request_plan(
     *, events: Sequence[Mapping[str, Any]], canonical_games: Sequence[CanonicalGame],
     slate_date: str, markets: str, regions: str,
-    credit_rules: Mapping[str, Any] | None = None,
+    credit_rules: Mapping[str, Any] | None = None, bookmakers: str = "",
 ) -> tuple[OddsRequestPlan, list[dict[str, Any]]]:
     market_values, region_values = preflight_odds_request_budget(
         canonical_games=canonical_games, markets=markets, regions=regions,
-        credit_rules=credit_rules)
+        credit_rules=credit_rules, bookmakers=bookmakers)
+    book_values = _bookmaker_values(bookmakers)
     game_ids = tuple(sorted(int(game.game_id) for game in canonical_games))
     bindings = _bind_events(events, canonical_games, slate_date=slate_date)
     selected = sorted(
@@ -810,9 +910,11 @@ def build_odds_request_plan(
         raise BudgetGuardError("ODDS_SELECTED_EVENTS_EXCEED_REQUEST_CEILING")
     if len(selected_games) != len(set(selected_games)) or len(selected_events) != len(set(selected_events)):
         raise BudgetGuardError("ODDS_REQUEST_PLAN_NOT_ONE_TO_ONE")
-    discovery_cost, per_paid, maximum_credits = derive_odds_credit_bound(
+    discovery_cost, per_event, maximum_credits = derive_odds_credit_bound(
         paid_request_count=len(selected), markets=market_values,
-        regions=region_values, credit_rules=credit_rules)
+        regions=region_values, credit_rules=credit_rules, bookmakers=book_values)
+    supplemental = supplemental_credit_cost(markets=market_values, bookmakers=book_values)
+    per_paid = per_event - supplemental
     missing = tuple(sorted(set(game_ids) - set(selected_games)))
     plan = OddsRequestPlan(
         planner_contract_version=ODDS_REQUEST_PLANNER_CONTRACT,
@@ -822,11 +924,12 @@ def build_odds_request_plan(
         selected_provider_event_ids=selected_events, request_pairs=tuple(selected),
         markets=market_values, regions=region_values,
         maximum_discovery_requests=1, maximum_paid_requests=len(selected),
-        maximum_total_attempts=1 + len(selected),
+        maximum_total_attempts=1 + len(selected) * (2 if book_values else 1),
         credits_per_paid_request=per_paid, discovery_credit_cost=discovery_cost,
         maximum_credits=maximum_credits,
         absolute_paid_request_ceiling=NHL_ABSOLUTE_GAME_REQUEST_CEILING,
         missing_canonical_game_ids=missing,
+        supplemental_bookmakers=book_values, supplemental_credits_per_request=supplemental,
     )
     return plan, bindings
 
@@ -834,7 +937,7 @@ def build_odds_request_plan(
 def _explicit_observation(
     observation_dir: Path, *, day_root: Path, phase: str,
     expected_game_set_hash: str, markets: str, regions: str,
-    days_from: int, odds_format: str,
+    days_from: int, odds_format: str, bookmakers: str = "",
 ) -> OddsObservationResult:
     """Validate and load only the immutable package explicitly selected by an operator."""
     directory = Path(observation_dir).resolve()
@@ -857,6 +960,7 @@ def _explicit_observation(
     split = lambda value: sorted({part.strip() for part in str(value or "").split(",") if part.strip()})
     if (split(requested.get("markets")) != split(markets)
             or split(requested.get("regions")) != split(regions)
+            or split(requested.get("bookmakers")) != split(bookmakers)
             or requested.get("days_from") != int(days_from)
             or requested.get("odds_format") != odds_format):
         raise ValueError("ODDS_REPLAY_REQUEST_PARAMETERS_MISMATCH")
@@ -940,6 +1044,7 @@ def capture_odds_observation(
     regions: str = NHL_ODDS_REGIONS_CSV, odds_format: str = "american",
     credit_rules: Mapping[str, Any] | None = None,
     reuse_observation_dir: Path | None = None,
+    bookmakers: str = NHL_ODDS_SUPPLEMENTAL_BOOKMAKERS_CSV,
     claim_scope: str | None = None,
 ) -> OddsObservationResult:
     phase = str(phase).upper()
@@ -959,7 +1064,7 @@ def capture_odds_observation(
         return _explicit_observation(
             reuse_observation_dir, day_root=day_root, phase=phase,
             expected_game_set_hash=game_hash, markets=markets, regions=regions,
-            days_from=days_from, odds_format=odds_format)
+            days_from=days_from, odds_format=odds_format, bookmakers=bookmakers)
 
     first_puck = min((game.start_time_utc for game in canonical_games), default=None)
     claim_root = Path(root) / ".claims" / f"season={int(season)}" / f"slate_date={slate_date}"
@@ -1013,7 +1118,8 @@ def capture_odds_observation(
         try:
             plan, bindings = build_odds_request_plan(
                 events=[], canonical_games=canonical_games, slate_date=slate_date,
-                markets=markets, regions=regions, credit_rules=credit_rules)
+                markets=markets, regions=regions, credit_rules=credit_rules,
+                bookmakers=bookmakers)
             plan_payload = plan.as_dict()
             # No transport is authorized, so the executable ceilings are zero.
             plan_payload.update({
@@ -1044,14 +1150,14 @@ def capture_odds_observation(
         try:
             preflight_odds_request_budget(
                 canonical_games=canonical_games, markets=markets, regions=regions,
-                credit_rules=credit_rules)
+                credit_rules=credit_rules, bookmakers=bookmakers)
             if not hasattr(provider, "discover_events") or not hasattr(provider, "capture_plan"):
                 raise BudgetGuardError("ODDS_PROVIDER_LACKS_GOVERNED_PLAN_INTERFACE")
             discovery = provider.discover_events(days_from=days_from)  # type: ignore[union-attr]
             plan, bindings = build_odds_request_plan(
                 events=discovery.events, canonical_games=canonical_games,
                 slate_date=slate_date, markets=markets, regions=regions,
-                credit_rules=credit_rules)
+                credit_rules=credit_rules, bookmakers=bookmakers)
             claim_payload = {**claim_base, **plan.as_dict()}
             _write_create_only(claim, _json_bytes(claim_payload))
             if discovery.classification is not None:
@@ -1123,6 +1229,8 @@ def capture_odds_observation(
     request_ended = utc_now()
 
     rows = _market_rows(captured.odds_payload)
+    supplemental = [r for r in (captured.credit_accounting or [])
+                    if r.get("request_kind") == "EVENT_ODDS_SUPPLEMENTAL"]
     bindings = captured.bindings or bindings or _bind_events(
         captured.events, canonical_games, slate_date=slate_date)
     matched = sum(row["binding_status"] == "MATCHED" for row in bindings)
@@ -1164,7 +1272,7 @@ def capture_odds_observation(
         "endpoint_family": "THE_ODDS_API_NHL_PLAYER_PROPS",
         "sanitized_request_parameters": {
             "days_from": int(days_from), "markets": markets,
-            "regions": regions, "odds_format": odds_format,
+            "regions": regions, "bookmakers": bookmakers, "odds_format": odds_format,
         },
         "request_started_at_utc": iso_utc(request_started),
         "request_ended_at_utc": iso_utc(request_ended),
@@ -1242,7 +1350,12 @@ def capture_odds_observation(
         "logical_request_count": len(captured.exchanges),
         "network_attempt_count": len(captured.exchanges),
         "discovery_request_count": min(1, len(captured.exchanges)),
-        "paid_event_odds_request_count": max(0, len(captured.exchanges) - 1),
+        "paid_event_odds_request_count": max(0, len(captured.exchanges) - 1 - len(supplemental)),
+        "supplemental_bookmakers": request_plan.get("supplemental_bookmakers", []),
+        "supplemental_request_count": len(supplemental),
+        "supplemental_merged_count": sum(r.get("supplemental_status") == "MERGED" for r in supplemental),
+        "supplemental_failed_event_ids": [
+            r["provider_event_id"] for r in supplemental if r.get("supplemental_status") != "MERGED"],
         "maximum_discovery_requests": request_plan.get("maximum_discovery_requests", 0),
         "maximum_paid_requests": request_plan.get("maximum_paid_requests", 0),
         "maximum_total_attempts": request_plan.get("maximum_total_attempts", 0),

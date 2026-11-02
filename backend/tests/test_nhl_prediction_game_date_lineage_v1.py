@@ -296,6 +296,9 @@ def test_saves_scorer_wide_output_preserves_lineage(tmp_path, monkeypatch):
     out = tmp_path / "saves_predictions.csv"
     monkeypatch.setattr(score_nhl_saves_with_lineage, "fitted_model_identity",
                         lambda **_kwargs: {"test_identity": True})
+    # The generic-scorer path (Phoenix V2, the rollback since the 2026-11-01 refit cutover).
+    from backend.nhl import saves_production
+    monkeypatch.setattr(saves_production, "PRODUCTION", saves_production.PHOENIX_V2)
     monkeypatch.setattr(sys, "argv", [
         "score_nhl_saves_with_lineage.py", "--model-dir", str(model_dir), "--csv", str(input_path),
         "--feature-json", str(feature_json), "--feature-key", "goalie_saves",
