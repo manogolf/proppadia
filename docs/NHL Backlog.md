@@ -2835,6 +2835,19 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   Same day: the Over 1.5 focus splits +100 to +129 into +100 to +109,
   +110 to +119 and +120 to +129 (`FOCUS_BANDS`; whole-market bands unchanged).
   Positive EV at the operator's books through 11-02: 13 / 6 / 4.
+- 2026-11-03 historical check, season 2025-26
+  (`research_nhl_sog_over_1_5_historical_bands.py`; out-of-sample refits of the
+  SOG HGB family, archived 7 pm ET US-book prices, 12,623 quoted Over 1.5
+  rows). Positive-EV model-underdog Over 1.5, all books, by fair band (+100 to
+  +109 / +110 to +119 / +120 to +129 / +130 to +169 / +170 to +249 / +250+):
+  81 / 47 / 15 / 18 / 6 / 22 picks, return -12.1% / +4.4% / +10.5% / +14.4% /
+  +76.7% / +48.2%; BetOnline only 47 / 20 / 6 / 7 / 0 / 1. A full season fills
+  no band to 100 at the operator's books. Model probability vs hit rate on
+  quoted rows: 0.43 vs 0.50 (0.40-0.45) and 0.48 vs 0.52 (0.45-0.50); the
+  model's underdog Over 1.5 sides averaged 0.41 vs 0.46 actual and 0.50
+  implied by the best price. Measurement only (no calibration). Book plus
+  money Over 1.5 where the model favors the Over: 286 picks, -2.8% / +7.6% /
+  +7.6% at +100 to +109 / +110 to +119 / +120 to +129.
 
 ### P2.42 Pinnacle in the NHL odds capture
 
