@@ -3924,6 +3924,19 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Next: watch the first live runs (lane `legacy_sog` evidence, the 8rain SOG
   file, next-day grading); track the season-level bias and both shadows in the
   weekly report.
+- 2026-11-03 spike-game and short-history check (from the Frondell 11-02
+  projection: 2.73 shots after a 9-shot game and a 12-game prior season at
+  10.2 per 60; he took 2). Read-only, scratch in `tmp/`. Held-out test: refit
+  on season 2024 plus season 2025 before game 590 (about 2026-01-01), scored
+  the rest of season 2025 (25,723 rows, actual/predicted 0.99). Spike (last 5
+  games: top game 5+ shots and 45%+ of the shots): 1,588 rows at 1.02, 253
+  projections of 2.5+ at 1.07, so no overprediction. Prior-season 1-20 games
+  with a 2.5+ projection: 1 row, so that combination is outside the training
+  data. Live 2026 (8 morning runs 10-26 to 11-02, 1,822 graded rows, 0.99):
+  spike 115 rows at 0.95; 2.5+ projections with 50 or fewer prior-season games
+  10 rows at 0.69 (pred 2.9, actual 2.0, 2 of them Frondell). No change.
+  Watch: high projections of players whose prior-season rate comes from a short
+  NHL stint; recheck at month end with more rows.
 
 ### P2.32 Production SOG model review: what drives the predictions
 
