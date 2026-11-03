@@ -2848,6 +2848,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   implied by the best price. Measurement only (no calibration). Book plus
   money Over 1.5 where the model favors the Over: 286 picks, -2.8% / +7.6% /
   +7.6% at +100 to +109 / +110 to +119 / +120 to +129.
+- 2026-11-03 edge filter on underdog SOG Overs at 2.5/3.5 (fair +100 or
+  longer, positive EV; operator asked whether a 2-point edge minimum drops good
+  picks). Live 10-25 to 11-02, operator's books: edge under 2 97 picks +25.3%,
+  2+ 112 picks -0.6%. Season 2025-26 (same refit and archived prices as the
+  Over 1.5 check; scratch `tmp/frondell_test/hist_o25_35.py`), BetOnline:
+  under 2 1,037 picks -8.5%, 2+ 1,025 picks 0.0%; all books -1.7% (2,187) and
+  -0.1% (2,512). The minimum does not remove better-returning picks over a
+  season; no edge band was reliably profitable at the 7 pm ET prices. Model
+  win rate ran above actual as edge rose (6+: 0.36 model vs 0.28 actual at
+  BetOnline). Measurement only.
 
 ### P2.42 Pinnacle in the NHL odds capture
 
