@@ -2832,6 +2832,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   -35.1%, +60.1%). Positive-EV underdog Over 1.5 sides at +170 or longer are
   rare (the model seldom prices 2+ shots under 37% with a longer book price),
   so the every-band readiness rule may not be met for this line.
+  Same day: the Over 1.5 focus splits +100 to +129 into +100 to +109,
+  +110 to +119 and +120 to +129 (`FOCUS_BANDS`; whole-market bands unchanged).
+  Positive EV at the operator's books through 11-02: 13 / 6 / 4.
 
 ### P2.42 Pinnacle in the NHL odds capture
 

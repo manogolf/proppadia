@@ -142,6 +142,8 @@ READY_PER_BAND = 100
 # Single lines the operator watches on their own, besides each market as a whole:
 # (readiness name, market, line, side, heading).
 FOCUS_LINES = (("sog over 1.5", "sog", 1.5, "OVER", "SOG Over 1.5"),)
+# Focus lines split the first plus band in three; the other bands are unchanged.
+FOCUS_BANDS = ((100, 109, "+100 to +109"), (110, 119, "+110 to +119"), (120, 129, "+120 to +129")) + PLUS_BANDS[1:]
 WEEKLY_OUT = ROOT / "artifacts/analysis/nhl/price_view"
 WEEKLY_DOC = ROOT / "docs/nhl/plus_money_price_view.md"
 
@@ -231,6 +233,8 @@ def weekly_priced(rows: pd.DataFrame, prices: pd.DataFrame) -> pd.DataFrame:
     priced["plus_band"] = priced.american_price.map(lambda a: _band(a, PLUS_BANDS))
     priced["fair_american"] = priced.model_probability.map(fair_american)
     priced["fair_band"] = priced.model_probability.map(_fair_band)
+    priced["focus_band"] = priced.model_probability.map(
+        lambda p: _band(max(fair_american(p), 100), FOCUS_BANDS) if p < 0.5 else None)
     priced["price_bucket"] = priced.american_price.map(lambda a: _band(a, PRICE_BUCKETS) or "-100")
     return priced
 
@@ -248,8 +252,8 @@ def readiness(priced: pd.DataFrame) -> pd.DataFrame:
              "needed": READY_PER_BAND} for lane in LANE_MARKETS for _, _, band in PLUS_BANDS]
     for name, market, line, side, heading in FOCUS_LINES:
         focus = target[(target.market == market) & (target.line == line) & (target.side == side)]
-        rows += [{"market": name, "fair_band": band, "picks": int((focus.fair_band == band).sum()),
-                  "needed": READY_PER_BAND} for _, _, band in PLUS_BANDS]
+        rows += [{"market": name, "fair_band": band, "picks": int((focus.focus_band == band).sum()),
+                  "needed": READY_PER_BAND} for _, _, band in FOCUS_BANDS]
     out = pd.DataFrame(rows)
     out["ready"] = out.picks >= out.needed
     return out
@@ -315,6 +319,7 @@ def render_weekly(as_of: str, priced: pd.DataFrame, days: dict[str, list[str]], 
                                        ("my_books", "Any EV, operator's books", False)):
             sub = focus[(focus.price_scope == scope) & ((focus.model_ev > 0) | (not positive))]
             lines += ["", f"{title}:"]
+            sub = sub.drop(columns="fair_band").rename(columns={"focus_band": "fair_band"})
             lines += _md_table(plus_summary(sub, ["fair_band"]), ["fair_band"])
     every = dogs[dogs.price_scope == "my_books"]
     lines += ["", "## Every underdog side, any EV — operator's books", "",
@@ -354,7 +359,7 @@ def run_weekly(as_of: str) -> dict:
             frames.append(priced)
     priced = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame(columns=[
         "market", "price_scope", "relation", "side", "line", "american_price", "model_probability",
-        "plus_band", "fair_band", "price_bucket", "won", "profit", "model_ev"])
+        "plus_band", "fair_band", "focus_band", "price_bucket", "won", "profit", "model_ev"])
     out = WEEKLY_OUT / f"weekly_{as_of}"
     out.mkdir(parents=True, exist_ok=True)
     priced.to_csv(out / "priced_rows.csv", index=False)
