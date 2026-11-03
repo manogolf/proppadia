@@ -3662,6 +3662,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     (it checks the ten core inputs only); 2026 totals into the prior-season
     table before the 2027 season; first natural run to confirm the receipt's
     `model_identity` is `8cda6061…`.
+- 2026-11-03 high-volume defensemen check (from Chychrun 11-03: model 59.4% for
+  1+ point, market about 50%, his record 54%). Read-only, on the frozen 2025
+  holdout predictions of the production model (`8cda6061…`, fit on 2023-24),
+  players with 5+ prior games, position from `nhl.players`. Defensemen by
+  last-10 SOG per 60 quintile: model vs actual 1+ point within 1.4 points in
+  every quintile; top quintile 2,822 rows, 39.3% vs 39.7%. Top-quintile D at
+  model 55-60%: 173 rows, actual 63.0%. D at 7.5+ SOG per 60: 384 rows, 47.1%
+  vs 49.2%. Chychrun himself: 75 rows, 51.6% vs 53.3%. No overrating; if
+  anything slightly under. Forwards' top quintile 48.3% vs 51.6%. No change.
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
