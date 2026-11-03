@@ -139,6 +139,9 @@ LANE_MARKETS = {"sog": "shots_on_goal", "points": "player_points"}
 # Positive-EV underdog sides at the operator's books, per lane and fair-odds band:
 # about +/-10 points of return noise at 100 picks. A lane is ready when every band is.
 READY_PER_BAND = 100
+# Single lines the operator watches on their own, besides each market as a whole:
+# (readiness name, market, line, side, heading).
+FOCUS_LINES = (("sog over 1.5", "sog", 1.5, "OVER", "SOG Over 1.5"),)
 WEEKLY_OUT = ROOT / "artifacts/analysis/nhl/price_view"
 WEEKLY_DOC = ROOT / "docs/nhl/plus_money_price_view.md"
 
@@ -243,6 +246,10 @@ def readiness(priced: pd.DataFrame) -> pd.DataFrame:
     target = target[(target.price_scope == "my_books") & (target.model_ev > 0)]
     rows = [{"market": lane, "fair_band": band, "picks": int(((target.market == lane) & (target.fair_band == band)).sum()),
              "needed": READY_PER_BAND} for lane in LANE_MARKETS for _, _, band in PLUS_BANDS]
+    for name, market, line, side, heading in FOCUS_LINES:
+        focus = target[(target.market == market) & (target.line == line) & (target.side == side)]
+        rows += [{"market": name, "fair_band": band, "picks": int((focus.fair_band == band).sum()),
+                  "needed": READY_PER_BAND} for _, _, band in PLUS_BANDS]
     out = pd.DataFrame(rows)
     out["ready"] = out.picks >= out.needed
     return out
@@ -299,6 +306,16 @@ def render_weekly(as_of: str, priced: pd.DataFrame, days: dict[str, list[str]], 
         lines += _md_table(plus_summary(sub, ["market", "side", "fair_band"]), ["market", "side", "fair_band"])
         lines += ["", "By line, side and fair odds:"]
         lines += _md_table(plus_summary(sub, keys), keys)
+    for name, market, line, side, heading in FOCUS_LINES:
+        focus = dogs[(dogs.market == market) & (dogs.line == line) & (dogs.side == side)]
+        lines += ["", f"## {heading}: model-underdog sides by fair odds", "",
+                  "The same sides for this one line, tracked on their own (readiness above)."]
+        for scope, title, positive in (("my_books", "Positive EV, operator's books", True),
+                                       ("all_books", "Positive EV, all books", True),
+                                       ("my_books", "Any EV, operator's books", False)):
+            sub = focus[(focus.price_scope == scope) & ((focus.model_ev > 0) | (not positive))]
+            lines += ["", f"{title}:"]
+            lines += _md_table(plus_summary(sub, ["fair_band"]), ["fair_band"])
     every = dogs[dogs.price_scope == "my_books"]
     lines += ["", "## Every underdog side, any EV — operator's books", "",
               "Context: the same sides without the positive-EV condition."]

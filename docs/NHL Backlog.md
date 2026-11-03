@@ -2825,6 +2825,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   a saved-search setting (fair odds range, EV) or none. No threshold is chosen
   from the weekly tables before that. The price-band tables of model picks at
   plus prices stay in the data (`plus_price_bands.csv`) as context.
+- 2026-11-03: SOG Over 1.5 tracked on its own (the operator's original
+  intent; the 2.5/3.5 underdog-Over watch continues within `sog`). Through
+  11-02, positive-EV underdog Over 1.5 at the operator's books: 23 / 3 / 0 / 0
+  by fair band (8-15 and 1-2). Any EV: 105 / 72 / 36 / 8 (-2.8%, -3.8%,
+  -35.1%, +60.1%). Positive-EV underdog Over 1.5 sides at +170 or longer are
+  rare (the model seldom prices 2+ shots under 37% with a longer book price),
+  so the every-band readiness rule may not be met for this line.
 
 ### P2.42 Pinnacle in the NHL odds capture
 

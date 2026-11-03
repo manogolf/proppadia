@@ -42,6 +42,19 @@ class PlusMoneyPriceViewTests(unittest.TestCase):
         self.assertEqual(ready.loc[("points", "+100 to +129"), "picks"], 0)
         self.assertEqual(view.lane_readiness(ready.reset_index())[1],
                          {"market": "points", "picks": 0, "needed": 100, "ready": False})
+        self.assertEqual(int(ready.loc[("sog over 1.5", "+130 to +169"), "picks"]), 0)
+
+    def test_sog_over_1_5_is_tracked_on_its_own(self):
+        rows = pd.DataFrame([{"slate_date": "2026-11-03", "game_id": 2026020300, "player_id": 7, "line": 1.5,
+                              "p_over": 0.45, "selected_side": "UNDER", "grading_state": "LOSS", "lane": "sog"}])
+        prices = view.best_prices([quote("novig", "OVER", 2.40, line=1.5, market="shots_on_goal"),
+                                   quote("novig", "UNDER", 1.60, line=1.5, market="shots_on_goal")])
+        ready = view.readiness(view.weekly_priced(rows, prices)).set_index(["market", "fair_band"])
+        # 45% is fair +122; the book's +140 is longer, so a positive-EV underdog Over 1.5.
+        self.assertEqual(int(ready.loc[("sog over 1.5", "+100 to +129"), "picks"]), 1)
+        self.assertEqual(int(ready.loc[("sog", "+100 to +129"), "picks"]), 1)
+        self.assertEqual([r["market"] for r in view.lane_readiness(ready.reset_index())],
+                         ["sog", "points", "sog over 1.5"])
 
     def test_points_slates_follow_the_production_identity(self):
         current = view.current_points_identity()
