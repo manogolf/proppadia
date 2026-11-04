@@ -2341,10 +2341,20 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.33 Daily NHL run timing: when to capture odds and publish picks
 
-- Status: **OPEN — awaiting operator decision** (recommendation from P2.28,
-  2026-10-30). No schedule has changed. Any change needs separate operator
-  approval and its own rollback note (the prior plist values below).
-- Current schedule (read 2026-10-30):
+- Status: **DONE (code) — install pending the operator** (approved 2026-11-03:
+  "I want the morning run to be earlier ... I'm usually up and running earlier
+  than 8"). Morning prep 07:30 -> 05:30; `com.proppadia.nhl.scheduled-daily`
+  at 05:45, 08:30, 11:30 local runs `daily --with-odds`, the cross-market
+  capture and the 8rain export (`run_nhl_scheduled_daily.py`); the 06:00 trial
+  job is retired. The operator runs `bin/nhl_install_schedule.sh` (the repo
+  rule forbids writing to `~/Library/LaunchAgents`); rollback
+  `bin/nhl_install_schedule.sh --rollback` restores the plists below from
+  commit 85b3ccf2. MLB LaunchAgents are disabled for the off-season, so the
+  05:30 and 08:30 MLB refresh slots do not conflict; recheck before MLB
+  resumes. launchd does not wake a sleeping Mac: a 05:28 wake
+  (`pmset repeat`, operator-only) keeps the 05:45 file on time.
+  Deferred: confirm the first scheduled runs (summary.json READY, CSV written).
+- Prior schedule (kept for rollback):
   - `com.proppadia.nhl.morning-orchestration`: 07:30 PT daily
     (`StartCalendarInterval` Hour 7 Minute 30). Prerequisites only; no odds.
   - Player-prop odds that feed the picks come from the operator's manual

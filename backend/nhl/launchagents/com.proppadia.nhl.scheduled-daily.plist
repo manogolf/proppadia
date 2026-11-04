@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.proppadia.nhl.scheduled-daily</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-i</string>
+    <string>/Users/jerrystrain/Projects/proppadia/bin/python</string>
+    <string>/Users/jerrystrain/Projects/proppadia/backend/nhl/scripts/run_nhl_scheduled_daily.py</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/jerrystrain/Projects/proppadia</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>HOME</key><string>/Users/jerrystrain</string>
+    <key>PATH</key><string>/opt/homebrew/opt/libpq/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    <key>PYTHONUNBUFFERED</key><string>1</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Hour</key><integer>5</integer><key>Minute</key><integer>45</integer></dict>
+    <dict><key>Hour</key><integer>8</integer><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Hour</key><integer>11</integer><key>Minute</key><integer>30</integer></dict>
+  </array>
+  <key>RunAtLoad</key><false/>
+  <key>KeepAlive</key><false/>
+  <key>StandardOutPath</key>
+  <string>/Users/jerrystrain/Projects/proppadia/artifacts/operational/nhl/scheduled_daily/launchagent.stdout.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/jerrystrain/Projects/proppadia/artifacts/operational/nhl/scheduled_daily/launchagent.stderr.log</string>
+</dict>
+</plist>

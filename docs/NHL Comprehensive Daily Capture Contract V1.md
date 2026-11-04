@@ -170,6 +170,22 @@ put captures about 26.6 minutes out):
 - Verification: `report_nhl_closing_odds.py --date <d>` lists, per game, the
   minutes between the closing snapshot and puck drop.
 
+Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
+- `com.proppadia.nhl.morning-orchestration` runs at 05:30 local (was 07:30).
+- `com.proppadia.nhl.scheduled-daily` (`backend/nhl/scripts/run_nhl_scheduled_daily.py`,
+  under `caffeinate -i`) runs at 05:45, 08:30 and 11:30 local: `daily --with-odds`
+  (phase EARLY), then the mainline cross-market capture (AUTO for the slate's
+  first package, else REFRESH), then `run_nhl_8rain_export.py --latest-refresh`.
+  A daily run that is not READY stops before the export; a failed game-line
+  capture still exports (recorded as `cross_market_warning`). It skips while a
+  manual `daily` or another scheduled run is active and first waits up to 20
+  minutes for a running morning prep (launchd runs missed jobs together on
+  wake; it does not wake a sleeping Mac). Step logs and `summary.json`
+  (`upload_csv`) under `artifacts/operational/nhl/scheduled_daily/<date>/<run>/`.
+  The 8rain upload stays manual. Manual runs are unchanged and still allowed.
+- Install or roll back with `bin/nhl_install_schedule.sh [--rollback]`
+  (templates in `backend/nhl/launchagents/`).
+
 06:00 PT odds-only trial (operator-approved 2026-10-22; slates 2026-10-23 to
 2026-10-29). `backend/nhl/scripts/run_nhl_early_prop_odds_trial.py`
 (LaunchAgent `com.proppadia.nhl.early-prop-odds-trial`, 06:00 and 06:15 PT,
@@ -190,8 +206,9 @@ measure early coverage and prices against later snapshots and CLOSING:
   `early_trial_capture_log.jsonl` in the day folder. About 21 credits per game.
 - Status (2026-10-30): the trial is over and analysed (NHL Backlog P2.28;
   all seven slates, 47 of 48 games, 705 credits). The script now logs only
-  `TRIAL_INACTIVE`; removing the LaunchAgent awaits operator approval. Daily
-  run timing is unchanged; the timing recommendation is NHL Backlog P2.33.
+  `TRIAL_INACTIVE`. The LaunchAgent and its template were removed on
+  2026-11-03 with the scheduled daily runs above (the script stays for the
+  record; rollback restores it).
 
 - Daily lanes. Phoenix Points and Saves input preparation, the HGB Points
   capture, and the HGB production artifact score every pregame game that has

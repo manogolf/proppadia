@@ -41,6 +41,13 @@ Detailed commands for each step remain below.
 This is the current operational path; it is separate from the historical SOG
 grading/book-upload workflow below. The upload remains manual.
 
+Since 2026-11-03 steps 1, 2 and 5 run automatically at 05:45, 08:30 and 11:30
+local (`com.proppadia.nhl.scheduled-daily`, `run_nhl_scheduled_daily.py`; NHL
+Backlog P2.33): upload the newest CSV in
+`artifacts/operational/nhl/8rain_uploads/YYYY-MM-DD/`. Each run's result is in
+`artifacts/operational/nhl/scheduled_daily/YYYY-MM-DD/<run>/summary.json`.
+The manual steps below still work at any other time.
+
 1. Run today's normal pipeline and acquire fresh odds:
 
    ```bash
