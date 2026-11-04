@@ -49,7 +49,21 @@ and hash manifest are committed.
 selector `60ea3b5e…`. `--validate` reports `GOVERNED_CHILD_VALID_INACTIVE`
 while V6 (`4d01c5da…`) is selected.
 
-## Activation (operator decision)
+## Activation (activated 2026-11-04)
+
+The operator approved the swap on 2026-11-04, and `--activate` ran in the
+main checkout:
+
+- It returned `ACTIVATED`: prior selector `4d01c5da…` (V6), new selector
+  `60ea3b5e…` (V7). `activation_rollback.json` was written.
+- `--validate` then reported V7 `GOVERNED_CHILD_VALID_ACTIVE` and V6
+  `GOVERNED_CHILD_VALID_SUPERSEDED`.
+- The active authority serves 2,959 rows and resolves 849799 as `POSTSEASON` /
+  `WORLD_SERIES`.
+- The MLB phase-authority tests pass, except the known frozen-pin tripwire
+  `test_agreement_v4_and_network_database_boundaries_unchanged` (MLB backlog).
+
+The change reaches Render with the next push.
 
 `--activate` is a compare-and-swap from the exact V6 selector. It writes the
 create-only `activation_rollback.json`, and `--rollback` restores V6. After

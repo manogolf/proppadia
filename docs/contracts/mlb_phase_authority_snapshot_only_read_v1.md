@@ -143,6 +143,6 @@ built this way (activated 2026-10-19).
 
 V7 (`docs/contracts/mlb_2026_postseason_authority_v7/`) adds the five World
 Series games and completes the 2026 postseason (40 games). It was prepared
-2026-11-04, and activation is the operator's decision.
+2026-11-04 and activated the same day.
 
 Tests: `backend/mlb/tests/test_mlb_phase_authority_snapshot_only_verification_v1.py`.
