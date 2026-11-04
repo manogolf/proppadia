@@ -1095,6 +1095,57 @@ writer validation does not authorize a hosted cutover or a different writer.
   `artifacts/ops/mlb_offseason_roster_refresh.out.log` and the ops check
   returning to PASS. At the 2027 restart, run the script with `--rollback`.
 
+### P2.6 Postseason grading inventory before the closeout package (2026-11-04)
+
+- Status: **OPEN — inventory done (read-only); fixes need operator decisions.**
+  The postseason population is complete (V7 phase authority, 40 games, all
+  Final). Rows were matched to it by exact gamePk. Database reads used the
+  research login. No writes and no network requests were made. Scratch:
+  `tmp/postseason_grading/`.
+- **Fully graded:**
+  - **Moneyline** (`mlb.public_game_moneyline_predictions` / `_outcomes`): 33
+    games, 34 rows, all graded.
+  - **RAW Totals** (`totals_shadow_v1.sqlite3`): 2 games (10-04), both graded.
+    After that, `--evaluation-phase REGULAR_SEASON` skipped the postseason
+    (`TOTALS_SHADOW_DAILY_NO_GAMES_IN_PHASE`).
+  - **DH forward** (`forward_{prediction,outcome}_ledger_v1.csv`): all 40 games
+    graded.
+- **Never predicted postseason, by design:** Totals C (last game 09-27) and
+  market strong agreement v4 (`SKIPPED_OUTSIDE_FROZEN_REGULAR_SEASON_HORIZON`,
+  no charged request).
+- **Gaps:**
+  1. **Full-board Hits** (`hits05_full_board_shadow_v1.sqlite3`): 21 games
+     predicted (333 rows), only 2 graded (849816, 849817 on 10-18). Ungraded:
+     - D: 849822, 849823, 849825, 849827, 849831, 849832, 849838
+     - L: 849809, 849810, 849812, 849813, 849815, 849818, 849820
+     - W: 849799, 849802, 849803, 849804, 849805
+
+     The daily runner grades only the previous day and never retries a missed
+     day. Logged results: `PENDING_CANONICAL_COMPLETENESS` (10-03, 10-05,
+     10-06), `COMPLETENESS_NOT_EXACT` (10-22), and missed or failed next-day
+     runs (10-09, 10-20, 10-21). The completeness CSVs now exist for most
+     dates, so a backfill grade looks feasible (local sqlite only). Not run.
+  2. **Moneyline 849817:** it was predicted on 10-16 (a postponed date) and
+     again on 10-18. Both rows were graded against the 10-18 final. The 10-16
+     row should probably be void. DH forward correctly left its two 10-16 rows
+     ungraded.
+  3. **Moneyline, 7 games never predicted:** 849844, 849828, 849829, 849835,
+     849825, 849830 and 849816. The hook failed on 10-02/10-03 (rc 1/3) and on a
+     10-04 DNS error; the rest had already started (inferred). This is a
+     coverage gap, not a grading gap.
+  4. **Starter skill workload:** 27 postseason games observed, but outcomes
+     have never been bound for any row all season (72 rows `pending`). This is
+     lane-wide.
+  5. **Regular season, RAW Totals:** 15 predictions from 09-27 are still
+     `DEFERRED_OFFICIAL_FINAL_UNAVAILABLE`.
+- **Paid requests:** 104 Pinnacle main-market captures (10-04 to 10-29), 104
+  requests, 306 credits, all HTTP 200
+  (`backend/mlb/exports/market_history/full_game_totals/<date>/<run>/pinnacle/`).
+- **Observation-only lanes** (no graded predictions): exact-game feature
+  shadow, BvP (no postseason gamePks), and market snapshots
+  (`full_game_totals_v1.sqlite3`, 29 games). `mlb.model_training_props` holds
+  outcomes for all 40 games.
+
 ## Daily Signal Cleanup Follow-ups (2026-10-18)
 
 Commits `bdad28b6`, `1f5a71a3`, and `34960e87` removed retired-lane warnings,
