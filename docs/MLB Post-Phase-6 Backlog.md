@@ -1097,7 +1097,17 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P2.6 Postseason grading inventory before the closeout package (2026-11-04)
 
-- Status: **OPEN — inventory done (read-only); fixes need operator decisions.**
+- Status: **CLOSED 2026-11-04.**
+  - The Hits backfill and the Moneyline grader fix are both done (below).
+  - The postseason closeout package is written
+    (`artifacts/operational/mlb/season_close/2026/postseason_closeout.json`,
+    `POSTSEASON_CLOSEOUT_READY`), with the remaining known exceptions listed in
+    it. See the closeout plan README.
+  - Still open, not blocking:
+    - Starter workload outcome binding (lane-wide).
+    - The 15 regular-season RAW Totals rows from 09-27 (item 5).
+  - Prior status: OPEN — inventory done (read-only); fixes need operator
+    decisions.
   The postseason population is complete (V7 phase authority, 40 games, all
   Final). Rows were matched to it by exact gamePk. Database reads used the
   research login. No writes and no network requests were made. Scratch:

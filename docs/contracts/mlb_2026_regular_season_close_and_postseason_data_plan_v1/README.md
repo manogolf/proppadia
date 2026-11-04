@@ -1,6 +1,6 @@
 # MLB 2026 regular-season close and postseason data plan V1
 
-Status: **REGULAR SEASON CLOSED 2026-09-28; POSTSEASON CLOSEOUT AND OFFSEASON MODE OPEN**
+Status: **REGULAR SEASON CLOSED 2026-09-28; POSTSEASON CLOSED OUT 2026-11-04; OFFSEASON = LAUNCHAGENT PAUSE**
 Contract: `MLB_2026_REGULAR_SEASON_CLOSE_AND_POSTSEASON_DATA_PLAN_V1`
 Prepared: 2026-09-21
 
@@ -21,9 +21,42 @@ Status (updated 2026-11-04):
   (`docs/contracts/mlb_2026_postseason_authority_v7/`) adds the five World
   Series games. It completes the 40-game postseason, all Final. V7 was
   prepared and activated 2026-11-04.
-- **Still open:** the postseason closeout package and the `OFFSEASON` mode
-  ("Exact offseason authorization condition" below). The MLB LaunchAgents are
-  paused instead (see "2026 closeout: LaunchAgent pause").
+- **Postseason closeout: done 2026-11-04.**
+  - Command: `backend.mlb.scripts.close_mlb_2026_postseason --execute
+    --authorized-by …`. Builder:
+    `backend/mlb/season_transition/postseason_closeout_v1.py`; tests:
+    `backend/mlb/tests/test_mlb_2026_postseason_closeout_v1.py`.
+  - The write-once, self-hashed package is
+    `artifacts/operational/mlb/season_close/2026/postseason_closeout.json`
+    (git-ignored; `package_sha256` `171d894a…`). Decision:
+    `POSTSEASON_CLOSEOUT_READY`.
+  - **Population:** the 40 V7 games (9 Wild Card, 16 Division Series, 10 LCS,
+    5 World Series). Each has exactly one playable final in the pinned Oct 29
+    12:30Z schedule (`bca22f86…`).
+  - **Lanes**, matched by exact gamePk, with zero ungraded eligible predictions:
+    - Moneyline: 33 games graded.
+    - RAW Totals: 2 games graded.
+    - Full-board Hits: 21 games graded, after the 2026-11-04 backfill.
+    - DH forward: 40 games graded.
+    - Totals C and Agreement V4: did not run on the postseason.
+    - Predictions for 849817's postponed 10-16 date are void.
+  - **Paid requests:** 102 Pinnacle captures, 102 requests, 306 credits, all
+    HTTP 200 (game dates 10-04 to 10-28).
+  - **Known exceptions:**
+    - The Moneyline 849817 10-16 row is graded (append-only).
+    - Seven postseason games were never predicted by Moneyline.
+    - Starter workload outcomes were never bound all season.
+  - Moneyline was read through the restricted research login. No database
+    writes and no network requests were made.
+- **Offseason authorization conditions** ("Exact offseason authorization
+  condition" below):
+  - Conditions 1–3 are met by the V7 authority, the lane and credit checks, and
+    the closeout package.
+  - Condition 4 rests on the retained schedule through 10-29. No fresh
+    schedule check was run.
+  - For condition 5, the `OFFSEASON` mode was never built. The operator's
+    LaunchAgent pause (2026-10-29) is the offseason state. Paid MLB routines
+    stay off until the 2027 restart conditions below are met.
 - `sha256_manifest.txt` records this README as prepared on 2026-09-21. Later
   status edits are not re-hashed.
 
