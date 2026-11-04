@@ -1123,8 +1123,29 @@ writer validation does not authorize a hosted cutover or a different writer.
      The daily runner grades only the previous day and never retries a missed
      day. Logged results: `PENDING_CANONICAL_COMPLETENESS` (10-03, 10-05,
      10-06), `COMPLETENESS_NOT_EXACT` (10-22), and missed or failed next-day
-     runs (10-09, 10-20, 10-21). The completeness CSVs now exist for most
-     dates, so a backfill grade looks feasible (local sqlite only). Not run.
+     runs (10-09, 10-20, 10-21).
+     **Backfilled 2026-11-04 (operator-approved): all 21 predicted games are
+     now graded.**
+     - It used the existing `grade_date` from
+       `grade_mlb_hits05_full_board_shadow_v1.py` for 14 slates: 10-04, 07, 08,
+       10, 11, 12, 13, 15, 19, 23, 24, 26, 27 and 28. Outcomes came from
+       `mlb.model_training_props` through the research login
+       (`MLB_RESEARCH_DATABASE_URL`, set from the audit URL as in the daily
+       wrapper; fallback refused).
+     - Result: 288 outcomes appended, 0 conflicts, 1 `NO_APPEARANCE_UNRESOLVED`
+       (10-04). Outcome rows went from 6,075 to 6,363.
+     - A rehearsal on a copy matched exactly, and a re-run is idempotent
+       (0 added).
+     - The 10-08 completeness CSV was missing. It was built with
+       `player_stats_game_completeness --mode date --date 2026-10-08`: free
+       StatsAPI reads and the research login, 849832 `COMPLETE_EXACT`.
+     - The validator's data checks all pass. The only failure,
+       `package_sha256_manifest`, is the pre-existing frozen code-hash pin on
+       three changed scripts. It fails identically before the backfill.
+     - Pre-backfill copy:
+       `tmp/hits05_backfill/before_backfill_2026-11-04.sqlite3`; scripts in
+       `tmp/hits05_backfill/`.
+     - 849817's 10-16 rows (the postponed date) are deliberately left ungraded.
   2. **Moneyline 849817:** it was predicted on 10-16 (a postponed date) and
      again on 10-18. Both rows were graded against the 10-18 final. The 10-16
      row should probably be void. DH forward correctly left its two 10-16 rows
