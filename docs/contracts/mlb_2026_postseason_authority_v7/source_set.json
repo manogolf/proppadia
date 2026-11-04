@@ -1,0 +1,51 @@
+{
+  "contract_name": "MLB_2026_PHASE_AUTHORITY_EXPLICIT_SOURCE_SET_V1",
+  "parent_descriptor_path": "backend/mlb/season_transition/authority_snapshots/v6/descriptor.json",
+  "parent_descriptor_sha256": "280cc121f12a4dc7d6a7a37ea61a20667db863be1846dcc917f466fb5cdab22b",
+  "schema_version": 1,
+  "source_set_id": "MLB_2026_POSTSEASON_AUTHORITY_V7_RETAINED_OCT29_1230Z",
+  "sources": [
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-29/20261029T123006280535Z_2026-08-05_2026-10-29_bca22f86480b875d7633fc24d73e57dfe44b2065561f6ff084e9323a644580c2.json",
+      "source_sha256": "bca22f86480b875d7633fc24d73e57dfe44b2065561f6ff084e9323a644580c2",
+      "source_bytes": 4625469,
+      "selected_game_pks": [
+        849799,
+        849802,
+        849803,
+        849804,
+        849805
+      ]
+    }
+  ],
+  "corroborating_schedule_evidence": [
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-28/20261028T233007054705Z_2026-08-05_2026-10-28_538a3b3b4eb76eb6eec7ff468091cdb37beffea88c632fa2736c781fce0d3705.json",
+      "source_sha256": "538a3b3b4eb76eb6eec7ff468091cdb37beffea88c632fa2736c781fce0d3705",
+      "source_bytes": 4622962,
+      "game_pks": [
+        849799,
+        849802,
+        849803,
+        849804,
+        849805
+      ],
+      "evidence_role": "LATEST_RETAINED_IDENTITY_OBSERVATION"
+    }
+  ],
+  "selection_evidence": [
+    {
+      "source_path": "artifacts/ops/mlb_public_game_moneyline_history_schedules/2026-10-29/20261029T123006280535Z_2026-08-05_2026-10-29_bca22f86480b875d7633fc24d73e57dfe44b2065561f6ff084e9323a644580c2_74694e77eb72b3a634657ca55401f0b95e9cb823be8f487e3914dde63d2b7830.selection.json",
+      "source_sha256": "2d3b7384716fcb9c9c4fbbddf61d5e255600e3a1d5356590f4cc27c6c8de736f",
+      "source_bytes": 1681832,
+      "schedule_sha256": "bca22f86480b875d7633fc24d73e57dfe44b2065561f6ff084e9323a644580c2",
+      "game_pks": [
+        849799,
+        849802,
+        849803,
+        849804,
+        849805
+      ]
+    }
+  ]
+}

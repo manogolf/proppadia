@@ -17,6 +17,10 @@ Status (updated 2026-11-04):
   `docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v2/README.md`.
 - The artifact freezes the game population and its dispositions. The wider
   freeze list under "Regular-season close specification" was not packaged.
+- **Postseason population:** the V7 phase-authority child
+  (`docs/contracts/mlb_2026_postseason_authority_v7/`) adds the five World
+  Series games. It completes the 40-game postseason, all Final. V7 was
+  prepared 2026-11-04; its activation is the operator's decision.
 - **Still open:** the postseason closeout package and the `OFFSEASON` mode
   ("Exact offseason authorization condition" below). The MLB LaunchAgents are
   paused instead (see "2026 closeout: LaunchAgent pause").

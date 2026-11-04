@@ -87,6 +87,21 @@ CHILDREN: dict[str, ChildSpec] = {
             849839: ("D", "AL Division Series", "2026-10-06T00:00:00Z"),
         },
     ),
+    # The five 2026 World Series games (all Final), from the retained
+    # Oct 29 12:30Z history schedule; V6 already holds the complete LCS.
+    "v7": ChildSpec(
+        version="v7",
+        package="mlb_2026_postseason_authority_v7",
+        parent_descriptor_sha256="280cc121f12a4dc7d6a7a37ea61a20667db863be1846dcc917f466fb5cdab22b",
+        parent_selection_sha256="4d01c5da1ceb90cf1029480f772ff580385d27a0db49e9cc0aafed44e6f7f266",
+        additions={
+            849799: ("W", "World Series", "2026-10-29T00:00:00Z"),
+            849802: ("W", "World Series", "2026-10-25T00:00:00Z"),
+            849803: ("W", "World Series", "2026-10-28T00:00:00Z"),
+            849804: ("W", "World Series", "2026-10-27T00:00:00Z"),
+            849805: ("W", "World Series", "2026-10-24T00:00:00Z"),
+        },
+    ),
 }
 
 
