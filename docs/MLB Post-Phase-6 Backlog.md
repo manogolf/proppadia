@@ -1147,9 +1147,18 @@ writer validation does not authorize a hosted cutover or a different writer.
        `tmp/hits05_backfill/`.
      - 849817's 10-16 rows (the postponed date) are deliberately left ungraded.
   2. **Moneyline 849817:** it was predicted on 10-16 (a postponed date) and
-     again on 10-18. Both rows were graded against the 10-18 final. The 10-16
-     row should probably be void. DH forward correctly left its two 10-16 rows
-     ungraded.
+     again on 10-18. Both rows were graded against the 10-18 final. DH forward
+     correctly left its two 10-16 rows ungraded.
+     **Grader fixed 2026-11-04 (operator-approved):** a prediction is now graded
+     only by the final on its own official date. Predictions for a postponed
+     date stay void (`durable_store_v1.fetch_ungraded_final_predictions`, test
+     `08h`).
+     - The same defect also graded 824785's 09-22 prediction by its 09-23
+       makeup. That game was graded once, so it isn't a duplicate.
+     - Both existing outcome rows stay as they are. The table is append-only,
+       and removing them would need owner-level access. They are known
+       exceptions; see
+       `docs/contracts/mlb_moneyline_postponed_rescheduled_finality_correction_v1/README.md`.
   3. **Moneyline, 7 games never predicted:** 849844, 849828, 849829, 849835,
      849825, 849830 and 849816. The hook failed on 10-02/10-03 (rc 1/3) and on a
      10-04 DNS error; the rest had already started (inferred). This is a

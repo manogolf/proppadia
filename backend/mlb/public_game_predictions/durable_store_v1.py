@@ -22,6 +22,12 @@ def _value(row: Any, key: str, index: int) -> Any:
     return row.get(key) if isinstance(row, dict) else row[index]
 
 
+def _prediction_field(payload: Any, key: str) -> Any:
+    if isinstance(payload, (str, bytes)):
+        payload = json.loads(payload)
+    return dict(payload).get(key)
+
+
 def _json_default(value: Any) -> str:
     if isinstance(value, (datetime, date)):
         return value.isoformat()
@@ -226,7 +232,8 @@ def fetch_ungraded_final_predictions(
                  COALESCE(c.corrected_home_runs,f.home_runs) AS official_home_runs,
                  COALESCE(c.corrected_away_runs,f.away_runs) AS official_away_runs,
                  COALESCE(c.source_identity,f.source_identity) AS official_source_identity,
-                 COALESCE(c.source_sha256,f.source_sha256) AS official_source_sha256
+                 COALESCE(c.source_sha256,f.source_sha256) AS official_source_sha256,
+                 f.game_date::text AS official_game_date
           FROM mlb.public_game_moneyline_predictions p
           JOIN mlb.public_game_official_finals f ON f.game_pk=p.game_id
           LEFT JOIN LATERAL (
@@ -250,7 +257,13 @@ def fetch_ungraded_final_predictions(
             'official_away_runs':int(_value(row,'official_away_runs',2)),
             'official_source_identity':str(_value(row,'official_source_identity',3)),
             'official_source_sha256':str(_value(row,'official_source_sha256',4)),
+            'official_game_date':str(_value(row,'official_game_date',5)),
         } for row in cur.fetchall()]
+    # A prediction is graded only by the final played on its own official
+    # date. A prediction for a date the game was postponed from stays
+    # ungraded (void); the makeup date's own prediction is graded instead.
+    rows = [item for item in rows
+            if str(_prediction_field(item['prediction'], 'game_date')) == item['official_game_date']]
     # Evaluation eligibility is deliberately joined after the immutable DB
     # read.  No phase value is copied into either Moneyline ledger.
     admitted = []

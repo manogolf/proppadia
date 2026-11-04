@@ -189,6 +189,33 @@ def test_08g_correction_replay_grading_can_be_date_scoped(monkeypatch):
     assert seen['params'][-2:]==('2026-08-17','2026-08-17')
 
 
+def test_08h_prediction_for_a_postponed_date_is_not_graded_by_the_makeup_final(monkeypatch):
+    # 849817 was predicted for Oct 16, postponed that evening, and played Oct 18.
+    # Only the Oct 18 prediction may be graded; the Oct 16 one stays void.
+    def fetched(prediction_date):
+        return {'prediction_payload':{'game_id':849817,'game_date':prediction_date},
+                'official_home_runs':1,'official_away_runs':3,
+                'official_source_identity':'official.json','official_source_sha256':'b'*64,
+                'official_game_date':'2026-10-18'}
+    class Cursor:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def execute(self,sql,params): assert 'AS official_game_date' in sql
+        def fetchall(self): return [fetched('2026-10-16'),fetched('2026-10-18')]
+    class Connection:
+        def __enter__(self): return self
+        def __exit__(self,*args): return False
+        def cursor(self): return Cursor()
+    class Admitted:
+        evaluation_partition=next(iter(durable.EVALUATION_PHASES))
+    monkeypatch.setattr(durable,'pg_connect',lambda:Connection())
+    monkeypatch.setattr(durable,'classify_moneyline_row',lambda *_args,**_kwargs:Admitted())
+    graded=durable.fetch_ungraded_final_predictions('2026-10-19T12:00:00Z')
+    assert [item['prediction']['game_date'] for item in graded]==['2026-10-18']
+    # A JSON-text payload is read the same way.
+    assert durable._prediction_field('{"game_date":"2026-10-16"}','game_date')=='2026-10-16'
+
+
 def test_09_tampered_state_hash_fails_closed():
     state=snapshot();state['teams']['110']['runs_scored']+=1
     with pytest.raises(model.PublicGamePredictionError,match='TEAM_STATE_HASH'):

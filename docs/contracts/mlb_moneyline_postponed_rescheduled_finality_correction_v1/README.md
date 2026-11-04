@@ -52,6 +52,36 @@ and return nonzero, preventing Agreement V4 from receiving a barrier.
   are preserved exactly as retained.
 - RAW Totals game 824462 and all non-Moneyline lanes are outside this change.
 
+## Prediction-date match (added 2026-11-04)
+
+This contract fixed which appearance may supply an outcome. It did not stop a
+prediction made for the original date from being graded by the makeup's
+final. `fetch_ungraded_final_predictions`
+(`backend/mlb/public_game_predictions/durable_store_v1.py`) joined predictions
+to `mlb.public_game_official_finals` by gamePk only.
+
+- **What happened:** two games were affected.
+  - 824785 was predicted for 09-22 only and graded by its 09-23 makeup.
+  - 849817 (ALCS) was predicted for 10-16, postponed that evening, then
+    predicted again and played on 10-18. Both predictions were graded by the
+    one 10-18 final, so one game counted twice.
+  - Every other graded game's prediction date equals its final's
+    `officialDate` (checked 2026-11-04 against the retained Oct 29 history
+    schedule: 746 outcomes, 2 differ).
+- **Rule now:** a prediction is graded only when its `game_date` equals the
+  official final's `game_date` (both are MLB `officialDate`).
+- **Postponed-date predictions:** a prediction for a date the game was
+  postponed from stays ungraded. This is a void, the same as sportsbook
+  practice and the DH forward lane. The makeup date's own prediction is
+  graded.
+- **Test:**
+  `test_public_game_prediction_hardening_v1::test_08h_prediction_for_a_postponed_date_is_not_graded_by_the_makeup_final`.
+- **Existing rows unchanged:** the outcomes table is append-only
+  (`reject_mutation` triggers), so the 824785 09-22 and 849817 10-16 outcome
+  rows remain. They are known exceptions: 849817 counts one extra loss in 746
+  graded rows. They were not removed, because that would need owner-level
+  access to bypass the triggers.
+
 ## Remaining operational boundary
 
 The implementation is fixture-validated and ready for the next natural window.
