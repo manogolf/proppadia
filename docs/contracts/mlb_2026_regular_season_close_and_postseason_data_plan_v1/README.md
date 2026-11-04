@@ -1,8 +1,27 @@
 # MLB 2026 regular-season close and postseason data plan V1
 
-Status: **PREPARED_AND_OFFLINE_VALIDATED; NOT ACTIVATED; REGULAR SEASON NOT CLOSED**
+Status: **REGULAR SEASON CLOSED 2026-09-28; POSTSEASON CLOSEOUT AND OFFSEASON MODE OPEN**
 Contract: `MLB_2026_REGULAR_SEASON_CLOSE_AND_POSTSEASON_DATA_PLAN_V1`
 Prepared: 2026-09-21
+
+Status (updated 2026-11-04):
+- **Regular-season close: done.** It was executed 2026-09-28 by
+  `backend.mlb.scripts.close_mlb_2026_regular_season --execute` under
+  authorization `MLB_2026_REGULAR_SEASON_CLOSE_EXECUTION_V1`. The write-once
+  artifact is `artifacts/operational/mlb/season_close/2026/regular_season_close.json`
+  (git-ignored; `close_artifact_sha256` `420650363c0f0a77…`).
+- It holds the 2,430-game V2 inventory: 2,401 final, 1 authoritatively
+  cancelled, 27 postponed and rescheduled, 1 suspended and resumed.
+- On 2026-11-04 it re-validated against the current pinned V2 package through
+  `regular_season_close_operation_v1.validate_close_artifact`. See
+  `docs/contracts/mlb_2026_authoritative_regular_season_close_inventory_v2/README.md`.
+- The artifact freezes the game population and its dispositions. The wider
+  freeze list under "Regular-season close specification" was not packaged.
+- **Still open:** the postseason closeout package and the `OFFSEASON` mode
+  ("Exact offseason authorization condition" below). The MLB LaunchAgents are
+  paused instead (see "2026 closeout: LaunchAgent pause").
+- `sha256_manifest.txt` records this README as prepared on 2026-09-21. Later
+  status edits are not re-hashed.
 
 This package changes no model, prediction, threshold, publication, wager, live database, paid acquisition, or scheduler. It defines the transition, provides a fail-closed classifier and validator, and prepares—but does not execute—the close command and schema migration.
 
