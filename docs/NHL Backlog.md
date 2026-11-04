@@ -294,7 +294,20 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.9 Enforce prior-day reconciliation before dependent NHL daily work
 
-- Status: **RECONCILIATION-FIRST RESTORED — focused tests and first successful natural daily ordering verified; FINAL_PREGAME observer acceptance pending**. The
+- Status: **CLOSED 2026-11-04 — natural evidence.** Both remaining conditions
+  now hold:
+  1. **FINAL_PREGAME observer acceptance:** in-window FINAL_PREGAME captures
+     with complete immutable game-level evidence ran naturally on 10-20 and
+     10-21 (P2.10, closed 2026-10-22).
+  2. **Certificate and ordering on natural runs:** every scheduled daily on
+     2026-11-04 recorded `prior_day_learning.prior_slate_date` 2026-11-03 with
+     the certified package before its feature, prediction and odds lanes, and
+     finished READY. Example: `nhldaily_20261104T134506020106Z_373dbef4`.
+
+  The missing-Saves-card contract was settled by P2.12: in prior-learning mode
+  an absent Saves card is ungradeable, and direct reconciliation still requires
+  exactly one. Prior status follows.
+- Prior status: **RECONCILIATION-FIRST RESTORED — focused tests and first successful natural daily ordering verified; FINAL_PREGAME observer acceptance pending**. The
   October 18 10:07 ET `EARLY` run bootstrapped today's two-game schedule, then
   prior-day reconciliation stopped because October 17 had one retained
   `REFRESH` state and no immutable `FINAL_PREGAME` cross-market state. The
@@ -2341,7 +2354,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.33 Daily NHL run timing: when to capture odds and publish picks
 
-- Status: **DONE (code) — install pending the operator** (approved 2026-11-03:
+- Status: **CLOSED 2026-11-04 — installed and verified in natural runs.**
+  The operator installed the schedule on 2026-11-03. On 2026-11-04 the Mac woke
+  at 05:28. All three scheduled runs finished READY with their 8rain file
+  written: `20261104T134504Z_bf7f0968` (daily
+  `nhldaily_20261104T134506020106Z_373dbef4`, 05:45-05:49 PT),
+  `20261104T163005Z_637a313f` (`…163007980075Z_82f0e004`) and
+  `20261104T193005Z_e774d3b9` (`…193007485185Z_fbda88b6`). Summaries are under
+  `artifacts/operational/nhl/scheduled_daily/2026-11-04/`. The jobs and the
+  05:28 wake survived a macOS update the same morning.
+  Still open: recheck the MLB clash before MLB resumes (below). Prior status
+  follows.
+- Prior status: **DONE (code) — install pending the operator** (approved 2026-11-03:
   "I want the morning run to be earlier ... I'm usually up and running earlier
   than 8"). Morning prep 07:30 -> 05:30; `com.proppadia.nhl.scheduled-daily`
   at 05:45, 08:30, 11:30 local runs `daily --with-odds`, the cross-market
@@ -2871,7 +2895,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.42 Pinnacle in the NHL odds capture
 
-- Status: **ADDED 2026-11-02; first live captures to check** (operator: "I
+- Status: **LIVE CAPTURES VERIFIED 2026-11-04; week comparison due from
+  2026-11-09.** Every odds observation since the change merged one
+  Pinnacle response per bound game: `supplemental_merged_count` was 4/4 on
+  the 11-02 EARLY captures, 11/11 on 11-03 and 4/4 on 11-04, and 1 on each
+  per-game CLOSING capture. Pinnacle rows appear in each `normalized_odds.jsonl`
+  (50-74 per CLOSING game; 520-632 on the 11-game 11-03 EARLY captures). Props
+  post later: the 11-04 05:45 PT capture had 72 Pinnacle rows, against 234 at
+  08:30 and 11:30. The only capture without Pinnacle, 11-02 14:35Z, predates
+  the change. Remaining: the week comparison under "Next". Prior status:
+  **ADDED 2026-11-02; first live captures to check** (operator: "I
   want it for mainlines and props if available ... it's quality" driving it,
   not cost; members with wider book access are the primary audience, and the
   operator reaches Pinnacle prices through its clone bet105).
