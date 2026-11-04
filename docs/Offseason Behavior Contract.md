@@ -67,4 +67,9 @@ Ops dashboard:
 
 1. Data freshness cards report source/cache staleness and roster freshness separately.
 2. Roster freshness stale/fail is operational concern even when no games are scheduled.
+3. While the MLB LaunchAgents are paused for the season closeout, MLB roster
+   freshness is kept inside the same 30-hour window by the roster-only job
+   `com.proppadia.mlb.offseason-roster-refresh` (daily 06:15 local; see
+   `docs/Roster Refresh Operations.md`). A FAIL during the pause means that
+   job has not run or has failed. It is not expected off-season behavior.
 

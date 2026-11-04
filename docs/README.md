@@ -71,7 +71,7 @@ If the question is “what is the active runtime path right now?”:
 - `make nhl-workflow-compat-check`: checks local NHL compatibility wrappers; it does not indicate a hosted workflow is active.
 - `make docs-make-target-audit`: fails when docs reference a non-existent Make target.
 - `make cross-sport-post-deploy BASE_URL=<url>`: one-command offseason-safe strict post-deploy checks for MLB + NHL.
-- `docs/Roster Refresh Operations.md`: local Mac runbook for MLB/NHL full-team roster refresh.
+- `docs/Roster Refresh Operations.md`: local Mac runbook for MLB/NHL full-team roster refresh, including the off-season MLB roster-only job.
 - `docs/Cron Replacement Runbook.md`: record of the retired hosted cron policy and the local command surfaces.
 
 ## MLB API and Validation

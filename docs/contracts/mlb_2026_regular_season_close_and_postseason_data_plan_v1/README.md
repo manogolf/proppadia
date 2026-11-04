@@ -223,6 +223,13 @@ authorization conditions above; those remain closeout work.
   `com.proppadia.mlb.bvp.prewarm.daily` (disabled),
   `com.proppadia.mlb.retrain.weekly` (suspended 2026-08-03).
 - NHL LaunchAgents are not touched.
+- Added 2026-11-03 (operator decision): the roster-only job
+  `com.proppadia.mlb.offseason-roster-refresh` (daily 06:15 local) keeps
+  `mlb.player_ids` fresh during the pause. It makes free StatsAPI roster reads
+  and writes only through restricted ingest, and it skips itself while
+  `com.proppadia.mlb.refresh.daily` is loaded. It is not a re-enable of the
+  paused jobs. Install/rollback: `bin/mlb_install_offseason_roster_refresh.sh`
+  (see `docs/Roster Refresh Operations.md`).
 - Final-game grading before the pause: the 05:30 refresh found finalized
   10-28 stats present (45 player rows) and ran the completed-slate reconcile
   (0 rows; no qualified prop model produced 10-28 slate predictions); the

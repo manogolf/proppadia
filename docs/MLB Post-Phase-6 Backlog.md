@@ -1061,6 +1061,30 @@ writer validation does not authorize a hosted cutover or a different writer.
   isolated worktree based on `origin/main`; do not push the ahead local
   `main` branch.
 
+### P2.5 Off-season MLB roster-only refresh (2026-11-03)
+
+- Status: **IMPLEMENTED LOCALLY — operator install pending**. Pausing the MLB
+  LaunchAgents on 2026-10-29 also stopped the roster refresh, so the ops
+  page's MLB Roster Freshness check failed (`mlb.player_ids` last updated
+  2026-10-29 15:43 UTC). The operator chose a separate daily roster-only job
+  over a non-failing check or leaving it failing. The 30-hour check is
+  unchanged.
+- Job: `com.proppadia.mlb.offseason-roster-refresh` at 06:15 local runs
+  `bin/mlb_offseason_roster_refresh.sh`, which runs only
+  `make mlb-roster-refresh-all` under restricted ingest with the daily
+  wrapper's retries. It skips itself while `com.proppadia.mlb.refresh.daily`
+  is loaded. Template: `backend/mlb/launchagents/`; tests:
+  `backend/mlb/tests/test_mlb_offseason_roster_refresh_launchagent.py`.
+- Off-season roster check (2026-11-03, read-only): the StatsAPI `active`
+  roster has returned the 40-man roster since the regular season ended (40 on
+  2026-10-28), so the paused job already ran on that shape through October.
+  Smaller November counts are free-agent departures; marking those players
+  inactive is intended.
+- Open: the operator runs `bin/mlb_install_offseason_roster_refresh.sh`, then
+  confirms the first run's `PASS mlb full roster refresh` line in
+  `artifacts/ops/mlb_offseason_roster_refresh.out.log` and the ops check
+  returning to PASS. At the 2027 restart, run the script with `--rollback`.
+
 ## Daily Signal Cleanup Follow-ups (2026-10-18)
 
 Commits `bdad28b6`, `1f5a71a3`, and `34960e87` removed retired-lane warnings,

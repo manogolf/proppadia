@@ -62,6 +62,26 @@ make mlb-roster-refresh-all MLB_ROSTER_DATE=$(date +%F)
 GitHub-hosted MLB roster automation is retired. Do not provision a hosted
 roster credential or use the removed workflow.
 
+#### Off-season roster-only job
+
+In season, the roster refresh runs inside the daily MLB refresh
+(`com.proppadia.mlb.refresh.daily`). While that job is paused for the season
+closeout, `com.proppadia.mlb.offseason-roster-refresh` runs
+`bin/mlb_offseason_roster_refresh.sh` daily at 06:15 local. It runs only
+`make mlb-roster-refresh-all` through restricted ingest, with the same retries
+as the daily wrapper. It shares the `mlb-pipeline` lock and skips itself while
+the daily refresh is loaded. This keeps the ops page's 30-hour MLB Roster
+Freshness check passing. Off-season, the StatsAPI `active` roster is the
+40-man roster, so free agents leaving a 40-man roster are marked inactive.
+
+```bash
+bin/mlb_install_offseason_roster_refresh.sh             # install (operator)
+launchctl kickstart gui/$(id -u)/com.proppadia.mlb.offseason-roster-refresh  # run now
+bin/mlb_install_offseason_roster_refresh.sh --rollback  # remove; also at the 2027 restart
+```
+
+Logs: `artifacts/ops/mlb_offseason_roster_refresh.{out,err}.log`.
+
 ### NHL
 
 NHL roster refresh is executed in NHL daily automation through:
