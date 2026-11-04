@@ -1063,7 +1063,17 @@ writer validation does not authorize a hosted cutover or a different writer.
 
 ### P2.5 Off-season MLB roster-only refresh (2026-11-03)
 
-- Status: **IMPLEMENTED LOCALLY — operator install pending**. Pausing the MLB
+- Status: **CLOSED 2026-11-04 — installed and verified.**
+  - The operator installed the job on 2026-11-03.
+  - A manual kickstart that evening logged
+    `PASS mlb full roster refresh date=2026-11-03 teams_ok=30/30 roster_rows=1099
+    upserts=1099` under `proppadia_mlb_ingest`.
+  - The live `/api/mlb/roster-freshness` check then returned
+    `status: pass` (`age_hours` 0.04).
+  - The first scheduled 06:15 run on 2026-11-04 logged the same PASS line for
+    2026-11-04 (`artifacts/ops/mlb_offseason_roster_refresh.out.log`).
+  - At the 2027 restart, run the install script with `--rollback`.
+- Prior status: **IMPLEMENTED LOCALLY — operator install pending**. Pausing the MLB
   LaunchAgents on 2026-10-29 also stopped the roster refresh, so the ops
   page's MLB Roster Freshness check failed (`mlb.player_ids` last updated
   2026-10-29 15:43 UTC). The operator chose a separate daily roster-only job
