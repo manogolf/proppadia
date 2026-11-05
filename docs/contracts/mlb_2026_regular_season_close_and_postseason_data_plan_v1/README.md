@@ -48,6 +48,13 @@ Status (updated 2026-11-04):
     - Starter workload outcomes were never bound all season.
   - Moneyline was read through the restricted research login. No database
     writes and no network requests were made.
+- **After the package (2026-11-04):**
+  - Starter workload outcomes were bound for 71 of 72 slates. The daily job
+    now retries pending past slates.
+  - The last 14 regular-season RAW Totals games (09-27) were graded; the
+    cancelled 823490 is void.
+  - The write-once package is unchanged and still lists starter workload as an
+    exception. See MLB backlog P2.6, items 4 and 5.
 - **Offseason authorization conditions** ("Exact offseason authorization
   condition" below):
   - Conditions 1–3 are met by the V7 authority, the lane and credit checks, and

@@ -240,6 +240,7 @@ def update_observation(args: argparse.Namespace) -> dict[str, Any]:
         "production_behavior_changed": False,
         "index_path": str(index_path),
         "latest_row": rows[-1] if rows else {},
+        "updated_row": row,
         "cumulative_eligible_completed_slate_count": eligible_count,
         "stage_reached": _stage(eligible_count),
         "stage_decision_label": _stage_decision_label(_stage(eligible_count)),
@@ -252,6 +253,32 @@ def update_observation(args: argparse.Namespace) -> dict[str, Any]:
         json.dumps(latest_summary, indent=2, sort_keys=True) + "\n"
     )
     return latest_summary
+
+
+PENDING_BINDING_STATUSES = ("pending_current_or_future_slate", "pending_or_unavailable")
+
+
+def rebind_pending_completed_slates(args: argparse.Namespace) -> list[dict[str, Any]]:
+    """Retry outcome binding for earlier slates that were still pending.
+
+    The daily run updates its own slate before games start, so that slate can
+    only bind on a later day. This retries every completed slate whose row is
+    still pending, which also catches up after missed days.
+    """
+    index_path = Path(args.observation_root) / "starter_skill_workload_observation_index.csv"
+    if not index_path.exists():
+        return []
+    with index_path.open(newline="") as fh:
+        pending = [row["slate_date"] for row in csv.DictReader(fh)
+                   if row.get("outcome_binding_status") in PENDING_BINDING_STATUSES
+                   and row.get("slate_date") != args.date
+                   and _is_completed_slate_date(str(row.get("slate_date")))]
+    results = []
+    for slate_date in pending:
+        retry = argparse.Namespace(**{**vars(args), "date": slate_date, "run_dir": ""})
+        updated = update_observation(retry)["updated_row"]
+        results.append({"slate_date": slate_date, "outcome_binding_status": updated.get("outcome_binding_status")})
+    return results
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:

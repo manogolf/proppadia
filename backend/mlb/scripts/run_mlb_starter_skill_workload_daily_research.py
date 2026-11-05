@@ -19,7 +19,10 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from backend.mlb.scripts.build_mlb_starter_skill_workload_research import build as build_research
-from backend.mlb.scripts.update_mlb_starter_skill_workload_observation import update_observation
+from backend.mlb.scripts.update_mlb_starter_skill_workload_observation import (
+    rebind_pending_completed_slates,
+    update_observation,
+)
 
 
 DEFAULT_LOGIC_ROOT = Path("artifacts/analysis/model_development/mlb_starter_skill_workload_launchagent")
@@ -166,6 +169,8 @@ def run(args: argparse.Namespace) -> dict:
         no_db=args.no_db,
     )
     observation = update_observation(obs_args)
+    # Today's slate binds on a later day; retry earlier slates still pending.
+    rebound = rebind_pending_completed_slates(obs_args)
     payload = {
         "date": date_value,
         "run_tag": run_tag,
@@ -175,6 +180,7 @@ def run(args: argparse.Namespace) -> dict:
         "runner_status": "SUCCESS",
         "generator_result": result,
         "observation_status": observation,
+        "rebound_prior_slates": rebound,
         "db_writes": 0,
         "oddsapi_calls": 0,
         "production_behavior_changed": False,

@@ -64,5 +64,34 @@ class StarterSkillWorkloadDailyRunnerTests(unittest.TestCase):
             self.assertEqual(payload["generated_at_utc"], generated)
 
 
+class RebindPendingCompletedSlatesTests(unittest.TestCase):
+    def test_only_completed_pending_slates_other_than_today_are_retried(self):
+        from backend.mlb.scripts import update_mlb_starter_skill_workload_observation as updater
+
+        with tempfile.TemporaryDirectory() as raw:
+            root = Path(raw)
+            (root / "starter_skill_workload_observation_index.csv").write_text(
+                "slate_date,outcome_binding_status\n"
+                "2026-10-26,pending_current_or_future_slate\n"
+                "2026-10-27,bound_sufficient\n"
+                "2026-10-28,pending_or_unavailable\n"
+                "2099-01-01,pending_current_or_future_slate\n"
+            )
+            args = argparse.Namespace(date="2026-10-28", run_dir="/today/run", daily_root="daily",
+                                      observation_root=str(root), min_starter_match_pct=0.8, no_db=False)
+            calls = []
+
+            def fake_update(retry):
+                calls.append((retry.date, retry.run_dir))
+                return {"updated_row": {"outcome_binding_status": "bound_sufficient"}}
+
+            with patch.object(updater, "update_observation", side_effect=fake_update):
+                result = updater.rebind_pending_completed_slates(args)
+        # Today's slate (10-28), bound slates and future slates are left alone;
+        # the retry uses that slate's own latest pregame run, not today's.
+        self.assertEqual(calls, [("2026-10-26", "")])
+        self.assertEqual(result, [{"slate_date": "2026-10-26", "outcome_binding_status": "bound_sufficient"}])
+
+
 if __name__ == "__main__":
     unittest.main()

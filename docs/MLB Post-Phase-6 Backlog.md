@@ -1103,9 +1103,9 @@ writer validation does not authorize a hosted cutover or a different writer.
     (`artifacts/operational/mlb/season_close/2026/postseason_closeout.json`,
     `POSTSEASON_CLOSEOUT_READY`), with the remaining known exceptions listed in
     it. See the closeout plan README.
-  - Still open, not blocking:
-    - Starter workload outcome binding (lane-wide).
-    - The 15 regular-season RAW Totals rows from 09-27 (item 5).
+  - Items 4 and 5 were resolved later on 2026-11-04 (below), after the
+    package was written. The write-once package still lists starter workload
+    as an exception.
   - Prior status: OPEN — inventory done (read-only); fixes need operator
     decisions.
   The postseason population is complete (V7 phase authority, 40 games, all
@@ -1176,8 +1176,36 @@ writer validation does not authorize a hosted cutover or a different writer.
   4. **Starter skill workload:** 27 postseason games observed, but outcomes
      have never been bound for any row all season (72 rows `pending`). This is
      lane-wide.
+     **Resolved 2026-11-04.**
+     - Cause: the daily job updates its own slate before the games, when the
+       slate is never "completed", and nothing retried later.
+     - Re-running `update_mlb_starter_skill_workload_observation` for all 72
+       slates (research login only; rehearsed on a copy; pregame fields
+       unchanged) bound 71 `bound_sufficient`.
+     - 10-16 is correctly `pending_or_unavailable`: only the postponed 849817
+       was on that date.
+     - The lane's stage label is now `MODELING_READINESS_DECISION_DUE` (71
+       eligible slates). That is a research review, not acted on.
+     - Going forward,
+       `run_mlb_starter_skill_workload_daily_research.py` calls the new
+       `rebind_pending_completed_slates` after each update. It retries every
+       earlier completed slate still pending (test
+       `RebindPendingCompletedSlatesTests`).
+     - Pre-change index copy: `tmp/starter_bind/obs_before_2026-11-04/`.
   5. **Regular season, RAW Totals:** 15 predictions from 09-27 are still
      `DEFERRED_OFFICIAL_FINAL_UNAVAILABLE`.
+     **Resolved 2026-11-04.**
+     - Cause: the 09-27 player-stats completeness folder (official live feeds)
+       was never built.
+     - It was built with `player_stats_game_completeness --mode date --date
+       2026-09-27` (free StatsAPI and the research login; 15/15
+       `COMPLETE_EXACT`).
+     - `grade_mlb_totals_prospective_shadow_v1 --date 2026-09-27
+       --allow-partial` then graded 14. The ledger now has 625 predictions and
+       624 outcomes, with prediction rows unchanged.
+     - The remaining row, 823490, is the authoritatively cancelled game
+       (`NONPLAYABLE_TERMINAL`), so it stays void.
+     - Ledger backup: `tmp/totals_0927/before_grade_2026-11-04.sqlite3`.
 - **Paid requests:** 104 Pinnacle main-market captures (10-04 to 10-29), 104
   requests, 306 credits, all HTTP 200
   (`backend/mlb/exports/market_history/full_game_totals/<date>/<run>/pinnacle/`).
