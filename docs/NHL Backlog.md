@@ -3724,6 +3724,28 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   model 55-60%: 173 rows, actual 63.0%. D at 7.5+ SOG per 60: 384 rows, 47.1%
   vs 49.2%. Chychrun himself: 75 rows, 51.6% vs 53.3%. No overrating; if
   anything slightly under. Forwards' top quintile 48.3% vs 51.6%. No change.
+- 2026-11-05 two-sided Points 0.5 gap by model (operator: find what drives the
+  two-sided gap; no calibration layer). Read-only; published production picks
+  10-10..11-04 (6,370 settled at 0.5, 3,427 two-sided with a market no-vig
+  price), features joined from each capture's `features.csv`; scratch under
+  `tmp/pts_std*.pkl`. Off two-sided lines the published model was within
+  about 2 points in every PP-TOI, TOI, form and games-played group; the gap
+  sat on two-sided lines, and the market was calibrated there (priced 42.5%,
+  actual 42.7%; where the market was 15+ above the model, actual 48.6% vs
+  model 29.8%).
+  - Old models (10-10..11-01 morning, 2,936 two-sided): model 37.2% vs actual
+    42.7%, log loss 0.6598 vs market 0.6386; picks the market rated far above
+    the model had fewer games, no prior-season rate and low team shots.
+    Causes already fixed: early `team_d10_sf_per_game` near 14 until the
+    10-15 repair (`c421f583`; about 27 after), and no prior-season own rate
+    (this item's goals + assists cutover).
+  - Goals + assists model (11-01..11-04, 491 two-sided): model 41.2% vs actual
+    42.8% vs market 43.2%; log loss 0.6356 vs market 0.6340. Unders: model
+    65.9%, won 65.0%; Overs: model 59.0%, won 62.1%. Four dates only.
+  - WATCH (weekly from 11-09): two-sided gap and log loss vs market for the
+    current model; if Overs keep winning above confidence, test the untested
+    inputs listed above (market totals once enough captures exist, lineup and
+    PP-unit news), not a calibration layer (operator preference 2026-11-05).
 
 ### P2.38 Daily input watch surfaces input problems without being asked
 
