@@ -239,6 +239,23 @@ class NHLPerformanceSummaryTests(unittest.TestCase):
         self.assertIn("Quote matching is descriptive and does not affect grading.", markdown)
         self.assertIn("retained bound coverage evidence unavailable", markdown)
 
+    def test_market_coverage_sits_before_notes_and_shadow_captures_are_labeled(self):
+        summary = self.summary()
+        summary["sog_fixed_blend_prospective"] = {"status": "COMPLETE", "grades": [
+            {"model_identity": "BLEND_A", "run_id": "nhldaily_20261104T134506020106Z_373dbef4"},
+            {"model_identity": "BLEND_A", "run_id": "nhldaily_20261104T163007980075Z_82f0e004"},
+        ]}
+        summary["sog_d10_d20_divergence_shadow"] = {"status": "COMPLETE", "grades": [
+            {"run_id": "nhldaily_20261104T193007485185Z_fbda88b6", "settled_player_games": 3}]}
+        lines = render_markdown(summary).splitlines()
+        coverage = lines.index("## Market Coverage Context")
+        self.assertLess(coverage, lines.index("## Notes"))
+        self.assertLess(coverage, lines.index("## SOG Fixed Blend Prospective Shadows"))
+        self.assertEqual(lines[lines.index("## Notes") - 1], "")
+        self.assertTrue(any(line.startswith("- 13:45Z capture, BLEND_A:") for line in lines))
+        self.assertTrue(any(line.startswith("- 16:30Z capture, BLEND_A:") for line in lines))
+        self.assertTrue(any(line.startswith("- 19:30Z capture: settled player-games 3") for line in lines))
+
     def test_nonpushable_markets_render_wl_and_keep_machine_semantics(self):
         grades = grade_frames()
         grades["sog"] = grades["sog"].copy()

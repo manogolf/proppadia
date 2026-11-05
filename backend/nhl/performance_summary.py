@@ -1365,6 +1365,12 @@ def summarize_frames(*, slate_date: str, games: int, phase: str,
     }
 
 
+def _capture_label(grade: dict[str, Any]) -> str:
+    """Name the pregame capture a shadow grade came from, e.g. "13:45Z capture"."""
+    match = re.search(r"T(\d{2})(\d{2})\d*Z", str(grade.get("run_id") or ""))
+    return f"{match.group(1)}:{match.group(2)}Z capture" if match else "capture"
+
+
 def _count_shadow_section(context: dict[str, Any], title: str) -> list[str]:
     """Markdown for a count-model SOG shadow graded by latest pregame capture."""
     lines = ["", f"## {title}",
@@ -1568,7 +1574,7 @@ def render_markdown(summary: dict[str, Any]) -> str:
               f"Status: {fixed_blend.get('status', 'NO_IMMUTABLE_SHADOW_CAPTURE')}"]
     for grade in fixed_blend.get("grades", []):
         lines.append(
-            f"- {grade.get('model_identity')}: settled player-games "
+            f"- {_capture_label(grade)}, {grade.get('model_identity')}: settled player-games "
             f"{grade.get('settled_player_games', 0)}, paired rows {grade.get('paired_n', 0)}, "
             f"count MAE difference vs d10 {grade.get('paired_count_mae_difference_vs_d10')}, "
             f"1.5 Brier difference {grade.get('paired_brier_difference_1_5_vs_d10')}."
@@ -1579,13 +1585,13 @@ def render_markdown(summary: dict[str, Any]) -> str:
     lines += ["", "## SOG D10/D20 Divergence Prospective Shadow",
               f"Status: {divergence.get('status', 'NO_IMMUTABLE_SHADOW_CAPTURE')} (PROSPECTIVE_SHADOW)"]
     for grade in divergence_grades:
-        lines.append(f"- Settled player-games {grade.get('settled_player_games', 0)}; count MAE {grade.get('count_mae')}; paired count MAE difference vs the Poisson formula {grade.get('paired_count_mae_difference_vs_production')}.")
+        lines.append(f"- {_capture_label(grade)}: settled player-games {grade.get('settled_player_games', 0)}; count MAE {grade.get('count_mae')}; paired count MAE difference vs the Poisson formula {grade.get('paired_count_mae_difference_vs_production')}.")
     lines.append("Shadow only; production SOG is the SOG section's production model.")
     structural = summary.get("sog_d10_structural_correction_shadow") or {}
     lines += ["", "## SOG Combined Structural-Correction Prospective Shadow",
               f"Status: {structural.get('status', 'NO_IMMUTABLE_SHADOW_CAPTURE')} (PROSPECTIVE_SHADOW)"]
     for grade in structural.get("grades", []):
-        lines.append(f"- Settled player-games {grade.get('settled_player_games', 0)}; combined count MAE {grade.get('count', {}).get('mae')}.")
+        lines.append(f"- {_capture_label(grade)}: settled player-games {grade.get('settled_player_games', 0)}; combined count MAE {grade.get('count', {}).get('mae')}.")
     lines.append("Shadow only; production SOG is the SOG section's production model.")
     lines += _count_shadow_section(summary.get("sog_shrunk_rate_k180_shadow") or {},
                                    "SOG Shrunk-Rate (K=180) Prospective Shadow")
@@ -1626,8 +1632,10 @@ def render_markdown(summary: dict[str, Any]) -> str:
                 "because the SOG market-retention repair was not completed before puck drop. "
                 "This is an operational evidence gap; bookmaker market absence is not inferred."
             )
-    lines[-4:-4] = ["", "## Market Coverage Context", *coverage_rows,
-                    "Quote matching is descriptive and does not affect grading."]
+    # Market coverage belongs just before Notes, not wherever the report ends.
+    notes_at = lines.index("## Notes") - 1
+    lines[notes_at:notes_at] = ["", "## Market Coverage Context", *coverage_rows,
+                                "Quote matching is descriptive and does not affect grading."]
     return "\n".join(lines).rstrip() + "\n"
 
 
