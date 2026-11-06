@@ -722,6 +722,28 @@ hash-verified against its contract. `league_prior` is constant for a season
 (last season's league rate by position), so a new season is reported out of
 range but not flagged.
 
+Role changes in the input watch (2026-11-06, NHL Backlog P2.44). The report
+opens with "Role changes vs last season": tonight's players (5+ games this
+season, 20+ last regular season) whose last-10 TOI moved 2.5+ minutes or
+power-play TOI 1.0+ minutes from last season's per-game average. Last season's
+PP time is first scaled by tonight's players' overall PP change (league PP
+time per skater ran ~31% higher in 2026 than 2025; P2.45), so a league-wide
+shift is not a role change. Each player shows TOI two seasons ago / last /
+now, points per game for the same three seasons (from the production Points
+contract's `prior_season_totals`), and model vs market P(Over) at Points 0.5
+and SOG 1.5 (median same-book no-vig, two-sided lines only). The read compares
+the role's direction with the Over gap: a gap under 5 points is agreement; a
+role up with the model below the market (or down and above) reads "model
+likely behind the role change". The table lists disagreements; agreeing and
+unquoted players are named or counted below it. A role change is also the
+first reason on any of the ten largest gaps it explains. Last season's usage
+is read from `artifacts/operational/nhl/input_watch/prior_season_usage.csv`,
+built once per completed season, read-only, by
+`backend/nhl/scripts/build_nhl_prior_season_usage.py --seasons <s-2> <s-1>`
+(regular season = game type 02); without it the section says unavailable and
+the rest of the watch runs. Scheduled runs record the watch's path as
+`input_watch` in `summary.json` and on the `NHL_SCHEDULED_DAILY=` line.
+
 Two-sided line level in the daily performance summary (2026-10-28). Next to
 the all-predictions tables, SOG production and Points HGB production show W/L
 by line and side for only the graded predictions whose exact line had a

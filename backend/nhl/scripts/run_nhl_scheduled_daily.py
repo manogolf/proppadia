@@ -144,6 +144,10 @@ def main(argv: list[str] | None = None) -> int:
             receipt = latest_daily_receipt(summary["started_utc"])
             result["daily_classification"] = receipt.get("final_classification") if receipt else None
             result["daily_receipt"] = receipt.get("path") if receipt else None
+            # The daily run's input watch (role changes, biggest model-market gaps).
+            watch = (ROOT / "artifacts/operational/nhl/input_watch" / f"slate_date={slate}"
+                     / f"run_id={receipt.get('parent_daily_run_id')}" / "input_watch.md") if receipt else None
+            summary["input_watch"] = str(watch) if watch and watch.is_file() else None
             if result["exit_code"] != 0 or result["daily_classification"] != "READY":
                 summary["status"] = "FAILED_DAILY"
                 break
@@ -161,7 +165,8 @@ def main(argv: list[str] | None = None) -> int:
     summary["finished_utc"] = utc_now()
     write()
     print("NHL_SCHEDULED_DAILY=" + json.dumps({"status": summary["status"], "slate": slate,
-                                               "upload_csv": summary["upload_csv"]}))
+                                               "upload_csv": summary["upload_csv"],
+                                               "input_watch": summary.get("input_watch")}))
     return 0 if summary["status"] == "READY" else 1
 
 

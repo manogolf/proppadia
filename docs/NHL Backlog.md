@@ -2833,6 +2833,48 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.45 League power-play time per skater ~31% higher in 2026 data
+
+- Status: **OPEN — not investigated** (found 2026-11-06 while building P2.44).
+- Evidence (read-only, `nhl.skater_game_logs_raw`, regular season): mean PP
+  TOI per skater-game 1.17 (2024-25), 1.16 (2025-26), 1.52 (2026-27 to
+  11-05); PP skater-minutes per team-game 21.0, 19.8, 27.3; p90 3.40, 3.40,
+  4.18. Total TOI per skater-game is flat (16.53, 16.54, 16.50).
+- Open question: more power plays this season, or a change in how 2026 PP
+  time is sourced or filled (see the 2026-10-24 PP TOI backfill and
+  verified-zero fill above). It matters beyond the watch: PP TOI is a Points
+  and SOG model input trained on earlier seasons (the input watch already
+  reports many PP TOI values outside the SOG training range).
+- Next: compare 2026 team PP opportunities and PP minutes from an official
+  source with the stored values for a sample of games.
+
+### P2.44 Daily role-change watch (ice time and PP time vs last season)
+
+- Status: **DONE 2026-11-06** (operator: "Yes, build it" — a way to see role
+  changes without manual stat checks). Extends the existing input watch
+  (P2.38) instead of adding a new report; no model change.
+- Trigger: Kent Johnson (CBJ) Points 0.5 on 2026-11-06, model 38% vs market
+  50%. TOI 17.3 (2024-25), 13.2 (2025-26), 18.4 now; PP 1.3 to 3.3; points
+  per game 0.87, 0.29, 1.00. The Points rate input (`own_rate_k30`) counts
+  last season's 76 games like this season's 14, so it reads him like
+  2025-26.
+- Built: `role_changes`, `role_read` and a "Role changes vs last season"
+  section in `backend/nhl/input_watch.py`; one-time usage table
+  `backend/nhl/scripts/build_nhl_prior_season_usage.py` (built 2026-11-06 for
+  2024 and 2025: 886 and 929 players); scheduled runs record the watch path.
+  Rules and output in the capture contract ("Role changes in the input
+  watch"). Tests: `backend/nhl/tests/test_input_watch.py`.
+- First run (2026-11-06 08:30 PT data): 40 role-change players, PP scale
+  1.39; 6 read "model likely behind" (Kent Johnson, Owen Power, Maxim
+  Shabanov, Jackson LaCombe, Quinn Hughes, Kirill Kaprizov; all role up,
+  model 6-15 points below the market on the Points 0.5 Over), 1 "model
+  further along" (Macklin Celebrini, 77% vs 65%), 3 mixed with the model
+  below the market; 17 agree within 5 points; 13 have no two-sided market.
+- Thresholds (2.5 TOI minutes, 1.0 PP minutes, 5-point gap) are first
+  choices, not tuned. Whether "model likely behind" picks actually lose to
+  the market is unmeasured; check with the current model only, once a few
+  weeks of reads are graded.
+
 ### P2.43 Plus-money picks: weekly collection until an evaluation is due
 
 - Status: **COLLECTING (from 2026-11-02)**. Subject (operator, 2026-11-02:

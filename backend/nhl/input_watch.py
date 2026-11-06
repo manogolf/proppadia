@@ -19,6 +19,16 @@ change to any prediction. It writes
    (NHL Backlog P2.29, P2.37) and inputs unusual against players the market
    prices the same.
 3. Source health: the prior date's shot-attempt source diagnostic.
+4. Role changes (2026-11-06): tonight's players whose ice time or power-play
+   time over the last 10 games differs from last season's by at least
+   ``ROLE_TOI_DELTA`` / ``ROLE_PP_DELTA`` minutes, with points per game for
+   this season and the two before and the model's Points 0.5 and SOG 1.5
+   probabilities next to the market's. The Points rate input weighs last
+   season's games like this season's, so a player whose role changed can sit
+   far from a market that has already reacted. Last season's usage comes from
+   ``PRIOR_USAGE_PATH`` (built once per season by
+   ``scripts/build_nhl_prior_season_usage.py``); points per game from the
+   production Points model's frozen ``prior_season_totals``.
 """
 from __future__ import annotations
 
@@ -44,6 +54,13 @@ IMPUTED_SHARE = 0.02     # flag substituted attempts above this share of players
 PEER_WINDOW = 0.05       # peers: same line, market P(over) within +/- this
 PEER_MIN = 8
 PEER_Z = 1.5
+PRIOR_USAGE_PATH = OUTPUT_ROOT / "prior_season_usage.csv"
+ROLE_TOI_DELTA = 2.5     # minutes per game, last 10 games vs last season
+ROLE_PP_DELTA = 1.0      # power-play minutes per game
+ROLE_MIN_GAMES = 5       # games this season before a role change is read
+ROLE_MIN_PRIOR_GAMES = 20
+ROLE_MARKET_GAP = 0.05   # model vs market P(over) beyond this is read as a gap
+ROLE_LINES = {"points": 0.5, "sog": 1.5}
 POINTS_FEATURES = [
     "is_home", "d10_sog_per60", "attempts_d10_per60", "player_points_last10",
     "current_season_points_prior", "current_season_games_prior", "mean_toi_last10",
@@ -236,9 +253,102 @@ def _points_reasons(row: pd.Series, slate: pd.DataFrame, ranges: dict[str, Any])
     return reasons
 
 
+def season_of(slate_date: str) -> int:
+    """NHL season by start year (September onward belongs to that year's season)."""
+    year, month = int(slate_date[:4]), int(slate_date[5:7])
+    return year if month >= 9 else year - 1
+
+
+def prior_points_per_game() -> pd.DataFrame | None:
+    """Points per game by player and season from the production Points model's frozen totals."""
+    from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
+    contract = json.loads(scorer.CONTRACT_PATH.read_text())
+    path = scorer.CONTRACT_PATH.parent / contract["prior_season_totals"]
+    if not path.is_file():
+        return None
+    totals = pd.read_csv(path)
+    totals["ppg"] = totals.points / totals.games.replace(0, np.nan)
+    return totals[["player_id", "season", "games", "ppg"]]
+
+
+def role_changes(points: pd.DataFrame, usage: pd.DataFrame, season: int,
+                 totals: pd.DataFrame | None = None) -> pd.DataFrame:
+    """Tonight's players whose last-10 ice time or PP time moved from last season's."""
+    prior = usage[usage.season.eq(season - 1)].set_index("player_id")
+    before = usage[usage.season.eq(season - 2)].set_index("player_id")
+    f = points.copy()
+    f["player_id"] = f.player_id.astype("int64")
+    f = f[pd.to_numeric(f.current_season_games_prior, errors="coerce").ge(ROLE_MIN_GAMES)]
+    f = f[f.player_id.isin(prior.index[prior.games.ge(ROLE_MIN_PRIOR_GAMES)])]
+    if f.empty:
+        return pd.DataFrame()
+    f["toi_prior"] = f.player_id.map(prior.toi_per_game)
+    f["toi_before"] = f.player_id.map(before.toi_per_game) if len(before) else np.nan
+    f["toi_now"] = pd.to_numeric(f.mean_toi_last10, errors="coerce")
+    f["pp_now"] = pd.to_numeric(f.mean_pp_toi_last10, errors="coerce").fillna(0.0)
+    # League power-play time shifts between seasons (2026 runs ~30% above 2025);
+    # scale last season's PP time by tonight's players' overall change so only
+    # player-specific moves count.
+    raw_pp_prior = f.player_id.map(prior.pp_toi_per_game).fillna(0.0)
+    pp_scale = float(f.pp_now.mean() / raw_pp_prior.mean()) if raw_pp_prior.mean() > 0 else 1.0
+    f["pp_prior"] = raw_pp_prior * pp_scale
+    f["toi_delta"] = f.toi_now - f.toi_prior
+    f["pp_delta"] = f.pp_now - f.pp_prior
+    f = f[f.toi_delta.abs().ge(ROLE_TOI_DELTA) | f.pp_delta.abs().ge(ROLE_PP_DELTA)].copy()
+    if f.empty:
+        empty = pd.DataFrame()
+        empty.attrs["pp_scale"] = pp_scale
+        return empty
+    up = f.toi_delta.ge(0) & f.pp_delta.ge(0)
+    down = f.toi_delta.le(0) & f.pp_delta.le(0)
+    f["direction"] = np.select([up, down], ["UP", "DOWN"], "MIXED")
+    f["ppg_now"] = f.current_season_points_prior / f.current_season_games_prior.replace(0, np.nan)
+    for label, offset in (("ppg_prior", 1), ("ppg_before", 2)):
+        f[label] = np.nan
+        if totals is not None:
+            rates = totals[totals.season.eq(season - offset)].set_index("player_id").ppg
+            f[label] = f.player_id.map(rates)
+    f["role_size"] = f.toi_delta.abs() / ROLE_TOI_DELTA + f.pp_delta.abs() / ROLE_PP_DELTA
+    keep = ["game_id", "player_id", "player_name", "direction", "toi_before", "toi_prior", "toi_now",
+            "toi_delta", "pp_prior", "pp_now", "pp_delta", "ppg_before", "ppg_prior", "ppg_now",
+            "current_season_games_prior", "role_size"]
+    if "player_name" not in f:
+        f["player_name"] = f.player_id.astype(str)
+    out = f[keep].sort_values("role_size", ascending=False).reset_index(drop=True)
+    out.attrs["pp_scale"] = pp_scale
+    return out
+
+
+def role_read(direction: str, model_p_over: float | None, market_p_over: float | None) -> str:
+    """Plain reading of a role change against the model-market gap on the Over."""
+    if model_p_over is None or market_p_over is None or pd.isna(model_p_over) or pd.isna(market_p_over):
+        return "no two-sided market"
+    gap = model_p_over - market_p_over
+    if abs(gap) < ROLE_MARKET_GAP:
+        return "model and market agree"
+    if direction == "MIXED":
+        return f"model {'above' if gap > 0 else 'below'} market; mixed role change, check lines/PP unit"
+    behind = (direction == "UP" and gap < 0) or (direction == "DOWN" and gap > 0)
+    if behind:
+        return "model likely behind the role change (market already moved)"
+    return "model further along the role change than the market; check news"
+
+
+def _role_reason(row: pd.Series, roles: pd.DataFrame | None) -> str | None:
+    if roles is None or roles.empty:
+        return None
+    hit = roles[roles.player_id.eq(int(row.player_id))]
+    if hit.empty:
+        return None
+    r = hit.iloc[0]
+    return (f"role change vs last season: TOI {r.toi_prior:.1f} to {r.toi_now:.1f}, "
+            f"PP {r.pp_prior:.1f} to {r.pp_now:.1f} (rate input leans on last season)")
+
+
 def explain_disagreements(*, points: pd.DataFrame | None, sog: pd.DataFrame | None, slate_date: str,
                           run_id: str, operational_root: Path, now_utc: str,
-                          ranges: dict[str, Any], sog_ranges: dict[str, Any] | None = None) -> dict[str, Any]:
+                          ranges: dict[str, Any], sog_ranges: dict[str, Any] | None = None,
+                          roles: pd.DataFrame | None = None) -> dict[str, Any]:
     starts: dict[int, str] = {}
     if points is not None and "game_start_utc" in points:
         starts = {int(g): str(s).replace(" ", "T") for g, s in zip(points.game_id, points.game_start_utc)}
@@ -254,7 +364,7 @@ def explain_disagreements(*, points: pd.DataFrame | None, sog: pd.DataFrame | No
     quotes, _ = candidate_export.load_retained_quotes(operational_root, candidates, price_both_sides=True)
     market = _market(candidate_export.deduplicate_quotes(quotes))
     cand = pd.DataFrame(candidates).merge(market, on="candidate_key", how="inner")
-    out: dict[str, Any] = {"two_sided_candidates": int(len(cand)), "lanes": {}}
+    out: dict[str, Any] = {"two_sided_candidates": int(len(cand)), "lanes": {}, "role_market": []}
     for lane, (frame, market_key, _lines) in lanes.items():
         part = cand[cand.market_key.eq(market_key)].copy()
         if part.empty:
@@ -270,6 +380,12 @@ def explain_disagreements(*, points: pd.DataFrame | None, sog: pd.DataFrame | No
         frame["game_id"] = frame.game_id.astype("int64")
         frame["player_id"] = frame.player_id.astype("int64")
         part = part.merge(frame, on=["game_id", "player_id"], how="left", suffixes=("", "_feature"))
+        if roles is not None and not roles.empty:
+            mine = part[part.player_id.isin(roles.player_id) & part.line.eq(ROLE_LINES[lane])]
+            out["role_market"] += [{"lane": lane, "player_id": int(r.player_id), "line": float(r.line),
+                                    "model_p_over": round(float(r.probability_over), 4),
+                                    "market_p_over": round(float(r.market_p_over), 4)}
+                                   for r in mine.itertuples(index=False)]
         if lane == "points":
             part["season_ppg"] = part.current_season_points_prior / part.current_season_games_prior.replace(0, np.nan)
             peer_columns = ["season_ppg", "player_points_last10", "mean_toi_last10", "mean_pp_toi_last10",
@@ -300,6 +416,9 @@ def explain_disagreements(*, points: pd.DataFrame | None, sog: pd.DataFrame | No
                     if pd.notna(value) and not bounds["p01"] <= value <= bounds["p99"]:
                         reasons.append(f"{FEATURE_LABELS.get(column, column.removeprefix('feature_'))} "
                                        f"{value:.3g} outside training range")
+            role = _role_reason(row, roles)
+            if role:
+                reasons.insert(0, role)
             reasons += _peer_reasons(row, part, peer_columns)
             picks.append({
                 "player": str(row.get("player_name") or row.player_id), "player_id": int(row.player_id),
@@ -331,10 +450,82 @@ def attempt_source_health(operational_root: Path, prior_date: str | None, run_id
             "flag": bool(failed)}
 
 
+def _role_rows(roles: pd.DataFrame | None, market: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if roles is None or roles.empty:
+        return []
+    by_key = {(m["lane"], m["player_id"]): m for m in market}
+    rows = []
+    for r in roles.itertuples(index=False):
+        row = {key: (None if pd.isna(value) else (round(float(value), 3) if isinstance(value, float) else value))
+               for key, value in r._asdict().items()}
+        row["player_id"], row["game_id"] = int(r.player_id), int(r.game_id)
+        for lane in ("points", "sog"):
+            m = by_key.get((lane, int(r.player_id))) or {}
+            row[f"{lane}_model_p_over"] = m.get("model_p_over")
+            row[f"{lane}_market_p_over"] = m.get("market_p_over")
+        lead = "points" if row["points_market_p_over"] is not None else "sog"
+        row["read"] = role_read(r.direction, row[f"{lead}_model_p_over"], row[f"{lead}_market_p_over"])
+        row["read_from"] = lead
+        rows.append(row)
+    # Players the model looks behind on come first; no-market players last.
+    order = {"model likely behind": 0, "model further": 1, "model below": 2, "model above": 2,
+             "model and market": 3, "no two-sided": 4}
+    rank = lambda read: next((v for k, v in order.items() if read.startswith(k)), 3)
+    return sorted(rows, key=lambda row: rank(row["read"]))
+
+
+def _pct(value: float | None) -> str:
+    return "–" if value is None else f"{100 * value:.0f}%"
+
+
+def _num(value: float | None, digits: int = 1) -> str:
+    return "–" if value is None else f"{value:.{digits}f}"
+
+
+def render_role_changes(section: dict[str, Any]) -> list[str]:
+    lines = ["## Role changes vs last season", "",
+             f"Tonight's players whose ice time over the last 10 games moved {ROLE_TOI_DELTA:g}+ minutes, or "
+             f"power-play time {ROLE_PP_DELTA:g}+ minutes, from last season ({ROLE_MIN_GAMES}+ games this "
+             f"season, {ROLE_MIN_PRIOR_GAMES}+ last season). The Points rate input counts last season's games "
+             "like this season's, so these are the players the model is slowest on. Model and market are "
+             "P(Over) at Points 0.5 and SOG 1.5 (market: median no-vig, two-sided lines only); the read uses "
+             f"Points 0.5 when quoted and treats a gap under {100 * ROLE_MARKET_GAP:.0f} points as agreement.", ""]
+    if not str(section.get("status", "")).startswith("COMPLETE"):
+        return lines + [f"Unavailable: {section.get('status')}", ""]
+    if section.get("pp_scale"):
+        lines[-1:-1] = ["", f"Last season's PP time is scaled by {section['pp_scale']:.2f} (tonight's players' "
+                        "power-play time now vs last season) so a league-wide shift is not read as a role change."]
+    every = section.get("players") or []
+    quoted = [p for p in every if not p["read"].startswith("no two-sided")]
+    agree = [p["player_name"] for p in quoted if p["read"].startswith("model and market agree")]
+    players = [p for p in quoted if not p["read"].startswith("model and market agree")]
+    unquoted = len(every) - len(quoted)
+    tail = []
+    if agree:
+        tail.append(f"Role changed, model and market within {100 * ROLE_MARKET_GAP:.0f} points: {', '.join(agree)}.")
+    if unquoted:
+        tail.append(f"{unquoted} more role-change player(s) without a two-sided market (in the JSON).")
+    if not players:
+        return lines + ["No role-change player tonight where the model and market disagree.", "", *tail, ""]
+    lines += ["| Player | Role | TOI 2 seasons ago / last / now | PP TOI last (adjusted) / now | Points/game 2 seasons ago / "
+              "last / now | Points 0.5 model / market | SOG 1.5 model / market | Read |",
+              "|---|---|---|---|---|---|---|---|"]
+    for p in players:
+        lines.append(
+            f"| {p['player_name']} | {p['direction']} | {_num(p['toi_before'])} / {_num(p['toi_prior'])} / "
+            f"{_num(p['toi_now'])} | {_num(p['pp_prior'])} / {_num(p['pp_now'])} | {_num(p['ppg_before'], 2)} / "
+            f"{_num(p['ppg_prior'], 2)} / {_num(p['ppg_now'], 2)} | {_pct(p['points_model_p_over'])} / "
+            f"{_pct(p['points_market_p_over'])} | {_pct(p['sog_model_p_over'])} / {_pct(p['sog_market_p_over'])} "
+            f"| {p['read']} |")
+    return lines + ["", *tail, ""]
+
+
 def render(result: dict[str, Any]) -> str:
     lines = [f"# NHL input watch — {result['slate_date']}", "",
              f"Run `{result['run_id']}`; {result['flag_count']} flag(s). Read-only diagnostic; "
              "predictions are unchanged.", ""]
+    if result.get("role_changes"):
+        lines += render_role_changes(result["role_changes"])
     for lane in ("points", "sog"):
         checks = result["sanity"].get(lane) or []
         flagged = [c for c in checks if c["flag"]]
@@ -365,7 +556,7 @@ def render(result: dict[str, Any]) -> str:
 def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
                     points_capture_dir: Path | None, operational_root: Path,
                     prior_date: str | None = None, output_root: Path = OUTPUT_ROOT,
-                    now_utc: str | None = None) -> dict[str, Any]:
+                    now_utc: str | None = None, prior_usage_path: Path = PRIOR_USAGE_PATH) -> dict[str, Any]:
     now_utc = now_utc or datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     ranges = json.loads(POINTS_RANGES_PATH.read_text())
     sog_ranges = json.loads(SOG_RANGES_PATH.read_text()) if SOG_RANGES_PATH.is_file() else None
@@ -398,13 +589,26 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
                     frame["player_name"] if "player_name" in frame else frame.player_id.astype(str))
     sanity = {"points": points_sanity(points, ranges) if points is not None else [],
               "sog": sog_sanity(sog, sog_ranges) if sog is not None else []}
+    roles, role_status = None, "UNAVAILABLE:no Points capture"
+    if points is not None:
+        try:
+            if not Path(prior_usage_path).is_file():
+                role_status = f"UNAVAILABLE:missing {Path(prior_usage_path).name}; run build_nhl_prior_season_usage.py"
+            else:
+                roles = role_changes(points, pd.read_csv(prior_usage_path), season_of(slate_date),
+                                     prior_points_per_game())
+                role_status = "COMPLETE"
+        except Exception as error:  # the watch never blocks the run
+            role_status = f"UNAVAILABLE:{type(error).__name__}:{error}"
     try:
         disagreements = explain_disagreements(points=points, sog=sog, slate_date=slate_date, run_id=run_id,
                                               operational_root=Path(operational_root), now_utc=now_utc,
-                                              ranges=ranges, sog_ranges=sog_ranges)
+                                              ranges=ranges, sog_ranges=sog_ranges, roles=roles)
         disagreements["status"] = "COMPLETE"
     except Exception as error:  # the watch never blocks the run
         disagreements = {"status": "UNAVAILABLE", "reason": f"{type(error).__name__}:{error}"}
+    role_section = {"status": role_status, "players": _role_rows(roles, disagreements.get("role_market") or []),
+                    "pp_scale": None if roles is None else round(float(roles.attrs.get("pp_scale", 1.0)), 3)}
     health = attempt_source_health(Path(operational_root), prior_date, run_id)
     flags = [f"{lane}:{c['check']}" for lane, checks in sanity.items() for c in checks if c["flag"]]
     if health.get("flag"):
@@ -412,7 +616,8 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
     result = {"schema_version": SCHEMA, "slate_date": slate_date, "run_id": run_id, "generated_at_utc": now_utc,
               "players": {"points": 0 if points is None else int(len(points)),
                           "sog": 0 if sog is None else int(len(sog))},
-              "sanity": sanity, "disagreements": disagreements, "source_health": health,
+              "sanity": sanity, "role_changes": role_section, "disagreements": disagreements,
+              "source_health": health,
               "flags": flags, "flag_count": len(flags), "database_writes": 0, "provider_requests": 0}
     out = Path(output_root) / f"slate_date={slate_date}" / f"run_id={run_id}"
     out.mkdir(parents=True, exist_ok=True)

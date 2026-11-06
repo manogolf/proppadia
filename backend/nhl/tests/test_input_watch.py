@@ -138,5 +138,64 @@ class RunTests(unittest.TestCase):
             self.assertIn("points:ATTEMPTS_BELOW_SOG", result["flags"])
 
 
+def usage_rows(rows):
+    return pd.DataFrame([{"season": s, "player_id": p, "games": g, "toi_per_game": toi,
+                          "pp_toi_per_game": pp, "pp_games": g} for s, p, g, toi, pp in rows])
+
+
+class RoleChangeTests(unittest.TestCase):
+    def test_role_changes_scale_league_pp_and_need_enough_games(self):
+        points = pd.DataFrame([
+            points_row(1, mean_toi_last10=18.4, mean_pp_toi_last10=3.3, current_season_points_prior=14,
+                       current_season_games_prior=14),                       # role up
+            points_row(2, mean_toi_last10=18.0, mean_pp_toi_last10=2.6),      # PP up only by the league shift
+            points_row(3, mean_toi_last10=11.9, mean_pp_toi_last10=0.0),      # role down
+            points_row(4, mean_toi_last10=22.0, current_season_games_prior=3),  # too few games now
+            points_row(5, mean_toi_last10=22.0),                              # too few games last season
+        ])
+        usage = usage_rows([(2025, 1, 76, 13.2, 1.3), (2025, 2, 80, 17.8, 2.0), (2025, 3, 70, 15.6, 2.5),
+                            (2025, 4, 70, 15.0, 1.0), (2025, 5, 10, 15.0, 1.0), (2024, 1, 63, 17.3, 2.0)])
+        totals = pd.DataFrame({"player_id": [1, 1], "season": [2024, 2025], "games": [63, 76],
+                               "ppg": [55 / 63, 22 / 76]})
+        roles = watch.role_changes(points, usage, 2026, totals)
+        self.assertEqual(sorted(roles.player_id), [1, 3])
+        johnson = roles[roles.player_id.eq(1)].iloc[0]
+        self.assertEqual(johnson.direction, "UP")
+        self.assertAlmostEqual(johnson.ppg_before, 55 / 63)
+        self.assertAlmostEqual(johnson.ppg_now, 1.0)
+        self.assertAlmostEqual(johnson.toi_before, 17.3)
+        self.assertEqual(roles[roles.player_id.eq(3)].iloc[0].direction, "DOWN")
+        self.assertGreater(roles.attrs["pp_scale"], 1.0)
+
+    def test_role_read_names_who_is_behind(self):
+        self.assertTrue(watch.role_read("UP", 0.38, 0.50).startswith("model likely behind"))
+        self.assertTrue(watch.role_read("DOWN", 0.45, 0.30).startswith("model likely behind"))
+        self.assertTrue(watch.role_read("UP", 0.77, 0.65).startswith("model further along"))
+        self.assertEqual(watch.role_read("UP", 0.56, 0.58), "model and market agree")
+        self.assertEqual(watch.role_read("UP", None, 0.5), "no two-sided market")
+
+    def test_season_of_starts_in_september(self):
+        self.assertEqual(watch.season_of("2026-11-06"), 2026)
+        self.assertEqual(watch.season_of("2027-03-01"), 2026)
+
+    def test_missing_usage_file_reports_and_keeps_the_watch(self):
+        with tempfile.TemporaryDirectory(dir=watch.ROOT / "tmp") as temp:
+            temp = Path(temp)
+            capture = temp / "capture"
+            capture.mkdir()
+            rows = pd.DataFrame([points_row(1)])
+            rows.to_csv(capture / "features.csv", index=False)
+            rows.to_csv(capture / "predictions.csv", index=False)
+            with mock.patch.object(watch.candidate_export, "load_retained_quotes", return_value=([], [])):
+                result = watch.run_input_watch(
+                    slate_date="2026-11-06", run_id="r", prediction_run_dir=temp,
+                    points_capture_dir=capture, operational_root=temp, output_root=temp / "out",
+                    prior_usage_path=temp / "missing.csv")
+            self.assertTrue(result["role_changes"]["status"].startswith("UNAVAILABLE:missing"))
+            text = (Path(result["path"]) / "input_watch.md").read_text()
+            self.assertIn("## Role changes vs last season", text)
+            self.assertIn("build_nhl_prior_season_usage.py", text)
+
+
 if __name__ == "__main__":
     unittest.main()
