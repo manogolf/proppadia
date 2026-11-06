@@ -2871,9 +2871,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   further along" (Macklin Celebrini, 77% vs 65%), 3 mixed with the model
   below the market; 17 agree within 5 points; 13 have no two-sided market.
 - Thresholds (2.5 TOI minutes, 1.0 PP minutes, 5-point gap) are first
-  choices, not tuned. Whether "model likely behind" picks actually lose to
-  the market is unmeasured; check with the current model only, once a few
-  weeks of reads are graded.
+  choices, not tuned.
+- First grading (2026-11-06,
+  `backend/nhl/scripts/research_nhl_role_change_reads.py --start 2026-10-26
+  --end 2026-11-05 --points-start 2026-11-01`; current models only: SOG HGB
+  from 10-26, Points goals+assists from 11-01; last capture before first
+  puck drop, quotes to one minute before it). Lower log loss is better.
+  - Points 0.5, model and market 5+ apart on a role-change player: 106
+    picks, 79 players, Over 37.7%, model 38.3%, market 42.8%, log loss model
+    0.673 vs market 0.651 (market better). "Model behind" (45): Over 44.4%,
+    model 40.7%, market 45.4%, 0.718 vs 0.681. Supports the Points read.
+  - SOG 1.5, 5+ apart: 191 picks, 109 players, log loss model 0.595 vs
+    market 0.625 (model better), every read group included; role up with
+    the model above the market: 65 picks, Over 70.8%, model 70.4%, market
+    61.1%. The SOG model reads recent TOI and per-60 rates, so it follows a
+    role change sooner than the market here. Highlights therefore list SOG
+    gaps on role-change players as "the SOG model has been the better
+    guide".
+  - Small samples (5 Points slates, 11 SOG slates, players repeat). Rerun
+    the script with a later `--end` after a few more weeks before treating
+    either direction as settled.
 
 ### P2.43 Plus-money picks: weekly collection until an evaluation is due
 

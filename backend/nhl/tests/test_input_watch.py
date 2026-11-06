@@ -177,7 +177,7 @@ class RoleChangeTests(unittest.TestCase):
     def test_highlights_lead_the_report(self):
         player = {"player_name": "Kent Johnson", "direction": "UP", "read": "model likely behind the role change",
                   "read_from": "points", "points_model_p_over": 0.38, "points_market_p_over": 0.50,
-                  "sog_model_p_over": None, "sog_market_p_over": None, "toi_prior": 13.2, "toi_now": 18.4,
+                  "sog_model_p_over": 0.64, "sog_market_p_over": 0.53, "toi_prior": 13.2, "toi_now": 18.4,
                   "pp_prior": 1.8, "pp_now": 3.3, "toi_before": 17.3, "ppg_before": 0.87, "ppg_prior": 0.29,
                   "ppg_now": 1.0}
         result = {"slate_date": "2026-11-06", "run_id": "r", "flag_count": 0, "flags": [], "sanity": {},
@@ -189,6 +189,7 @@ class RoleChangeTests(unittest.TestCase):
         self.assertLess(text.index("## Highlights"), text.index("## Role changes"))
         self.assertIn("Kent Johnson (up): Points 0.5 model 38% vs market 50%; TOI 13.2 to 18.4, PP 1.8 to 3.3", text)
         self.assertIn("X POINTS 0.5 UNDER model 58% vs market 45%", text)
+        self.assertIn("Kent Johnson model 64% vs market 53% (role up)", text)
         self.assertIn("- Data flags: none", text)
 
     def test_season_of_starts_in_september(self):

@@ -543,6 +543,18 @@ def render_highlights(result: dict[str, Any]) -> list[str]:
     if ahead:
         lines.append("- **Model ahead of the market on a role change** (check news): "
                      + "; ".join(f"{p['player_name']} {line_of(p)}" for p in ahead[:HIGHLIGHT_MAX]))
+    shots = sorted((p for p in players if p.get("sog_market_p_over") is not None
+                    and abs(p["sog_model_p_over"] - p["sog_market_p_over"]) >= ROLE_MARKET_GAP),
+                   key=lambda p: -abs(p["sog_model_p_over"] - p["sog_market_p_over"]))
+    if shots:
+        # The SOG model reads recent TOI and per-60 rates, so it tracks role changes; on these
+        # players it has been closer to results than the market (NHL Backlog P2.44).
+        lines.append(f"- **Shots: SOG 1.5 model vs market {100 * ROLE_MARKET_GAP:.0f}+ apart on a role change** "
+                     "(the SOG model has been the better guide on these): "
+                     + "; ".join(f"{p['player_name']} model {_pct(p['sog_model_p_over'])} vs market "
+                                 f"{_pct(p['sog_market_p_over'])} (role {p['direction'].lower()})"
+                                 for p in shots[:HIGHLIGHT_MAX])
+                     + (f"; and {len(shots) - HIGHLIGHT_MAX} more" if len(shots) > HIGHLIGHT_MAX else ""))
     unexplained = [(lane, p) for lane, picks in ((result.get("disagreements") or {}).get("lanes") or {}).items()
                    for p in picks if p["reasons"][0].startswith("no input stands out")]
     if unexplained:
@@ -552,7 +564,7 @@ def render_highlights(result: dict[str, Any]) -> list[str]:
                                  for lane, p in unexplained[:HIGHLIGHT_MAX]))
     flags = result.get("flags") or []
     lines.append(f"- Data flags: {', '.join(flags)}" if flags else "- Data flags: none")
-    if not (behind or ahead or unexplained):
+    if not (behind or ahead or unexplained or shots):
         lines.insert(2, "- Nothing stands out tonight between role changes and the market.")
     return lines + [""]
 

@@ -746,8 +746,12 @@ the rest of the watch runs. Scheduled runs record the watch's path as
 The report starts with "Highlights" (2026-11-06, operator request): up to six
 "model likely behind" role-change players (model vs market P(Over), TOI and
 PP last season to now), any "model ahead" players, the largest gaps whose
-first reason is "no input stands out" (likely news the model cannot see), and
-the run's data flags.
+first reason is "no input stands out" (likely news the model cannot see), a
+Shots line with up to six role-change players whose SOG 1.5 model and market
+P(Over) are 5+ points apart (largest first; on these the SOG model scored
+better than the market in the 2026-11-06 grading, P2.44), and the run's data
+flags. `backend/nhl/scripts/research_nhl_role_change_reads.py` regrades the
+reads for a date range (read-only, output under `tmp/`).
 
 Two-sided line level in the daily performance summary (2026-10-28). Next to
 the all-predictions tables, SOG production and Points HGB production show W/L
