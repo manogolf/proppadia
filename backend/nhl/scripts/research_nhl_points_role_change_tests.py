@@ -238,6 +238,9 @@ def main() -> None:
     levels = pd.DataFrame([{"group": g, "model": k, "n": int(m.sum()), "mean_expected": float(v[m].mean()),
                             "mean_actual": float(hold.realized_points.to_numpy()[m].mean())}
                            for g, m in masks(hold).items() if m.sum() for k, v in hp.items()])
+    # Research-path per-minute inputs on 2026 rows: the parity reference for the live shadow.
+    f26[KEYS + ["game_date", "own_rate_toi", "goal_rate_toi", "assist_rate_toi"]].to_csv(
+        OUT / "per_minute_inputs_2026.csv", index=False, float_format="%.17g")
     hold_tab.to_csv(OUT / "holdout_2025_paired.csv", index=False)
     market_tab.to_csv(OUT / "two_sided_2026_vs_production.csv", index=False)
     levels.to_csv(OUT / "holdout_2025_levels.csv", index=False)

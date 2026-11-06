@@ -36,11 +36,11 @@ class ScheduledDailyTests(unittest.TestCase):
 
     def test_all_steps_run_in_order_and_record_the_upload_csv(self):
         calls, a, b = self.fake_steps({"01_daily_with_odds": 0, "02_cross_market_capture": 0, "03_8rain_export": 0,
-                                       "04_projected_lineups_trial": 0})
+                                       "04_projected_lineups_trial": 0, "05_points_per_minute_shadow": 0})
         with a, b:
             self.assertEqual(job.main([]), 0)
         self.assertEqual(calls, ["01_daily_with_odds", "02_cross_market_capture", "03_8rain_export",
-                                 "04_projected_lineups_trial"])
+                                 "04_projected_lineups_trial", "05_points_per_minute_shadow"])
         self.assertEqual((self.summary()["status"], self.summary()["upload_csv"]), ("READY", "artifacts/x.csv"))
 
     def test_a_daily_run_that_is_not_ready_stops_before_the_export(self):
@@ -52,19 +52,20 @@ class ScheduledDailyTests(unittest.TestCase):
 
     def test_a_failed_game_line_refresh_still_exports_with_a_warning(self):
         calls, a, b = self.fake_steps({"01_daily_with_odds": 0, "02_cross_market_capture": 2, "03_8rain_export": 0,
-                                       "04_projected_lineups_trial": 0})
+                                       "04_projected_lineups_trial": 0, "05_points_per_minute_shadow": 0})
         with a, b:
             self.assertEqual(job.main([]), 0)
         self.assertEqual(self.summary()["cross_market_warning"], "capture exit 2")
 
     def test_a_failed_lineup_trial_warns_and_keeps_the_run_ready(self):
         calls, a, b = self.fake_steps({"01_daily_with_odds": 0, "02_cross_market_capture": 0, "03_8rain_export": 0,
-                                       "04_projected_lineups_trial": 1})
+                                       "04_projected_lineups_trial": 1, "05_points_per_minute_shadow": 2})
         with a, b:
             self.assertEqual(job.main([]), 0)
         self.assertEqual(self.summary()["status"], "READY")
         self.assertEqual(self.summary()["upload_csv"], "artifacts/x.csv")
         self.assertEqual(self.summary()["lineups_trial_warning"], "collector exit 1")
+        self.assertEqual(self.summary()["points_per_minute_shadow_warning"], "shadow exit 2")
 
     def test_skips_when_a_manual_daily_is_running(self):
         with mock.patch.object(job, "manual_daily_running", return_value=True), \

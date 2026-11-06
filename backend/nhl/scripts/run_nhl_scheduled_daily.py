@@ -129,6 +129,9 @@ def main(argv: list[str] | None = None) -> int:
         # Trial (P2.47): NHL.com projected lineups; non-blocking, stops itself after its end date.
         ("04_projected_lineups_trial", [PYTHON, ROOT / "backend/nhl/scripts/collect_nhl_projected_lineups.py",
                                         "--slate-date", slate]),
+        # Shadow (P2.46): Points per-minute candidate on this slate's Points captures; non-blocking.
+        ("05_points_per_minute_shadow", [PYTHON, ROOT / "backend/nhl/scripts/run_nhl_points_per_minute_shadow.py",
+                                         "--slate-date", slate]),
     ]
     if args.dry_run:
         print(json.dumps({"slate": slate, "steps": [[str(c) for c in cmd] for _, cmd in steps]}, indent=2))
@@ -164,6 +167,8 @@ def main(argv: list[str] | None = None) -> int:
             summary["upload_csv"] = export_csv_path(ROOT / result["log"])
         elif name == "04_projected_lineups_trial" and result["exit_code"] != 0:
             summary["lineups_trial_warning"] = f"collector exit {result['exit_code']}"
+        elif name == "05_points_per_minute_shadow" and result["exit_code"] != 0:
+            summary["points_per_minute_shadow_warning"] = f"shadow exit {result['exit_code']}"
         write()
     else:
         summary["status"] = "READY"

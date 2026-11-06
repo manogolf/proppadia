@@ -196,6 +196,40 @@ Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
   `lineups_trial_warning` and the run stays READY. After the trial end date
   the collector prints `SKIPPED_TRIAL_ENDED` and writes nothing.
 
+- Step 5, `05_points_per_minute_shadow` (from 2026-11-06, NHL Backlog P2.46;
+  operator-approved shadow): runs
+  `backend/nhl/scripts/run_nhl_points_per_minute_shadow.py --slate-date <d>`.
+  Non-blocking: a failure is `points_per_minute_shadow_warning` and the run
+  stays READY.
+
+Points per-minute shadow (2026-11-06, P2.46). `backend/nhl/points_per_minute_shadow.py`
+scores every Points capture of the slate once (captures already scored are
+skipped; captures without the 2026-11-01 component rates are skipped). Model:
+the production goals + assists recipe on the production inputs plus
+`own_rate_toi`, `goal_rate_toi` and `assist_rate_toi` = (last season's +
+this season's points, goals or assists + 30 x last season's league rate per
+game) / (last season's + this season's minutes + 30 x last season's league
+minutes per game) x TOI over the last 10 games. Counts and minutes are strict
+prior, from the capture's own official outcomes and skater logs; last
+season's totals and league rates from the production Points contract; last
+season's minutes from `artifacts/operational/nhl/input_watch/prior_season_usage.csv`
+(estimated as games x this season's TOI when missing). Frozen by
+`backend/nhl/scripts/freeze_nhl_points_per_minute_shadow.py` (from candidate
+PER_MINUTE_ADD of `research_nhl_points_role_change_tests.py`; rerun both to
+regenerate) under
+`artifacts/analysis/nhl/points_hgb_pp_corrected_refit/per_minute_shadow_2026-11-06/`
+(artifact hash in `shadow_contract.json`, checked before scoring), with a
+live-path parity check on the 2026-10-16..31 captures (goal and assist rates
+within 1e-4; the points rate differs by up to 0.08% because training used a
+research cache whose 2025-26 totals miss late games). Output:
+`artifacts/operational/nhl/points_per_minute_shadows/season=<s>/slate_date=<d>/run_id=<r>/phase=<p>/captured_at=<t>/`
+(`predictions.csv`, `summary.json`). Nothing reads it except
+`backend/nhl/scripts/grade_nhl_points_per_minute_shadow.py --start --end`
+(last capture before first puck drop; production, shadow and the market's
+median no-vig P(Over) on two-sided lines; log loss overall and on role-change
+players; output under `tmp/`). Production is unchanged; any promotion goes
+through the promotion rules and operator approval.
+
 NHL.com projected lineups trial (2026-11-06, P2.47). Source: the NHL.com
 article "Projected lineups, starting goalies for today"
 (`https://www.nhl.com/news/nhl-lineup-projections-2026-27-season`), written

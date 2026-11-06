@@ -2920,11 +2920,25 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     last season's minutes from games played (their per-minute rate equals
     the per-game rate); the 2026 rows are the 11-01 research cache, not live
     captures.
-  - Next: (a) holdout split by games played; (b) PER_MINUTE_ADD as a daily
-    shadow on live captures, graded against production and the market
-    (operator approval needed); (c) test 4, line matchups, needs on-ice
-    goals by line (shift charts plus play-by-play goals), not built yet;
-    (d) test 5, market totals.
+  - Next: (a) holdout split by games played; (c) test 4, line matchups,
+    needs on-ice goals by line (shift charts plus play-by-play goals), not
+    built yet; (d) test 5, market totals.
+- Shadow started 2026-11-06 (operator: "Yes, start shadow"): PER_MINUTE_ADD
+  frozen (`freeze_nhl_points_per_minute_shadow.py`, live-path parity passed:
+  goal/assist rates within 2.5e-5, points rate within 0.08%), scored on every
+  Points capture by step 5 of the scheduled runs; rules in the capture
+  contract ("Points per-minute shadow"). Production unchanged.
+  - First grading, 2026-11-01 to 11-05 (captures scored after the fact from
+    their own point-in-time inputs; 5 slates;
+    `grade_nhl_points_per_minute_shadow.py`), log loss x1000 vs production,
+    negative = better: two-sided role change, all lines (511): shadow -3.87,
+    market -10.44; Points 0.5 (245): shadow -2.12, market -12.30; two-sided
+    no role change (1,122): shadow +0.61, market -7.15; all rows (3,333):
+    shadow -0.31. Live, the shadow closes about a third of the market's lead
+    on role-change players (the October research cache showed most of it).
+  - Grade weekly with the current production model only; decide after at
+    least 3-4 weeks whether to propose promotion (route and gate in
+    `docs/nhl/model_promotion_rules.md`), keep watching, or drop.
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
   Pregame line combinations: NHL.com projected lineups in trial from
