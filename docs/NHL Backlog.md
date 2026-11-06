@@ -2860,8 +2860,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.46 Points: tests to close the role-change gap with the market
 
-- Status: **OPEN — research queued** (operator 2026-11-06: "add points tests
-  to the backlog"). Research only; no model change, and no calibration layer
+- Status: **IN PROGRESS — tests 1-3 run 2026-11-06** (operator 2026-11-06:
+  "add points tests to the backlog"; then "historical tests first"). Research only; no model change, and no calibration layer
   (operator preference: find causes and fix inputs). Any candidate goes
   through the existing promotion gate and operator approval.
 - Why: on role-change players the market beats the current Points model
@@ -2892,6 +2892,39 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
      line's goals against per 60.
   5. Market totals (captured from 2026-11-01): team implied goals as a
      scoring environment input.
+- Results, tests 1-3 (2026-11-06, operator: "historical tests first";
+  `backend/nhl/scripts/research_nhl_points_role_change_tests.py`, output
+  `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/role_change_tests_2026-11-06/`,
+  research login, read-only). Each candidate is a goals + assists pair on the
+  production recipe, trained on 2023-24 and 2024-25 (90,486 rows), scored
+  against the current production artifact. Paired log loss x1000, negative =
+  better than production, 95% intervals.
+  - 2026 two-sided lines (cached 2026-10-16 to 10-31, 4,057 line rows;
+    retrospective features): role-change rows (1,173): PER_MINUTE_ADD -3.79
+    [-6.93, -0.62], PER_MINUTE_REPLACE -4.96 [-9.11, -1.56], market -4.49
+    [-13.58, 3.39]; role up (664): ADD -4.25 [-8.55, 0.06], REPLACE -5.20
+    [-10.24, -0.91], market -7.14. No role change (2,884): ADD +0.16, REPLACE
+    +2.99 [-1.87, 8.47]. All rows: ADD -0.98 [-2.74, 1.0], market -5.90.
+    The per-minute rate recovers most of the market's lead on role-change
+    players; ADD leaves the rest unchanged, REPLACE does not.
+  - 2025 holdout (47,023 rows; 13,661 role-change): all effects within about
+    0.5 x1000 and every interval includes zero (ADD role change 0.5: -0.52
+    [-1.4, 0.41]). The gain shows in the early 2026 season, not across a
+    full past season; likely because the per-game rate leans on last
+    season most when this season has few games (unchecked: rerun the
+    holdout split by games played).
+  - MATES (with "new linemates") and LINE (games in a row with the same
+    linemates): no gain anywhere; LINE slightly worse on 2026 (+1.04 [0.16,
+    2.02]). Linemate and line-stability ideas are closed as tested.
+  - Caveats: 2022-23 has no stored TOI, so 54% of training rows estimate
+    last season's minutes from games played (their per-minute rate equals
+    the per-game rate); the 2026 rows are the 11-01 research cache, not live
+    captures.
+  - Next: (a) holdout split by games played; (b) PER_MINUTE_ADD as a daily
+    shadow on live captures, graded against production and the market
+    (operator approval needed); (c) test 4, line matchups, needs on-ice
+    goals by line (shift charts plus play-by-play goals), not built yet;
+    (d) test 5, market totals.
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
   Pregame line combinations: NHL.com projected lineups in trial from
