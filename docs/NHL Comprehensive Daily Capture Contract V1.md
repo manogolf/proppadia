@@ -189,6 +189,34 @@ Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
   The 8rain upload stays manual. Manual runs are unchanged and still allowed.
 - Install or roll back with `bin/nhl_install_schedule.sh [--rollback]`
   (templates in `backend/nhl/launchagents/`).
+- Step 4, `04_projected_lineups_trial` (2026-11-06 to 2026-11-13, NHL
+  Backlog P2.47; operator-approved trial): runs
+  `backend/nhl/scripts/collect_nhl_projected_lineups.py --slate-date <d>`
+  after the export. Non-blocking: a failure is recorded as
+  `lineups_trial_warning` and the run stays READY. After the trial end date
+  the collector prints `SKIPPED_TRIAL_ENDED` and writes nothing.
+
+NHL.com projected lineups trial (2026-11-06, P2.47). Source: the NHL.com
+article "Projected lineups, starting goalies for today"
+(`https://www.nhl.com/news/nhl-lineup-projections-2026-27-season`), written
+by NHL.com staff and team correspondents; there is no API (article text, no
+player IDs). The operator reviewed the site terms (2026-11-06). One page
+request per scheduled run, ordinary retry (3 attempts with backoff). Parsing
+follows the article layout: "AWAY (record) at HOME (record)" starts a game,
+a weekday heading ("SATURDAY") marks later games, "<Team> projected lineup"
+starts a team, three names joined by " -- " are a forward line (F1-F4), two
+a defense pair (D1-D3), the next single names the goalies (G1 is the
+probable starter), then "Scratched:" and "Injured:" (labels and wrapped
+lists joined), and "Status report" ends the team. Names match the slate's
+`backend/nhl/exports/daily/names/names_<d>.csv` within the team: full name,
+then a unique last name, then a unique last-name prefix of 4+ letters
+(`LAST_NAME_PREFIX`, for typos); anything else is `UNMATCHED`, never
+guessed. Output per run:
+`artifacts/operational/nhl/projected_lineups/season=<s>/slate_date=<d>/observation=<utc>/`
+(`page.html`, `lineups.csv`, `observation_summary.json` with the article's
+`dateModified`, slate games vs games with lineups, lineup players matched,
+and unmatched names; status `COMPLETE`, `PARTIAL`, `NO_LINEUPS_PARSED` or
+`NO_SLATE`). Read-only; nothing downstream reads it during the trial.
 
 06:00 PT odds-only trial (operator-approved 2026-10-22; slates 2026-10-23 to
 2026-10-29). `backend/nhl/scripts/run_nhl_early_prop_odds_trial.py`

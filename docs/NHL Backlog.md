@@ -2833,6 +2833,31 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.47 NHL.com projected lineups: trial collection
+
+- Status: **TRIAL RUNNING 2026-11-06 to 2026-11-13** (operator: "set up a
+  trial test collection"; operator reviewed the NHL.com terms 2026-11-06:
+  standard terms, nothing against this use). Read-only; no model or report
+  reads it during the trial.
+- Why: P2.46 line-combination and matchup tests need tonight's lines, not
+  last game's. NHL.com staff and team correspondents publish projected
+  lines, pairs, goalies, scratches and injuries daily as article text (no
+  API). DailyFaceoff compiles from beat reporters and team sources; not used.
+- Built: `backend/nhl/scripts/collect_nhl_projected_lineups.py` (step 4 of
+  each scheduled run, non-blocking; rules and output in the capture
+  contract). Tests: `backend/nhl/tests/test_collect_nhl_projected_lineups.py`.
+- First observation 2026-11-06 12:20 PT (article modified 11:54 PT): 3 of 3
+  slate games, 120 of 120 lineup players matched (119 full name, 1 prefix:
+  the article's "Jacob Troub" = Jacob Trouba); tomorrow's games already
+  posted (marked by weekday heading). Fixes made while building: the page is
+  UTF-8 (non-breaking spaces), and scratch/injury labels and wrapped lists
+  arrive as separate text lines.
+- Trial questions for 2026-11-13: does every slate game get a lineup before
+  the 05:45, 08:30 and 11:30 PT runs; how often names fail to match; how
+  often lines change between runs and vs the game's actual lines (shift
+  charts); whether G1 matches the actual starter. Then decide: keep (and
+  feed P2.46 and the input watch), extend, or drop.
+
 ### P2.46 Points: tests to close the role-change gap with the market
 
 - Status: **OPEN — research queued** (operator 2026-11-06: "add points tests
@@ -2869,8 +2894,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
      scoring environment input.
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
-  Pregame line combinations are not collected; tests use the last game's
-  lines as the proxy (the market sees morning-skate lines).
+  Pregame line combinations: NHL.com projected lineups in trial from
+  2026-11-06 (P2.47); until it is kept, tests use the last game's lines as
+  the proxy (the market sees morning-skate lines).
 
 ### P2.45 League power-play time per skater ~31% higher in 2026 data
 
