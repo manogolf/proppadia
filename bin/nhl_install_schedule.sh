@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install the NHL daily schedule (NHL Backlog P2.33, approved 2026-11-03).
-#   - morning prep (com.proppadia.nhl.morning-orchestration) at 05:30 local
+#   - morning prep (com.proppadia.nhl.morning-orchestration) at 04:30 local (05:30 until 2026-11-06)
 #   - scheduled daily run + game-line refresh + 8rain file
 #     (com.proppadia.nhl.scheduled-daily) at 05:45, 08:30 and 11:30 local
 #   - retires the finished 06:00 early-odds trial (com.proppadia.nhl.early-prop-odds-trial)
@@ -42,4 +42,4 @@ rm -f "$agents/com.proppadia.nhl.early-prop-odds-trial.plist"
 for label in com.proppadia.nhl.morning-orchestration com.proppadia.nhl.scheduled-daily com.proppadia.nhl.early-prop-odds-trial; do
   if launchctl print "$domain/$label" >/dev/null 2>&1; then echo "$label: loaded"; else echo "$label: not loaded"; fi
 done
-echo "Installed. Morning prep 05:30; daily + 8rain file 05:45, 08:30, 11:30 (local time)."
+echo "Installed. Morning prep 04:30; daily + 8rain file 05:45, 08:30, 11:30 (local time)."

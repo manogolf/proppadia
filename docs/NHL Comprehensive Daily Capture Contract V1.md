@@ -171,16 +171,20 @@ put captures about 26.6 minutes out):
   minutes between the closing snapshot and puck drop.
 
 Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
-- `com.proppadia.nhl.morning-orchestration` runs at 05:30 local (was 07:30).
+- `com.proppadia.nhl.morning-orchestration` runs at 04:30 local (05:30 from
+  2026-11-03 to 2026-11-06, 07:30 before that). The operator's repeating `pmset`
+  wake is 04:28 so the Mac is awake for it.
 - `com.proppadia.nhl.scheduled-daily` (`backend/nhl/scripts/run_nhl_scheduled_daily.py`,
   under `caffeinate -i`) runs at 05:45, 08:30 and 11:30 local: `daily --with-odds`
   (phase EARLY), then the mainline cross-market capture (AUTO for the slate's
   first package, else REFRESH), then `run_nhl_8rain_export.py --latest-refresh`.
   A daily run that is not READY stops before the export; a failed game-line
   capture still exports (recorded as `cross_market_warning`). It skips while a
-  manual `daily` or another scheduled run is active and first waits up to 20
-  minutes for a running morning prep (launchd runs missed jobs together on
-  wake; it does not wake a sleeping Mac). Step logs and `summary.json`
+  `daily` (manual or the morning prep's own) or another scheduled run is
+  active, and otherwise waits up to 20 minutes for a running morning prep
+  (launchd runs missed jobs together on wake; it does not wake a sleeping
+  Mac). Because the active-daily check comes first, a prep still in its
+  `daily` at 05:45 makes that run skip (2026-11-06; NHL Backlog P2.33). Step logs and `summary.json`
   (`upload_csv`) under `artifacts/operational/nhl/scheduled_daily/<date>/<run>/`.
   The 8rain upload stays manual. Manual runs are unchanged and still allowed.
 - Install or roll back with `bin/nhl_install_schedule.sh [--rollback]`

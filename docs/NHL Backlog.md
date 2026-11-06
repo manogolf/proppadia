@@ -2365,6 +2365,17 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   05:28 wake survived a macOS update the same morning.
   Still open: recheck the MLB clash before MLB resumes (below). Prior status
   follows.
+- 2026-11-06 missed 05:45 snapshot; morning prep moved to 04:30 (operator
+  request). The 05:30 prep ran to 05:59 PT (about 25 minutes regrading
+  2026-11-05, reconciliation `f4795d26f8a3a06c3a43`; usually about 4 minutes).
+  At 05:45 the scheduled job saw the prep's `daily` running and logged
+  `SKIPPED_MANUAL_DAILY_ACTIVE`. The active-daily check runs before the
+  20-minute morning-prep wait, so the wait never applied. No EARLY odds
+  snapshot or 8rain file existed until the 08:30 run. Fix: template
+  `com.proppadia.nhl.morning-orchestration` now 04:30; the operator reinstalls
+  with `bin/nhl_install_schedule.sh` and moves the repeating wake from 05:28 to
+  04:28 (`sudo pmset repeat wakeorpoweron MTWRFSU 04:28:00`). Open (not done):
+  reorder the scheduled job to wait for the prep before the active-daily check.
 - Prior status: **DONE (code) — install pending the operator** (approved 2026-11-03:
   "I want the morning run to be earlier ... I'm usually up and running earlier
   than 8"). Morning prep 07:30 -> 05:30; `com.proppadia.nhl.scheduled-daily`
