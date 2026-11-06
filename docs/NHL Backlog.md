@@ -2833,6 +2833,45 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.46 Points: tests to close the role-change gap with the market
+
+- Status: **OPEN — research queued** (operator 2026-11-06: "add points tests
+  to the backlog"). Research only; no model change, and no calibration layer
+  (operator preference: find causes and fix inputs). Any candidate goes
+  through the existing promotion gate and operator approval.
+- Why: on role-change players the market beats the current Points model
+  (P2.44: 5+ point gaps, log loss model 0.673 vs market 0.651), while the SOG
+  model, which reads recent TOI and per-60 rates, beats the market (0.595 vs
+  0.625). The Points model sees recent TOI and PP TOI, but its main input
+  (`own_rate_k30`) counts last season's games per game played, so a usage
+  change does not move the scoring rate.
+- Already tested (do not repeat as-is): previous-game top-two linemates
+  scored by their own rate, top-linemate TOI share, and team PP share, on top
+  of HGB+OWN_k30: no gain on the full 2025 holdout (P2.39, 2026-11-01).
+  Opponent defence and goalie, league level, late-game and market win
+  probability: noise-level (P2.39).
+- Tests, each against the current production model, scored on the full
+  holdout, on role-change players (P2.44 reads), and on two-sided lines
+  against the market's no-vig price:
+  1. Per-minute own rate: last season's points per 60 (even strength and PP
+     separately if the data allow) times this season's recent TOI and PP
+     TOI, in place of or beside `own_rate_k30`.
+  2. Linemates on role-change players only: the P2.39 linemate inputs
+     re-scored on the subset where the full-holdout average may hide them;
+     plus "new linemates" (top partners differ from last season's).
+  3. Line combinations as a repeating unit: the player's line over its last
+     N games together (stability, the line's combined scoring rate), and
+     power-play unit 1 vs 2 from shift overlap during PP time.
+  4. Line matchups: which opposing line the player's line faces most
+     (shift overlap), using the home team's last change; the opposing
+     line's goals against per 60.
+  5. Market totals (captured from 2026-11-01): team implied goals as a
+     scoring environment input.
+- Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
+  charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
+  Pregame line combinations are not collected; tests use the last game's
+  lines as the proxy (the market sees morning-skate lines).
+
 ### P2.45 League power-play time per skater ~31% higher in 2026 data
 
 - Status: **OPEN — not investigated** (found 2026-11-06 while building P2.44).
