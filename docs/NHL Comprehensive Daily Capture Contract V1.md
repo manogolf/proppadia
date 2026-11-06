@@ -810,7 +810,7 @@ The report starts with "Highlights" (2026-11-06, operator request): up to six
 PP last season to now), any "model ahead" players, the largest gaps whose
 first reason is "no input stands out" (likely news the model cannot see), a
 Shots line with up to six role-change players whose SOG 1.5 model and market
-P(Over) are 5+ points apart (largest first; on these the SOG model scored
+P(Over) are 5+ points apart (largest first; players beyond six are named without numbers; on these the SOG model scored
 better than the market in the 2026-11-06 grading, P2.44), and the run's data
 flags. `backend/nhl/scripts/research_nhl_role_change_reads.py` regrades the
 reads for a date range (read-only, output under `tmp/`).

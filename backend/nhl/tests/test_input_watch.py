@@ -192,6 +192,15 @@ class RoleChangeTests(unittest.TestCase):
         self.assertIn("Kent Johnson model 64% vs market 53% (role up)", text)
         self.assertIn("- Data flags: none", text)
 
+    def test_highlights_name_players_beyond_the_limit(self):
+        base = {"direction": "UP", "read": "model likely behind the role change", "read_from": "points",
+                "points_model_p_over": 0.38, "points_market_p_over": 0.50, "sog_model_p_over": 0.70,
+                "sog_market_p_over": 0.60, "toi_prior": 13.0, "toi_now": 18.0, "pp_prior": 1.0, "pp_now": 3.0}
+        players = [{**base, "player_name": f"P{i}"} for i in range(8)]
+        text = "\n".join(watch.render_highlights({"role_changes": {"players": players}, "flags": []}))
+        self.assertIn("and 2 more: P6, P7", text)
+        self.assertIn("; and 2 more: P6, P7", text)
+
     def test_season_of_starts_in_september(self):
         self.assertEqual(watch.season_of("2026-11-06"), 2026)
         self.assertEqual(watch.season_of("2027-03-01"), 2026)

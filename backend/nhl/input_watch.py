@@ -539,7 +539,8 @@ def render_highlights(result: dict[str, Any]) -> list[str]:
                   f"{_num(p['toi_prior'])} to {_num(p['toi_now'])}, PP {_num(p['pp_prior'])} to "
                   f"{_num(p['pp_now'])}" for p in behind[:HIGHLIGHT_MAX]]
         if len(behind) > HIGHLIGHT_MAX:
-            lines.append(f"  - and {len(behind) - HIGHLIGHT_MAX} more in Role changes below")
+            lines.append(f"  - and {len(behind) - HIGHLIGHT_MAX} more: "
+                         + ", ".join(p["player_name"] for p in behind[HIGHLIGHT_MAX:]))
     if ahead:
         lines.append("- **Model ahead of the market on a role change** (check news): "
                      + "; ".join(f"{p['player_name']} {line_of(p)}" for p in ahead[:HIGHLIGHT_MAX]))
@@ -554,7 +555,8 @@ def render_highlights(result: dict[str, Any]) -> list[str]:
                      + "; ".join(f"{p['player_name']} model {_pct(p['sog_model_p_over'])} vs market "
                                  f"{_pct(p['sog_market_p_over'])} (role {p['direction'].lower()})"
                                  for p in shots[:HIGHLIGHT_MAX])
-                     + (f"; and {len(shots) - HIGHLIGHT_MAX} more" if len(shots) > HIGHLIGHT_MAX else ""))
+                     + (f"; and {len(shots) - HIGHLIGHT_MAX} more: "
+                        + ", ".join(p["player_name"] for p in shots[HIGHLIGHT_MAX:]) if len(shots) > HIGHLIGHT_MAX else ""))
     unexplained = [(lane, p) for lane, picks in ((result.get("disagreements") or {}).get("lanes") or {}).items()
                    for p in picks if p["reasons"][0].startswith("no input stands out")]
     if unexplained:
