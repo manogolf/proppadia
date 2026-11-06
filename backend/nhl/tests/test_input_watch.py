@@ -174,6 +174,23 @@ class RoleChangeTests(unittest.TestCase):
         self.assertEqual(watch.role_read("UP", 0.56, 0.58), "model and market agree")
         self.assertEqual(watch.role_read("UP", None, 0.5), "no two-sided market")
 
+    def test_highlights_lead_the_report(self):
+        player = {"player_name": "Kent Johnson", "direction": "UP", "read": "model likely behind the role change",
+                  "read_from": "points", "points_model_p_over": 0.38, "points_market_p_over": 0.50,
+                  "sog_model_p_over": None, "sog_market_p_over": None, "toi_prior": 13.2, "toi_now": 18.4,
+                  "pp_prior": 1.8, "pp_now": 3.3, "toi_before": 17.3, "ppg_before": 0.87, "ppg_prior": 0.29,
+                  "ppg_now": 1.0}
+        result = {"slate_date": "2026-11-06", "run_id": "r", "flag_count": 0, "flags": [], "sanity": {},
+                  "players": {}, "role_changes": {"status": "COMPLETE", "players": [player]},
+                  "disagreements": {"lanes": {"points": [{"player": "X", "line": 0.5, "side": "UNDER",
+                                                          "model_p": 0.58, "market_p": 0.45, "gap": 0.13,
+                                                          "reasons": ["no input stands out; check the market"]}]}}}
+        text = watch.render(result)
+        self.assertLess(text.index("## Highlights"), text.index("## Role changes"))
+        self.assertIn("Kent Johnson (up): Points 0.5 model 38% vs market 50%; TOI 13.2 to 18.4, PP 1.8 to 3.3", text)
+        self.assertIn("X POINTS 0.5 UNDER model 58% vs market 45%", text)
+        self.assertIn("- Data flags: none", text)
+
     def test_season_of_starts_in_september(self):
         self.assertEqual(watch.season_of("2026-11-06"), 2026)
         self.assertEqual(watch.season_of("2027-03-01"), 2026)

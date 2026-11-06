@@ -743,6 +743,11 @@ built once per completed season, read-only, by
 (regular season = game type 02); without it the section says unavailable and
 the rest of the watch runs. Scheduled runs record the watch's path as
 `input_watch` in `summary.json` and on the `NHL_SCHEDULED_DAILY=` line.
+The report starts with "Highlights" (2026-11-06, operator request): up to six
+"model likely behind" role-change players (model vs market P(Over), TOI and
+PP last season to now), any "model ahead" players, the largest gaps whose
+first reason is "no input stands out" (likely news the model cannot see), and
+the run's data flags.
 
 Two-sided line level in the daily performance summary (2026-10-28). Next to
 the all-predictions tables, SOG production and Points HGB production show W/L

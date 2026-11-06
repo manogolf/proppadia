@@ -520,10 +520,48 @@ def render_role_changes(section: dict[str, Any]) -> list[str]:
     return lines + ["", *tail, ""]
 
 
+HIGHLIGHT_MAX = 6
+
+
+def render_highlights(result: dict[str, Any]) -> list[str]:
+    """A few lines to read first: who the model is likely behind on, unexplained gaps, data flags."""
+    lines = ["## Highlights", ""]
+    players = (result.get("role_changes") or {}).get("players") or []
+    line_of = lambda p: (f"Points 0.5 model {_pct(p['points_model_p_over'])} vs market "
+                         f"{_pct(p['points_market_p_over'])}" if p["read_from"] == "points" else
+                         f"SOG 1.5 model {_pct(p['sog_model_p_over'])} vs market {_pct(p['sog_market_p_over'])}")
+    behind = [p for p in players if p["read"].startswith("model likely behind")]
+    ahead = [p for p in players if p["read"].startswith("model further")]
+    if behind:
+        lines.append("- **Model likely behind a role change** (Over chance; role "
+                     + ("up" if all(p["direction"] == "UP" for p in behind) else "changed") + "):")
+        lines += [f"  - {p['player_name']} ({p['direction'].lower()}): {line_of(p)}; TOI "
+                  f"{_num(p['toi_prior'])} to {_num(p['toi_now'])}, PP {_num(p['pp_prior'])} to "
+                  f"{_num(p['pp_now'])}" for p in behind[:HIGHLIGHT_MAX]]
+        if len(behind) > HIGHLIGHT_MAX:
+            lines.append(f"  - and {len(behind) - HIGHLIGHT_MAX} more in Role changes below")
+    if ahead:
+        lines.append("- **Model ahead of the market on a role change** (check news): "
+                     + "; ".join(f"{p['player_name']} {line_of(p)}" for p in ahead[:HIGHLIGHT_MAX]))
+    unexplained = [(lane, p) for lane, picks in ((result.get("disagreements") or {}).get("lanes") or {}).items()
+                   for p in picks if p["reasons"][0].startswith("no input stands out")]
+    if unexplained:
+        lines.append("- **Big gaps no input explains** (likely news or lineup the model can't see): "
+                     + "; ".join(f"{p['player']} {lane.upper()} {p['line']:g} {p['side']} model "
+                                 f"{100 * p['model_p']:.0f}% vs market {100 * p['market_p']:.0f}%"
+                                 for lane, p in unexplained[:HIGHLIGHT_MAX]))
+    flags = result.get("flags") or []
+    lines.append(f"- Data flags: {', '.join(flags)}" if flags else "- Data flags: none")
+    if not (behind or ahead or unexplained):
+        lines.insert(2, "- Nothing stands out tonight between role changes and the market.")
+    return lines + [""]
+
+
 def render(result: dict[str, Any]) -> str:
     lines = [f"# NHL input watch — {result['slate_date']}", "",
              f"Run `{result['run_id']}`; {result['flag_count']} flag(s). Read-only diagnostic; "
              "predictions are unchanged.", ""]
+    lines += render_highlights(result)
     if result.get("role_changes"):
         lines += render_role_changes(result["role_changes"])
     for lane in ("points", "sog"):
