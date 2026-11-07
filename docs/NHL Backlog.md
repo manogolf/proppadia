@@ -990,7 +990,25 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.15 Separate NHL roster acquisition failures from readiness timing
 
-- Status: **IMPLEMENTED LOCALLY — still pending (checked 2026-10-22)**: no slate with
+- Status: **CLOSED 2026-11-07 — natural-run acceptance met** over the
+  consecutive slates 2026-11-05, 2026-11-06 and 2026-11-07, the last with
+  first puck 09:30 PT (game 2026020265, 17:30Z). (1) Every daily run (4, 3
+  and 2 runs) recorded a `CERTIFIED_FINAL` prior-day certificate before
+  schedule import. (2) The one current-slate roster child (lane `roster`,
+  599 rows on 11-07) ran after `import_schedule_today.py`; the second
+  `refresh_players_and_roster_today.py` call in `shared_prerequisites`
+  covers the prior slate's players (153 rows = 11-06's slate). (3) On 11-07
+  the child and parent roster manifest SHA-256 agree (`cf5ed131…`), coverage
+  `FULL`, transaction `COMMITTED`. (4) Observers before readiness reported
+  the exact gap and never reached feature export: 11-07 had one
+  `PRIOR_DAY_RECONCILIATION_CERTIFICATE_REQUIRED:PRIOR_DAY_RECONCILIATION_NOT_YET_CREATED`
+  at 05:06Z, then `ROSTER_NOT_READY` / `CURRENT_SLATE_SCHEDULE_NOT_IMPORTED`
+  until the 13:30Z morning run (28 polls); 11-06 had 30 certificate-required
+  polls with no roster or feature work; no raw `FileNotFoundError`. (5) All
+  12 games on 11-07 were eligible pregame (0 started-excluded; feature cutoff
+  13:47Z, 3h43m before first puck); 0 started-excluded on 11-05 and 11-06.
+  No blocked certificate occurred in a daily run during the window.
+  Earlier status: IMPLEMENTED LOCALLY — still pending (checked 2026-10-22): no slate with
   first puck before 10:00 PT has occurred since the fix. Corrected 2026-10-22
   (operator): 2026-10-24's first puck (game 2026020168, 17:00Z) is exactly
   10:00 PT, so it is an early slate but does not meet the condition. From the
