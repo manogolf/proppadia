@@ -167,6 +167,19 @@ class RoleChangeTests(unittest.TestCase):
         self.assertEqual(roles[roles.player_id.eq(3)].iloc[0].direction, "DOWN")
         self.assertGreater(roles.attrs["pp_scale"], 1.0)
 
+    def test_direction_comes_from_the_qualifying_moves(self):
+        points = pd.DataFrame([
+            points_row(1, mean_toi_last10=18.5, mean_pp_toi_last10=1.8),  # TOI up; PP down a little
+            points_row(2, mean_toi_last10=18.5, mean_pp_toi_last10=0.5),  # TOI up; PP down 1.5
+            points_row(3, mean_toi_last10=15.0, mean_pp_toi_last10=3.7),  # PP up only (keeps the scale at 1)
+        ])
+        usage = usage_rows([(2025, p, 80, 15.0, 2.0) for p in (1, 2, 3)])
+        roles = watch.role_changes(points, usage, 2026).set_index("player_id")
+        self.assertAlmostEqual(roles.attrs["pp_scale"], 1.0)
+        self.assertEqual(roles.loc[1, "direction"], "UP")
+        self.assertEqual(roles.loc[2, "direction"], "MIXED")
+        self.assertEqual(roles.loc[3, "direction"], "UP")
+
     def test_role_read_names_who_is_behind(self):
         self.assertTrue(watch.role_read("UP", 0.38, 0.50).startswith("model likely behind"))
         self.assertTrue(watch.role_read("DOWN", 0.45, 0.30).startswith("model likely behind"))

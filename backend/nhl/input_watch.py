@@ -299,8 +299,11 @@ def role_changes(points: pd.DataFrame, usage: pd.DataFrame, season: int,
         empty = pd.DataFrame()
         empty.attrs["pp_scale"] = pp_scale
         return empty
-    up = f.toi_delta.ge(0) & f.pp_delta.ge(0)
-    down = f.toi_delta.le(0) & f.pp_delta.le(0)
+    # Direction comes from the moves that qualify; a small move the other way does not make it mixed.
+    toi_move = np.where(f.toi_delta.abs().ge(ROLE_TOI_DELTA), np.sign(f.toi_delta), 0)
+    pp_move = np.where(f.pp_delta.abs().ge(ROLE_PP_DELTA), np.sign(f.pp_delta), 0)
+    up = (toi_move >= 0) & (pp_move >= 0)
+    down = (toi_move <= 0) & (pp_move <= 0)
     f["direction"] = np.select([up, down], ["UP", "DOWN"], "MIXED")
     f["ppg_now"] = f.current_season_points_prior / f.current_season_games_prior.replace(0, np.nan)
     for label, offset in (("ppg_prior", 1), ("ppg_before", 2)):

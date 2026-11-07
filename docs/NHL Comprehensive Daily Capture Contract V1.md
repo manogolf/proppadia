@@ -793,7 +793,10 @@ time per skater ran ~31% higher in 2026 than 2025; P2.45), so a league-wide
 shift is not a role change. Each player shows TOI two seasons ago / last /
 now, points per game for the same three seasons (from the production Points
 contract's `prior_season_totals`), and model vs market P(Over) at Points 0.5
-and SOG 1.5 (median same-book no-vig, two-sided lines only). The read compares
+and SOG 1.5 (median same-book no-vig, two-sided lines only). The role's
+direction (UP/DOWN) comes from the moves that pass their threshold; it is
+MIXED only when TOI and PP time both pass and move opposite ways (2026-11-07:
+a small move below threshold no longer makes a role mixed). The read compares
 the role's direction with the Over gap: a gap under 5 points is agreement; a
 role up with the model below the market (or down and above) reads "model
 likely behind the role change". The table lists disagreements; agreeing and
