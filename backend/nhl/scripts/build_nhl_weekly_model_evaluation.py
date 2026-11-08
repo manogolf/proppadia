@@ -458,14 +458,33 @@ def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFram
     return "\n".join(lines)
 
 
-def latest_pulse() -> str | None:
+PULSE_REVISIONS = ROOT / "artifacts/analysis/nhl/player_performance_pulse/2026-10-07_final/revisions"
+PULSE_SCRIPT = ROOT / "backend/nhl/scripts/extend_nhl_player_performance_pulse.py"
+
+
+def refresh_pulse(as_of: str, revisions: Path = PULSE_REVISIONS) -> str | None:
+    """Create the week's pulse revision if it is missing; returns a failure note or None."""
+    if (revisions / f"as_of={as_of}" / "summary.json").is_file():
+        return None
+    import subprocess
+    import sys
+    done = subprocess.run([sys.executable, str(PULSE_SCRIPT), "--as-of-date", as_of],
+                          cwd=ROOT, capture_output=True, text=True)
+    if done.returncode != 0:
+        return f"pulse revision for {as_of} failed (exit {done.returncode})"
+    return None
+
+
+def latest_pulse(as_of: str | None = None, revisions: Path = PULSE_REVISIONS) -> str | None:
+    """The newest valid pulse verdict, marked stale when it predates the report week's last day."""
     from backend.nhl.scripts.extend_nhl_player_performance_pulse import verdict_line
-    revisions = sorted((ROOT / "artifacts/analysis/nhl/player_performance_pulse/2026-10-07_final/revisions").glob("as_of=*/summary.json"))
-    for path in reversed(revisions):
+    for path in sorted(revisions.glob("as_of=*/summary.json"), reverse=True):
         s = json.loads(path.read_text())
         if s.get("revision") == 3 and "artifact_audit" in s:
             invalid = sum(c.get("INVALID_PRODUCTION_TRANSITION_EVIDENCE", 0) for c in s["production_evidence_counts_by_lane"].values())
-            return verdict_line(s, invalid)
+            line = verdict_line(s, invalid)
+            pulse_date = path.parent.name.split("=", 1)[1]
+            return line if not as_of or pulse_date >= as_of else f"STALE (as of {pulse_date}, report {as_of}): {line}"
     return None
 
 
@@ -535,7 +554,11 @@ def main() -> int:
     schedule_note = (f"Schedule: automatic weekly build is {'on' if nxt['enabled'] else 'off'}; "
                      f"next report due {(date.fromisoformat(args.as_of) + timedelta(days=8)).isoformat()} "
                      f"(week ending {(date.fromisoformat(args.as_of) + timedelta(days=7)).isoformat()}).")
-    report = render(args.as_of, week, records, rows, latest_pulse(), log_note, schedule_note,
+    pulse_failure = refresh_pulse(args.as_of)
+    pulse_line = latest_pulse(args.as_of)
+    if pulse_failure:
+        pulse_line = f"{pulse_failure}; {pulse_line or 'no earlier revision'}"
+    report = render(args.as_of, week, records, rows, pulse_line, log_note, schedule_note,
                     shadow_rows=shadow_rows)
     seg.to_csv(out / "segments.csv", index=False)
     gap_table(pd.concat([rows, shadow_rows], ignore_index=True), week).to_csv(out / "gap_bands.csv", index=False)

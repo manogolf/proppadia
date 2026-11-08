@@ -1,5 +1,8 @@
 """Weekly NHL model evaluation: record extraction, quality and segments."""
+import json
+import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import pandas as pd
@@ -155,6 +158,33 @@ class QualityTests(unittest.TestCase):
         # 0.3 -> UNDER 1.5 with 1 shot: WIN; 0.7 -> OVER 2.5 with 2 shots: LOSS.
         self.assertEqual(rows.selected_side.tolist(), ["UNDER", "OVER"])
         self.assertEqual(rows.grading_state.tolist(), ["WIN", "LOSS"])
+
+
+class PulseTests(unittest.TestCase):
+    def _revision(self, root, day):
+        folder = root / f"as_of={day}"
+        folder.mkdir(parents=True)
+        (folder / "summary.json").write_text(json.dumps({"revision": 3, "artifact_audit": {},
+            "production_evidence_counts_by_lane": {"sog": {"INVALID_PRODUCTION_TRANSITION_EVIDENCE": 0}}}))
+
+    def test_pulse_older_than_the_report_is_marked_stale(self):
+        with tempfile.TemporaryDirectory(dir=ev.ROOT / "tmp") as temp, \
+                mock.patch("backend.nhl.scripts.extend_nhl_player_performance_pulse.verdict_line",
+                           return_value="NHL PULSE x: PASS"):
+            root = Path(temp)
+            self._revision(root, "2026-10-25")
+            self.assertTrue(ev.latest_pulse("2026-11-07", root).startswith("STALE (as of 2026-10-25"))
+            self._revision(root, "2026-11-07")
+            self.assertEqual(ev.latest_pulse("2026-11-07", root), "NHL PULSE x: PASS")
+
+    def test_refresh_skips_an_existing_revision(self):
+        with tempfile.TemporaryDirectory(dir=ev.ROOT / "tmp") as temp, mock.patch("subprocess.run") as run:
+            root = Path(temp)
+            self._revision(root, "2026-11-07")
+            self.assertIsNone(ev.refresh_pulse("2026-11-07", root))
+            run.assert_not_called()
+            run.return_value = mock.Mock(returncode=1)
+            self.assertIn("failed", ev.refresh_pulse("2026-11-14", root))
 
 
 if __name__ == "__main__":
