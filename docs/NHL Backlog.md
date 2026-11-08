@@ -4080,6 +4080,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   two-sided 3,519-1,198 (74.6%, 4,717 picks). 10-08/10-09 have no
   timestamped production candidates; 10-18 has zero two-sided picks (its only
   odds snapshot was taken after the predictions).
+- WATCH, due with the week ending 2026-11-28 report (built 2026-11-29):
+  split the season columns at each production model change (SOG
+  `NHL_SOG_COUNT_HGB_V1` from 2026-10-25; Points goals + assists from
+  2026-11-01). Operator 2026-11-08: keep the columns as they are until the
+  current models have enough slates. By 11-28 SOG has 5 weeks and Points 4
+  of current-model data (roughly 6,000+ and 9,000+ two-sided picks at this
+  week's rates); 4 weeks also matches the P2.46 shadow promotion window.
 - Open: production SOG
   prediction timestamps in the export come from the slate's latest fixed-blend
   shadow capture; if that shadow lane stops running, the SOG level shows
