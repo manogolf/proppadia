@@ -3021,12 +3021,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Small samples (5 Points slates, 11 SOG slates, players repeat). Rerun
     the script with a later `--end` after a few more weeks before treating
     either direction as settled.
-- Deferred (operator, 2026-11-08: "not now"): grade removal candidates —
-  the station picks the watch says to skip (Points Unders on role-up
-  players the model is behind on) — at their search price the next day, so
-  removals have a record. First hand-graded slate, 2026-11-07: Harley,
-  Carrier, Hronek would have lost, McTavish and Finnie won; 2-3, about
-  −$10.79 at the search prices, so removing saved that amount.
+- Removal candidates graded daily (implemented 2026-11-08, operator
+  request; first deferred the same morning): each watch grades the prior
+  slate's Points 0.5 model-side plays on "model likely behind" players at $10
+  and the market no-vig price, with the season so far (capture contract,
+  "Removal candidates graded"). First grade: 2026-11-06 1-5 (+$45.17 saved),
+  2026-11-07 11-12 with 1 void (+$38.34 saved); season 12-17, +$83.51 saved.
+  The operator's five station removals on 11-07 (Harley, Carrier, Hronek,
+  McTavish, Finnie) went 2-3 by hand at search prices, about $10.79 saved.
+  Two slates are far too few; read the season line over weeks.
 
 ### P2.43 Plus-money picks: weekly collection until an evaluation is due
 

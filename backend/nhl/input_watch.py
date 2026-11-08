@@ -271,6 +271,16 @@ def prior_points_per_game() -> pd.DataFrame | None:
     return totals[["player_id", "season", "games", "ppg"]]
 
 
+def role_direction(toi_delta, pp_delta) -> np.ndarray:
+    """UP/DOWN from the moves that pass their threshold; MIXED only when those disagree."""
+    toi, pp = np.asarray(toi_delta, dtype=float), np.asarray(pp_delta, dtype=float)
+    toi_move = np.where(np.abs(toi) >= ROLE_TOI_DELTA, np.sign(toi), 0)
+    pp_move = np.where(np.abs(pp) >= ROLE_PP_DELTA, np.sign(pp), 0)
+    up = (toi_move >= 0) & (pp_move >= 0)
+    down = (toi_move <= 0) & (pp_move <= 0)
+    return np.select([up, down], ["UP", "DOWN"], "MIXED")
+
+
 def role_changes(points: pd.DataFrame, usage: pd.DataFrame, season: int,
                  totals: pd.DataFrame | None = None) -> pd.DataFrame:
     """Tonight's players whose last-10 ice time or PP time moved from last season's."""
@@ -299,12 +309,7 @@ def role_changes(points: pd.DataFrame, usage: pd.DataFrame, season: int,
         empty = pd.DataFrame()
         empty.attrs["pp_scale"] = pp_scale
         return empty
-    # Direction comes from the moves that qualify; a small move the other way does not make it mixed.
-    toi_move = np.where(f.toi_delta.abs().ge(ROLE_TOI_DELTA), np.sign(f.toi_delta), 0)
-    pp_move = np.where(f.pp_delta.abs().ge(ROLE_PP_DELTA), np.sign(f.pp_delta), 0)
-    up = (toi_move >= 0) & (pp_move >= 0)
-    down = (toi_move <= 0) & (pp_move <= 0)
-    f["direction"] = np.select([up, down], ["UP", "DOWN"], "MIXED")
+    f["direction"] = role_direction(f.toi_delta, f.pp_delta)
     f["ppg_now"] = f.current_season_points_prior / f.current_season_games_prior.replace(0, np.nan)
     for label, offset in (("ppg_prior", 1), ("ppg_before", 2)):
         f[label] = np.nan
@@ -524,6 +529,120 @@ def render_role_changes(section: dict[str, Any]) -> list[str]:
 
 
 HIGHLIGHT_MAX = 6
+REMOVAL_STAKE = 10.0   # dollars per skipped play when grading removal candidates
+
+
+def removal_candidates(prior_watches: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """A slate's Points 0.5 plays the watch says to skip: the model's side on a role change it is behind on.
+
+    Each player's last pregame read that day is used (later runs drop started games). The
+    direction is recomputed with the current rule, so older reports grade the same way.
+    """
+    latest: dict[tuple[int, int], dict[str, Any]] = {}
+    for watch in sorted(prior_watches, key=lambda w: w.get("generated_at_utc") or ""):
+        for p in (watch.get("role_changes") or {}).get("players") or []:
+            latest[(int(p["game_id"]), int(p["player_id"]))] = p
+    picks = []
+    for (game_id, player_id), p in sorted(latest.items()):
+        model, market = p.get("points_model_p_over"), p.get("points_market_p_over")
+        if model is None or market is None or "toi_delta" not in p:
+            continue
+        direction = str(role_direction([p["toi_delta"]], [p["pp_delta"]])[0])
+        if not role_read(direction, model, market).startswith("model likely behind"):
+            continue
+        side = "UNDER" if direction == "UP" else "OVER"
+        picks.append({"game_id": game_id, "player_id": player_id, "player_name": p.get("player_name"),
+                      "direction": direction, "side": side, "model_p": model if side == "OVER" else 1 - model,
+                      "market_p": market if side == "OVER" else 1 - market})
+    return picks
+
+
+def grade_removals(picks: list[dict[str, Any]], outcomes: pd.DataFrame) -> list[dict[str, Any]]:
+    """Grade each skipped play at $REMOVAL_STAKE and the market's no-vig price; no game is VOID."""
+    o = outcomes.drop_duplicates(["game_id", "player_id"]).set_index(["game_id", "player_id"])
+    graded = []
+    for p in picks:
+        key = (p["game_id"], p["player_id"])
+        row = o.loc[key] if key in o.index else None
+        if row is None or row.participation_state != "PARTICIPATED" or not bool(row.official_final):
+            graded.append({**p, "points": None, "result": "VOID", "dollars": 0.0})
+            continue
+        points = int(row.official_points)
+        won = (points >= 1) == (p["side"] == "OVER")
+        dollars = REMOVAL_STAKE * (1 - p["market_p"]) / p["market_p"] if won else -REMOVAL_STAKE
+        graded.append({**p, "points": points, "result": "W" if won else "L", "dollars": round(dollars, 2)})
+    return graded
+
+
+def prior_outcomes(operational_root: Path, prior_date: str) -> pd.DataFrame | None:
+    """Skater outcomes from the newest complete reconciliation package for the date."""
+    packages = [p for p in (Path(operational_root) / "postgame_reconciliation" / prior_date).glob("reconciliation=*")
+                if (p / "RUN_COMPLETE.json").is_file() and (p / "canonical_skater_outcomes.csv").is_file()]
+    if not packages:
+        return None
+    newest = max(packages, key=lambda p: (p / "RUN_COMPLETE.json").stat().st_mtime)
+    return pd.read_csv(newest / "canonical_skater_outcomes.csv")
+
+
+def _graded_date(day: str, operational_root: Path, output_root: Path) -> tuple[str, list[dict[str, Any]] | None]:
+    watches = [json.loads(p.read_text()) for p in
+               (Path(output_root) / f"slate_date={day}").glob("run_id=*/input_watch.json")]
+    if not watches:
+        return "NO_WATCH_FOR_PRIOR_DATE", None
+    if not any((w.get("role_changes") or {}).get("status") == "COMPLETE" for w in watches):
+        return "NO_ROLE_READS_FOR_PRIOR_DATE", None  # role reads began 2026-11-06
+    outcomes = prior_outcomes(operational_root, day)
+    if outcomes is None:
+        return "NO_OUTCOMES_YET", None
+    return "GRADED", grade_removals(removal_candidates(watches), outcomes)
+
+
+def removal_section(*, prior_date: str | None, operational_root: Path, output_root: Path) -> dict[str, Any]:
+    """The prior slate's removal candidates graded, plus every earlier slate this season."""
+    if not prior_date:
+        return {"status": "NOT_APPLICABLE"}
+    status, picks = _graded_date(prior_date, operational_root, output_root)
+    if picks is None:
+        return {"status": status, "prior_date": prior_date}
+    season = {prior_date: picks}
+    for folder in sorted(Path(output_root).glob("slate_date=*")):
+        day = folder.name.split("=", 1)[1]
+        if day < prior_date and season_of(day) == season_of(prior_date):
+            _, earlier = _graded_date(day, operational_root, output_root)
+            if earlier is not None:
+                season[day] = earlier
+    every = [p for rows in season.values() for p in rows]
+    tally = lambda rows: {"won": sum(p["result"] == "W" for p in rows), "lost": sum(p["result"] == "L" for p in rows),
+                          "void": sum(p["result"] == "VOID" for p in rows),
+                          "dollars": round(sum(p["dollars"] for p in rows), 2)}
+    return {"status": "GRADED", "prior_date": prior_date, "stake": REMOVAL_STAKE, "picks": picks,
+            "totals": tally(picks), "season": {"slates": len(season), "first_slate": min(season), **tally(every)}}
+
+
+def _removal_summary(totals: dict[str, Any]) -> str:
+    saved = -totals["dollars"]
+    return (f"skipped plays would have gone {totals['won']}-{totals['lost']}"
+            + (f" ({totals['void']} void)" if totals["void"] else "")
+            + f", {'saving' if saved >= 0 else 'costing'} ${abs(saved):.2f}")
+
+
+def render_removals(section: dict[str, Any]) -> list[str]:
+    lines = [f"## Removal candidates graded ({section.get('prior_date', 'prior date')})", ""]
+    if section.get("status") != "GRADED":
+        return lines + [f"Not graded: {section.get('status')}.", ""]
+    lines.append(f"Points 0.5 plays the watch said to skip (role change, model likely behind, so the "
+                 f"market is the better guide). Each graded at ${section['stake']:g} and the market's "
+                 f"no-vig price, so book prices would pay a little less. This slate: "
+                 f"{_removal_summary(section['totals'])}. Season so far ({section['season']['slates']} "
+                 f"slates from {section['season']['first_slate']}): {_removal_summary(section['season'])}.")
+    if section["picks"]:
+        lines += ["", "| Player | Role | Skipped side | Market | Model | Points | Would have | $ |",
+                  "|---|---|---|---:|---:|---:|---|---:|"]
+        lines += [f"| {p['player_name']} | {p['direction']} | {p['side']} 0.5 | {_pct(p['market_p'])} | "
+                  f"{_pct(p['model_p'])} | {'–' if p['points'] is None else p['points']} | "
+                  f"{ {'W': 'won', 'L': 'lost', 'VOID': 'void'}[p['result']]} | {p['dollars']:+.2f} |"
+                  for p in section["picks"]]
+    return lines + [""]
 
 
 def render_highlights(result: dict[str, Any]) -> list[str]:
@@ -567,6 +686,10 @@ def render_highlights(result: dict[str, Any]) -> list[str]:
                      + "; ".join(f"{p['player']} {lane.upper()} {p['line']:g} {p['side']} model "
                                  f"{100 * p['model_p']:.0f}% vs market {100 * p['market_p']:.0f}%"
                                  for lane, p in unexplained[:HIGHLIGHT_MAX]))
+    removals = result.get("removal_grades") or {}
+    if removals.get("status") == "GRADED":
+        lines.append(f"- **Removal candidates {removals['prior_date']}**: {_removal_summary(removals['totals'])}; "
+                     f"season so far {_removal_summary(removals['season'])}")
     flags = result.get("flags") or []
     lines.append(f"- Data flags: {', '.join(flags)}" if flags else "- Data flags: none")
     if not (behind or ahead or unexplained or shots):
@@ -581,6 +704,8 @@ def render(result: dict[str, Any]) -> str:
     lines += render_highlights(result)
     if result.get("role_changes"):
         lines += render_role_changes(result["role_changes"])
+    if result.get("removal_grades", {}).get("status") not in (None, "NOT_APPLICABLE"):
+        lines += render_removals(result["removal_grades"])
     for lane in ("points", "sog"):
         checks = result["sanity"].get(lane) or []
         flagged = [c for c in checks if c["flag"]]
@@ -665,6 +790,11 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
     role_section = {"status": role_status, "players": _role_rows(roles, disagreements.get("role_market") or []),
                     "pp_scale": None if roles is None else round(float(roles.attrs.get("pp_scale", 1.0)), 3)}
     health = attempt_source_health(Path(operational_root), prior_date, run_id)
+    try:
+        removals = removal_section(prior_date=prior_date, operational_root=Path(operational_root),
+                                   output_root=Path(output_root))
+    except Exception as error:  # the watch never blocks the run
+        removals = {"status": f"UNAVAILABLE:{type(error).__name__}:{error}", "prior_date": prior_date}
     flags = [f"{lane}:{c['check']}" for lane, checks in sanity.items() for c in checks if c["flag"]]
     if health.get("flag"):
         flags.append("source:SHOT_ATTEMPTS_GAMES_DROPPED")
@@ -672,7 +802,7 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
               "players": {"points": 0 if points is None else int(len(points)),
                           "sog": 0 if sog is None else int(len(sog))},
               "sanity": sanity, "role_changes": role_section, "disagreements": disagreements,
-              "source_health": health,
+              "source_health": health, "removal_grades": removals,
               "flags": flags, "flag_count": len(flags), "database_writes": 0, "provider_requests": 0}
     out = Path(output_root) / f"slate_date={slate_date}" / f"run_id={run_id}"
     out.mkdir(parents=True, exist_ok=True)

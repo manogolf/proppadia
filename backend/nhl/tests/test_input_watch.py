@@ -237,5 +237,65 @@ class RoleChangeTests(unittest.TestCase):
             self.assertIn("build_nhl_prior_season_usage.py", text)
 
 
+def role_row(player_id, toi_delta, pp_delta, model, market, game_id=7):
+    return {"game_id": game_id, "player_id": player_id, "player_name": f"P{player_id}", "toi_delta": toi_delta,
+            "pp_delta": pp_delta, "points_model_p_over": model, "points_market_p_over": market}
+
+
+class RemovalGradeTests(unittest.TestCase):
+    def test_candidates_are_the_model_side_when_the_model_is_behind(self):
+        early = {"generated_at_utc": "2026-11-07T13:45:00Z", "role_changes": {"players": [
+            role_row(1, 3.0, 0.0, 0.40, 0.50),     # up, model below: skip the Under
+            role_row(2, -3.0, 0.0, 0.50, 0.40),    # down, model above: skip the Over
+            role_row(3, 3.0, 0.0, 0.60, 0.50),     # up, model above: model ahead, not a removal
+            role_row(4, 3.0, -0.2, 0.40, 0.42)]}}  # agreement
+        late = {"generated_at_utc": "2026-11-07T19:30:00Z", "role_changes": {"players": [
+            role_row(1, 3.0, 0.0, 0.38, 0.50)]}}   # the later read wins
+        picks = {p["player_id"]: p for p in watch.removal_candidates([late, early])}
+        self.assertEqual(sorted(picks), [1, 2])
+        self.assertEqual(picks[1]["side"], "UNDER")
+        self.assertAlmostEqual(picks[1]["model_p"], 0.62)
+        self.assertAlmostEqual(picks[1]["market_p"], 0.50)
+        self.assertEqual(picks[2]["side"], "OVER")
+
+    def test_grades_at_the_no_vig_price_and_voids_non_participants(self):
+        picks = [{"game_id": 7, "player_id": 1, "side": "UNDER", "market_p": 0.6},
+                 {"game_id": 7, "player_id": 2, "side": "OVER", "market_p": 0.4},
+                 {"game_id": 7, "player_id": 3, "side": "UNDER", "market_p": 0.5}]
+        outcomes = pd.DataFrame([
+            {"game_id": 7, "player_id": 1, "official_points": 0, "participation_state": "PARTICIPATED", "official_final": True},
+            {"game_id": 7, "player_id": 2, "official_points": 0, "participation_state": "PARTICIPATED", "official_final": True},
+            {"game_id": 7, "player_id": 3, "official_points": 0, "participation_state": "DID_NOT_PLAY", "official_final": True}])
+        graded = {p["player_id"]: p for p in watch.grade_removals(picks, outcomes)}
+        self.assertEqual(graded[1]["result"], "W")
+        self.assertAlmostEqual(graded[1]["dollars"], round(10 * 0.4 / 0.6, 2))
+        self.assertEqual((graded[2]["result"], graded[2]["dollars"]), ("L", -10.0))
+        self.assertEqual(graded[3]["result"], "VOID")
+
+    def test_section_grades_prior_slate_and_season(self):
+        with tempfile.TemporaryDirectory(dir=watch.ROOT / "tmp") as temp:
+            temp = Path(temp)
+            for day, points in (("2026-11-06", 1), ("2026-11-07", 0)):
+                run = temp / "out" / f"slate_date={day}" / "run_id=r"
+                run.mkdir(parents=True)
+                (run / "input_watch.json").write_text(json.dumps({"role_changes": {
+                    "status": "COMPLETE", "players": [role_row(1, 3.0, 0.0, 0.40, 0.50)]}}))
+                package = temp / "ops" / "postgame_reconciliation" / day / "reconciliation=a"
+                package.mkdir(parents=True)
+                (package / "RUN_COMPLETE.json").write_text("{}")
+                pd.DataFrame([{"game_id": 7, "player_id": 1, "official_points": points,
+                               "participation_state": "PARTICIPATED", "official_final": True}]).to_csv(
+                    package / "canonical_skater_outcomes.csv", index=False)
+            section = watch.removal_section(prior_date="2026-11-07", operational_root=temp / "ops",
+                                            output_root=temp / "out")
+            self.assertEqual(section["totals"]["won"], 1)          # 11-07: skipped Under won
+            self.assertEqual(section["season"]["slates"], 2)
+            self.assertEqual((section["season"]["won"], section["season"]["lost"]), (1, 1))
+            self.assertIn("Removal candidates graded", "\n".join(watch.render_removals(section)))
+            missing = watch.removal_section(prior_date="2026-11-08", operational_root=temp / "ops",
+                                            output_root=temp / "out")
+            self.assertEqual(missing["status"], "NO_WATCH_FOR_PRIOR_DATE")
+
+
 if __name__ == "__main__":
     unittest.main()

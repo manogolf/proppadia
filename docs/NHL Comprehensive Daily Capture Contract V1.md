@@ -818,6 +818,23 @@ better than the market in the 2026-11-06 grading, P2.44), and the run's data
 flags. `backend/nhl/scripts/research_nhl_role_change_reads.py` regrades the
 reads for a date range (read-only, output under `tmp/`).
 
+Removal candidates graded (2026-11-08, operator request, P2.44). Each watch
+grades the prior slate's removal candidates: the Points 0.5 plays on the
+model's side for every "model likely behind" role-change player (role up:
+Under; role down: Over), the plays the watch says to skip. A player's last
+pregame read that day is used (later runs drop started games), and the
+direction is recomputed with the current rule. Outcomes come from the newest
+complete `postgame_reconciliation/<date>/reconciliation=*` package
+(`canonical_skater_outcomes.csv`); a player who did not participate, or a
+non-final row, is VOID. Each play is graded at $10 and the market's median
+no-vig price for its side, so book prices would pay a little less. The
+section (`removal_grades` in `input_watch.json`; "Removal candidates graded"
+in the report, with one Highlights line) shows the slate and the season so
+far, regraded from every earlier slate with role reads (from 2026-11-06).
+Candidates are every such player, not only those that passed a station
+search. If the prior slate has no watch, no role reads or no outcomes yet,
+the section says so and the rest of the watch runs.
+
 Two-sided line level in the daily performance summary (2026-10-28). Next to
 the all-predictions tables, SOG production and Points HGB production show W/L
 by line and side for only the graded predictions whose exact line had a
