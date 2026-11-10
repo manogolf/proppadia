@@ -189,6 +189,14 @@ Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
   The 8rain upload stays manual. Manual runs are unchanged and still allowed.
 - Install or roll back with `bin/nhl_install_schedule.sh [--rollback]`
   (templates in `backend/nhl/launchagents/`).
+- `com.proppadia.nhl.mainline-cross-market-shadow` (every 15 minutes) runs
+  under `caffeinate -i` (from 2026-11-10). It starts the prior-day
+  reconciliation when none exists, including during a brief overnight wake;
+  without `caffeinate` the Mac slept mid-run and the reconciliation lock
+  stayed held, so the 04:30 and 05:45 runs failed with
+  `NHL_POSTGAME_RECONCILIATION_ALREADY_RUNNING`. The roster refresh
+  (`refresh_players_and_roster_today.py`) connects with TCP keepalives, so a
+  dropped database connection fails in about 1.5 minutes instead of hanging.
 - Step 4, `04_projected_lineups_trial` (2026-11-06 to 2026-11-13, NHL
   Backlog P2.47; operator-approved trial): runs
   `backend/nhl/scripts/collect_nhl_projected_lineups.py --slate-date <d>`

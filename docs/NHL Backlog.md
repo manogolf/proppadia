@@ -2383,6 +2383,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   05:28 wake survived a macOS update the same morning.
   Still open: recheck the MLB clash before MLB resumes (below). Prior status
   follows.
+- 2026-11-10 missed 04:30 prep and 05:45 run. The cross-market job
+  (every 15 minutes, no `caffeinate`) started the 2026-11-09 reconciliation
+  during a 30-second dark wake at 02:58 PT. The Mac slept mid-run; the roster
+  refresh's database connection died and the process hung until 06:08
+  (`server closed the connection unexpectedly`) with the reconciliation lock
+  held, so the 04:30 prep and 05:45 run failed with
+  `NHL_POSTGAME_RECONCILIATION_ALREADY_RUNNING`. The 06:23 tick reconciled
+  2026-11-09; the prep and scheduled daily were rerun by hand at 06:46 (both
+  READY; 8rain file and input watch written). Fix: the cross-market template
+  runs under `caffeinate -i` and the install script now reloads it; the
+  roster refresh connects with TCP keepalives. The operator reinstalls with
+  `bin/nhl_install_schedule.sh`.
 - 2026-11-06 missed 05:45 snapshot; morning prep moved to 04:30 (operator
   request). The 05:30 prep ran to 05:59 PT (about 25 minutes regrading
   2026-11-05, reconciliation `f4795d26f8a3a06c3a43`; usually about 4 minutes).

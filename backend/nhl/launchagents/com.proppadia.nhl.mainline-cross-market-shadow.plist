@@ -6,6 +6,8 @@
   <string>com.proppadia.nhl.mainline-cross-market-shadow</string>
   <key>ProgramArguments</key>
   <array>
+    <string>/usr/bin/caffeinate</string>
+    <string>-i</string>
     <string>/Users/jerrystrain/Projects/proppadia/.venv/bin/python</string>
     <string>/Users/jerrystrain/Projects/proppadia/backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py</string>
     <string>--slate-date</string><string>today</string>

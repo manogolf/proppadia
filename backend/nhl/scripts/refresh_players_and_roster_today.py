@@ -97,6 +97,8 @@ if "?sslmode=" not in DB_URL and "&sslmode=" not in DB_URL:
     DB_URL += ("&" if "?" in DB_URL else "?") + "sslmode=require"
 if "?gssencmode=" not in DB_URL and "&gssencmode=" not in DB_URL:
     DB_URL += ("&" if "?" in DB_URL else "?") + "gssencmode=disable"
+DB_KEEPALIVES = {"keepalives": 1, "keepalives_idle": 30,
+                 "keepalives_interval": 10, "keepalives_count": 6}
 
 BASE = "https://api-web.nhle.com/v1"
 FETCH_DISABLED = os.environ.get("NHL_FETCH_DISABLE", "0") == "1"
@@ -831,7 +833,10 @@ def main():
     roster_status_upsert_rows = -1
     roster_observation_reference: dict | None = None
     roster_coverage = "FULL"
-    with psycopg.connect(DB_URL, prepare_threshold=None, row_factory=dict_row) as conn:
+    # TCP keepalives make a connection dropped by Mac sleep fail in about
+    # 1.5 minutes instead of hanging for hours with the reconciliation lock held.
+    with psycopg.connect(DB_URL, prepare_threshold=None, row_factory=dict_row,
+                         **DB_KEEPALIVES) as conn:
         try:
             conn.prepare_threshold = None  # type: ignore[attr-defined]
         except Exception:

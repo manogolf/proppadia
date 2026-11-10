@@ -3,6 +3,9 @@
 #   - morning prep (com.proppadia.nhl.morning-orchestration) at 04:30 local (05:30 until 2026-11-06)
 #   - scheduled daily run + game-line refresh + 8rain file
 #     (com.proppadia.nhl.scheduled-daily) at 05:45, 08:30 and 11:30 local
+#   - cross-market capture every 15 minutes (com.proppadia.nhl.mainline-cross-market-shadow),
+#     kept awake with caffeinate so a brief overnight wake can't leave the
+#     prior-day reconciliation hung with its lock held (2026-11-10 incident)
 #   - retires the finished 06:00 early-odds trial (com.proppadia.nhl.early-prop-odds-trial)
 # Run from the repo root by the operator: bin/nhl_install_schedule.sh
 # Rollback: bin/nhl_install_schedule.sh --rollback (morning back to 07:30,
@@ -36,10 +39,11 @@ fi
 mkdir -p "$repo/artifacts/operational/nhl/scheduled_daily"
 reload com.proppadia.nhl.morning-orchestration "$templates/com.proppadia.nhl.morning-orchestration.plist"
 reload com.proppadia.nhl.scheduled-daily "$templates/com.proppadia.nhl.scheduled-daily.plist"
+reload com.proppadia.nhl.mainline-cross-market-shadow "$templates/com.proppadia.nhl.mainline-cross-market-shadow.plist"
 launchctl bootout "$domain/com.proppadia.nhl.early-prop-odds-trial" 2>/dev/null || true
 rm -f "$agents/com.proppadia.nhl.early-prop-odds-trial.plist"
 
-for label in com.proppadia.nhl.morning-orchestration com.proppadia.nhl.scheduled-daily com.proppadia.nhl.early-prop-odds-trial; do
+for label in com.proppadia.nhl.morning-orchestration com.proppadia.nhl.scheduled-daily com.proppadia.nhl.mainline-cross-market-shadow com.proppadia.nhl.early-prop-odds-trial; do
   if launchctl print "$domain/$label" >/dev/null 2>&1; then echo "$label: loaded"; else echo "$label: not loaded"; fi
 done
 echo "Installed. Morning prep 04:30; daily + 8rain file 05:45, 08:30, 11:30 (local time)."
