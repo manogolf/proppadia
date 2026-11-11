@@ -2875,12 +2875,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   them `poisson_baseline/baseline_v1` in the all-candidate evaluation. Tests:
   `test_raw_sog_never_publishes_formula_fallback_rows`,
   `test_formula_fallback_rows_keep_the_formula_identity`.
-- Open: the HGB count grade in the daily summary (`sog_count_hgb_shadow`, which
+- Kept: the HGB count grade in the daily summary (`sog_count_hgb_shadow`, which
   the weekly evaluation reads) still counts fallback rows in its wins and
   losses at the formula's probability; it reports them as
   `production_fallback_player_games`. Few settle (6 player-games by
-  2026-11-11). Splitting them out changes a graded record, so it awaits the
-  operator.
+  2026-11-11). Left as is (operator, 2026-11-11: "Leave it").
 - Finding: the production SOG model (`NHL_SOG_COUNT_HGB_V1`) needs last-10 TOI
   and a shrunk rate. A player with no NHL games in its history gets the old
   formula's prediction instead (`poisson_source = formula_fallback`,
