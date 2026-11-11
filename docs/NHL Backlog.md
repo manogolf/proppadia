@@ -2865,7 +2865,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.48 SOG: players with no NHL history reach the 8rain upload on the formula fallback
 
-- Status: **DEFERRED 2026-11-11** (operator: "Not needed now").
+- Status: **DONE 2026-11-11** for the 8rain export and the all-candidate
+  evaluation (operator: "it doesn't seem right to allow that since we don't use
+  that formula for today's predictions"; first deferred the same day). Only
+  no-history players fall back: all 38 fallback player-games since 2026-10-25 had 0
+  games this season and no prior-season rate.
+  `select_raw_sog` drops `formula_fallback` rows from the upload and reports
+  `formula_fallback_player_games_excluded`; `production_sog_identity` labels
+  them `poisson_baseline/baseline_v1` in the all-candidate evaluation. Tests:
+  `test_raw_sog_never_publishes_formula_fallback_rows`,
+  `test_formula_fallback_rows_keep_the_formula_identity`.
+- Open: the HGB count grade in the daily summary (`sog_count_hgb_shadow`, which
+  the weekly evaluation reads) still counts fallback rows in its wins and
+  losses at the formula's probability; it reports them as
+  `production_fallback_player_games`. Few settle (6 player-games by
+  2026-11-11). Splitting them out changes a graded record, so it awaits the
+  operator.
 - Finding: the production SOG model (`NHL_SOG_COUNT_HGB_V1`) needs last-10 TOI
   and a shrunk rate. A player with no NHL games in its history gets the old
   formula's prediction instead (`poisson_source = formula_fallback`,
@@ -2877,8 +2892,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   play. Scratch: `tmp/sog_fallback_grade.py`.
 - Not a rule for injury returns: a player with NHL history but 0 games this
   season (Troy Terry, 2026-11-11) keeps current practice (operator).
-- Revisit when a fallback row has a book price: then decide whether to keep
-  these rows out of the 8rain upload. Points was not checked.
+- Points was not checked.
 
 ### P2.47 NHL.com projected lineups: trial collection
 

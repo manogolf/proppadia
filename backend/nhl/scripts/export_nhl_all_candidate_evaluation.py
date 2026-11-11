@@ -649,6 +649,17 @@ def _prediction_row(base: dict[str, Any], p_over: float | None, p_under: float |
     return {field: base.get(field, "") for field in PREDICTION_FIELDS}
 
 
+def production_sog_identity(poisson_source: str | None) -> tuple[str, str]:
+    """Model identity of one production SOG row (HGB from 2026-10-25).
+
+    `formula_fallback` rows (players with no NHL history) carry the retired
+    formula's prediction, so they keep the formula's identity.
+    """
+    if poisson_source == "hgb_count":
+        return "hgb_count", "NHL_SOG_COUNT_HGB_V1"
+    return "poisson_baseline", "baseline_v1"
+
+
 def add_captured_sog_arms(rows: list[dict[str, Any]], operational_root: Path,
                           slate_date: str) -> list[dict[str, Any]]:
     """Bind immutable production and fixed-blend captures to official SOG outcomes."""
@@ -688,11 +699,7 @@ def add_captured_sog_arms(rows: list[dict[str, Any]], operational_root: Path,
             game_id, player_id = r.get("game_id", ""), r.get("player_id", "")
             outcome = outcomes.get((game_id, player_id), {})
             if model == "PRODUCTION":
-                # The production wide file records its scorer per row (HGB from 2026-10-25).
-                if r.get("poisson_source") in ("hgb_count", "formula_fallback"):
-                    family, version = "hgb_count", "NHL_SOG_COUNT_HGB_V1"
-                else:
-                    family, version = "poisson_baseline", "baseline_v1"
+                family, version = production_sog_identity(r.get("poisson_source"))
                 line_probs = [("1.5", _num(r.get("p_over_1_5"))), ("2.5", _num(r.get("p_over_2_5"))), ("3.5", _num(r.get("p_over_3_5")))]
             else:
                 family, version = "poisson_baseline", model

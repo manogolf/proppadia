@@ -733,7 +733,11 @@ population, and the HGB model rescores them from strict-prior skater logs
 exact column layout (`poisson_source` = `hgb_count`, or `formula_fallback`
 where a player has no qualifying history). The `legacy_sog` lane, its fitted
 model evidence, `nhl.predictions`, the 8rain export and governed grading read
-that production file as before; the lane output also records the HGB history
+that production file as before, except that from 2026-11-11 the 8rain export
+drops `formula_fallback` rows (summary `formula_fallback_player_games_excluded`)
+and the all-candidate evaluation labels them `poisson_baseline/baseline_v1`, so
+the retired formula's guess is never published or graded as the HGB model
+(NHL Backlog P2.48); the lane output also records the HGB history
 SHA, artifact SHA, the formula file and the per-row feature file
 `sog_hgb_features.csv`. The retained SOG feature package binds the formula's
 inputs to the formula's own output. The formula is a shadow

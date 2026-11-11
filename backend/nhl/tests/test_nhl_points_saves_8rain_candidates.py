@@ -11,7 +11,7 @@ import pandas as pd
 from backend.nhl.eightrain_adapter import build_rows, UPLOAD_COLUMNS, validate_upload
 from backend.nhl.scripts.select_nhl_points_saves_8rain_candidates import (
     DEFAULT_POLICIES, bind_current_points_authority, bind_saves_model_label, load_active_policy,
-    require_current_slate, select_lane, select_raw_lane,
+    require_current_slate, select_lane, select_raw_lane, select_raw_sog,
 )
 from backend.nhl.scripts.build_points_with_market import parse_points_odds
 from backend.nhl.scripts.build_saves_with_market import parse_odds_candidates
@@ -301,6 +301,31 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
         _, upload, summary = select_raw_lane(source, self.names, self.schedule, **common)
         self.assertEqual(len(upload), 2)
         self.assertEqual(summary["mapped_upload_predictions"], 2)
+
+    def test_raw_sog_never_publishes_formula_fallback_rows(self):
+        # No-history players get the retired formula's guess; it must not
+        # reach 8rain under the current model's name.
+        wide = pd.DataFrame([
+            {"player_id": pid, "game_id": 100, "team_id": 1, "full_name": name,
+             "game_date": "2026-10-01", "poisson_source": src, "p_over_1_5": 0.6}
+            for pid, name, src in [(10, "Alex Example", "hgb_count"), (11, "New Callup", "formula_fallback")]])
+        market = pd.DataFrame([{"player_id": pid, "game_id": 100, "line": 1.5, "p_over": 0.5}
+                               for pid in (10, 11)])
+        names = pd.concat([self.names, pd.DataFrame([{"player_id": 11, "game_id": 100, "team_code": "BOS"}])])
+        with tempfile.TemporaryDirectory(dir="tmp") as tmp:
+            wide_path, market_path = Path(tmp) / "wide.csv", Path(tmp) / "market.csv"
+            wide.to_csv(wide_path, index=False)
+            market.to_csv(market_path, index=False)
+            decisions, upload, summary = select_raw_sog(
+                wide_path, market_path, names, self.schedule, slate_date="2026-10-01",
+                source_sha256="sha", observation_id="obs", observation_manifest_sha256="manifest",
+                capture_timestamp_utc="2026-10-01T15:00:00Z", team_map=self.common["team_map"],
+                player_map={**self.common["player_map"], ("new callup", "team-bos"): "callup-code"},
+                unique_name_map={}, ambiguous_team_keys=set(), ambiguous_names=set(),
+                allowed_bets={"shots_on_goal": {"over", "under"}}, parent_run_id="daily-1")
+        self.assertEqual(set(decisions.player_id), {10})
+        self.assertEqual(summary["formula_fallback_player_games_excluded"], 1)
+        self.assertEqual(set(decisions.model_identity), {"NHL_SOG_COUNT_HGB_V1"})
 
     def test_raw_zero_probability_is_preserved_but_classified_as_format_limit(self):
         source = self.source(lines=(1.5,)).copy()

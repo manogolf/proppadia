@@ -10,6 +10,7 @@ from backend.nhl.scripts.export_nhl_all_candidate_evaluation import (
     missing_required_arms,
     moneyline_role_at_prediction,
     orient_moneyline_candidate,
+    production_sog_identity,
     quote_is_eligible,
     scope_regular_season_pregame,
 )
@@ -226,6 +227,10 @@ class AllCandidateExportTests(unittest.TestCase):
         self.assertEqual(exclusions[("2026-10-16", "NOT_REGULAR_SEASON")], 1)
         self.assertEqual(exclusions[("2026-10-16", "PREDICTION_AT_OR_AFTER_SCHEDULED_START")], 1)
         self.assertEqual(exclusions[("2026-10-16", "PREGAME_CHRONOLOGY_UNPROVEN")], 1)
+
+    def test_formula_fallback_rows_keep_the_formula_identity(self):
+        self.assertEqual(production_sog_identity("hgb_count"), ("hgb_count", "NHL_SOG_COUNT_HGB_V1"))
+        self.assertEqual(production_sog_identity("formula_fallback"), ("poisson_baseline", "baseline_v1"))
 
 
 class ResilientCrossMarketFillTests(unittest.TestCase):

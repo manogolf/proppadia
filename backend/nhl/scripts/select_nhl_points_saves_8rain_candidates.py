@@ -618,6 +618,10 @@ def select_raw_sog(
     wide = pd.read_csv(prediction_path)
     if "game_date" not in wide or set(wide.game_date.astype(str)) != {slate_date}:
         raise ValueError("SOG_RAW_PREDICTION_SLATE_MISMATCH")
+    # Players with no NHL history get the retired formula's guess
+    # (`formula_fallback`); never publish it under the current model's name.
+    fallback = wide.get("poisson_source", pd.Series("", index=wide.index)).eq("formula_fallback")
+    wide = wide[~fallback]
     import re
     probability_columns = {}
     for column in wide.columns:
@@ -648,7 +652,7 @@ def select_raw_sog(
         long["model_identity"] = "NHL_SOG_POISSON_BASELINE_V1_REFERENCE"
     else:
         long["model_identity"] = "NHL_SOG_REFERENCE_PREDICTION"
-    return select_raw_lane(
+    decisions, upload_rows, summary = select_raw_lane(
         long, names, schedule, lane="shots_on_goal", slate_date=slate_date,
         source_sha256=source_sha256, observation_id=observation_id,
         observation_manifest_sha256=observation_manifest_sha256,
@@ -657,6 +661,8 @@ def select_raw_sog(
         ambiguous_team_keys=ambiguous_team_keys, ambiguous_names=ambiguous_names,
         allowed_bets=allowed_bets, parent_run_id=parent_run_id,
     )
+    summary["formula_fallback_player_games_excluded"] = int(fallback.sum())
+    return decisions, upload_rows, summary
 
 
 def main() -> None:
