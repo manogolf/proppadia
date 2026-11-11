@@ -2863,6 +2863,23 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.48 SOG: players with no NHL history reach the 8rain upload on the formula fallback
+
+- Status: **DEFERRED 2026-11-11** (operator: "Not needed now").
+- Finding: the production SOG model (`NHL_SOG_COUNT_HGB_V1`) needs last-10 TOI
+  and a shrunk rate. A player with no NHL games in its history gets the old
+  formula's prediction instead (`poisson_source = formula_fallback`,
+  `backend/nhl/sog_hgb_count_model.py`), and those rows still go to the 8rain
+  upload. From 2026-10-25 to 2026-11-11 that was 38 player-games, 16 players
+  (call-ups and depth players such as Mason Shaw, Maveric Lamoureux, Quinton
+  Burns), with formula guesses of 0.0-4.0 expected shots. None of their 249
+  lines had a book price, so none could show in station searches. Most did not
+  play. Scratch: `tmp/sog_fallback_grade.py`.
+- Not a rule for injury returns: a player with NHL history but 0 games this
+  season (Troy Terry, 2026-11-11) keeps current practice (operator).
+- Revisit when a fallback row has a book price: then decide whether to keep
+  these rows out of the 8rain upload. Points was not checked.
+
 ### P2.47 NHL.com projected lineups: trial collection
 
 - Status: **TRIAL RUNNING 2026-11-06 to 2026-11-13** (operator: "set up a
