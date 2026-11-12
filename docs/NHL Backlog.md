@@ -2863,6 +2863,30 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.51 Saves station search: readiness for the operator's request
+
+- Status: **READY, NOT ADOPTED** (operator 2026-11-12: "adding saves to the
+  search is nearing and we should be ready for when I ask"). Nothing changes
+  until the operator asks; no calibration without approval.
+- Evidence (`tmp/saves_band_grade.py`, production
+  `NHL_SAVES_SHOTS_X_SAVE_RATE_V1`, slates 11-02..11-11; 11-01 had no saves
+  prices at the operator's books; upload nearest 14:34 ET, best price at
+  BetOnline/Novig/Pinnacle from the latest odds at or before it; actual
+  starters only). 672 starter-lines, 264 two-sided.
+  - Model leans Under: on 132 two-sided lines the Over hit 45.5%, market
+    no-vig 47.8%, model 41.1%. Overs almost never show edge at these books.
+  - Under, fair 57-75% (-133 to -300), edge 4+: 42-26 (62%) vs breakeven
+    54%, +$95 at $10 (68 plays, 55 starts, 10 slates). Edge 2-4: 1-5. Edge
+    6+: 26-17. Fair 50-57%: about even.
+- Proposed starting search: Saves Under, fair -300 to -133, edge 4+, no cap;
+  no Saves Over search yet. Confirmed starters only: the model scores every
+  goalie, and books void a goalie who does not start; lines post from about
+  08:00 PT and cover 91-95% of games from about 11:00 PT (P2.28).
+- Gaps: Kalshi lists NHL saves markets (7 on 2026-11-12) but no Kalshi saves
+  quote has reached our feed in 37 slates (Kalshi arrives as Points, h2h and
+  totals only); Bookmaker is not in the feed. Several lines per goalie are
+  correlated, so 68 plays is closer to 55 independent starts.
+
 ### P2.50 Points attachment ignored alternate lines, so Kalshi never attached
 
 - Status: **DONE 2026-11-12** (operator: "Yes, include them").
