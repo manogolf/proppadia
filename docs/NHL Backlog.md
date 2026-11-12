@@ -1675,6 +1675,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   disagreement direction/magnitude, and the V3/V2 role cutover. Continue
   prospective paired grading using existing daily/reconciliation evidence;
   do not add an acquisition lane or use these tiers as betting filters.
+- **WATCH, 2026-11-12 (operator: "Yes, record it"): edge side vs the model's
+  own favorite.** V3 production, 177 settled 2026 games (10-14..11-11), the
+  side where the model is above the median same-book no-vig market, graded
+  at $10 and that side's no-vig price (`tmp/ml_gap_fav.py` on the
+  cross-market grade packages). Edge side is the model's favorite: 89-57,
+  market expected 83.2 wins, +$88.8. Edge side is the model's underdog:
+  9-22, market expected 12.3, -$78.3 (gap 5+: 2-5). Every gap-10+ game so far
+  was a model favorite: 15-8, market expected 13.0, +$29.4. Season Brier:
+  model 0.2269, market 0.2255 (tied a week earlier). Operator working rule
+  for the "ml 10+ gap" plays: take the edge side only when it is also the
+  model's favorite. 31 underdog games is small; regrade at the 11-28 weekly
+  review alongside the model-version split.
 
 ### P2.8 Evaluate SOG production versus D10/D20 fixed blends
 
