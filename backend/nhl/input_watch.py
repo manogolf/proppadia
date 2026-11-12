@@ -29,6 +29,11 @@ change to any prediction. It writes
    ``PRIOR_USAGE_PATH`` (built once per season by
    ``scripts/build_nhl_prior_season_usage.py``); points per game from the
    production Points model's frozen ``prior_season_totals``.
+5. Hot streaks (2026-11-12, watch-only, NHL Backlog P2.49): tonight's players who
+   cleared SOG 1.5 or Points 0.5 in each of their last ``HOT_GAMES`` played
+   games this season (from saved reconciliation outcomes), with the model's and
+   the market's P(over). On 10-26..11-11 these players beat both the market and
+   the models; each watch grades the prior slate's tags to keep measuring it.
 """
 from __future__ import annotations
 
@@ -372,7 +377,7 @@ def explain_disagreements(*, points: pd.DataFrame | None, sog: pd.DataFrame | No
     quotes, _ = candidate_export.load_retained_quotes(operational_root, candidates, price_both_sides=True)
     market = _market(candidate_export.deduplicate_quotes(quotes))
     cand = pd.DataFrame(candidates).merge(market, on="candidate_key", how="inner")
-    out: dict[str, Any] = {"two_sided_candidates": int(len(cand)), "lanes": {}, "role_market": []}
+    out: dict[str, Any] = {"two_sided_candidates": int(len(cand)), "lanes": {}, "role_market": [], "line_market": []}
     for lane, (frame, market_key, _lines) in lanes.items():
         part = cand[cand.market_key.eq(market_key)].copy()
         if part.empty:
@@ -388,6 +393,9 @@ def explain_disagreements(*, points: pd.DataFrame | None, sog: pd.DataFrame | No
         frame["game_id"] = frame.game_id.astype("int64")
         frame["player_id"] = frame.player_id.astype("int64")
         part = part.merge(frame, on=["game_id", "player_id"], how="left", suffixes=("", "_feature"))
+        out["line_market"] += [{"lane": lane, "player_id": int(r.player_id),
+                                "market_p_over": round(float(r.market_p_over), 4)}
+                               for r in part[part.line.eq(ROLE_LINES[lane])].itertuples(index=False)]
         if roles is not None and not roles.empty:
             mine = part[part.player_id.isin(roles.player_id) & part.line.eq(ROLE_LINES[lane])]
             out["role_market"] += [{"lane": lane, "player_id": int(r.player_id), "line": float(r.line),
@@ -530,6 +538,8 @@ def render_role_changes(section: dict[str, Any]) -> list[str]:
 
 HIGHLIGHT_MAX = 6
 REMOVAL_STAKE = 10.0   # dollars per skipped play when grading removal candidates
+HOT_GAMES = 3          # hit the line in each of this many most recent played games
+HOT_RULES = {"sog": ("official_sog", 2), "points": ("official_points", 1)}  # SOG 1.5, Points 0.5
 
 
 def removal_candidates(prior_watches: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -645,6 +655,125 @@ def render_removals(section: dict[str, Any]) -> list[str]:
     return lines + [""]
 
 
+def season_outcomes(operational_root: Path, slate_date: str) -> pd.DataFrame | None:
+    """Played games this season before the slate, one row per player-game, from saved reconciliations."""
+    frames = []
+    for folder in sorted((Path(operational_root) / "postgame_reconciliation").glob("20*")):
+        day = folder.name
+        if day < slate_date and season_of(day) == season_of(slate_date):
+            outcomes = prior_outcomes(operational_root, day)
+            if outcomes is not None:
+                frames.append(outcomes.assign(slate_date=day))
+    if not frames:
+        return None
+    played = pd.concat(frames)
+    played = played[played.participation_state.eq("PARTICIPATED") & played.official_final.astype(bool)]
+    return played.drop_duplicates(["game_id", "player_id"]).sort_values(["player_id", "slate_date"])
+
+
+def hot_streaks(*, points: pd.DataFrame | None, sog: pd.DataFrame | None, history: pd.DataFrame | None,
+                market: dict[tuple[str, int], float]) -> list[dict[str, Any]]:
+    """Tonight's players who cleared the line in each of their last HOT_GAMES played games."""
+    if history is None or history.empty:
+        return []
+    out = []
+    for lane, frame, model_column in (("sog", sog, "p_over_1_5"), ("points", points, "prob_over_0_5")):
+        if frame is None or model_column not in frame:
+            continue
+        column, threshold = HOT_RULES[lane]
+        recent = history.groupby("player_id").tail(HOT_GAMES)
+        hits = recent.assign(hit=recent[column].ge(threshold)).groupby("player_id").hit.agg(["sum", "size"])
+        hot = set(hits[(hits["size"] == HOT_GAMES) & (hits["sum"] == HOT_GAMES)].index.astype("int64"))
+        for row in frame.drop_duplicates(["game_id", "player_id"]).itertuples(index=False):
+            if int(row.player_id) in hot:
+                out.append({"lane": lane, "line": ROLE_LINES[lane], "game_id": int(row.game_id),
+                            "player_id": int(row.player_id),
+                            "player_name": str(getattr(row, "player_name", row.player_id)),
+                            "model_p_over": round(float(getattr(row, model_column)), 4),
+                            "market_p_over": market.get((lane, int(row.player_id)))})
+    # Model's Over lean over the market first: the tags that back a search play.
+    return sorted(out, key=lambda p: (p["lane"], p["market_p_over"] is None,
+                                      -(p["model_p_over"] - (p["market_p_over"] or 0))))
+
+
+def grade_hot(tags: list[dict[str, Any]], outcomes: pd.DataFrame) -> list[dict[str, Any]]:
+    """Each tag graded as an Over at $REMOVAL_STAKE and the market's no-vig price (VOID without one)."""
+    o = outcomes.drop_duplicates(["game_id", "player_id"]).set_index(["game_id", "player_id"])
+    graded = []
+    for t in tags:
+        key = (t["game_id"], t["player_id"])
+        row = o.loc[key] if key in o.index else None
+        market = t.get("market_p_over")
+        if row is None or row.participation_state != "PARTICIPATED" or not bool(row.official_final):
+            graded.append({**t, "result": "VOID", "dollars": 0.0})
+            continue
+        column, threshold = HOT_RULES[t["lane"]]
+        won = int(getattr(row, column)) >= threshold
+        dollars = (0.0 if not market else REMOVAL_STAKE * (1 - market) / market if won else -REMOVAL_STAKE)
+        graded.append({**t, "result": "W" if won else "L", "dollars": round(dollars, 2)})
+    return graded
+
+
+def _hot_date(day: str, operational_root: Path, output_root: Path) -> list[dict[str, Any]] | None:
+    latest: dict[tuple[str, int, int], dict[str, Any]] = {}
+    watches = [json.loads(p.read_text()) for p in (Path(output_root) / f"slate_date={day}").glob("run_id=*/input_watch.json")]
+    for w in sorted(watches, key=lambda w: w.get("generated_at_utc") or ""):
+        for t in (w.get("hot_streaks") or {}).get("players") or []:
+            latest[(t["lane"], t["game_id"], t["player_id"])] = t
+    outcomes = prior_outcomes(operational_root, day) if latest else None
+    return None if outcomes is None else grade_hot(list(latest.values()), outcomes)
+
+
+def hot_section(*, slate_date: str, prior_date: str | None, points, sog, market,
+                operational_root: Path, output_root: Path) -> dict[str, Any]:
+    players = hot_streaks(points=points, sog=sog, history=season_outcomes(operational_root, slate_date), market=market)
+    section: dict[str, Any] = {"status": "COMPLETE", "games": HOT_GAMES, "players": players, "season": {}}
+    days = sorted(f.name.split("=", 1)[1] for f in Path(output_root).glob("slate_date=*"))
+    for day in days:
+        if day < slate_date and season_of(day) == season_of(slate_date):
+            graded = _hot_date(day, operational_root, output_root)
+            if graded:
+                section["season"][day] = graded
+                if day == prior_date:
+                    section["prior"] = {"date": day, "picks": graded}
+    return section
+
+
+def _hot_tally(rows: list[dict[str, Any]]) -> str:
+    settled = [r for r in rows if r["result"] != "VOID"]
+    if not settled:
+        return "none settled"
+    priced = [r for r in settled if r.get("market_p_over")]
+    won = sum(r["result"] == "W" for r in settled)
+    text = f"{won}-{len(settled) - won} ({100 * won / len(settled):.0f}%)"
+    if priced:
+        text += (f"; priced {len(priced)}: hit {100 * sum(r['result'] == 'W' for r in priced) / len(priced):.0f}% vs "
+                 f"market {100 * sum(r['market_p_over'] for r in priced) / len(priced):.0f}% and model "
+                 f"{100 * sum(r['model_p_over'] for r in priced) / len(priced):.0f}%, "
+                 f"${sum(r['dollars'] for r in priced):+.2f} at ${REMOVAL_STAKE:g} and no-vig")
+    return text
+
+
+def render_hot(section: dict[str, Any]) -> list[str]:
+    lines = [f"## Hot streaks: cleared the line in each of the last {section.get('games', HOT_GAMES)} games", ""]
+    if section.get("status") != "COMPLETE":
+        return lines + [f"Unavailable: {section.get('status')}.", ""]
+    lines.append("Watch-only (NHL Backlog P2.49): from 10-26 to 11-11 these players cleared the line more often "
+                 "than the market and the models priced. Tonight's model and market P(over):")
+    lines += ["", "| Player | Line | Model | Market |", "|---|---|---:|---:|"]
+    lines += [f"| {p['player_name']} | {'SOG 1.5' if p['lane'] == 'sog' else 'Points 0.5'} Over | "
+              f"{_pct(p['model_p_over'])} | {_pct(p['market_p_over'])} |" for p in section["players"]]
+    if not section["players"]:
+        lines.append("| none | | | |")
+    for lane, label in (("sog", "SOG 1.5"), ("points", "Points 0.5")):
+        prior = [r for r in (section.get("prior") or {}).get("picks", []) if r["lane"] == lane]
+        every = [r for rows in section["season"].values() for r in rows if r["lane"] == lane]
+        if every:
+            lines.append(f"- {label} Over tags graded: prior slate {_hot_tally(prior)}; "
+                         f"since {min(section['season'])} {_hot_tally(every)}.")
+    return lines + [""]
+
+
 def render_highlights(result: dict[str, Any]) -> list[str]:
     """A few lines to read first: who the model is likely behind on, unexplained gaps, data flags."""
     lines = ["## Highlights", ""]
@@ -686,6 +815,15 @@ def render_highlights(result: dict[str, Any]) -> list[str]:
                      + "; ".join(f"{p['player']} {lane.upper()} {p['line']:g} {p['side']} model "
                                  f"{100 * p['model_p']:.0f}% vs market {100 * p['market_p']:.0f}%"
                                  for lane, p in unexplained[:HIGHLIGHT_MAX]))
+    hot = [p for p in (result.get("hot_streaks") or {}).get("players") or []]
+    for lane, label in (("sog", "SOG 1.5"), ("points", "Points 0.5")):
+        mine = [p for p in hot if p["lane"] == lane]
+        if mine:
+            lines.append(f"- **Hot: {label} Over cleared in each of the last {HOT_GAMES} games** (watch-only; "
+                         f"{len(mine)} players; market and models have underrated these; model's Over lean first): "
+                         + "; ".join(f"{p['player_name']} model {_pct(p['model_p_over'])} vs market "
+                                     f"{_pct(p['market_p_over'])}" for p in mine[:HIGHLIGHT_MAX])
+                         + (f"; and {len(mine) - HIGHLIGHT_MAX} more" if len(mine) > HIGHLIGHT_MAX else ""))
     removals = result.get("removal_grades") or {}
     if removals.get("status") == "GRADED":
         lines.append(f"- **Removal candidates {removals['prior_date']}**: {_removal_summary(removals['totals'])}; "
@@ -706,6 +844,8 @@ def render(result: dict[str, Any]) -> str:
         lines += render_role_changes(result["role_changes"])
     if result.get("removal_grades", {}).get("status") not in (None, "NOT_APPLICABLE"):
         lines += render_removals(result["removal_grades"])
+    if result.get("hot_streaks"):
+        lines += render_hot(result["hot_streaks"])
     for lane in ("points", "sog"):
         checks = result["sanity"].get(lane) or []
         flagged = [c for c in checks if c["flag"]]
@@ -795,6 +935,13 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
                                    output_root=Path(output_root))
     except Exception as error:  # the watch never blocks the run
         removals = {"status": f"UNAVAILABLE:{type(error).__name__}:{error}", "prior_date": prior_date}
+    try:
+        line_market = {(m["lane"], m["player_id"]): m["market_p_over"]
+                       for m in disagreements.get("line_market") or []}
+        hot = hot_section(slate_date=slate_date, prior_date=prior_date, points=points, sog=sog, market=line_market,
+                          operational_root=Path(operational_root), output_root=Path(output_root))
+    except Exception as error:  # the watch never blocks the run
+        hot = {"status": f"UNAVAILABLE:{type(error).__name__}:{error}", "players": [], "season": {}}
     flags = [f"{lane}:{c['check']}" for lane, checks in sanity.items() for c in checks if c["flag"]]
     if health.get("flag"):
         flags.append("source:SHOT_ATTEMPTS_GAMES_DROPPED")
@@ -802,7 +949,7 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
               "players": {"points": 0 if points is None else int(len(points)),
                           "sog": 0 if sog is None else int(len(sog))},
               "sanity": sanity, "role_changes": role_section, "disagreements": disagreements,
-              "source_health": health, "removal_grades": removals,
+              "source_health": health, "removal_grades": removals, "hot_streaks": hot,
               "flags": flags, "flag_count": len(flags), "database_writes": 0, "provider_requests": 0}
     out = Path(output_root) / f"slate_date={slate_date}" / f"run_id={run_id}"
     out.mkdir(parents=True, exist_ok=True)

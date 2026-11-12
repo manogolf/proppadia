@@ -297,5 +297,54 @@ class RemovalGradeTests(unittest.TestCase):
             self.assertEqual(missing["status"], "NO_WATCH_FOR_PRIOR_DATE")
 
 
+class HotStreakTests(unittest.TestCase):
+    def _package(self, root, day, rows):
+        package = root / "postgame_reconciliation" / day / "reconciliation=a"
+        package.mkdir(parents=True)
+        (package / "RUN_COMPLETE.json").write_text("{}")
+        pd.DataFrame(rows).to_csv(package / "canonical_skater_outcomes.csv", index=False)
+
+    def test_tags_players_who_cleared_the_line_in_each_of_the_last_three_games(self):
+        def game(day, player, sog, points, state="PARTICIPATED"):
+            return {"game_id": int(day[-2:]), "player_id": player, "official_sog": sog, "official_points": points,
+                    "participation_state": state, "official_final": True}
+        with tempfile.TemporaryDirectory(dir=watch.ROOT / "tmp") as temp:
+            ops = Path(temp)
+            self._package(ops, "2026-11-01", [game("2026-11-01", 1, 0, 0), game("2026-11-01", 2, 3, 1)])
+            self._package(ops, "2026-11-02", [game("2026-11-02", 1, 2, 1), game("2026-11-02", 2, 2, 1)])
+            self._package(ops, "2026-11-03", [game("2026-11-03", 1, 4, 1), game("2026-11-03", 2, 0, 0, "DID_NOT_PLAY")])
+            self._package(ops, "2026-11-04", [game("2026-11-04", 1, 2, 2), game("2026-11-04", 2, 1, 1)])
+            self._package(ops, "2026-11-05", [game("2026-11-05", 1, 5, 0)])   # tonight: not history
+            history = watch.season_outcomes(ops, "2026-11-05")
+            self.assertNotIn("2026-11-05", set(history.slate_date))
+            sog = pd.DataFrame([{"game_id": 9, "player_id": 1, "player_name": "A", "p_over_1_5": 0.6},
+                                {"game_id": 9, "player_id": 2, "player_name": "B", "p_over_1_5": 0.5}])
+            points = pd.DataFrame([{"game_id": 9, "player_id": 1, "player_name": "A", "prob_over_0_5": 0.55},
+                                   {"game_id": 9, "player_id": 2, "player_name": "B", "prob_over_0_5": 0.5}])
+            tags = watch.hot_streaks(points=points, sog=sog, history=history, market={("sog", 1): 0.52})
+            # Player 1: SOG 2,4,2 all clear 1.5; points 1,1,2 all clear 0.5. Player 2: SOG 3,2,1 -> no;
+            # points 1,1,1 over played games only (the DNP is skipped) -> yes.
+            self.assertEqual(sorted((t["lane"], t["player_id"]) for t in tags),
+                             [("points", 1), ("points", 2), ("sog", 1)])
+            sog_tag = next(t for t in tags if t["lane"] == "sog")
+            self.assertEqual((sog_tag["model_p_over"], sog_tag["market_p_over"]), (0.6, 0.52))
+
+    def test_prior_slate_tags_are_graded_as_overs(self):
+        tags = [{"lane": "sog", "game_id": 7, "player_id": 1, "model_p_over": 0.6, "market_p_over": 0.5},
+                {"lane": "points", "game_id": 7, "player_id": 1, "model_p_over": 0.5, "market_p_over": None},
+                {"lane": "sog", "game_id": 7, "player_id": 2, "model_p_over": 0.6, "market_p_over": 0.5}]
+        outcomes = pd.DataFrame([
+            {"game_id": 7, "player_id": 1, "official_sog": 2, "official_points": 0,
+             "participation_state": "PARTICIPATED", "official_final": True},
+            {"game_id": 7, "player_id": 2, "official_sog": 0, "official_points": 0,
+             "participation_state": "DID_NOT_PLAY", "official_final": True}])
+        graded = watch.grade_hot(tags, outcomes)
+        self.assertEqual([(g["result"], g["dollars"]) for g in graded], [("W", 10.0), ("L", 0.0), ("VOID", 0.0)])
+        text = "\n".join(watch.render_hot({"status": "COMPLETE", "players": [], "season": {"2026-11-11": graded},
+                                           "prior": {"date": "2026-11-11", "picks": graded}}))
+        self.assertIn("SOG 1.5 Over tags graded: prior slate 1-0 (100%)", text)
+        self.assertIn("Points 0.5 Over tags graded: prior slate 0-1 (0%)", text)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -847,6 +847,20 @@ Candidates are every such player, not only those that passed a station
 search. If the prior slate has no watch, no role reads or no outcomes yet,
 the section says so and the rest of the watch runs.
 
+Hot streaks in the input watch (2026-11-12, operator: "Yes, add the tag",
+P2.49). Watch-only; no prediction, search or upload changes. Each watch tags
+tonight's players who cleared SOG 1.5 (2+ shots) or Points 0.5 (1+ point) in
+each of their last 3 played games this season, read from the newest complete
+reconciliation package per earlier date (`canonical_skater_outcomes.csv`;
+non-participation and non-final rows are skipped, not counted as misses).
+Each tag shows the model's P(over) and the median same-book no-vig market
+P(over) at that line (two-sided quotes before the watch; `–` when none). The
+Highlights list puts the model's Over lean over the market first. Each watch
+also grades every earlier slate's tags this season as Overs (last pregame
+read per player that day): W-L, hit rate vs average market and model, and
+dollars at $10 and the no-vig price (tags without a market price are counted
+in W-L only). JSON key `hot_streaks`; report section "Hot streaks".
+
 Two-sided line level in the daily performance summary (2026-10-28). Next to
 the all-predictions tables, SOG production and Points HGB production show W/L
 by line and side for only the graded predictions whose exact line had a

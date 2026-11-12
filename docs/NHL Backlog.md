@@ -2863,6 +2863,28 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
+
+- Status: **WATCH** from 2026-11-12 (operator: "Yes, add the tag"). Tag in the
+  input watch only; no model, search or upload change. Review with ~4 weeks of
+  graded tags (about 2026-12-10) before any use beyond the watch; no
+  calibration without operator approval.
+- Evidence (2026-11-12, `tmp/rotation_check.py` on `tmp/search_band_grade_rows.csv`,
+  lines priced at Novig/BetOnline/Kalshi around 11:30 ET): players who cleared
+  the line in all of their last 3 games beat the market and the models.
+  SOG 1.5 Over (10-26..11-11, current SOG model): 262 player-games, hit 69.5%
+  vs market no-vig 60.8% and model 65.6%. Points 0.5 Over (11-01..11-11,
+  current Points model): 223, hit 67.3% vs market 57.8% and model 56.3%. Cold
+  shooters (0 of last 3, or 3+ misses in a row) fell short of the market by
+  about 5-7 points; no "due" effect. The same grading found the Points model's
+  Over lean anti-informative overall (leaned Over on 38% of scorers vs 44% of
+  non-scorers) and its Over probability low on average (47.9% vs 50.6% hit).
+- Implemented: `backend/nhl/input_watch.py` (`season_outcomes`, `hot_streaks`,
+  `grade_hot`, `hot_section`), tests in `backend/nhl/tests/test_input_watch.py`
+  (`HotStreakTests`); capture contract "Hot streaks in the input watch".
+- Open: whether the effect holds prospectively; whether it is role changes the
+  models' recent averages lag (compare with the P2.44 role reads).
+
 ### P2.48 SOG: players with no NHL history reach the 8rain upload on the formula fallback
 
 - Status: **DONE 2026-11-11** for the 8rain export and the all-candidate
