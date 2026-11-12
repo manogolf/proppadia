@@ -2939,6 +2939,17 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   often lines change between runs and vs the game's actual lines (shift
   charts); whether G1 matches the actual starter. Then decide: keep (and
   feed P2.46 and the input watch), extend, or drop.
+- Added to the 11-13 review (operator, 2026-11-12: "yes, include in
+  tomorrows evaluation"): do projected roles explain Over hits the model
+  prices below 57%? First look (`tmp/lineup_below57.py`, 11-06..11-11 SOG 1.5
+  Over at Novig/BetOnline/Kalshi, latest pregame lineup read per player):
+  below 57%, F3/F4 hit 54% vs market 47% (n=56) and D2/D3 61% vs 47% (n=31),
+  while F1/F2 hit 47% vs 50% (n=100); at 57%+, F3 hit 43% vs 59% (n=21).
+  Too small to act on. The review also covers: the article usually posts
+  10:30 AM-2:30 PM ET, often after the operator's morning plays; captures
+  hold lines and pairs only, no power-play units (PP time drives shot-volume
+  differences most); whether the actual PP unit (shift charts or official
+  PP TOI) adds to the projected line.
 
 ### P2.46 Points: tests to close the role-change gap with the market
 
