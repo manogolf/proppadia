@@ -2949,7 +2949,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   10:30 AM-2:30 PM ET, often after the operator's morning plays; captures
   hold lines and pairs only, no power-play units (PP time drives shot-volume
   differences most); whether the actual PP unit (shift charts or official
-  PP TOI) adds to the projected line.
+  PP TOI) adds to the projected line. Link to bet timing (operator,
+  2026-11-12): P2.28 found price timing small at sportsbooks but prediction
+  markets (Novig, Kalshi) better on the model's side later in the day
+  (SOG about -0.6pp midday, -1.4pp late). If projected roles carry signal, a
+  later bet gets both the lineup and the better Novig price; test whether
+  plays filtered by the posted lineup beat the same plays taken at the
+  morning run.
 
 ### P2.46 Points: tests to close the role-change gap with the market
 
