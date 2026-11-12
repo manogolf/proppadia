@@ -75,6 +75,51 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(set(self.rows[self.rows.team_code.isin(["CBJ", "BUF"])].day), {"TODAY"})
         self.assertFalse(self.rows.name.str.contains("Greaves will").any())
 
+    def test_neutral_site_vs_header_and_day_header_ends_the_game(self):
+        # 2026-11-11: the next day's Global Series game ("vs.", not "at") was filed under
+        # Nashville at Anaheim; on 2026-11-12 it was the only game listed and nothing parsed.
+        page = """<html><body><main>
+<p>PREDATORS (9-4-5) at DUCKS (10-7-1)</p>
+<p>Predators projected lineup</p>
+<p>Filip Forsberg -- Ryan O'Reilly -- Steven Stamkos</p>
+<p>Status report</p>
+<p>THURSDAY</p>
+<p>HURRICANES (14-3-2) vs. KRAKEN (9-6-1)</p>
+<p>2026 NHL Global Series Finland</p>
+<p>At Veikkaus Arena, Helsinki</p>
+<p>Hurricanes projected lineup</p>
+<p>Taylor Hall -- Mark Jankowski -- Seth Jarvis</p>
+<p>BROKEN HEADER LINE</p>
+</main></body></html>"""
+        rows = pd.DataFrame(lineups.parse(page))
+        car = rows[rows.team_code.eq("CAR")]
+        self.assertEqual(car[["day", "away", "home", "unit"]].drop_duplicates().values.tolist(),
+                         [["THURSDAY", "CAR", "SEA", "F1"]])
+        self.assertEqual(set(rows[rows.team_code.eq("NSH")].day), {"TODAY"})
+        today = pd.DataFrame(lineups.parse(page.replace("<p>THURSDAY</p>", "")))
+        self.assertEqual(today[today.team_code.eq("CAR")].home.unique().tolist(), ["SEA"])
+
+    def test_teams_after_an_unread_day_header_are_dropped_not_misfiled(self):
+        page = """<html><body><main>
+<p>PREDATORS (9-4-5) at DUCKS (10-7-1)</p>
+<p>Predators projected lineup</p>
+<p>Filip Forsberg -- Ryan O'Reilly -- Steven Stamkos</p>
+<p>FRIDAY</p>
+<p>HURRICANES in a header the parser cannot read</p>
+<p>Hurricanes projected lineup</p>
+<p>Taylor Hall -- Mark Jankowski -- Seth Jarvis</p>
+</main></body></html>"""
+        rows = pd.DataFrame(lineups.parse(page))
+        self.assertEqual(rows.team_code.unique().tolist(), ["NSH"])
+        # Same day: the status report closes the game (Jets at Stars filed under Buffalo at
+        # Chicago on 2026-11-12 because its header read "AT").
+        same_day = page.replace("<p>FRIDAY</p>", "<p>Status report</p>")
+        self.assertEqual(pd.DataFrame(lineups.parse(same_day)).team_code.unique().tolist(), ["NSH"])
+        upper = same_day.replace("HURRICANES in a header the parser cannot read",
+                                 "HURRICANES (14-3-2) AT KRAKEN (9-6-1)")
+        car = pd.DataFrame(lineups.parse(upper)).query("team_code == 'CAR'")
+        self.assertEqual(car[["away", "home"]].drop_duplicates().values.tolist(), [["CAR", "SEA"]])
+
     def test_article_times(self):
         self.assertEqual(lineups.article_times(PAGE)["date_modified"], "2026-11-06T19:54:30Z")
 

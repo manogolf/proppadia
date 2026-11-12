@@ -49,7 +49,9 @@ NICKNAMES = {
     "GOLDEN KNIGHTS": "VGK", "CAPITALS": "WSH", "JETS": "WPG",
 }
 WEEKDAYS = {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}
-GAME = re.compile(r"^(?P<away>[A-Z .'\-]+?) \((?:[\d-]+)\) at (?P<home>[A-Z .'\-]+?) \((?:[\d-]+)\)$")
+# Neutral-site games read "vs." ("HURRICANES (14-3-2) vs. KRAKEN (9-6-1)") and the joiner's case
+# varies ("JETS (8-8-3) AT STARS (10-5-2)"), both 2026-11-12.
+GAME = re.compile(r"^(?P<away>[A-Z .'\-]+?) \((?:[\d-]+)\) (?i:at|vs\.?) (?P<home>[A-Z .'\-]+?) \((?:[\d-]+)\)$")
 TEAM = re.compile(r"^(?P<team>.+?) projected lineup$", re.IGNORECASE)
 
 
@@ -106,7 +108,7 @@ def parse(html: str) -> list[dict]:
             joined.append(text)
     for text in joined:
         if text.upper() in WEEKDAYS:
-            day, team = text.upper(), None
+            day, game, team = text.upper(), None, None
             continue
         found = GAME.match(text)
         if found and found["away"] in NICKNAMES and found["home"] in NICKNAMES:
@@ -117,10 +119,11 @@ def parse(html: str) -> list[dict]:
         if found and game and found["team"].upper() in NICKNAMES:
             team, forwards, pairs, goalies = NICKNAMES[found["team"].upper()], 0, 0, 0
             continue
-        if team is None:
-            continue
         if text.lower().startswith("status report"):
-            team = None
+            # The status report closes the game, so an unread next header cannot inherit it.
+            game = team = None
+            continue
+        if team is None:
             continue
         base = {"day": game["day"], "away": game["away"], "home": game["home"], "team_code": team}
         if " -- " in text:

@@ -3018,6 +3018,29 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   later bet gets both the lineup and the better Novig price; test whether
   plays filtered by the posted lineup beat the same plays taken at the
   morning run.
+- Parser fix (2026-11-12, operator: "fix the labeling"). Carolina vs Seattle
+  (Global Series, Helsinki, noon ET) was headed "HURRICANES (14-3-2) vs.
+  KRAKEN (9-6-1)": the 11-11 14:34 ET capture filed both teams under
+  Nashville at Anaheim, and the 11-12 08:49 and 11:34 ET captures (the
+  article then listed only this game) parsed nothing. "JETS (8-8-3) AT STARS
+  (10-5-2)" also failed, filing Winnipeg at Dallas under Buffalo at Chicago
+  at 14:34 ET. Fixed: "at" in any case or "vs."; a weekday heading or status
+  report closes the game. Re-parsing every saved page changes only those
+  five captures. Saved `lineups.csv` files are not rewritten; the review
+  re-parses `page.html`. Still open for the review: an early-morning capture
+  can read the previous day's article (11-08 08:49 ET held 11-07's Chicago at
+  Carolina as "TODAY", off the slate so not used); check `dateModified`
+  against the slate date before using a capture.
+- Linemate turn test for the 11-13 review (operator, 2026-11-12: "it was
+  his teammates turn today"). Carolina vs Seattle: projected F3 Hall
+  (model 47%) 3 SOG, Jankowski (48%) 2, Jarvis (74%, the play) 1. Question:
+  within a projected line, when linemates out-shoot their model expectation,
+  does the player shoot below his (shots shared out), or are linemates'
+  results independent of his? Test on 11-06..11-12 projected F1-F4 lines
+  with official SOG: correlation of each player's SOG minus model expected
+  SOG with his linemates' combined residual, against a shuffled-line
+  baseline. A negative link supports "turns"; none or positive (lines hot
+  together) means the misses are chance.
 
 ### P2.46 Points: tests to close the role-change gap with the market
 

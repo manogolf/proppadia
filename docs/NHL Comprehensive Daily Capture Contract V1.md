@@ -244,12 +244,17 @@ article "Projected lineups, starting goalies for today"
 by NHL.com staff and team correspondents; there is no API (article text, no
 player IDs). The operator reviewed the site terms (2026-11-06). One page
 request per scheduled run, ordinary retry (3 attempts with backoff). Parsing
-follows the article layout: "AWAY (record) at HOME (record)" starts a game,
-a weekday heading ("SATURDAY") marks later games, "<Team> projected lineup"
+follows the article layout: "AWAY (record) at HOME (record)" starts a game
+("at" in any case, or "vs." for a neutral-site game, listed team first as
+away), a weekday heading ("SATURDAY") marks later games, "<Team> projected lineup"
 starts a team, three names joined by " -- " are a forward line (F1-F4), two
 a defense pair (D1-D3), the next single names the goalies (G1 is the
 probable starter), then "Scratched:" and "Injured:" (labels and wrapped
-lists joined), and "Status report" ends the team. Names match the slate's
+lists joined), and "Status report" ends the game. A weekday heading or a
+status report closes the current game, so teams under a header the parser
+cannot read are dropped, never filed under the previous game (fixed
+2026-11-12; captures saved before then keep their original `lineups.csv`,
+and readers re-parse `page.html` with the current parser). Names match the slate's
 `backend/nhl/exports/daily/names/names_<d>.csv` within the team: full name,
 then a unique last name, then a unique last-name prefix of 4+ letters
 (`LAST_NAME_PREFIX`, for typos); anything else is `UNMATCHED`, never
