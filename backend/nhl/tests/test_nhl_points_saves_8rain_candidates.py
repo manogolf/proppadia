@@ -387,21 +387,28 @@ class PointsSavesEightRainPolicyTests(unittest.TestCase):
                 self.assertEqual(points.iloc[0].source_quote_count_over, len(book_keys))
                 self.assertEqual(points.iloc[0].source_books_over, "|".join(sorted(book_keys)))
 
-    def test_alternate_provider_markets_stay_distinct_from_prediction_quotes(self):
-        raw = [{"bookmakers": [{"key": "kalshi", "markets": [
-            {"key": "player_points", "outcomes": [
-                {"name": "Over", "description": "Alex Example", "point": 0.5, "price": -110},
-            ]},
-            {"key": "player_points_alternate", "outcomes": [
-                {"name": "Over", "description": "Alex Example", "point": 1.0, "price": -110},
-            ]},
-            {"key": "player_total_saves_alternate", "outcomes": [
+    def test_alternate_points_quotes_attach_and_standard_wins_within_a_book(self):
+        # Kalshi posts Points only as player_points_alternate; Saves alternates stay out.
+        raw = [{"bookmakers": [
+            {"key": "kalshi", "markets": [{"key": "player_points_alternate", "outcomes": [
+                {"name": "Over", "description": "Alex Example", "point": 0.5, "price": 120},
+                {"name": "Under", "description": "Alex Example", "point": 0.5, "price": -150},
+            ]}, {"key": "player_total_saves_alternate", "outcomes": [
                 {"name": "Over", "description": "Goalie Example", "point": 24, "price": -110},
+            ]}]},
+            {"key": "novig", "markets": [
+                {"key": "player_points", "outcomes": [
+                    {"name": "Over", "description": "Alex Example", "point": 0.5, "price": 100}]},
+                {"key": "player_points_alternate", "outcomes": [
+                    {"name": "Over", "description": "Alex Example", "point": 0.5, "price": 300}]},
             ]},
-        ]}]}]
-        points = parse_points_odds(raw)
+        ]}]
+        points = parse_points_odds(raw).set_index("line_str").loc["0.5"]
         saves = parse_odds_candidates(raw)
-        self.assertEqual(points.line_str.tolist(), ["0.5"])
+        self.assertEqual(points.source_books_over, "kalshi|novig")
+        self.assertEqual(points.source_quote_count_over, 2)
+        self.assertEqual(points.price_over, 110)          # median of kalshi 120 and novig's standard 100
+        self.assertEqual(points.source_books_under, "kalshi")
         self.assertTrue(saves.empty)
         self.assertEqual(POINTS_LINES, (0.5, 1.5, 2.5))
         self.assertEqual(SAVES_LINES, tuple(float(line) + 0.5 for line in range(18, 31)))

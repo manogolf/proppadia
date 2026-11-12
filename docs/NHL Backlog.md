@@ -2863,6 +2863,32 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   NULL-PP source, run a candidate prospectively in shadow, and apply the
   existing promotion gate.
 
+### P2.50 Points attachment ignored alternate lines, so Kalshi never attached
+
+- Status: **DONE 2026-11-12** (operator: "Yes, include them").
+  `build_points_with_market.py` read only `player_points`; Kalshi posts Points
+  only as `player_points_alternate`, so Kalshi-only lines counted as
+  unmatched in the Points market attachment and the daily summary's
+  market-coverage count. The two-sided W/L level, input watch and
+  all-candidate evaluation already read alternates (11-11: 486 Kalshi Points
+  quotes), so no W/L record changed.
+- Fix: the attachment reads both keys; a book's standard quote wins at the
+  same line and side. Test
+  `test_alternate_points_quotes_attach_and_standard_wins_within_a_book`
+  replaces the 10-07 test that kept alternates out (written when alternates
+  were first captured; no stated reason beyond keeping them distinct).
+- Check on the 11-11 19:33Z odds: priced player-lines at 0.5/1.5/2.5 went
+  from 317 to 412, two-sided from 255 to 330, 270 now include Kalshi; the
+  0.5 median Over price moved 0.41 implied points on average.
+- Not changed: the 8rain upload row set (predictions spine, left join) and
+  Saves alternates.
+- Found while verifying, not fixed (outside this change; same failures with
+  and without it): 6 tests fail in `backend/tests` --
+  `test_nhl_points_hgb_per_game_source.py` (2, `HGB_FROZEN_CONTRACT_MISMATCH`,
+  fixtures predate the 11-01 goals+assists cutover) and
+  `test_nhl_prediction_only_entry_points_v1.py` (4,
+  `SAVES_REFIT_HISTORY_DSN_MISSING`). `backend/nhl/tests` passes.
+
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
 - Status: **WATCH** from 2026-11-12 (operator: "Yes, add the tag"). Tag in the

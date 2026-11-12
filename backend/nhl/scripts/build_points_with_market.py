@@ -141,6 +141,10 @@ def load_odds_json(path: Path | None):
                 print(f"[points_with_market] warn: failed to read odds JSON {p}: {e}", file=sys.stderr)
     return None
 
+# Kalshi posts Points only as player_points_alternate (2026-11-12, NHL Backlog P2.50).
+POINTS_MARKETS = {"player_points", "player_points_alternate"}
+
+
 def parse_points_odds(raw, slate_names: SlateNames | None = None) -> pd.DataFrame | None:
     """
     Return median Over and Under prices per (name_short, line_str), with book provenance.
@@ -157,7 +161,7 @@ def parse_points_odds(raw, slate_names: SlateNames | None = None) -> pd.DataFram
         if isinstance(x, dict):
             if "markets" in x and x.get("key") is not None:
                 bookmaker_key = str(x.get("key"))
-            if x.get("key") == "player_points":
+            if x.get("key") in POINTS_MARKETS:
                 for o in (x.get("outcomes") or []):
                     side = str(o.get("name") or "").strip().lower()
                     if side not in {"over", "under"}:
@@ -176,6 +180,7 @@ def parse_points_odds(raw, slate_names: SlateNames | None = None) -> pd.DataFram
                                 "line_str": str(pt),
                                 "side": side,
                                 "bookmaker_key": bookmaker_key,
+                                "market_key": x.get("key"),
                                 "price": float(pr),
                             }
                         )
@@ -189,6 +194,10 @@ def parse_points_odds(raw, slate_names: SlateNames | None = None) -> pd.DataFram
     if not recs:
         return None
     od = pd.DataFrame(recs)
+    # A book's standard quote wins over its alternate quote at the same line and side.
+    od["is_alternate"] = od.market_key.ne("player_points")
+    od = od.sort_values("is_alternate").drop_duplicates(
+        [key_col, "line_str", "side", "bookmaker_key"], keep="first")
     med = od.groupby([key_col, "line_str", "side"], as_index=False).agg(
         price=("price", "median"),
         full_name_odds=("full_name_odds", "first"),

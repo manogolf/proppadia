@@ -1086,6 +1086,16 @@ per-game CLOSING capture): `h2h`, `totals` (game total goals, from 2026-11-01),
 retained in the observation's `normalized_odds.jsonl` like every market; no lane
 reads them yet (input for the Points team-goals research, NHL Backlog P2.39).
 
+Alternate lines in the attachments. The SOG attachment reads
+`player_shots_on_goal` and its `_alternate` market. From 2026-11-12 the Points
+attachment (`build_points_with_market.py`) also reads `player_points_alternate`
+(operator: "Yes, include them", NHL Backlog P2.50): Kalshi posts Points only
+there, so before this a Kalshi-only line counted as unmatched. A book's
+standard quote wins over its alternate quote at the same line and side; the
+median price per side then spans the books as before, so Over-only alternate
+ladders can join the Over median. Saves alternates stay out. The evaluation
+quote loader and the two-sided line level already read every alternate.
+
 Regions are `us`, `us2` and `us_ex` (`backend/nhl/odds_regions.py`). Books
 outside those regions are requested by name in a second call per event
 (`NHL_ODDS_SUPPLEMENTAL_BOOKMAKERS`, currently `pinnacle`, operator-approved
