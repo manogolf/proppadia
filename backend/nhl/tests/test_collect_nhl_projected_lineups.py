@@ -145,6 +145,48 @@ class ParseTests(unittest.TestCase):
                           ["SUSPENDED", "Dylan Larkin"]])
         self.assertFalse(van.name.str.contains("Status|Fantasy").any())
 
+    def test_loose_separators_and_dashes(self):
+        # 2026-11-13: "Lauzon--  Andersson" became an EXTRA goalie-slot name and an en dash
+        # turned Seattle's second line into a defense pair.
+        page = """<html><body><main>
+<p>PREDATORS (10-4-5) at GOLDEN KNIGHTS (11-5-2)</p>
+<p>Golden Knights projected lineup</p>
+<p>Kaapo Kakko -- Berkly Catton – Mackie Samoskevich</p>
+<p>Shea Theodore --  Brayden McNabb</p>
+<p>Jeremy Lauzon--  Rasmus Andersson</p>
+<p>Ukko-Pekka Luukkonen</p>
+<p>Carter Hart</p>
+</main></body></html>"""
+        rows = pd.DataFrame(lineups.parse(page))
+        self.assertEqual(rows.groupby("unit", sort=False)["name"].agg(list).to_dict(),
+                         {"F1": ["Kaapo Kakko", "Berkly Catton", "Mackie Samoskevich"],
+                          "D1": ["Shea Theodore", "Brayden McNabb"],
+                          "D2": ["Jeremy Lauzon", "Rasmus Andersson"],
+                          "G1": ["Ukko-Pekka Luukkonen"], "G2": ["Carter Hart"]})
+
+    def test_two_name_fourth_line_with_seven_defensemen(self):
+        page = """<html><body><main>
+<p>LIGHTNING (8-6-1) at JETS (8-8-3)</p>
+<p>Lightning projected lineup</p>
+<p>Jake Guentzel -- Brayden Point -- Nikita Kucherov</p>
+<p>Brandon Hagel -- Anthony Cirelli -- Gage Goncalves</p>
+<p>Ilya Mikheyev -- Conor Geekie -- Pontus Holmberg</p>
+<p>Jeffrey Viel -- Zemgus Girgensons</p>
+<p>J.J. Moser -- John Carlson</p>
+<p>Ryan McDonagh -- Erik Cernak</p>
+<p>Victor Hedman -- Emil Lilleberg</p>
+<p>Charle-Edouard D'Astous</p>
+<p>Andrei Vasilevskiy</p>
+<p>Dennis Hildeby</p>
+</main></body></html>"""
+        rows = pd.DataFrame(lineups.parse(page))
+        units = rows.groupby("unit", sort=False)["name"].agg(list).to_dict()
+        self.assertEqual(units["F4"], ["Jeffrey Viel", "Zemgus Girgensons"])
+        self.assertEqual(units["D1"], ["J.J. Moser", "John Carlson"])
+        self.assertEqual(units["D3"], ["Victor Hedman", "Emil Lilleberg"])
+        self.assertNotIn("D4", units)
+        self.assertEqual((units["EXTRA"], units["G1"]), (["Charle-Edouard D'Astous"], ["Andrei Vasilevskiy"]))
+
     def test_article_times(self):
         self.assertEqual(lineups.article_times(PAGE)["date_modified"], "2026-11-06T19:54:30Z")
 

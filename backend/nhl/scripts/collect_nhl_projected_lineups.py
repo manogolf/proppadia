@@ -53,6 +53,10 @@ WEEKDAYS = {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", 
 # Neutral-site games read "vs." ("HURRICANES (14-3-2) vs. KRAKEN (9-6-1)") and the joiner's case
 # varies ("JETS (8-8-3) AT STARS (10-5-2)"), both 2026-11-12.
 GAME = re.compile(r"^(?P<away>[A-Z .'\-]+?) \((?:[\d-]+)\) (?i:at|vs\.?) (?P<home>[A-Z .'\-]+?) \((?:[\d-]+)\)$")
+# Names on a line or pair are joined by " -- ", but spacing slips ("Jeremy Lauzon--  Rasmus
+# Andersson") and an en or em dash sometimes stands in ("Berkly Catton – Mackie Samoskevich"),
+# both 2026-11-13. A single hyphen inside a name ("Ukko-Pekka") is not a separator.
+SEPARATOR = re.compile(r"\s*--\s*|\s+[–—]\s+")
 TEAM = re.compile(r"^(?P<team>.+?) projected lineup$", re.IGNORECASE)
 
 
@@ -137,8 +141,8 @@ def parse(html: str) -> list[dict]:
         if team is None:
             continue
         base = {"day": game["day"], "away": game["away"], "home": game["home"], "team_code": team}
-        if " -- " in text:
-            names = [n.strip() for n in text.split(" -- ")]
+        if SEPARATOR.search(text):
+            names = [n.strip() for n in SEPARATOR.split(text)]
             if len(names) == 3:
                 forwards += 1
                 rows += [{**base, "unit": f"F{forwards}", "slot": i + 1, "name": n} for i, n in enumerate(names)]
@@ -162,6 +166,18 @@ def parse(html: str) -> list[dict]:
             # Single names after the defense pairs: goalies, or an extra skater (see above).
             if pairs and not closed and re.fullmatch(r"[A-Za-zÀ-ÿ.'\- ]{3,40}", text) and " " in text:
                 rows.append({**base, "unit": "SINGLE", "slot": 1, "name": text})
+    # An 11-forward lineup lists its last forward line with two names ("Jeffrey Viel --
+    # Zemgus Girgensons", Tampa Bay 2026-11-08), read above as a fourth defense pair: with
+    # three forward lines and four pairs, the first pair is forward line F4.
+    units: dict[tuple, list[dict]] = {}
+    for row in rows:
+        units.setdefault((row["day"], row["away"], row["home"], row["team_code"]), []).append(row)
+    for group in units.values():
+        lines = {r["unit"] for r in group if r["unit"][0] in "FD" and r["unit"][1:].isdigit()}
+        if lines >= {"F3", "D4"} and "F4" not in lines:
+            for r in group:
+                if r["unit"][0] == "D" and r["unit"][1:].isdigit():
+                    r["unit"] = "F4" if r["unit"] == "D1" else f"D{int(r['unit'][1:]) - 1}"
     singles: dict[tuple, list[dict]] = {}
     for row in rows:
         if row["unit"] == "SINGLE":

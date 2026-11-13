@@ -255,7 +255,9 @@ follows the article layout: "AWAY (record) at HOME (record)" starts a game
 ("at" in any case, or "vs." for a neutral-site game, listed team first as
 away), a weekday heading ("SATURDAY") marks later games, "<Team> projected lineup"
 starts a team, three names joined by " -- " are a forward line (F1-F4), two
-a defense pair (D1-D3), the next single names the goalies (G1 is the
+a defense pair (D1-D3) (the joiner may lack spaces or be an en or em dash
+with spaces; with three forward lines and four pairs, an 11-forward
+lineup, the first pair is forward line F4; both 2026-11-13), the next single names the goalies (G1 is the
 probable starter), then "Scratched:", "Injured:" and "Suspended:" (labels
 and wrapped lists joined; an empty label never takes "Status report" as its
 body), and "Status report" ends the game. Of the single names, the last two
