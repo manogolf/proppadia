@@ -197,7 +197,7 @@ Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
   `NHL_POSTGAME_RECONCILIATION_ALREADY_RUNNING`. The roster refresh
   (`refresh_players_and_roster_today.py`) connects with TCP keepalives, so a
   dropped database connection fails in about 1.5 minutes instead of hanging.
-- Step 4, `04_projected_lineups_trial` (2026-11-06 to 2026-11-13, NHL
+- Step 4, `04_projected_lineups_trial` (2026-11-06 to 2026-11-30, NHL
   Backlog P2.47; operator-approved trial): runs
   `backend/nhl/scripts/collect_nhl_projected_lineups.py --slate-date <d>`
   after the export. Non-blocking: a failure is recorded as
@@ -238,7 +238,8 @@ median no-vig P(Over) on two-sided lines; log loss overall and on role-change
 players; output under `tmp/`). Production is unchanged; any promotion goes
 through the promotion rules and operator approval.
 
-NHL.com projected lineups trial (2026-11-06, P2.47). Source: the NHL.com
+NHL.com projected lineups trial (2026-11-06 to 2026-11-30, extended from
+2026-11-13 by the operator; P2.47). Source: the NHL.com
 article "Projected lineups, starting goalies for today"
 (`https://www.nhl.com/news/nhl-lineup-projections-2026-27-season`), written
 by NHL.com staff and team correspondents; there is no API (article text, no

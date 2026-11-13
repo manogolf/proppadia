@@ -5,8 +5,8 @@ goalies (probable starter first), scratches and injuries as one news article.
 There is no API: the lineups are article text. This reads the article, saves
 the page, parses each team's lineup by its fixed layout and matches names to
 our player IDs through the slate's names file (team-scoped). Read-only: no
-database access, no model input, nothing downstream reads it during the
-trial. Runs as a non-blocking step of each scheduled daily run until
+database access, no model input; only the input watch reads it (goalies and
+regulars out, watch-only). Runs as a non-blocking step of each scheduled daily run until
 ``TRIAL_END``:
 
     ./bin/python backend/nhl/scripts/collect_nhl_projected_lineups.py [--slate-date YYYY-MM-DD]
@@ -35,7 +35,7 @@ URL = "https://www.nhl.com/news/nhl-lineup-projections-2026-27-season"
 OUT = ROOT / "artifacts/operational/nhl/projected_lineups"
 NAMES = ROOT / "backend/nhl/exports/daily/names"
 SCHEMA = "NHL_PROJECTED_LINEUPS_TRIAL_V1"
-TRIAL_END = "2026-11-13"
+TRIAL_END = "2026-11-30"  # extended from 2026-11-13 (operator, 2026-11-13)
 ATTEMPTS = 3
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; proppadia-lineup-trial)"}
 # NHL.com headers use upper-case nicknames ("BLUE JACKETS (7-7-0) at SABRES (7-5-3)").

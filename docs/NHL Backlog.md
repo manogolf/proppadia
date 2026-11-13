@@ -3055,7 +3055,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.47 NHL.com projected lineups: trial collection
 
-- Status: **TRIAL RUNNING 2026-11-06 to 2026-11-13** (operator: "set up a
+- Status: **TRIAL RUNNING 2026-11-06 to 2026-11-30**, extended from 11-13
+  (operator, 2026-11-13: "extend it to the end of november and discuss again
+  with months end"); the 11-13 review questions below move to the 11-30
+  review. (Original approval, operator: "set up a
   trial test collection"; operator reviewed the NHL.com terms 2026-11-06:
   standard terms, nothing against this use). Read-only; no model or report
   reads it during the trial.
