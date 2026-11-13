@@ -866,6 +866,27 @@ read per player that day): W-L, hit rate vs average market and model, and
 dollars at $10 and the no-vig price (tags without a market price are counted
 in W-L only). JSON key `hot_streaks`; report section "Hot streaks".
 
+Goalies in the input watch (2026-11-13, operator: "Yes, add the flag", P2.7).
+Watch-only. The production moneyline model has no goalie input, so each watch
+lists every game's projected starters next to the model's favorite: G1 from
+the newest NHL.com lineup capture that covers the slate (P2.47; an article
+published on the slate date gives its "TODAY" rows, one published earlier its
+rows under the slate's weekday, so a game posted a day early is read from the
+previous date's capture; pages are re-parsed with the current parser), and
+each team's starts leader this season from official starts in the newest
+complete reconciliation per earlier date (`canonical_goalie_outcomes.csv`,
+`actual_start_flag`; named once he has 3 starts). A projected goalie who is
+not the leader is a backup below 40% of his team's starts and a tandem at or
+above. The favorite, its probability and back-to-back flags come from
+`moneyline_production_predictions.csv` in the newest complete cross-market
+capture for the slate. The watch runs in step 01, before that run's lineup
+(step 04) and cross-market (step 02) steps, so it reads earlier captures; the
+first morning run may have no moneyline capture or no posted starters. Reads:
+backup on the model's favorite "pass", on its underdog "model side stronger",
+"both teams start a backup", "usual starters", "starter not posted yet".
+Highlights list the backup games. JSON key `goalies`; report section
+"Goalies vs the moneyline model's favorite".
+
 Two-sided line level in the daily performance summary (2026-10-28). Next to
 the all-predictions tables, SOG production and Points HGB production show W/L
 by line and side for only the graded predictions whose exact line had a

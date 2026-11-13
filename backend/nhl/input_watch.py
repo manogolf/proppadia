@@ -34,12 +34,21 @@ change to any prediction. It writes
    games this season (from saved reconciliation outcomes), with the model's and
    the market's P(over). On 10-26..11-11 these players beat both the market and
    the models; each watch grades the prior slate's tags to keep measuring it.
+6. Goalies (2026-11-13, NHL Backlog P2.7): each game's projected starters (G1 in
+   the newest NHL.com lineup capture, P2.47) against each team's starts leader
+   this season (official starts in saved reconciliations), next to the
+   production moneyline favorite from the newest complete cross-market capture
+   and back-to-back flags. The moneyline model has no goalie input; a backup
+   on its favorite reads "pass", on its underdog "model side stronger". The
+   watch runs before that run's lineup and cross-market steps, so it reads the
+   previous captures.
 """
 from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -540,6 +549,10 @@ HIGHLIGHT_MAX = 6
 REMOVAL_STAKE = 10.0   # dollars per skipped play when grading removal candidates
 HOT_GAMES = 3          # hit the line in each of this many most recent played games
 HOT_RULES = {"sog": ("official_sog", 2), "points": ("official_points", 1)}  # SOG 1.5, Points 0.5
+GOALIE_MIN_STARTS = 3  # starts this season before a team's usual starter is named
+GOALIE_BACKUP_SHARE = 0.40  # a non-leader below this share of team starts is a backup; at or above, a tandem
+LINEUP_ROOT = ROOT / "artifacts/operational/nhl/projected_lineups"
+CROSS_MARKET_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow"
 
 
 def removal_candidates(prior_watches: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -774,6 +787,193 @@ def render_hot(section: dict[str, Any]) -> list[str]:
     return lines + [""]
 
 
+def season_starts(operational_root: Path, slate_date: str) -> pd.DataFrame | None:
+    """Official goalie starts this season before the slate, one row per team-game."""
+    frames = []
+    for folder in sorted((Path(operational_root) / "postgame_reconciliation").glob("20*")):
+        if not (folder.name < slate_date and season_of(folder.name) == season_of(slate_date)):
+            continue
+        packages = [p for p in folder.glob("reconciliation=*")
+                    if (p / "RUN_COMPLETE.json").is_file() and (p / "canonical_goalie_outcomes.csv").is_file()]
+        if packages:
+            newest = max(packages, key=lambda p: (p / "RUN_COMPLETE.json").stat().st_mtime)
+            frames.append(pd.read_csv(newest / "canonical_goalie_outcomes.csv"))
+    if not frames:
+        return None
+    starts = pd.concat(frames)
+    starts = starts[starts.actual_start_flag.astype(str).eq("True")]
+    return starts.drop_duplicates(["game_id", "team_id"])
+
+
+def usual_starters(starts: pd.DataFrame | None) -> dict[int, dict[str, Any]]:
+    """Each team's starts leader this season, once he has GOALIE_MIN_STARTS starts."""
+    if starts is None or starts.empty:
+        return {}
+    out = {}
+    for team_id, team in starts.groupby("team_id"):
+        counts = team.goalie_id.value_counts()
+        if counts.iloc[0] >= GOALIE_MIN_STARTS:
+            out[int(team_id)] = {"goalie_id": int(counts.index[0]), "starts": int(counts.iloc[0]),
+                                 "team_games": int(len(team)),
+                                 "by_goalie": {int(g): int(n) for g, n in counts.items()}}
+    return out
+
+
+def projected_starters(slate_date: str, lineup_root: Path = LINEUP_ROOT) -> dict[str, dict[str, Any]]:
+    """G1 per team from the newest NHL.com lineup capture that covers the slate (P2.47).
+
+    The article labels the day it was published "TODAY" and later days by weekday, so a
+    game posted a day early is read from the previous day's capture. Pages are re-parsed
+    with the current parser (fixed 2026-11-12)."""
+    from backend.nhl.scripts import collect_nhl_projected_lineups as lineups
+
+    slate = datetime.fromisoformat(slate_date).date()
+    weekday = slate.strftime("%A").upper()
+    folders = [Path(lineup_root) / f"season={season_of(slate_date)}" / f"slate_date={d.isoformat()}"
+               for d in (slate, slate - timedelta(days=1))]
+    captures = sorted((o for f in folders for o in f.glob("observation=*") if (o / "page.html").is_file()),
+                      key=lambda o: o.name, reverse=True)
+    found: dict[str, dict[str, Any]] = {}
+    for capture in captures:
+        html = (capture / "page.html").read_text()
+        published = lineups.article_times(html).get("date_published")
+        article_day = (datetime.fromisoformat(published.replace("Z", "+00:00")).astimezone(
+            ZoneInfo("America/New_York")).date() if published else
+            datetime.fromisoformat(capture.parent.name.split("=", 1)[1]).date())
+        wanted = "TODAY" if article_day == slate else weekday if article_day < slate else None
+        if wanted is None:
+            continue
+        for row in lineups.parse(html):
+            if row["unit"] == "G1" and row["day"] == wanted and row["team_code"] not in found:
+                found[row["team_code"]] = {"name": row["name"], "observation": capture.name.split("=", 1)[1]}
+    return found
+
+
+def latest_moneyline(slate_date: str, cross_market_root: Path = CROSS_MARKET_ROOT) -> pd.DataFrame | None:
+    """Production moneyline predictions from the newest complete cross-market capture for the slate."""
+    files = [p / "moneyline_production_predictions.csv" for p in
+             (Path(cross_market_root) / f"season={season_of(slate_date)}" / f"slate_date={slate_date}").glob(
+                 "run_type=*/state=*") if (p / "RUN_COMPLETE.json").is_file()]
+    files = [f for f in files if f.is_file()]
+    if not files:
+        return None
+    return pd.read_csv(max(files, key=lambda f: f.stat().st_mtime))
+
+
+def goalie_read(home: dict[str, Any], away: dict[str, Any], favorite: str | None) -> str:
+    backups = [t for t in (home, away) if t["status"] == "BACKUP"]
+    if any(t["status"] == "NOT_POSTED" for t in (home, away)):
+        return "starter not posted yet"
+    if not backups:
+        return "usual starters"
+    if len(backups) == 2:
+        return "both teams start a backup"
+    side = backups[0]
+    if favorite is None:
+        return f"backup for {side['team']}"
+    return (f"backup on the model's favorite ({side['team']}): pass" if side["team"] == favorite else
+            f"backup on the model's underdog ({side['team']}): model side stronger")
+
+
+def goalie_section(*, slate_date: str, operational_root: Path, names: pd.DataFrame | None,
+                   lineup_root: Path = LINEUP_ROOT, cross_market_root: Path = CROSS_MARKET_ROOT) -> dict[str, Any]:
+    """Projected starter vs each team's usual starter, next to the moneyline model's favorite.
+
+    The moneyline model has no goalie input (NHL Backlog P2.7), so it prices each team with
+    its usual goaltending; a projected backup is a matchup it cannot see."""
+    from backend.nhl.scripts import collect_nhl_projected_lineups as lineups
+
+    if names is None or names.empty:
+        return {"status": "UNAVAILABLE:no names file", "games": []}
+    usual = usual_starters(season_starts(operational_root, slate_date))
+    projected = projected_starters(slate_date, lineup_root)
+    rows = pd.DataFrame([{"team_code": t, "name": v["name"]} for t, v in projected.items()],
+                        columns=["team_code", "name"])
+    matched = lineups.match_names(rows, names) if len(rows) else rows.assign(player_id=pd.NA)
+    projected_id = dict(zip(matched.team_code, matched.player_id))
+    name_of = dict(zip(names.player_id.astype("int64"), names.full_name))
+    code_of = dict(zip(names.team_id.astype("int64"), names.team_code))
+    moneyline = latest_moneyline(slate_date, cross_market_root)
+    if moneyline is not None:
+        games = [{"game_id": int(r.game_id), "home": r.home_team, "away": r.away_team,
+                  "favorite": r.challenger_favored_team,
+                  "favorite_p": round(float(max(r.challenger_home_win_probability,
+                                                r.challenger_away_win_probability)), 4),
+                  "back_to_back": [t for t, b in ((r.home_team, r.home_back_to_back),
+                                                  (r.away_team, r.away_back_to_back)) if int(b)]}
+                 for r in moneyline.drop_duplicates("game_id").itertuples(index=False)]
+    else:
+        teams = names.drop_duplicates(["game_id", "team_code"])
+        games = [{"game_id": int(g), "home": None, "away": None, "favorite": None, "favorite_p": None,
+                  "back_to_back": [], "teams": sorted(t.team_code)} for g, t in teams.groupby("game_id")]
+    team_id_of = {c: t for t, c in code_of.items()}
+    out = []
+    for game in games:
+        sides = []
+        for code in ([game["away"], game["home"]] if game["home"] else game.pop("teams")):
+            entry = {"team": code, "projected": (projected.get(code) or {}).get("name")}
+            regular = usual.get(team_id_of.get(code, -1))
+            if regular:
+                entry.update(usual=name_of.get(regular["goalie_id"], str(regular["goalie_id"])),
+                             usual_starts=regular["starts"], team_games=regular["team_games"])
+            pid = projected_id.get(code)
+            if entry["projected"] is None:
+                entry["status"] = "NOT_POSTED"
+            elif not regular:
+                entry["status"] = "NO_USUAL_STARTER"
+            elif pd.isna(pid):
+                entry["status"] = "UNMATCHED"
+            else:
+                own = regular["by_goalie"].get(int(pid), 0)
+                entry["projected_starts"] = own
+                entry["status"] = ("USUAL" if int(pid) == regular["goalie_id"] else
+                                   "BACKUP" if own < GOALIE_BACKUP_SHARE * regular["team_games"] else "TANDEM")
+            sides.append(entry)
+        game["away_goalie"], game["home_goalie"] = sides[0], sides[1]
+        game["read"] = goalie_read(sides[1], sides[0], game["favorite"])
+        out.append(game)
+    order = {"pass": 0, "stronger": 1, "both": 2, "backup": 3}
+    out.sort(key=lambda g: next((v for k, v in order.items() if k in g["read"]), 9))
+    return {"status": "COMPLETE" if moneyline is not None else "NO_MONEYLINE_CAPTURE_YET",
+            "posted_teams": len(projected), "games": out}
+
+
+def _goalie_cell(side: dict[str, Any]) -> str:
+    if side["status"] == "NOT_POSTED":
+        return f"{side['team']}: not posted"
+    text = f"{side['team']}: {side['projected']}"
+    if side["status"] == "BACKUP":
+        text += (f" (**backup**, {side['projected_starts']} of {side['team_games']} starts; usual {side['usual']}, "
+                 f"{side['usual_starts']})")
+    elif side["status"] == "TANDEM":
+        text += (f" (tandem, {side['projected_starts']} of {side['team_games']} starts; leader {side['usual']}, "
+                 f"{side['usual_starts']})")
+    elif side["status"] == "USUAL":
+        text += f" (usual, {side['usual_starts']} of {side['team_games']})"
+    elif side["status"] == "UNMATCHED":
+        text += " (name not matched)"
+    return text
+
+
+def render_goalies(section: dict[str, Any]) -> list[str]:
+    lines = ["## Goalies vs the moneyline model's favorite", ""]
+    if not section.get("games"):
+        return lines + [f"Unavailable: {section.get('status')}.", ""]
+    lines.append("The moneyline model has no goalie input (P2.7). Projected starter (NHL.com G1) against each "
+                 "team's starts leader this season; a goalie with under "
+                 f"{100 * GOALIE_BACKUP_SHARE:.0f}% of his team's starts is a backup, more is a tandem. "
+                 "A backup on the model's favorite: pass; on its underdog: the model's side is stronger." +(" No moneyline capture for the slate yet."
+                                                    if section["status"] != "COMPLETE" else ""))
+    lines += ["", "| Game | Model favorite | Away goalie | Home goalie | Rest | Read |", "|---|---|---|---|---|---|"]
+    for g in section["games"]:
+        fav = f"{g['favorite']} {_pct(g['favorite_p'])}" if g["favorite"] else "—"
+        rest = ", ".join(f"{t} back-to-back" for t in g["back_to_back"]) or "—"
+        title = f"{g['away']} at {g['home']}" if g["home"] else f"{g['away_goalie']['team']}-{g['home_goalie']['team']}"
+        lines.append(f"| {title} | {fav} | {_goalie_cell(g['away_goalie'])} | {_goalie_cell(g['home_goalie'])} | "
+                     f"{rest} | {g['read']} |")
+    return lines + [""]
+
+
 def render_highlights(result: dict[str, Any]) -> list[str]:
     """A few lines to read first: who the model is likely behind on, unexplained gaps, data flags."""
     lines = ["## Highlights", ""]
@@ -824,6 +1024,12 @@ def render_highlights(result: dict[str, Any]) -> list[str]:
                          + "; ".join(f"{p['player_name']} model {_pct(p['model_p_over'])} vs market "
                                      f"{_pct(p['market_p_over'])}" for p in mine[:HIGHLIGHT_MAX])
                          + (f"; and {len(mine) - HIGHLIGHT_MAX} more" if len(mine) > HIGHLIGHT_MAX else ""))
+    flagged = [g for g in (result.get("goalies") or {}).get("games") or []
+               if "backup" in g["read"]]
+    if flagged:
+        lines.append("- **Goalies: projected backup** (moneyline model has no goalie input): "
+                     + "; ".join(f"{g['away'] or g['away_goalie']['team']} at {g['home'] or g['home_goalie']['team']} "
+                                 f"— {g['read']}" for g in flagged))
     removals = result.get("removal_grades") or {}
     if removals.get("status") == "GRADED":
         lines.append(f"- **Removal candidates {removals['prior_date']}**: {_removal_summary(removals['totals'])}; "
@@ -844,6 +1050,8 @@ def render(result: dict[str, Any]) -> str:
         lines += render_role_changes(result["role_changes"])
     if result.get("removal_grades", {}).get("status") not in (None, "NOT_APPLICABLE"):
         lines += render_removals(result["removal_grades"])
+    if result.get("goalies"):
+        lines += render_goalies(result["goalies"])
     if result.get("hot_streaks"):
         lines += render_hot(result["hot_streaks"])
     for lane in ("points", "sog"):
@@ -942,6 +1150,13 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
                           operational_root=Path(operational_root), output_root=Path(output_root))
     except Exception as error:  # the watch never blocks the run
         hot = {"status": f"UNAVAILABLE:{type(error).__name__}:{error}", "players": [], "season": {}}
+    try:
+        goalies = goalie_section(slate_date=slate_date, operational_root=Path(operational_root),
+                                 names=pd.read_csv(names_path) if names_path.is_file() else None,
+                                 lineup_root=Path(operational_root) / "projected_lineups",
+                                 cross_market_root=Path(operational_root) / "cross_market_shadow")
+    except Exception as error:  # the watch never blocks the run
+        goalies = {"status": f"UNAVAILABLE:{type(error).__name__}:{error}", "games": []}
     flags = [f"{lane}:{c['check']}" for lane, checks in sanity.items() for c in checks if c["flag"]]
     if health.get("flag"):
         flags.append("source:SHOT_ATTEMPTS_GAMES_DROPPED")
@@ -949,7 +1164,7 @@ def run_input_watch(*, slate_date: str, run_id: str, prediction_run_dir: Path,
               "players": {"points": 0 if points is None else int(len(points)),
                           "sog": 0 if sog is None else int(len(sog))},
               "sanity": sanity, "role_changes": role_section, "disagreements": disagreements,
-              "source_health": health, "removal_grades": removals, "hot_streaks": hot,
+              "source_health": health, "removal_grades": removals, "hot_streaks": hot, "goalies": goalies,
               "flags": flags, "flag_count": len(flags), "database_writes": 0, "provider_requests": 0}
     out = Path(output_root) / f"slate_date={slate_date}" / f"run_id={run_id}"
     out.mkdir(parents=True, exist_ok=True)

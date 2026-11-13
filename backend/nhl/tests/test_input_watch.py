@@ -346,5 +346,97 @@ class HotStreakTests(unittest.TestCase):
         self.assertIn("Points 0.5 Over tags graded: prior slate 0-1 (0%)", text)
 
 
+
+class GoalieTests(unittest.TestCase):
+    """Projected starter vs usual starter next to the moneyline favorite (NHL Backlog P2.7)."""
+
+    PAGE = """<html><head><script type="application/ld+json">
+{{"@type":"NewsArticle","datePublished":"{published}","dateModified":"{published}"}}
+</script></head><body><main>
+<p>{header}</p>
+<p>Lightning projected lineup</p>
+<p>Brandon Hagel -- Brayden Point -- Nikita Kucherov</p>
+<p>Victor Hedman -- Ryan McDonagh</p>
+<p>Dennis Hildeby</p>
+<p>Andrei Vasilevskiy</p>
+<p>Blue Jackets projected lineup</p>
+<p>Kirill Marchenko -- Adam Fantilli -- Kent Johnson</p>
+<p>Zach Werenski -- Damon Severson</p>
+<p>Jet Greaves</p>
+<p>Elvis Merzlikins</p>
+<p>Status report</p>
+</main></body></html>"""
+
+    def _ops(self, root, *, header, published, folder_day):
+        package = root / "postgame_reconciliation" / "2026-11-10" / "reconciliation=a"
+        package.mkdir(parents=True)
+        (package / "RUN_COMPLETE.json").write_text("{}")
+        starts = ([(1, 14, 100)] * 8 + [(1, 14, 101)] * 2      # TBL: Vasilevskiy 8, Hildeby 2
+                  + [(1, 29, 200)] * 6 + [(1, 29, 201)] * 4)   # CBJ: Greaves 6, Merzlikins 4 (tandem)
+        pd.DataFrame([{"game_id": i, "team_id": t, "goalie_id": g, "actual_start_flag": True}
+                      for i, (_, t, g) in enumerate(starts)]).to_csv(package / "canonical_goalie_outcomes.csv",
+                                                                     index=False)
+        capture = root / "projected_lineups" / "season=2026" / f"slate_date={folder_day}" / "observation=20261112T193000Z"
+        capture.mkdir(parents=True)
+        (capture / "page.html").write_text(self.PAGE.format(header=header, published=published))
+        cross = root / "cross_market_shadow" / "season=2026" / "slate_date=2026-11-12" / "run_type=REFRESH" / "state=a"
+        cross.mkdir(parents=True)
+        (cross / "RUN_COMPLETE.json").write_text("{}")
+        pd.DataFrame([{"game_id": 7, "home_team": "CBJ", "away_team": "TBL", "challenger_favored_team": "TBL",
+                       "challenger_home_win_probability": 0.45, "challenger_away_win_probability": 0.55,
+                       "home_back_to_back": 0, "away_back_to_back": 1}]).to_csv(
+            cross / "moneyline_production_predictions.csv", index=False)
+        return pd.DataFrame([{"player_id": pid, "full_name": name, "last_name": name.split()[-1], "team_id": team,
+                              "team_code": code, "game_id": 7}
+                             for pid, name, team, code in ((100, "Andrei Vasilevskiy", 14, "TBL"),
+                                                           (101, "Dennis Hildeby", 14, "TBL"),
+                                                           (200, "Jet Greaves", 29, "CBJ"),
+                                                           (201, "Elvis Merzlikins", 29, "CBJ"))])
+
+    def _section(self, root, names):
+        return watch.goalie_section(slate_date="2026-11-12", operational_root=root, names=names,
+                                    lineup_root=root / "projected_lineups",
+                                    cross_market_root=root / "cross_market_shadow")
+
+    def test_backup_on_the_model_favorite_reads_pass_and_a_split_is_a_tandem(self):
+        with tempfile.TemporaryDirectory(dir=watch.ROOT / "tmp") as temp:
+            root = Path(temp)
+            names = self._ops(root, header="LIGHTNING (10-3-2) at BLUE JACKETS (7-7-0)",
+                              published="2026-11-12T14:30:00Z", folder_day="2026-11-12")
+            game = self._section(root, names)["games"][0]
+            self.assertEqual((game["away_goalie"]["status"], game["away_goalie"]["projected_starts"]), ("BACKUP", 2))
+            self.assertEqual(game["home_goalie"]["status"], "USUAL")   # Greaves leads 6-4
+            self.assertEqual(game["read"], "backup on the model's favorite (TBL): pass")
+            self.assertEqual(game["back_to_back"], ["TBL"])
+            md = "\n".join(watch.render_goalies(self._section(root, names)))
+            self.assertIn("**backup**, 2 of 10 starts; usual Andrei Vasilevskiy, 8", md)
+            highlights = "\n".join(watch.render_highlights({"goalies": self._section(root, names)}))
+            self.assertIn("TBL at CBJ — backup on the model's favorite (TBL): pass", highlights)
+
+    def test_a_game_posted_the_day_before_is_read_from_the_previous_capture(self):
+        with tempfile.TemporaryDirectory(dir=watch.ROOT / "tmp") as temp:
+            root = Path(temp)
+            names = self._ops(root, header="LIGHTNING (10-3-2) at BLUE JACKETS (7-7-0)",
+                              published="2026-11-11T14:30:00Z", folder_day="2026-11-11")
+            page = root / "projected_lineups/season=2026/slate_date=2026-11-11/observation=20261112T193000Z/page.html"
+            page.write_text(page.read_text().replace("<p>LIGHTNING", "<p>THURSDAY</p><p>LIGHTNING"))
+            game = self._section(root, names)["games"][0]
+            self.assertEqual(game["away_goalie"]["projected"], "Dennis Hildeby")
+            # Without the weekday heading the rows are the 11-11 article's own games: not used.
+            page.write_text(page.read_text().replace("<p>THURSDAY</p>", ""))
+            self.assertEqual(self._section(root, names)["games"][0]["read"], "starter not posted yet")
+
+    def test_tandem_goalie_is_not_a_backup(self):
+        with tempfile.TemporaryDirectory(dir=watch.ROOT / "tmp") as temp:
+            root = Path(temp)
+            names = self._ops(root, header="LIGHTNING (10-3-2) at BLUE JACKETS (7-7-0)",
+                              published="2026-11-12T14:30:00Z", folder_day="2026-11-12")
+            page = next(root.glob("projected_lineups/**/page.html"))
+            page.write_text(page.read_text().replace("<p>Jet Greaves</p>\n<p>Elvis Merzlikins</p>",
+                                                     "<p>Elvis Merzlikins</p>\n<p>Jet Greaves</p>"))
+            game = self._section(root, names)["games"][0]
+            self.assertEqual(game["home_goalie"]["status"], "TANDEM")
+            self.assertEqual(game["read"], "backup on the model's favorite (TBL): pass")
+
 if __name__ == "__main__":
     unittest.main()

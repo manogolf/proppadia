@@ -1687,6 +1687,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   for the "ml 10+ gap" plays: take the edge side only when it is also the
   model's favorite. 31 underdog games is small; regrade at the 11-28 weekly
   review alongside the model-version split.
+- **WATCH, 2026-11-13 (operator: "Yes, add the flag"): goalie flag in the
+  input watch.** The model has no goalie input; the operator's check before a
+  moneyline play is whether a backup starts and on which side. The input watch
+  now lists each game's projected G1 (NHL.com lineup capture, P2.47) against
+  each team's starts leader, a backup being under 40% of the team's starts
+  (capture contract "Goalies in the input watch"). The reads ("pass" on a
+  backup favorite, "model side stronger" on a backup underdog) are the
+  operator's judgment, not measured. Replay on 11-12 (posted for 8 of 10
+  games): backup favorites COL (lost), NJD (won), TBL (won), BUF (lost);
+  backup underdog TOR (MIN won). Grade the flagged games at the 11-28 review:
+  model-favorite record with and without a projected backup, against the
+  market's no-vig price.
 
 ### P2.8 Evaluate SOG production versus D10/D20 fixed blends
 
