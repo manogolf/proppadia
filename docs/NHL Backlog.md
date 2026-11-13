@@ -3160,6 +3160,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
        Holloway 1 SOG on our Over. The second line split its matchups, took
        7 ES shots for and 9 SOG combined. One game; Utah's lines were
        reshuffled by injuries. Applies to the SOG model as well as Points.
+       Scheduled (operator, 2026-11-13: "Yes, next week"): build the week
+       of 2026-11-16 on past seasons, result ready for the 11-28 weekly
+       review. First version: home vs road top-line comparison only. First
+       step: check which seasons' shift charts are already stored; size
+       any missing pull for the operator before fetching.
   5. Market totals (captured from 2026-11-01): team implied goals as a
      scoring environment input.
 - Results, tests 1-3 (2026-11-06, operator: "historical tests first";
