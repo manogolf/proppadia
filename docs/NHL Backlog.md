@@ -1713,7 +1713,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   effect; samples of 23-39 games carry about +/-15-20pp on a win rate. The
   flag's reads ("pass" on a backup favorite, "model side stronger" on a
   backup underdog) are not supported: backup favorites did fine and favorites
-  facing a backup did worse. Regrade at 11-28.
+  facing a backup did worse. Regrade at 11-28. Operator: "Yes, neutral
+  wording": the flag now names the side starting a backup, with no advice.
 
 ### P2.8 Evaluate SOG production versus D10/D20 fixed blends
 

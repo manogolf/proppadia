@@ -38,8 +38,9 @@ change to any prediction. It writes
    the newest NHL.com lineup capture, P2.47) against each team's starts leader
    this season (official starts in saved reconciliations), next to the
    production moneyline favorite from the newest complete cross-market capture
-   and back-to-back flags. The moneyline model has no goalie input; a backup
-   on its favorite reads "pass", on its underdog "model side stronger". The
+   and back-to-back flags. The moneyline model has no goalie input; the read
+   names which side starts a backup, with no advice (a season check found no
+   large backup effect, 2026-11-13). The
    watch runs before that run's lineup and cross-market steps, so it reads the
    previous captures.
 """
@@ -871,8 +872,8 @@ def goalie_read(home: dict[str, Any], away: dict[str, Any], favorite: str | None
     side = backups[0]
     if favorite is None:
         return f"backup for {side['team']}"
-    return (f"backup on the model's favorite ({side['team']}): pass" if side["team"] == favorite else
-            f"backup on the model's underdog ({side['team']}): model side stronger")
+    return (f"backup on the model's favorite ({side['team']})" if side["team"] == favorite else
+            f"backup on the model's underdog ({side['team']})")
 
 
 def goalie_section(*, slate_date: str, operational_root: Path, names: pd.DataFrame | None,
@@ -932,7 +933,7 @@ def goalie_section(*, slate_date: str, operational_root: Path, names: pd.DataFra
         game["away_goalie"], game["home_goalie"] = sides[0], sides[1]
         game["read"] = goalie_read(sides[1], sides[0], game["favorite"])
         out.append(game)
-    order = {"pass": 0, "stronger": 1, "both": 2, "backup": 3}
+    order = {"favorite": 0, "underdog": 1, "both": 2, "backup": 3}
     out.sort(key=lambda g: next((v for k, v in order.items() if k in g["read"]), 9))
     return {"status": "COMPLETE" if moneyline is not None else "NO_MONEYLINE_CAPTURE_YET",
             "posted_teams": len(projected), "games": out}
@@ -962,7 +963,8 @@ def render_goalies(section: dict[str, Any]) -> list[str]:
     lines.append("The moneyline model has no goalie input (P2.7). Projected starter (NHL.com G1) against each "
                  "team's starts leader this season; a goalie with under "
                  f"{100 * GOALIE_BACKUP_SHARE:.0f}% of his team's starts is a backup, more is a tandem. "
-                 "A backup on the model's favorite: pass; on its underdog: the model's side is stronger." +(" No moneyline capture for the slate yet."
+                 "Information only: on 10-14..11-12 backups showed no large effect on the model's "
+                 "favorites (P2.7)." + (" No moneyline capture for the slate yet."
                                                     if section["status"] != "COMPLETE" else ""))
     lines += ["", "| Game | Model favorite | Away goalie | Home goalie | Rest | Read |", "|---|---|---|---|---|---|"]
     for g in section["games"]:

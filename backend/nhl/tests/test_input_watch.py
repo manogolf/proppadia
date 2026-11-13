@@ -398,7 +398,7 @@ class GoalieTests(unittest.TestCase):
                                     lineup_root=root / "projected_lineups",
                                     cross_market_root=root / "cross_market_shadow")
 
-    def test_backup_on_the_model_favorite_reads_pass_and_a_split_is_a_tandem(self):
+    def test_backup_on_the_model_favorite_is_named_and_a_split_is_a_tandem(self):
         with tempfile.TemporaryDirectory(dir=watch.ROOT / "tmp") as temp:
             root = Path(temp)
             names = self._ops(root, header="LIGHTNING (10-3-2) at BLUE JACKETS (7-7-0)",
@@ -406,12 +406,12 @@ class GoalieTests(unittest.TestCase):
             game = self._section(root, names)["games"][0]
             self.assertEqual((game["away_goalie"]["status"], game["away_goalie"]["projected_starts"]), ("BACKUP", 2))
             self.assertEqual(game["home_goalie"]["status"], "USUAL")   # Greaves leads 6-4
-            self.assertEqual(game["read"], "backup on the model's favorite (TBL): pass")
+            self.assertEqual(game["read"], "backup on the model's favorite (TBL)")
             self.assertEqual(game["back_to_back"], ["TBL"])
             md = "\n".join(watch.render_goalies(self._section(root, names)))
             self.assertIn("**backup**, 2 of 10 starts; usual Andrei Vasilevskiy, 8", md)
             highlights = "\n".join(watch.render_highlights({"goalies": self._section(root, names)}))
-            self.assertIn("TBL at CBJ — backup on the model's favorite (TBL): pass", highlights)
+            self.assertIn("TBL at CBJ — backup on the model's favorite (TBL)", highlights)
 
     def test_a_game_posted_the_day_before_is_read_from_the_previous_capture(self):
         with tempfile.TemporaryDirectory(dir=watch.ROOT / "tmp") as temp:
@@ -436,7 +436,7 @@ class GoalieTests(unittest.TestCase):
                                                      "<p>Elvis Merzlikins</p>\n<p>Jet Greaves</p>"))
             game = self._section(root, names)["games"][0]
             self.assertEqual(game["home_goalie"]["status"], "TANDEM")
-            self.assertEqual(game["read"], "backup on the model's favorite (TBL): pass")
+            self.assertEqual(game["read"], "backup on the model's favorite (TBL)")
 
 if __name__ == "__main__":
     unittest.main()
