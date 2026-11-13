@@ -885,7 +885,20 @@ first morning run may have no moneyline capture or no posted starters. Reads
 name the side only, with no advice ("backup on the model's favorite (TEAM)",
 "backup on the model's underdog (TEAM)", "both teams start a backup", "usual
 starters", "starter not posted yet"): the 2026-11-13 season check found no
-large backup effect on the model's favorites (P2.7).
+large backup effect on the model's favorites (P2.7). Regulars out
+(2026-11-13, operator: "Yes, add it"): per team, skaters who played 4 of its
+last 5 games (newest complete reconciliation per date,
+`canonical_skater_outcomes.csv`), ranked by average ice time within
+position (F or D from the season's `graded_sog.csv`; unknown counts as F);
+the top 6 forwards and top 4 defensemen that are not on the projected lines
+or pairs are listed with rank, minutes and the article's injured or
+scratched note ("not in lineup" when absent from both). A regular whose last
+name appears among the team's listed skaters counts as dressed, so an
+unmatched spelling never reads as out. Late scratches show only after the
+game; teams whose lineup is not posted read "not posted". Highlights list
+each team with a regular out and whether it is the model's favorite. Report
+section "Goalies and regulars out vs the moneyline model's favorite"; JSON
+key `goalies` (`regulars_out` per team).
 Highlights list the backup games. JSON key `goalies`; report section
 "Goalies vs the moneyline model's favorite".
 

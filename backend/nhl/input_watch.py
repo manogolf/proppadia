@@ -40,7 +40,11 @@ change to any prediction. It writes
    production moneyline favorite from the newest complete cross-market capture
    and back-to-back flags. The moneyline model has no goalie input; the read
    names which side starts a backup, with no advice (a season check found no
-   large backup effect, 2026-11-13). The
+   large backup effect, 2026-11-13). Each team also lists its top regulars
+   (top 6 forwards and 4 defensemen by ice time among skaters who played 4 of
+   the team's last 5 games) missing from the projected lines and pairs, with
+   the article's injury note; on 11-12 injuries to top skaters, not goalies,
+   moved the big moneyline prices (P2.7). The
    watch runs before that run's lineup and cross-market steps, so it reads the
    previous captures.
 """
@@ -552,6 +556,9 @@ HOT_GAMES = 3          # hit the line in each of this many most recent played ga
 HOT_RULES = {"sog": ("official_sog", 2), "points": ("official_points", 1)}  # SOG 1.5, Points 0.5
 GOALIE_MIN_STARTS = 3  # starts this season before a team's usual starter is named
 GOALIE_BACKUP_SHARE = 0.40  # a non-leader below this share of team starts is a backup; at or above, a tandem
+REGULAR_GAMES = 5      # a regular played at least REGULAR_MIN of the team's last REGULAR_GAMES games
+REGULAR_MIN = 4
+REGULAR_TOP = {"F": 6, "D": 4}  # top forwards and defensemen by average ice time, ranked separately
 LINEUP_ROOT = ROOT / "artifacts/operational/nhl/projected_lineups"
 CROSS_MARKET_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow"
 
@@ -820,8 +827,8 @@ def usual_starters(starts: pd.DataFrame | None) -> dict[int, dict[str, Any]]:
     return out
 
 
-def projected_starters(slate_date: str, lineup_root: Path = LINEUP_ROOT) -> dict[str, dict[str, Any]]:
-    """G1 per team from the newest NHL.com lineup capture that covers the slate (P2.47).
+def projected_lineups(slate_date: str, lineup_root: Path = LINEUP_ROOT) -> dict[str, dict[str, Any]]:
+    """Each team's rows from the newest NHL.com lineup capture that covers the slate (P2.47).
 
     The article labels the day it was published "TODAY" and later days by weekday, so a
     game posted a day early is read from the previous day's capture. Pages are re-parsed
@@ -844,10 +851,97 @@ def projected_starters(slate_date: str, lineup_root: Path = LINEUP_ROOT) -> dict
         wanted = "TODAY" if article_day == slate else weekday if article_day < slate else None
         if wanted is None:
             continue
+        teams: dict[str, list[dict[str, Any]]] = {}
         for row in lineups.parse(html):
-            if row["unit"] == "G1" and row["day"] == wanted and row["team_code"] not in found:
-                found[row["team_code"]] = {"name": row["name"], "observation": capture.name.split("=", 1)[1]}
+            if row["day"] == wanted:
+                teams.setdefault(row["team_code"], []).append(row)
+        for team, rows in teams.items():
+            found.setdefault(team, {"rows": rows, "observation": capture.name.split("=", 1)[1]})
     return found
+
+
+def projected_starters(slate_date: str, lineup_root: Path = LINEUP_ROOT) -> dict[str, dict[str, Any]]:
+    """G1 per team from :func:`projected_lineups`."""
+    out = {}
+    for team, found in projected_lineups(slate_date, lineup_root).items():
+        g1 = [r for r in found["rows"] if r["unit"] == "G1"]
+        if g1:
+            out[team] = {"name": g1[0]["name"], "observation": found["observation"]}
+    return out
+
+
+def _minutes(toi) -> float:
+    try:
+        minutes, seconds = str(toi).split(":")
+        return int(minutes) + int(seconds) / 60
+    except ValueError:
+        return 0.0
+
+
+def season_positions(operational_root: Path, slate_date: str) -> dict[int, str]:
+    """F or D per skater from the graded SOG files of this season's reconciliations (latest wins)."""
+    out: dict[int, str] = {}
+    for folder in sorted((Path(operational_root) / "postgame_reconciliation").glob("20*")):
+        if not (folder.name < slate_date and season_of(folder.name) == season_of(slate_date)):
+            continue
+        packages = [p for p in folder.glob("reconciliation=*")
+                    if (p / "RUN_COMPLETE.json").is_file() and (p / "graded_sog.csv").is_file()]
+        if packages:
+            newest = max(packages, key=lambda p: (p / "RUN_COMPLETE.json").stat().st_mtime)
+            graded = pd.read_csv(newest / "graded_sog.csv", usecols=lambda c: c in ("player_id", "position"))
+            if "position" in graded:   # older packages have no position column
+                graded = graded.dropna()
+                out.update(zip(graded.player_id.astype("int64"), graded.position.astype(str)))
+    return out
+
+
+def team_regulars(history: pd.DataFrame | None, positions: dict[int, str]) -> dict[int, list[dict[str, Any]]]:
+    """Per team, skaters who played REGULAR_MIN of its last REGULAR_GAMES games: the top forwards and
+    defensemen by average ice time (REGULAR_TOP), ranked within position (unknown counts as F)."""
+    if history is None or history.empty:
+        return {}
+    out = {}
+    for team_id, team in history.groupby("team_id"):
+        games = team.drop_duplicates("game_id").sort_values("slate_date").game_id.tail(REGULAR_GAMES)
+        recent = team[team.game_id.isin(games)].assign(minutes=lambda f: f.toi.map(_minutes))
+        usage = recent.groupby("player_id").agg(games=("game_id", "nunique"), toi=("minutes", "mean"))
+        usage = usage[usage.games >= REGULAR_MIN].sort_values("toi", ascending=False)
+        usage["position"] = [("D" if positions.get(int(p)) == "D" else "F") for p in usage.index]
+        rows = []
+        for position, top in REGULAR_TOP.items():
+            mine = usage[usage.position.eq(position)].head(top)
+            rows += [{"player_id": int(pid), "position": position, "toi": round(float(r.toi), 1), "rank": i + 1}
+                     for i, (pid, r) in enumerate(mine.iterrows())]
+        out[int(team_id)] = rows
+    return out
+
+
+def regulars_out(regulars: list[dict[str, Any]], rows: list[dict[str, Any]], names: pd.DataFrame,
+                 name_of: dict[int, str]) -> list[dict[str, Any]]:
+    """Top regulars missing from the projected lines and pairs, with the article's injury note if listed.
+
+    A regular counts as dressed when his ID matches a listed skater or his last name appears in a
+    listed skater's name on that team (an unmatched spelling never reads as out)."""
+    from backend.nhl.scripts import collect_nhl_projected_lineups as lineups
+
+    frame = pd.DataFrame(rows)
+    matched = lineups.match_names(frame[["team_code", "name"]], names)
+    frame = frame.assign(player_id=matched.player_id.values)
+    dressed = frame[frame.unit.str.match(r"^[FD]\d$")]
+    ids = set(dressed.player_id.dropna().astype("int64"))
+    listed_last = {lineups.norm(n).split(" ")[-1] for n in dressed.name}
+    notes = {int(p): (u, n) for p, u, n in zip(frame.player_id, frame.unit, frame.get("note", pd.Series(
+        [None] * len(frame)))) if pd.notna(p) and u in ("INJURED", "SCRATCHED")}
+    out = []
+    for regular in regulars:
+        name = name_of.get(regular["player_id"], str(regular["player_id"]))
+        if regular["player_id"] in ids or lineups.norm(name).split(" ")[-1] in listed_last:
+            continue
+        unit, note = notes.get(regular["player_id"], (None, None))
+        out.append({**regular, "name": name,
+                    "listed": (f"injured ({note})" if unit == "INJURED" and isinstance(note, str) else
+                               unit.lower() if unit else "not in lineup")})
+    return out
 
 
 def latest_moneyline(slate_date: str, cross_market_root: Path = CROSS_MARKET_ROOT) -> pd.DataFrame | None:
@@ -887,7 +981,10 @@ def goalie_section(*, slate_date: str, operational_root: Path, names: pd.DataFra
     if names is None or names.empty:
         return {"status": "UNAVAILABLE:no names file", "games": []}
     usual = usual_starters(season_starts(operational_root, slate_date))
+    lineup_rows = projected_lineups(slate_date, lineup_root)
     projected = projected_starters(slate_date, lineup_root)
+    regulars = team_regulars(season_outcomes(operational_root, slate_date),
+                             season_positions(operational_root, slate_date))
     rows = pd.DataFrame([{"team_code": t, "name": v["name"]} for t, v in projected.items()],
                         columns=["team_code", "name"])
     matched = lineups.match_names(rows, names) if len(rows) else rows.assign(player_id=pd.NA)
@@ -929,6 +1026,9 @@ def goalie_section(*, slate_date: str, operational_root: Path, names: pd.DataFra
                 entry["projected_starts"] = own
                 entry["status"] = ("USUAL" if int(pid) == regular["goalie_id"] else
                                    "BACKUP" if own < GOALIE_BACKUP_SHARE * regular["team_games"] else "TANDEM")
+            posted = lineup_rows.get(code)
+            entry["regulars_out"] = (regulars_out(regulars.get(team_id_of.get(code, -1), []), posted["rows"],
+                                                  names, name_of) if posted else None)
             sides.append(entry)
         game["away_goalie"], game["home_goalie"] = sides[0], sides[1]
         game["read"] = goalie_read(sides[1], sides[0], game["favorite"])
@@ -956,8 +1056,15 @@ def _goalie_cell(side: dict[str, Any]) -> str:
     return text
 
 
+def _out_cell(side: dict[str, Any]) -> str:
+    if side.get("regulars_out") is None:
+        return f"{side['team']}: not posted"
+    return f"{side['team']}: " + (", ".join(f"{r['name']} ({r['position']}{r['rank']}, {r['toi']:g} min; {r['listed']})"
+                                            for r in side["regulars_out"]) or "none")
+
+
 def render_goalies(section: dict[str, Any]) -> list[str]:
-    lines = ["## Goalies vs the moneyline model's favorite", ""]
+    lines = ["## Goalies and regulars out vs the moneyline model's favorite", ""]
     if not section.get("games"):
         return lines + [f"Unavailable: {section.get('status')}.", ""]
     lines.append("The moneyline model has no goalie input (P2.7). Projected starter (NHL.com G1) against each "
@@ -966,13 +1073,19 @@ def render_goalies(section: dict[str, Any]) -> list[str]:
                  "Information only: on 10-14..11-12 backups showed no large effect on the model's "
                  "favorites (P2.7)." + (" No moneyline capture for the slate yet."
                                                     if section["status"] != "COMPLETE" else ""))
-    lines += ["", "| Game | Model favorite | Away goalie | Home goalie | Rest | Read |", "|---|---|---|---|---|---|"]
+    lines.append(f"Regulars out: a team's top {REGULAR_TOP['F']} forwards and top {REGULAR_TOP['D']} defensemen "
+                 "by ice time (F1 = most-used forward) among those who played "
+                 f"{REGULAR_MIN} of its last {REGULAR_GAMES} games, missing from the projected lines and pairs "
+                 "(late scratches show only after the game). On 11-12 the big moneyline moves followed "
+                 "injuries to top skaters at Utah and Tampa Bay (P2.7).")
+    lines += ["", "| Game | Model favorite | Away goalie | Home goalie | Away regulars out | Home regulars out "
+              "| Rest | Read |", "|---|---|---|---|---|---|---|---|"]
     for g in section["games"]:
         fav = f"{g['favorite']} {_pct(g['favorite_p'])}" if g["favorite"] else "—"
         rest = ", ".join(f"{t} back-to-back" for t in g["back_to_back"]) or "—"
         title = f"{g['away']} at {g['home']}" if g["home"] else f"{g['away_goalie']['team']}-{g['home_goalie']['team']}"
         lines.append(f"| {title} | {fav} | {_goalie_cell(g['away_goalie'])} | {_goalie_cell(g['home_goalie'])} | "
-                     f"{rest} | {g['read']} |")
+                     f"{_out_cell(g['away_goalie'])} | {_out_cell(g['home_goalie'])} | {rest} | {g['read']} |")
     return lines + [""]
 
 
@@ -1032,6 +1145,14 @@ def render_highlights(result: dict[str, Any]) -> list[str]:
         lines.append("- **Goalies: projected backup** (moneyline model has no goalie input): "
                      + "; ".join(f"{g['away'] or g['away_goalie']['team']} at {g['home'] or g['home_goalie']['team']} "
                                  f"— {g['read']}" for g in flagged))
+    missing = [(g, side) for g in (result.get("goalies") or {}).get("games") or []
+               for side in (g["away_goalie"], g["home_goalie"]) if side.get("regulars_out")]
+    if missing:
+        lines.append(f"- **Regulars out** (top {REGULAR_TOP['F']} F / {REGULAR_TOP['D']} D by ice time; "
+                     "moneyline model sees no lineup): "
+                     + "; ".join(f"{side['team']} ({'model favorite' if side['team'] == g['favorite'] else 'vs ' + str(g['favorite'])}): "
+                                 + ", ".join(f"{r['name']} {r['position']}{r['rank']}" for r in side["regulars_out"])
+                                 for g, side in missing))
     removals = result.get("removal_grades") or {}
     if removals.get("status") == "GRADED":
         lines.append(f"- **Removal candidates {removals['prior_date']}**: {_removal_summary(removals['totals'])}; "

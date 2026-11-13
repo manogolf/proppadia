@@ -1731,6 +1731,19 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   made the big moves; the moneyline model reads team rates and sees no
   lineup. The 11-12 article covered St. Louis at Utah only after our last
   14:34 ET capture.
+- **Regulars-out flag (2026-11-13, operator: "Yes, add it").** The input
+  watch's goalie table now lists each team's top 6 forwards and top 4
+  defensemen by ice time (4 of the last 5 games) missing from the projected
+  lines, with the article's injury note (capture contract "Goalies in the
+  input watch"). Ranking all skaters together put star forwards behind
+  defensemen (Point tenth), so forwards and defense rank separately. Replay
+  of 11-12 from the captures then available: NJD Pesce D2 (ill),
+  Siegenthaler D4; TBL Point F5 (lower body); TOR Tanev D4 (scratched);
+  St. Louis at Utah not posted. The later 11-12 article (saved in the 11-13
+  08:49 ET capture) gives Utah Cooley F3 and Guenther F4 (upper body);
+  Schmaltz was projected in and is not flagged, and Cirelli's late scratch
+  cannot show. Information only; grade at 11-28 whether favorites with a top
+  regular out underperform their market price.
 
 ### P2.8 Evaluate SOG production versus D10/D20 fixed blends
 

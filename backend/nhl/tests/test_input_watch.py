@@ -438,5 +438,46 @@ class GoalieTests(unittest.TestCase):
             self.assertEqual(game["home_goalie"]["status"], "TANDEM")
             self.assertEqual(game["read"], "backup on the model's favorite (TBL)")
 
+    def test_top_regulars_missing_from_the_projected_lines_are_listed(self):
+        with tempfile.TemporaryDirectory(dir=watch.ROOT / "tmp") as temp:
+            root = Path(temp)
+            names = self._ops(root, header="LIGHTNING (10-3-2) at BLUE JACKETS (7-7-0)",
+                              published="2026-11-12T14:30:00Z", folder_day="2026-11-12")
+            skaters = [(301, "Nikita Kucherov", "F", "21:00"), (302, "Brayden Point", "F", "19:00"),
+                       (303, "Brandon Hagel", "F", "18:00"), (304, "Victor Hedman", "D", "24:00"),
+                       (305, "Ryan McDonagh", "D", "20:00"), (306, "Zemgus Girgensons", "F", "9:00")]
+            for i, day in enumerate(["2026-11-06", "2026-11-07", "2026-11-08", "2026-11-09", "2026-11-10"]):
+                package = root / "postgame_reconciliation" / day / "reconciliation=a"
+                package.mkdir(parents=True, exist_ok=True)
+                (package / "RUN_COMPLETE.json").write_text("{}")
+                pd.DataFrame([{"game_id": 100 + i, "player_id": pid, "team_id": 14, "toi": toi,
+                               "participation_state": "PARTICIPATED", "official_final": True}
+                              for pid, _, _, toi in skaters if not (pid == 306 and i < 2)]).to_csv(
+                    package / "canonical_skater_outcomes.csv", index=False)
+                pd.DataFrame([{"player_id": pid, "position": pos} for pid, _, pos, _ in skaters]).to_csv(
+                    package / "graded_sog.csv", index=False)
+            names = pd.concat([names, pd.DataFrame([{"player_id": pid, "full_name": n, "last_name": n.split()[-1],
+                                                     "team_id": 14, "team_code": "TBL", "game_id": 7}
+                                                    for pid, n, _, _ in skaters])])
+            page = next(root.glob("projected_lineups/**/page.html"))
+            page.write_text(page.read_text().replace(
+                "<p>Brandon Hagel -- Brayden Point -- Nikita Kucherov</p>",
+                "<p>Brandon Hagel -- Zemgus Girgensons -- N. Kucherov</p>").replace(
+                "<p>Andrei Vasilevskiy</p>", "<p>Andrei Vasilevskiy</p><p><strong>Injured:</strong> "
+                                              "Brayden Point (lower body)</p>"))
+            game = self._section(root, names)["games"][0]
+            out = game["away_goalie"]["regulars_out"]
+            # Point (F2) is out and listed injured; Kucherov is listed by initial, Hedman and McDonagh as a
+            # pair; Girgensons played 3 of 5 games, so he is not a regular.
+            self.assertEqual([(r["name"], r["position"], r["rank"], r["listed"]) for r in out],
+                             [("Brayden Point", "F", 2, "injured (lower body)")])
+            page.write_text(page.read_text().replace("<p>Victor Hedman -- Ryan McDonagh</p>",
+                                                     "<p>Victor Hedman -- Erik Cernak</p>"))
+            out = self._section(root, names)["games"][0]["away_goalie"]["regulars_out"]
+            self.assertEqual([(r["name"], r["listed"]) for r in out],
+                             [("Brayden Point", "injured (lower body)"), ("Ryan McDonagh", "not in lineup")])
+            highlights = "\n".join(watch.render_highlights({"goalies": self._section(root, names)}))
+            self.assertIn("TBL (model favorite): Brayden Point F2, Ryan McDonagh D2", highlights)
+
 if __name__ == "__main__":
     unittest.main()
