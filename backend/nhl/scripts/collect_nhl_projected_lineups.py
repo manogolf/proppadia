@@ -48,6 +48,7 @@ NICKNAMES = {
     "LIGHTNING": "TBL", "MAPLE LEAFS": "TOR", "MAMMOTH": "UTA", "CANUCKS": "VAN",
     "GOLDEN KNIGHTS": "VGK", "CAPITALS": "WSH", "JETS": "WPG",
 }
+LABELS = ("scratched:", "injured:", "suspended:")
 WEEKDAYS = {"MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"}
 # Neutral-site games read "vs." ("HURRICANES (14-3-2) vs. KRAKEN (9-6-1)") and the joiner's case
 # varies ("JETS (8-8-3) AT STARS (10-5-2)"), both 2026-11-12.
@@ -90,19 +91,29 @@ def article_times(html: str) -> dict:
 
 
 def parse(html: str) -> list[dict]:
-    """One row per listed player: game, team, unit (F1-F4, D1-D3, G1-G2, SCRATCHED, INJURED)."""
+    """One row per listed player: game, team, unit (F1-F4, D1-D3, G1-G2, EXTRA, SCRATCHED,
+    INJURED, SUSPENDED).
+
+    Single names after the defense pairs are the goalies, starter first. The article sometimes
+    lists an extra skater alone there too (a seventh defenseman: Luke Schenn ahead of
+    Vancouver's goalies, 2026-11-13), so of those single names the last two are G1 and G2 and
+    any before them are EXTRA. A "Label:" line (Scratched, Injured, Suspended, ...) ends the
+    goalies, so a suspended player listed after them is not read as one."""
     main = BeautifulSoup(html, "lxml").find("main")
     if main is None:
         return []
     lines = [t.replace("\xa0", " ").strip() for t in main.get_text("\n").split("\n")]
     lines = [t for t in lines if t]
-    rows, game, team, day, forwards, pairs, goalies = [], None, None, "TODAY", 0, 0, 0
+    rows, game, team, day, forwards, pairs, closed = [], None, None, "TODAY", 0, 0, False
     # A bold "Scratched:" label renders as its own text node; join it to the next line.
     joined: list[str] = []
     for text in lines:
         last = joined[-1].lower() if joined else ""
-        if last in ("scratched:", "injured:") or (last.startswith(("scratched:", "injured:"))
-                                                    and last.endswith(",")):
+        # An empty label is followed by the status report, never its body (2026-11-13: an empty
+        # "Injured:" swallowed "Status report" and the next game's text stayed under the team).
+        if text.lower().startswith("status report"):
+            joined.append(text)
+        elif last in LABELS or (last.startswith(LABELS) and last.endswith(",")):
             joined[-1] = f"{joined[-1]} {text}"
         else:
             joined.append(text)
@@ -117,7 +128,7 @@ def parse(html: str) -> list[dict]:
             continue
         found = TEAM.match(text)
         if found and game and found["team"].upper() in NICKNAMES:
-            team, forwards, pairs, goalies = NICKNAMES[found["team"].upper()], 0, 0, 0
+            team, forwards, pairs, closed = NICKNAMES[found["team"].upper()], 0, 0, False
             continue
         if text.lower().startswith("status report"):
             # The status report closes the game, so an unread next header cannot inherit it.
@@ -135,7 +146,9 @@ def parse(html: str) -> list[dict]:
                 pairs += 1
                 rows += [{**base, "unit": f"D{pairs}", "slot": i + 1, "name": n} for i, n in enumerate(names)]
             continue
-        for label in ("Scratched", "Injured"):
+        if re.match(r"^[A-Za-z][A-Za-z ]{2,30}:", text):
+            closed = True  # any label ends the goalies
+        for label in ("Scratched", "Injured", "Suspended"):
             if text.lower().startswith(label.lower() + ":"):
                 body = text.split(":", 1)[1].strip()
                 if body.lower().rstrip(".") != "none":
@@ -146,10 +159,17 @@ def parse(html: str) -> list[dict]:
                                          "note": note.rstrip(")") or None})
                 break
         else:
-            # Goalies: single names after the defense pairs, starter first.
-            if pairs and goalies < 2 and re.fullmatch(r"[A-Za-zÀ-ÿ.'\- ]{3,40}", text) and " " in text:
-                goalies += 1
-                rows.append({**base, "unit": f"G{goalies}", "slot": 1, "name": text})
+            # Single names after the defense pairs: goalies, or an extra skater (see above).
+            if pairs and not closed and re.fullmatch(r"[A-Za-zÀ-ÿ.'\- ]{3,40}", text) and " " in text:
+                rows.append({**base, "unit": "SINGLE", "slot": 1, "name": text})
+    singles: dict[tuple, list[dict]] = {}
+    for row in rows:
+        if row["unit"] == "SINGLE":
+            singles.setdefault((row["day"], row["away"], row["home"], row["team_code"]), []).append(row)
+    for group in singles.values():
+        for i, row in enumerate(group):
+            back = len(group) - i  # 2 = second to last, 1 = last
+            row["unit"] = "EXTRA" if back > 2 else f"G{len(group) - back + 1 - max(len(group) - 2, 0)}"
     return rows
 
 

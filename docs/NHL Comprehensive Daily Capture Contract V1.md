@@ -256,8 +256,15 @@ follows the article layout: "AWAY (record) at HOME (record)" starts a game
 away), a weekday heading ("SATURDAY") marks later games, "<Team> projected lineup"
 starts a team, three names joined by " -- " are a forward line (F1-F4), two
 a defense pair (D1-D3), the next single names the goalies (G1 is the
-probable starter), then "Scratched:" and "Injured:" (labels and wrapped
-lists joined), and "Status report" ends the game. A weekday heading or a
+probable starter), then "Scratched:", "Injured:" and "Suspended:" (labels
+and wrapped lists joined; an empty label never takes "Status report" as its
+body), and "Status report" ends the game. Of the single names, the last two
+are G1 and G2 and any before them are `EXTRA` (an extra skater listed alone:
+Luke Schenn ahead of Vancouver's goalies, 2026-11-13); any "Label:" line ends
+the goalies, so a suspended player after them is not read as one (fixed
+2026-11-13; before then the first two single names were G1 and G2, which
+named an extra defenseman as the starter for TBL, NJD, FLA and VAN on some
+days). A weekday heading or a
 status report closes the current game, so teams under a header the parser
 cannot read are dropped, never filed under the previous game (fixed
 2026-11-12; captures saved before then keep their original `lineups.csv`,

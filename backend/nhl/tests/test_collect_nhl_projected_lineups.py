@@ -120,6 +120,31 @@ class ParseTests(unittest.TestCase):
         car = pd.DataFrame(lineups.parse(upper)).query("team_code == 'CAR'")
         self.assertEqual(car[["away", "home"]].drop_duplicates().values.tolist(), [["CAR", "SEA"]])
 
+    def test_extra_skater_suspended_player_and_empty_injured_label(self):
+        # 2026-11-13: Luke Schenn listed alone ahead of Vancouver's goalies was read as G1;
+        # 2026-11-08: Larkin under "Suspended:" was read as a goalie; an empty "Injured:"
+        # swallowed "Status report" so the page's trailing text stayed under the team.
+        page = """<html><body><main>
+<p>RANGERS (8-8-2) at CANUCKS (7-9-2)</p>
+<p>Canucks projected lineup</p>
+<p>Jake DeBrusk -- Elias Pettersson -- Brock Boeser</p>
+<p>Zeev Buium -- Filip Hronek</p>
+<p>Luke Schenn</p>
+<p>Leevi Merilainen</p>
+<p>Kevin Lankinen</p>
+<p><strong>Scratched:</strong> None</p>
+<p><strong>Suspended:</strong></p>
+<p>Dylan Larkin</p>
+<p><strong>Injured:</strong></p>
+<p>Status report</p>
+<p>Fantasy Hockey Rankings and Picks</p>
+</main></body></html>"""
+        van = pd.DataFrame(lineups.parse(page))
+        self.assertEqual(van[van.unit.isin(["EXTRA", "G1", "G2", "SUSPENDED"])][["unit", "name"]].values.tolist(),
+                         [["EXTRA", "Luke Schenn"], ["G1", "Leevi Merilainen"], ["G2", "Kevin Lankinen"],
+                          ["SUSPENDED", "Dylan Larkin"]])
+        self.assertFalse(van.name.str.contains("Status|Fantasy").any())
+
     def test_article_times(self):
         self.assertEqual(lineups.article_times(PAGE)["date_modified"], "2026-11-06T19:54:30Z")
 
