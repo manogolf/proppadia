@@ -36,30 +36,31 @@ class ScheduledDailyTests(unittest.TestCase):
 
     def test_all_steps_run_in_order_and_record_the_upload_csv(self):
         calls, a, b = self.fake_steps({"01_daily_with_odds": 0, "02_cross_market_capture": 0, "03_8rain_export": 0,
-                                       "04_projected_lineups_trial": 0, "05_points_per_minute_shadow": 0})
+                                       "00_projected_lineups_trial": 0, "05_points_per_minute_shadow": 0})
         with a, b:
             self.assertEqual(job.main([]), 0)
-        self.assertEqual(calls, ["01_daily_with_odds", "02_cross_market_capture", "03_8rain_export",
-                                 "04_projected_lineups_trial", "05_points_per_minute_shadow"])
+        self.assertEqual(calls, ["00_projected_lineups_trial", "01_daily_with_odds", "02_cross_market_capture",
+                                 "03_8rain_export", "05_points_per_minute_shadow"])
         self.assertEqual((self.summary()["status"], self.summary()["upload_csv"]), ("READY", "artifacts/x.csv"))
 
     def test_a_daily_run_that_is_not_ready_stops_before_the_export(self):
-        calls, a, b = self.fake_steps({"01_daily_with_odds": 0}, classification="FAILED_BUDGET_GUARD")
+        calls, a, b = self.fake_steps({"00_projected_lineups_trial": 0, "01_daily_with_odds": 0},
+                                      classification="FAILED_BUDGET_GUARD")
         with a, b:
             self.assertEqual(job.main([]), 1)
-        self.assertEqual(calls, ["01_daily_with_odds"])
+        self.assertEqual(calls, ["00_projected_lineups_trial", "01_daily_with_odds"])
         self.assertEqual(self.summary()["status"], "FAILED_DAILY")
 
     def test_a_failed_game_line_refresh_still_exports_with_a_warning(self):
         calls, a, b = self.fake_steps({"01_daily_with_odds": 0, "02_cross_market_capture": 2, "03_8rain_export": 0,
-                                       "04_projected_lineups_trial": 0, "05_points_per_minute_shadow": 0})
+                                       "00_projected_lineups_trial": 0, "05_points_per_minute_shadow": 0})
         with a, b:
             self.assertEqual(job.main([]), 0)
         self.assertEqual(self.summary()["cross_market_warning"], "capture exit 2")
 
     def test_a_failed_lineup_trial_warns_and_keeps_the_run_ready(self):
         calls, a, b = self.fake_steps({"01_daily_with_odds": 0, "02_cross_market_capture": 0, "03_8rain_export": 0,
-                                       "04_projected_lineups_trial": 1, "05_points_per_minute_shadow": 2})
+                                       "00_projected_lineups_trial": 1, "05_points_per_minute_shadow": 2})
         with a, b:
             self.assertEqual(job.main([]), 0)
         self.assertEqual(self.summary()["status"], "READY")
@@ -85,9 +86,10 @@ class ScheduledDailyTests(unittest.TestCase):
                     mock.patch("builtins.print") as printed:
                 job.main(["--dry-run"])
             steps = json.loads(printed.call_args[0][0])["steps"]
-            self.assertIn(phase, steps[1])
-            self.assertEqual(steps[0][-2:], ["daily", "--with-odds"])
-            self.assertEqual(steps[2][-1], "--latest-refresh")
+            self.assertTrue(steps[0][1].endswith("collect_nhl_projected_lineups.py"))
+            self.assertEqual(steps[1][-2:], ["daily", "--with-odds"])
+            self.assertIn(phase, steps[2])
+            self.assertEqual(steps[3][-1], "--latest-refresh")
 
 
 if __name__ == "__main__":

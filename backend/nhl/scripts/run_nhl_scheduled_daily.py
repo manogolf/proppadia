@@ -122,13 +122,14 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     phase = "REFRESH" if has_cross_market_package(slate) else "AUTO"
     steps = [
+        # Trial (P2.47): NHL.com projected lineups; non-blocking, stops itself after its end date.
+        # Runs first so this run's input watch (inside step 01) reads this run's lineups (2026-11-13).
+        ("00_projected_lineups_trial", [PYTHON, ROOT / "backend/nhl/scripts/collect_nhl_projected_lineups.py",
+                                        "--slate-date", slate]),
         ("01_daily_with_odds", [PYTHON, "-m", "backend.nhl.cli", "daily", "--with-odds"]),
         ("02_cross_market_capture", [PYTHON, ROOT / "backend/nhl/scripts/run_nhl_mainline_cross_market_capture_warn_only.py",
                                      "--slate-date", slate, "--phase", phase, "--env-file", ENV_FILE]),
         ("03_8rain_export", [PYTHON, ROOT / "backend/nhl/scripts/run_nhl_8rain_export.py", "--latest-refresh"]),
-        # Trial (P2.47): NHL.com projected lineups; non-blocking, stops itself after its end date.
-        ("04_projected_lineups_trial", [PYTHON, ROOT / "backend/nhl/scripts/collect_nhl_projected_lineups.py",
-                                        "--slate-date", slate]),
         # Shadow (P2.46): Points per-minute candidate on this slate's Points captures; non-blocking.
         ("05_points_per_minute_shadow", [PYTHON, ROOT / "backend/nhl/scripts/run_nhl_points_per_minute_shadow.py",
                                          "--slate-date", slate]),
@@ -165,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
                 summary["status"] = "FAILED_EXPORT"
                 break
             summary["upload_csv"] = export_csv_path(ROOT / result["log"])
-        elif name == "04_projected_lineups_trial" and result["exit_code"] != 0:
+        elif name == "00_projected_lineups_trial" and result["exit_code"] != 0:
             summary["lineups_trial_warning"] = f"collector exit {result['exit_code']}"
         elif name == "05_points_per_minute_shadow" and result["exit_code"] != 0:
             summary["points_per_minute_shadow_warning"] = f"shadow exit {result['exit_code']}"

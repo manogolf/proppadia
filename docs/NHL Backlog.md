@@ -3066,8 +3066,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   last game's. NHL.com staff and team correspondents publish projected
   lines, pairs, goalies, scratches and injuries daily as article text (no
   API). DailyFaceoff compiles from beat reporters and team sources; not used.
-- Built: `backend/nhl/scripts/collect_nhl_projected_lineups.py` (step 4 of
-  each scheduled run, non-blocking; rules and output in the capture
+- Built: `backend/nhl/scripts/collect_nhl_projected_lineups.py` (first step,
+  `00_projected_lineups_trial`, of each scheduled run from 2026-11-13 so the
+  input watch reads that run's lineups; step 4 before; non-blocking; rules and output in the capture
   contract). Tests: `backend/nhl/tests/test_collect_nhl_projected_lineups.py`.
 - First observation 2026-11-06 12:20 PT (article modified 11:54 PT): 3 of 3
   slate games, 120 of 120 lineup players matched (119 full name, 1 prefix:

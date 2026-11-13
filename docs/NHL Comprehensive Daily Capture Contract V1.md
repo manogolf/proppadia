@@ -175,7 +175,8 @@ Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
   2026-11-03 to 2026-11-06, 07:30 before that). The operator's repeating `pmset`
   wake is 04:28 so the Mac is awake for it.
 - `com.proppadia.nhl.scheduled-daily` (`backend/nhl/scripts/run_nhl_scheduled_daily.py`,
-  under `caffeinate -i`) runs at 05:45, 08:30 and 11:30 local: `daily --with-odds`
+  under `caffeinate -i`) runs at 05:45, 08:30 and 11:30 local: the projected
+  lineups capture (step 00, below), then `daily --with-odds`
   (phase EARLY), then the mainline cross-market capture (AUTO for the slate's
   first package, else REFRESH), then `run_nhl_8rain_export.py --latest-refresh`.
   A daily run that is not READY stops before the export; a failed game-line
@@ -197,10 +198,15 @@ Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
   `NHL_POSTGAME_RECONCILIATION_ALREADY_RUNNING`. The roster refresh
   (`refresh_players_and_roster_today.py`) connects with TCP keepalives, so a
   dropped database connection fails in about 1.5 minutes instead of hanging.
-- Step 4, `04_projected_lineups_trial` (2026-11-06 to 2026-11-30, NHL
+- Step 00, `00_projected_lineups_trial` (2026-11-06 to 2026-11-30, NHL
   Backlog P2.47; operator-approved trial): runs
   `backend/nhl/scripts/collect_nhl_projected_lineups.py --slate-date <d>`
-  after the export. Non-blocking: a failure is recorded as
+  first, before the daily run, so that run's input watch reads this run's
+  lineups (from 2026-11-13; before that it ran fourth, after the export, as
+  `04_projected_lineups_trial`, and the watch read the previous run's
+  capture). At 05:45 the slate's names file may not exist yet: the page is
+  still saved, the summary shows `NO_SLATE` and unmatched rows, and readers
+  re-parse `page.html` and match names themselves. Non-blocking: a failure is recorded as
   `lineups_trial_warning` and the run stays READY. After the trial end date
   the collector prints `SKIPPED_TRIAL_ENDED` and writes nothing.
 
@@ -880,9 +886,10 @@ complete reconciliation per earlier date (`canonical_goalie_outcomes.csv`,
 not the leader is a backup below 40% of his team's starts and a tandem at or
 above. The favorite, its probability and back-to-back flags come from
 `moneyline_production_predictions.csv` in the newest complete cross-market
-capture for the slate. The watch runs in step 01, before that run's lineup
-(step 04) and cross-market (step 02) steps, so it reads earlier captures; the
-first morning run may have no moneyline capture or no posted starters. Reads
+capture for the slate. The watch runs in step 01, after that run's lineup
+capture (step 00) and before its cross-market step (02), so it reads this run's
+lineups and the previous moneyline capture; the first morning run may have no
+moneyline capture or no posted starters. Reads
 name the side only, with no advice ("backup on the model's favorite (TEAM)",
 "backup on the model's underdog (TEAM)", "both teams start a backup", "usual
 starters", "starter not posted yet"): the 2026-11-13 season check found no
