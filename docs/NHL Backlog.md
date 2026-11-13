@@ -1715,6 +1715,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   backup underdog) are not supported: backup favorites did fine and favorites
   facing a backup did worse. Regrade at 11-28. Operator: "Yes, neutral
   wording": the flag now names the side starting a backup, with no advice.
+- **What moved the 11-12 lines (2026-11-13, operator: "dig into those").**
+  No-vig bet-side price by capture (`tmp/ml_move_trace.py`, 26 books) and
+  regulars (4+ of the last 5 games) missing from each team's official 11-12
+  lineup. Utah (bet 11:15 ET): 52% at 08:48, 51% at 11:33, 46% at 14:33 ET,
+  every book together; Utah, on a back-to-back, played without Cooley,
+  Guenther, Schmaltz and DeSimone (NHL.com status report: Cooley out,
+  Guenther upper body, Schmaltz game-time decision); St. Louis had Parayko
+  back. Lost 1-0. Tampa Bay: 51% through 14:33 ET, 47.5% at 18:47 ET; Point
+  and Cernak listed out in the 14:34 ET capture, Cirelli projected on F1 but
+  did not play (late scratch); Hildeby in goal. Won 3-1. Colorado: drifted
+  52% to 48% all day; no regular missing; Wedgewood in goal; Greig back for
+  Ottawa. Dallas: flat 61% until the close, 59%; Morrissey back for Winnipeg.
+  Boston and New Jersey: flat. Skater injuries to top players, not goalies,
+  made the big moves; the moneyline model reads team rates and sees no
+  lineup. The 11-12 article covered St. Louis at Utah only after our last
+  14:34 ET capture.
 
 ### P2.8 Evaluate SOG production versus D10/D20 fixed blends
 
