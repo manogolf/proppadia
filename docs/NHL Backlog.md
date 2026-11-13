@@ -1699,6 +1699,21 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   backup underdog TOR (MIN won). Grade the flagged games at the 11-28 review:
   model-favorite record with and without a projected backup, against the
   market's no-vig price.
+- **Season goalie check, 2026-11-13 (operator: "Yes, run it").** V3, 188
+  settled games 10-14..11-12, actual starters (official start flag); a start
+  is a backup when that goalie had under 40% of the team's earlier starts
+  (first 5 team games and leaders under 3 starts count as usual)
+  (`tmp/ml_goalie_check.py`). Model favorites: neither team on a backup
+  96 games, favorite won 67% (model 62%, market 58%); favorite on a backup 30,
+  won 63% (model 58%, market 55%); underdog on a backup 39, won 56% (model
+  63%, market 58%); both on backups 23, won 48% (model 62%, market 59%). The
+  market moved little for backups (55-59% throughout). Edge on the model
+  favorite, $10 at no-vig: neither +$115.3 (54-28), favorite backup +$19.9
+  (13-9), underdog backup -$23.7 (18-15), both -$35.6 (6-8). No large goalie
+  effect; samples of 23-39 games carry about +/-15-20pp on a win rate. The
+  flag's reads ("pass" on a backup favorite, "model side stronger" on a
+  backup underdog) are not supported: backup favorites did fine and favorites
+  facing a backup did worse. Regrade at 11-28.
 
 ### P2.8 Evaluate SOG production versus D10/D20 fixed blends
 
