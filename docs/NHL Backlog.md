@@ -3150,6 +3150,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   4. Line matchups: which opposing line the player's line faces most
      (shift overlap), using the home team's last change; the opposing
      line's goals against per 60.
+     - Home matching (added 2026-11-13, operator: "Yes, add it"): first ask
+       whether road teams' top lines miss their projected shots and points
+       more than home teams' top lines (home last change lets the home coach
+       put his checking line on them). Example, STL at UTA 2026-11-12
+       (game 2026020307, shift chart): STL's top line (Thomas, Holloway,
+       Snuggerud) led ES time (15.7 min) but faced Trocheck's line 73% of it,
+       on-ice ES shots 2 for, 8 against, zone starts 3 O / 1 N / 5 D;
+       Holloway 1 SOG on our Over. The second line split its matchups, took
+       7 ES shots for and 9 SOG combined. One game; Utah's lines were
+       reshuffled by injuries. Applies to the SOG model as well as Points.
   5. Market totals (captured from 2026-11-01): team implied goals as a
      scoring environment input.
 - Results, tests 1-3 (2026-11-06, operator: "historical tests first";
