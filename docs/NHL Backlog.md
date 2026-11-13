@@ -1744,6 +1744,25 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   Schmaltz was projected in and is not flagged, and Cirelli's late scratch
   cannot show. Information only; grade at 11-28 whether favorites with a top
   regular out underperform their market price.
+- **Morning vs later moneyline prices (2026-11-13, operator: "Yes, measure
+  it"; question: keep morning wagers or wait for lineup news).** V3, 188
+  games 10-14..11-12; median no-vig price on the model's favorite in each
+  capture window (ET: morning 08-11, midday 11-14, afternoon 14-17, close =
+  last capture before the start; 5+ books), odds start times matched within
+  3 hours (`tmp/ml_timing_check.py`, rows `tmp/ml_timing_rows.csv`). Edge on
+  the favorite, $10 at that window's no-vig price. Same 169 games with a
+  morning price: bet at the morning price +$89.2 (131 bets, 80-51, market
+  expected 74.3) vs at the close +$29.1 (132 bets). Morning-to-close move on
+  the favorite: mean +0.03pp (sd 1.65); 1pp+ against 21%, for 20%; 3pp+
+  against 5%, for 4%. News moves both ways about equally, the edge survives
+  to the close in 96% of games, and later prices were not better: the market
+  moved toward the eventual winner, so the morning price was worth more.
+  Windows with fewer captures cover different days (afternoon 137 games,
+  -$27.7) and are not comparable to each other; on the 91-92 games with both,
+  morning -$11.5 vs afternoon -$17.2. Reading: keep morning moneyline wagers
+  with the news risk accepted; the input watch's goalie and regulars-out
+  table is a glance before betting, not a reason to wait. One month of games;
+  regrade 11-28.
 
 ### P2.8 Evaluate SOG production versus D10/D20 fixed blends
 
