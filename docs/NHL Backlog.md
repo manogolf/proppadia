@@ -1763,6 +1763,20 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   with the news risk accepted; the input watch's goalie and regulars-out
   table is a glance before betting, not a reason to wait. One month of games;
   regrade 11-28.
+- **Favorite results by edge size (2026-11-14, operator: "moneyline edges
+  are typically thin and ones that are not I'm suspicious of"; "Yes, add it"
+  to the 11-28 regrade).** V3, edge on the model's favorite, 10-14..11-12
+  rows of the season goalie check (`tmp/ml_goalie_check_rows.csv`), $10 at
+  the check's market price. Edge points (model minus market): 0-2 29 bets,
+  16-13, 55% vs market 57%, ROI -3%; 2-5 48, 33-15, 69% vs 57%, +21%; 5-10
+  50, 27-23, 54% vs 57%, -7%; 10+ 24, 15-9, 62% vs 57%, +8% (15-10 with
+  Vegas 11-13). The market sits near 57% in every band; larger gaps come
+  from the model rating the favorite higher (58% to 69%), the shape model
+  overconfidence would take, but each band's win rate is within about 7-10
+  points of noise. No filter change. At 11-28: regrade by band through
+  11-27 (add the 11-13..11-27 games), and compare the station's edge
+  minimum (operator uses 0.1 to block negative edges) and the "ml 10+ gap"
+  search against the bands.
 
 ### P2.8 Evaluate SOG production versus D10/D20 fixed blends
 
