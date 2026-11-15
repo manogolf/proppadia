@@ -3242,6 +3242,20 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - First step proposed: an ablation on the 2026-01..04 holdout and the
   2026 live window: V2 vs V2 + situation split (1) vs + tonight's PP
   minutes (2), read-only, with the IMP-034 band and PP bands reported.
+- Direction (operator 2026-11-15): build SOG from components that can be
+  removed and replaced one at a time, not one all-in-one model ("if using a
+  one solution that covers all you may never find another one solution that
+  is better and growth is stopped"). Target structure:
+  expected shots = sum over situations (EV, PP, SH) of
+  [expected minutes in that situation] x [shot rate in that situation],
+  then game adjustments (opponent, script), then a count distribution for
+  the line probabilities. Each component is scored on its own observable
+  target (predicted vs actual EV minutes, PP minutes, EV and PP shot rates;
+  count shape on settled lines), and a swap is accepted when the assembled
+  model is no worse than production and its component is better on its own
+  target. An ML model may live inside a component or correct the assembled
+  total, but stays a separate, removable piece. The first ablation is
+  reported both ways: as features added to V2 and as the component total.
 
 
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
