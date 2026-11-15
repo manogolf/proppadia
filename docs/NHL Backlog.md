@@ -3290,6 +3290,54 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     for the EV and PP rate components; a minutes component that uses
     projected lineups (P2.47) when available; then reassemble and compare
     with V2.
+- **Next steps run 2026-11-15** (operator: "proceed in order listed": 1 Points
+  PP component, 2 SOG component shrinkage, 3 minutes).
+  - **1, Points PP component** (`backend/nhl/scripts/research_nhl_points_pp_component.py`,
+    read-only; output `artifacts/analysis/nhl/points_pp_component_2026-11-15/`).
+    Official `skater/powerplay` per player-game (ppPoints, ppGoals,
+    ppTimeOnIce; known for 99.99% of rows). PP points rate shrunk to the
+    league rate by position with 160 PP minutes (chosen on 2023-24 training
+    rows; grid 20-1280, interior optimum). Against production `c940ae2f` on
+    the same rows, log loss x1000 at 0.5 / 1.5 / 2.5:
+    | Model | Holdout 2025 (47,023) | Live 11-01..11-14 (3,536) |
+    |---|---|---|
+    | P1 production + PP inputs | -0.49 (-0.92 to -0.09) / -0.46 (-0.79 to -0.14) / -0.10 | +0.39 / +0.11 / -0.10 (all span zero) |
+    | P2 non-PP model + PP points component | -0.16 / -0.21 / +0.11 (span zero) | -0.97 (-2.74 to +0.94) / -1.54 (-3.31 to +0.32) / -0.32 |
+    Top-unit (3+ PP min) P(1+ point): actual 57.8% holdout / 59.2% live;
+    production 55.2 / 54.5; P2 56.0 / 56.6 (live log loss 0.6738 to 0.6652).
+    P2 narrows the top-unit miss but overpredicts the 1-2 min band (holdout
+    37.5% vs 36.4%). Component targets: PP points component vs actual PP
+    points MAE 0.16 / 0.18, correlation 0.34 / 0.37; tonight's PP minutes
+    correlation 0.73 / 0.75. Reading: P1 is a small, real holdout gain not
+    yet seen live; P2 moves the right way on the known miss. Neither is
+    ready for production; both are shadow candidates (route A, 4 weekly
+    evaluations) if the operator approves.
+  - **2, SOG component shrinkage** (`backend/nhl/scripts/research_nhl_sog_component_shrinkage.py`,
+    read-only; output `artifacts/analysis/nhl/sog_component_shrinkage_2026-11-15/`).
+    Tuning the league-shrinkage weights on training rows changes nothing
+    (best 180 EV / 20 PP minutes vs the ablation's 180 / 30; holdout gap to
+    V2 0.0068 either way), so the earlier diagnosis (weights too strong) was
+    wrong. The cause was the target: rates were pulled toward the league
+    rate, while V2 also knows each player's own prior-season rate. Shrinking
+    toward the player's own prior-season EV and PP rates (themselves shrunk
+    to the league by 300 EV / 60 PP minutes), weights chosen on training
+    rows (360 EV / 120 PP minutes; 120 is the grid's top), gives:
+    holdout 1.53218 vs V2 recipe 1.52965 (gap +0.0025, +0.0009 to +0.0041,
+    down from +0.0068); live 1.52315 vs 1.52177 (+0.0014, -0.0018 to +0.0041,
+    not different); slope 1.003 / 1.000 (no longer compressed). PP bands
+    within 1-3% of actual. Four readable pieces with no fitted learner now
+    sit within 0.003 of V2.
+  - **3, minutes**: scoped, not run. Minutes are the largest component error
+    (EV minutes MAE 1.9). The lineup trial has 10 slates (2026-11-06..11-15);
+    by its 11-30 review about 25 slates (~9,000 player-games). Test then:
+    EV and PP minutes predicted from line number and PP unit (plus the
+    last-10 mean) vs the last-10 mean alone, on each component's own target,
+    then the reassembled SOG total vs V2.
+  - Next after these: extend the PP prior grid past 120 minutes; put the
+    tonight's-PP-minutes and own-prior pieces together with a learned
+    correction on the assembled total (a removable piece) and compare with
+    V2; decide with the operator whether any SOG or Points candidate runs as
+    a shadow.
 
 
 ### P2.53 Points goals + assists refit on corrected PP TOI (route B)
