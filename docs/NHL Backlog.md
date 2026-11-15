@@ -3448,7 +3448,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     (NULL-safe); unless all rows match, a cast raises and nothing changes.
     Read-only verify 2026-11-15: original 90,531, corrected 0, missing 0,
     other 0.
-  - Execution path: `execute_nhl_source_correction.py` per batch (SQL file,
+  - Execution path chosen 2026-11-15 (operator "SQL editor blocks"; the
+    executor's Keychain admin login is not on this Mac): one paste-ready
+    block per batch, `sql/editor_<month>.sql` (grant role, the unchanged
+    guarded UPDATE, reset, revoke, check revoke, commit; 3-293 KB), run by the
+    operator as `postgres`, then `--verify`. Alternative kept:
+    `execute_nhl_source_correction.py` per batch (SQL file,
     its SHA-256 from `summary.json`, authorization reference), which grants
     the restricted `proppadia_nhl_source_correction` role (UPDATE on
     `pp_toi_minutes` and `shot_attempts` only) and revokes it in the same

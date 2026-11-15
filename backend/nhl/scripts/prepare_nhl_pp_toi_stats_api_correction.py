@@ -228,6 +228,62 @@ WHERE skater_game_logs_raw.game_id = c.game_id
 """
 
 
+def editor_block(update: str, batch: str, rows: int) -> str:
+    """Paste-ready Supabase SQL editor block: the reviewed UPDATE inside a temporary role grant.
+
+    Same shape as the earlier operator PP-TOI blocks: one transaction grants the
+    correction role to postgres, switches to it, runs the UPDATE unchanged,
+    switches back, revokes and checks the revoke. Any failure rolls everything
+    back, the grant included. Re-running after success changes nothing.
+    """
+    return f"""-- PREPARED ONLY. Owner authorization required. Paste this whole block into the Supabase SQL
+-- editor for the production project and run it once. Batch {batch}: {rows} rows of
+-- nhl.skater_game_logs_raw.pp_toi_minutes set to the NHL stats API ppTimeOnIce (NHL Backlog P2.45).
+-- One transaction; any failure aborts it and nothing is committed, including the grant.
+-- Afterwards: prepare_nhl_pp_toi_stats_api_correction.py --verify (expect this batch corrected={rows}).
+
+BEGIN;
+
+DO $$
+BEGIN
+  IF session_user <> 'postgres' THEN
+    RAISE EXCEPTION 'RUN_AS_POSTGRES_IN_SQL_EDITOR:session_user=%', session_user;
+  END IF;
+  IF pg_has_role(session_user, 'proppadia_nhl_source_correction', 'MEMBER') THEN
+    RAISE EXCEPTION 'CORRECTION_ROLE_ALREADY_GRANTED_REFUSING_TO_PROCEED';
+  END IF;
+END $$;
+
+GRANT proppadia_nhl_source_correction TO postgres;
+SET LOCAL ROLE proppadia_nhl_source_correction;
+
+DO $$
+BEGIN
+  IF current_user <> 'proppadia_nhl_source_correction' THEN
+    RAISE EXCEPTION 'CORRECTION_SET_ROLE_VERIFICATION_FAILED:current_user=%', current_user;
+  END IF;
+END $$;
+
+{update.strip()}
+
+RESET ROLE;
+REVOKE proppadia_nhl_source_correction FROM postgres;
+
+DO $$
+BEGIN
+  IF current_user <> 'postgres'
+     OR pg_has_role('postgres', 'proppadia_nhl_source_correction', 'MEMBER') THEN
+    RAISE EXCEPTION 'CORRECTION_ROLE_RESET_OR_REVOKE_FAILED';
+  END IF;
+END $$;
+
+COMMIT;
+
+SELECT now() AS checked_at_utc, current_user AS checked_as, '{batch}' AS batch, {rows} AS batch_rows,
+       pg_has_role('postgres', 'proppadia_nhl_source_correction', 'MEMBER') AS correction_role_still_granted;
+"""
+
+
 def batches(proposal: list[dict]) -> dict[str, list[dict]]:
     """One batch per calendar month; split further only if a statement would exceed the size limit."""
     by_month: dict[str, list[dict]] = defaultdict(list)
@@ -270,6 +326,12 @@ def write_build(proposal, counts, missing, evidence: Path = EVIDENCE) -> dict:
             path.write_text(sql)
             entry[f"{kind}_sql"] = str(path.relative_to(ROOT))
             entry[f"{kind}_sha256"] = sha256_bytes(sql.encode())
+            if kind == "repair":
+                block = editor_block(sql, name, len(rows))
+                block_path = sql_dir / f"editor_{name}.sql"
+                block_path.write_text(block)
+                entry["editor_sql"] = str(block_path.relative_to(ROOT))
+                entry["editor_sha256"] = sha256_bytes(block.encode())
         summary["batches"].append(entry)
     (evidence / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     return summary

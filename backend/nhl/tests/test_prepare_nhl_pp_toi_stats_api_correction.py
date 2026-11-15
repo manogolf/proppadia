@@ -62,6 +62,15 @@ class SqlTests(unittest.TestCase):
         self.assertIn("(2025020001, 2, 10, NULL, 0.00)", prep.update_sql(self.rows, "x"))
         self.assertIn("(2025020001, 2, 10, 0.00, NULL)", prep.update_sql(self.rows, "x", reverse=True))
 
+    def test_editor_block_wraps_the_unchanged_update_in_a_grant_and_revoke(self):
+        update = prep.update_sql(self.rows, "2025-11")
+        block = prep.editor_block(update, "2025-11", 2)
+        self.assertIn(update.strip(), block)
+        order = [block.index(s) for s in ("BEGIN;", "GRANT proppadia_nhl_source_correction TO postgres;",
+                                          "SET LOCAL ROLE", "UPDATE nhl.skater_game_logs_raw", "RESET ROLE;",
+                                          "REVOKE proppadia_nhl_source_correction FROM postgres;", "COMMIT;")]
+        self.assertEqual(order, sorted(order))
+
     def test_validator_rejects_a_second_statement(self):
         with self.assertRaises(SourceCorrectionError):
             validate_correction_sql(prep.update_sql(self.rows, "x") + "DELETE FROM nhl.skater_game_logs_raw;")
