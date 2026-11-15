@@ -3077,6 +3077,36 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     shows nothing, keep it OPEN and watch.
   - Betting: outside the operator's 8rain SOG filters (Fair Odds −133 or
     shorter, model 57%+); no filter change.
+  - **Step 1 result, 2026-11-15** (operator "Yes, run step 1"; read-only,
+    research identity; `tmp/gap_split/step1.py`, `pp.py`). 5,218 live HGB
+    Over 1.5 picks 10-25..11-14 joined to official SOG and the features rebuilt
+    by `research_nhl_sog_hgb_count_model.build`; holdout as above. Mid band =
+    P(over 1.5) .45-.60 (live 999 rows, holdout 4,584): 2+ shots 47.1% vs
+    model 52.1% live, 51.2% vs 52.2% holdout.
+    - (3) Level: live overall mean 1.530 actual vs 1.524 expected, on target;
+      in the mid band 1.710 vs 1.752 (0.976), worth about 1-2 of the 5 points.
+    - (2) Spread: mid-band variance/mean 1.19 live vs 1.13 holdout; the
+      missing 2+ games went to 0 (+2.2 vs Poisson) and 1 (+2.8), 3+ on
+      target (25.8% vs 25.7%). Partial at most.
+    - (4) Role/TOI: not the cause. Picks whose game TOI was within 1 minute
+      of their 10-game average missed most (43.3% vs 52.2%; holdout 51.0%);
+      TOI-trend groups are all low.
+    - **New, power-play time** (P2.45): mid band by last-10 PP TOI, live vs
+      holdout 2+ shots minus model: 0.25-1.0 min 35.2% vs 50.7% (n=105;
+      holdout -0.9), 1-2 min 44.7% vs 51.7% (380; -0.9), 2-3 min 46.8% vs
+      52.4% (237; -1.4), 3+ min 57.9% vs 53.8% (235; -0.6). All picks: actual
+      / expected 0.97-0.98 at 0.25-2 min, 1.04 at 3+ min. Mid-band PP TOI
+      2.06 min live vs 1.71 holdout; PP share of TOI 8.4% vs 7.6%. The model
+      reads 2026 PP minutes on the training seasons' scale, so second-unit
+      players look more involved than they are and top-unit players less.
+  - Conclusion: the leading cause is the 2026 PP TOI shift; level and spread
+    are minor. Next: P2.45 (official PP opportunities and minutes vs stored
+    values for sample games) decides the route: a sourcing/fill defect is a
+    data fix with no model change; real extra power plays need a model input
+    change (PP TOI relative to the season's league level, or a refit with
+    2026 data) as a shadow under the promotion rules. PP TOI is also a Points
+    input; check IMP-037 (Points Under 0.5 .45-.50) the same way. Weekly
+    recheck 11-22 continues.
 
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
@@ -3303,7 +3333,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.45 League power-play time per skater ~31% higher in 2026 data
 
-- Status: **OPEN — not investigated** (found 2026-11-06 while building P2.44).
+- Status: **OPEN — not investigated; now priority** (found 2026-11-06 while
+  building P2.44). 2026-11-15: leading cause of the live SOG Over 1.5 gap
+  IMP-034/035 (P2.50 step 1: light-PP players overpredicted, heavy-PP
+  players underpredicted, holdout flat).
 - Evidence (read-only, `nhl.skater_game_logs_raw`, regular season): mean PP
   TOI per skater-game 1.17 (2024-25), 1.16 (2025-26), 1.52 (2026-27 to
   11-05); PP skater-minutes per team-game 21.0, 19.8, 27.3; p90 3.40, 3.40,
