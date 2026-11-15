@@ -3338,8 +3338,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 ### P2.45 League power-play time per skater ~31% higher in 2026 data
 
 - Status: **CAUSE FOUND 2026-11-15: stored training-season PP TOI is wrong,
-  not real PP growth; repair awaits operator approval** (found 2026-11-06
-  while building P2.44). 2026-11-15: leading cause of the live SOG Over 1.5 gap
+  not real PP growth. Source of record decided 2026-11-15: NHL stats API
+  `ppTimeOnIce` (operator "Yes, use stats API"); repair scope and daily-fill
+  switch still to decide** (found 2026-11-06 while building P2.44). 2026-11-15: leading cause of the live SOG Over 1.5 gap
   IMP-034/035 (P2.50 step 1: light-PP players overpredicted, heavy-PP
   players underpredicted, holdout flat).
 - Evidence (read-only, `nhl.skater_game_logs_raw`, regular season): mean PP
@@ -3418,7 +3419,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     min), plus 2,098 NULL. Separately, 3,471 official player-games have no
     stored row (3,024 in 2024-25, 310 in 2025-26, 137 in 2023-24): a missing
     row, not a PP value, so outside a PP update.
-  - Decisions for the operator before any write: (a) make the stats API
+  - Decision (a) made 2026-11-15: stats API is the source of record. Open:
+    (b) and (c). Decisions for the operator before any write: (a) make the stats API
     `ppTimeOnIce` the PP TOI source of record, superseding the shift-chart
     method and the 2023-24 recovery; (b) repair scope (all seasons, or the
     model training windows 2023-10..2026-04 first); (c) whether the daily fill
