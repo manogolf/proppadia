@@ -187,5 +187,38 @@ class PulseTests(unittest.TestCase):
             self.assertIn("failed", ev.refresh_pulse("2026-11-14", root))
 
 
+class CurrentModelTests(unittest.TestCase):
+    def test_split_keeps_only_each_lanes_current_model_days(self):
+        rows = pd.DataFrame({"lane": ["sog", "sog", "points", "points"],
+                             "slate_date": ["2026-10-24", "2026-10-25", "2026-10-31", "2026-11-01"]})
+        current, retired = ev.split_current(rows, {"sog": ["2026-10-25"], "points": ["2026-11-01"]})
+        self.assertEqual(current.slate_date.tolist(), ["2026-10-25", "2026-11-01"])
+        self.assertEqual(retired.slate_date.tolist(), ["2026-10-24", "2026-10-31"])
+
+    def test_log_keys_carry_the_model_and_retired_entries_are_left_alone(self):
+        retired = {"id": "IMP-001", "key": "sog|1.5|OVER|.50-.55", "status": "RETIRED_MODEL", "lane": "sog",
+                   "line": 1.5, "side": "OVER", "band": ".50-.55", "first_flagged": "2026-11-07",
+                   "finding": "pooled", "history":[{"as_of": "2026-11-07", "flagged": True, "gap": -0.06}]}
+        seg = pd.DataFrame([{"lane": "sog", "line": 1.5, "selected_side": "OVER", "band": ".50-.55",
+                             "n": 333, "win_rate": 0.453, "predicted": 0.525, "gap": -0.072, "level": "all"}])
+        log, new, recurring = ev.update_improvement_log({"entries": [retired]}, seg, "2026-11-14",
+                                                        {"sog": "NHL_SOG_COUNT_HGB_V1"})
+        self.assertEqual(new, ["IMP-002"])
+        self.assertEqual(recurring, [])
+        old, fresh = log["entries"]
+        self.assertEqual((old["status"], len(old["history"])), ("RETIRED_MODEL", 1))
+        self.assertEqual(fresh["key"], "NHL_SOG_COUNT_HGB_V1|sog|1.5|OVER|.50-.55")
+        self.assertEqual(fresh["model"], "NHL_SOG_COUNT_HGB_V1")
+        self.assertIn("RETIRED_MODEL", ev.render_log(log))
+
+    def test_report_names_the_current_model_windows(self):
+        rows = ev.enrich(pd.DataFrame({"slate_date": ["2026-11-02"], "game_id": [1], "player_id": [1], "line": [1.5],
+                                       "p_over": [0.6], "selected_side": ["OVER"], "grading_state": ["WIN"]}
+                                      ).assign(lane="sog"))
+        text = ev.render("2026-11-02", ["2026-11-02"], ev.model_records({"2026-11-02": summary(V3, V3)}), rows, None,
+                         current_starts={"sog": "2026-10-25", "points": "2026-11-01"})
+        self.assertIn("SOG HGB from 2026-10-25, Points (current model identity) from 2026-11-01", text)
+
+
 if __name__ == "__main__":
     unittest.main()

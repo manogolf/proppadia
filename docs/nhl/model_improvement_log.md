@@ -7,40 +7,47 @@ next_step in `model_improvement_log.json`; the weekly run keeps hand-set statuse
 (TESTING, PROMOTED, REJECTED, WATCH, RESOLVED). Rules for acting on an entry:
 `docs/nhl/model_promotion_rules.md`.
 
-Updated as of 2026-11-07.
+Segments are measured on each lane's current production model only (from 2026-11-15); entries flagged before then pooled retired models with the current ones and are RETIRED_MODEL (history kept, no longer tracked).
+
+Updated as of 2026-11-14.
 
 | Id | Status | Segment | First flagged | Weeks flagged | Latest gap | Finding |
 |---|---|---|---|---:|---:|---|
-| IMP-001 | OPEN | sog 2.5 OVER .70-1.00 | 2026-10-24 | 3 | -12.4 pts | sog 2.5 OVER, P(over) .70-1.00: model is overconfident (wins 62.7% vs 77.3% expected, n=75). |
-| IMP-002 | OPEN | sog 2.5 OVER .60-.70 | 2026-10-24 | 3 | -7.6 pts | sog 2.5 OVER, P(over) .60-.70: model is overconfident (wins 51.5% vs 65.6% expected, n=103). |
-| IMP-003 | OPEN | sog 2.5 OVER .55-.60 | 2026-10-24 | 3 | -8.6 pts | sog 2.5 OVER, P(over) .55-.60: model is overconfident (wins 44.5% vs 57.7% expected, n=137). |
-| IMP-004 | OPEN | sog 1.5 OVER .70-1.00 | 2026-10-24 | 3 | -5.5 pts | sog 1.5 OVER, P(over) .70-1.00: model is overconfident (wins 70.3% vs 79.4% expected, n=596). |
-| IMP-005 | OPEN | sog 2.5 OVER .50-.55 | 2026-10-24 | 3 | -6.3 pts | sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 42.7% vs 51.6% expected, n=124). |
-| IMP-006 | OPEN | points 0.5 UNDER .30-.40 | 2026-10-24 | 2 | -5.4 pts | points 0.5 UNDER, P(over) .30-.40: model is overconfident (wins 57.1% vs 65.5% expected, n=837). |
-| IMP-007 | OPEN | sog 1.5 OVER .60-.70 | 2026-10-24 | 1 | -8.2 pts | sog 1.5 OVER, P(over) .60-.70: model is overconfident (wins 57.3% vs 65.5% expected, n=386). |
-| IMP-008 | OPEN | sog 1.5 UNDER .00-.30 | 2026-10-24 | 1 | -6.3 pts | sog 1.5 UNDER, P(over) .00-.30: model is overconfident (wins 76.1% vs 82.4% expected, n=1267). |
-| IMP-009 | OPEN | sog 1.5 UNDER .45-.50 | 2026-10-24 | 3 | +5.3 pts | sog 1.5 UNDER, P(over) .45-.50: model is underconfident (wins 58.0% vs 52.4% expected, n=255). |
-| IMP-010 | OPEN | sog 2.5 UNDER .45-.50 | 2026-10-24 | 2 | +5.4 pts | sog 2.5 UNDER, P(over) .45-.50: model is underconfident (wins 59.5% vs 53.2% expected, n=153). |
-| IMP-011 | OPEN | sog 3.5 UNDER .30-.40 | 2026-10-24 | 3 | +5.3 pts | sog 3.5 UNDER, P(over) .30-.40: model is underconfident (wins 73.2% vs 65.3% expected, n=205). |
-| IMP-012 | OPEN | sog 3.5 UNDER .40-.45 | 2026-10-24 | 3 | +7.0 pts | sog 3.5 UNDER, P(over) .40-.45: model is underconfident (wins 66.7% vs 57.0% expected, n=48). |
-| IMP-013 | OPEN | points 0.5 OVER .70-1.00 | 2026-10-31 | 1 | -8.2 pts | points 0.5 OVER, P(over) .70-1.00: model is overconfident (wins 64.6% vs 72.8% expected, n=48). |
-| IMP-014 | OPEN | sog 1.5 OVER .50-.55 | 2026-10-31 | 2 | -5.2 pts | sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 46.5% vs 52.2% expected, n=441). |
-| IMP-015 | OPEN | points 0.5 OVER .60-.70 | 2026-10-31 | 2 | +6.8 pts | points 0.5 OVER, P(over) .60-.70: model is underconfident (wins 69.8% vs 63.8% expected, n=222). |
-| IMP-016 | OPEN | sog 3.5 UNDER .45-.50 | 2026-10-31 | 2 | +6.6 pts | sog 3.5 UNDER, P(over) .45-.50: model is underconfident (wins 59.6% vs 52.8% expected, n=47). |
-| IMP-017 | OPEN | sog 2.5 OVER .60-.70 (two-sided) | 2026-10-31 | 2 | -8.3 pts | two-sided lines: sog 2.5 OVER, P(over) .60-.70: model is overconfident (wins 51.2% vs 64.8% expected, n=80). |
-| IMP-018 | OPEN | sog 2.5 OVER .50-.55 (two-sided) | 2026-10-31 | 2 | -7.8 pts | two-sided lines: sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 40.4% vs 51.8% expected, n=94). |
-| IMP-019 | OPEN | sog 2.5 OVER .55-.60 (two-sided) | 2026-10-31 | 2 | -7.6 pts | two-sided lines: sog 2.5 OVER, P(over) .55-.60: model is overconfident (wins 47.8% vs 57.7% expected, n=90). |
-| IMP-020 | OPEN | sog 1.5 OVER .70-1.00 (two-sided) | 2026-10-31 | 2 | -7.0 pts | two-sided lines: sog 1.5 OVER, P(over) .70-1.00: model is overconfident (wins 68.9% vs 78.3% expected, n=315). |
-| IMP-021 | OPEN | sog 1.5 OVER .50-.55 (two-sided) | 2026-10-31 | 2 | -7.1 pts | two-sided lines: sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 44.5% vs 52.3% expected, n=209). |
-| IMP-022 | OPEN | sog 1.5 UNDER .40-.45 (two-sided) | 2026-10-31 | 2 | -5.5 pts | two-sided lines: sog 1.5 UNDER, P(over) .40-.45: model is overconfident (wins 50.0% vs 57.5% expected, n=260). |
-| IMP-023 | OPEN | points 0.5 UNDER .00-.30 (two-sided) | 2026-10-31 | 2 | -5.8 pts | two-sided lines: points 0.5 UNDER, P(over) .00-.30: model is overconfident (wins 69.1% vs 76.4% expected, n=1038). |
-| IMP-024 | OPEN | sog 1.5 UNDER .00-.30 (two-sided) | 2026-10-31 | 2 | -6.4 pts | two-sided lines: sog 1.5 UNDER, P(over) .00-.30: model is overconfident (wins 70.9% vs 78.2% expected, n=148). |
-| IMP-025 | OPEN | sog 1.5 UNDER .45-.50 (two-sided) | 2026-10-31 | 1 | +5.3 pts | two-sided lines: sog 1.5 UNDER, P(over) .45-.50: model is underconfident (wins 57.8% vs 52.4% expected, n=187). |
-| IMP-026 | OPEN | points 0.5 OVER .60-.70 (two-sided) | 2026-10-31 | 2 | +6.5 pts | two-sided lines: points 0.5 OVER, P(over) .60-.70: model is underconfident (wins 69.1% vs 63.7% expected, n=165). |
-| IMP-027 | OPEN | sog 3.5 UNDER .30-.40 (two-sided) | 2026-10-31 | 1 | +6.0 pts | two-sided lines: sog 3.5 UNDER, P(over) .30-.40: model is underconfident (wins 71.0% vs 65.0% expected, n=131). |
-| IMP-028 | OPEN | points 0.5 OVER .50-.55 (two-sided) | 2026-10-31 | 1 | +6.4 pts | two-sided lines: points 0.5 OVER, P(over) .50-.55: model is underconfident (wins 58.8% vs 52.4% expected, n=221). |
-| IMP-029 | OPEN | points 0.5 OVER .55-.60 (two-sided) | 2026-10-31 | 2 | +6.9 pts | two-sided lines: points 0.5 OVER, P(over) .55-.60: model is underconfident (wins 65.8% vs 57.5% expected, n=146). |
-| IMP-030 | OPEN | sog 3.5 UNDER .40-.45 (two-sided) | 2026-10-31 | 1 | +11.9 pts | two-sided lines: sog 3.5 UNDER, P(over) .40-.45: model is underconfident (wins 69.0% vs 57.1% expected, n=42). |
-| IMP-031 | OPEN | sog 3.5 OVER .50-.55 | 2026-11-07 | 1 | -6.7 pts | sog 3.5 OVER, P(over) .50-.55: model is overconfident (wins 45.2% vs 52.0% expected, n=42). |
-| IMP-032 | OPEN | sog 2.5 OVER .70-1.00 (two-sided) | 2026-11-07 | 1 | -11.2 pts | two-sided lines: sog 2.5 OVER, P(over) .70-1.00: model is overconfident (wins 64.4% vs 75.6% expected, n=45). |
-| IMP-033 | OPEN | sog 3.5 UNDER .45-.50 (two-sided) | 2026-11-07 | 1 | +7.8 pts | two-sided lines: sog 3.5 UNDER, P(over) .45-.50: model is underconfident (wins 60.5% vs 52.7% expected, n=43). |
+| IMP-001 | RETIRED_MODEL | sog 2.5 OVER .70-1.00 | 2026-10-24 | 4 | -11.4 pts | sog 2.5 OVER, P(over) .70-1.00: model is overconfident (wins 62.7% vs 77.3% expected, n=75). |
+| IMP-002 | RETIRED_MODEL | sog 2.5 OVER .60-.70 | 2026-10-24 | 3 | -7.6 pts | sog 2.5 OVER, P(over) .60-.70: model is overconfident (wins 51.5% vs 65.6% expected, n=103). |
+| IMP-003 | RETIRED_MODEL | sog 2.5 OVER .55-.60 | 2026-10-24 | 4 | -6.9 pts | sog 2.5 OVER, P(over) .55-.60: model is overconfident (wins 44.5% vs 57.7% expected, n=137). |
+| IMP-004 | RETIRED_MODEL | sog 1.5 OVER .70-1.00 | 2026-10-24 | 3 | -5.5 pts | sog 1.5 OVER, P(over) .70-1.00: model is overconfident (wins 70.3% vs 79.4% expected, n=596). |
+| IMP-005 | RETIRED_MODEL | sog 2.5 OVER .50-.55 | 2026-10-24 | 4 | -6.5 pts | sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 42.7% vs 51.6% expected, n=124). |
+| IMP-006 | RETIRED_MODEL | points 0.5 UNDER .30-.40 | 2026-10-24 | 2 | -5.4 pts | points 0.5 UNDER, P(over) .30-.40: model is overconfident (wins 57.1% vs 65.5% expected, n=837). |
+| IMP-007 | RETIRED_MODEL | sog 1.5 OVER .60-.70 | 2026-10-24 | 1 | -8.2 pts | sog 1.5 OVER, P(over) .60-.70: model is overconfident (wins 57.3% vs 65.5% expected, n=386). |
+| IMP-008 | RETIRED_MODEL | sog 1.5 UNDER .00-.30 | 2026-10-24 | 1 | -6.3 pts | sog 1.5 UNDER, P(over) .00-.30: model is overconfident (wins 76.1% vs 82.4% expected, n=1267). |
+| IMP-009 | RETIRED_MODEL | sog 1.5 UNDER .45-.50 | 2026-10-24 | 3 | +5.3 pts | sog 1.5 UNDER, P(over) .45-.50: model is underconfident (wins 58.0% vs 52.4% expected, n=255). |
+| IMP-010 | RETIRED_MODEL | sog 2.5 UNDER .45-.50 | 2026-10-24 | 2 | +5.4 pts | sog 2.5 UNDER, P(over) .45-.50: model is underconfident (wins 59.5% vs 53.2% expected, n=153). |
+| IMP-011 | RETIRED_MODEL | sog 3.5 UNDER .30-.40 | 2026-10-24 | 3 | +5.3 pts | sog 3.5 UNDER, P(over) .30-.40: model is underconfident (wins 73.2% vs 65.3% expected, n=205). |
+| IMP-012 | RETIRED_MODEL | sog 3.5 UNDER .40-.45 | 2026-10-24 | 4 | +6.3 pts | sog 3.5 UNDER, P(over) .40-.45: model is underconfident (wins 66.7% vs 57.0% expected, n=48). |
+| IMP-013 | RETIRED_MODEL | points 0.5 OVER .70-1.00 | 2026-10-31 | 1 | -8.2 pts | points 0.5 OVER, P(over) .70-1.00: model is overconfident (wins 64.6% vs 72.8% expected, n=48). |
+| IMP-014 | RETIRED_MODEL | sog 1.5 OVER .50-.55 | 2026-10-31 | 3 | -5.6 pts | sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 46.5% vs 52.2% expected, n=441). |
+| IMP-015 | RETIRED_MODEL | points 0.5 OVER .60-.70 | 2026-10-31 | 2 | +6.8 pts | points 0.5 OVER, P(over) .60-.70: model is underconfident (wins 69.8% vs 63.8% expected, n=222). |
+| IMP-016 | RETIRED_MODEL | sog 3.5 UNDER .45-.50 | 2026-10-31 | 3 | +6.2 pts | sog 3.5 UNDER, P(over) .45-.50: model is underconfident (wins 59.6% vs 52.8% expected, n=47). |
+| IMP-017 | RETIRED_MODEL | sog 2.5 OVER .60-.70 (two-sided) | 2026-10-31 | 2 | -8.3 pts | two-sided lines: sog 2.5 OVER, P(over) .60-.70: model is overconfident (wins 51.2% vs 64.8% expected, n=80). |
+| IMP-018 | RETIRED_MODEL | sog 2.5 OVER .50-.55 (two-sided) | 2026-10-31 | 3 | -8.5 pts | two-sided lines: sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 40.4% vs 51.8% expected, n=94). |
+| IMP-019 | RETIRED_MODEL | sog 2.5 OVER .55-.60 (two-sided) | 2026-10-31 | 3 | -5.9 pts | two-sided lines: sog 2.5 OVER, P(over) .55-.60: model is overconfident (wins 47.8% vs 57.7% expected, n=90). |
+| IMP-020 | RETIRED_MODEL | sog 1.5 OVER .70-1.00 (two-sided) | 2026-10-31 | 2 | -7.0 pts | two-sided lines: sog 1.5 OVER, P(over) .70-1.00: model is overconfident (wins 68.9% vs 78.3% expected, n=315). |
+| IMP-021 | RETIRED_MODEL | sog 1.5 OVER .50-.55 (two-sided) | 2026-10-31 | 3 | -6.7 pts | two-sided lines: sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 44.5% vs 52.3% expected, n=209). |
+| IMP-022 | RETIRED_MODEL | sog 1.5 UNDER .40-.45 (two-sided) | 2026-10-31 | 3 | -5.4 pts | two-sided lines: sog 1.5 UNDER, P(over) .40-.45: model is overconfident (wins 50.0% vs 57.5% expected, n=260). |
+| IMP-023 | RETIRED_MODEL | points 0.5 UNDER .00-.30 (two-sided) | 2026-10-31 | 2 | -5.8 pts | two-sided lines: points 0.5 UNDER, P(over) .00-.30: model is overconfident (wins 69.1% vs 76.4% expected, n=1038). |
+| IMP-024 | RETIRED_MODEL | sog 1.5 UNDER .00-.30 (two-sided) | 2026-10-31 | 3 | -5.7 pts | two-sided lines: sog 1.5 UNDER, P(over) .00-.30: model is overconfident (wins 70.9% vs 78.2% expected, n=148). |
+| IMP-025 | RETIRED_MODEL | sog 1.5 UNDER .45-.50 (two-sided) | 2026-10-31 | 1 | +5.3 pts | two-sided lines: sog 1.5 UNDER, P(over) .45-.50: model is underconfident (wins 57.8% vs 52.4% expected, n=187). |
+| IMP-026 | RETIRED_MODEL | points 0.5 OVER .60-.70 (two-sided) | 2026-10-31 | 2 | +6.5 pts | two-sided lines: points 0.5 OVER, P(over) .60-.70: model is underconfident (wins 69.1% vs 63.7% expected, n=165). |
+| IMP-027 | RETIRED_MODEL | sog 3.5 UNDER .30-.40 (two-sided) | 2026-10-31 | 1 | +6.0 pts | two-sided lines: sog 3.5 UNDER, P(over) .30-.40: model is underconfident (wins 71.0% vs 65.0% expected, n=131). |
+| IMP-028 | RETIRED_MODEL | points 0.5 OVER .50-.55 (two-sided) | 2026-10-31 | 1 | +6.4 pts | two-sided lines: points 0.5 OVER, P(over) .50-.55: model is underconfident (wins 58.8% vs 52.4% expected, n=221). |
+| IMP-029 | RETIRED_MODEL | points 0.5 OVER .55-.60 (two-sided) | 2026-10-31 | 2 | +6.9 pts | two-sided lines: points 0.5 OVER, P(over) .55-.60: model is underconfident (wins 65.8% vs 57.5% expected, n=146). |
+| IMP-030 | RETIRED_MODEL | sog 3.5 UNDER .40-.45 (two-sided) | 2026-10-31 | 1 | +11.9 pts | two-sided lines: sog 3.5 UNDER, P(over) .40-.45: model is underconfident (wins 69.0% vs 57.1% expected, n=42). |
+| IMP-031 | RETIRED_MODEL | sog 3.5 OVER .50-.55 | 2026-11-07 | 1 | -6.7 pts | sog 3.5 OVER, P(over) .50-.55: model is overconfident (wins 45.2% vs 52.0% expected, n=42). |
+| IMP-032 | RETIRED_MODEL | sog 2.5 OVER .70-1.00 (two-sided) | 2026-11-07 | 2 | -7.3 pts | two-sided lines: sog 2.5 OVER, P(over) .70-1.00: model is overconfident (wins 64.4% vs 75.6% expected, n=45). |
+| IMP-033 | RETIRED_MODEL | sog 3.5 UNDER .45-.50 (two-sided) | 2026-11-07 | 2 | +7.0 pts | two-sided lines: sog 3.5 UNDER, P(over) .45-.50: model is underconfident (wins 60.5% vs 52.7% expected, n=43). |
+| IMP-034 | OPEN | sog 1.5 OVER .50-.55 | 2026-11-14 | 1 | -7.2 pts | sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 45.3% vs 52.5% expected, n=333). |
+| IMP-035 | OPEN | sog 1.5 OVER .50-.55 (two-sided) | 2026-11-14 | 1 | -9.1 pts | two-sided lines: sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 43.3% vs 52.5% expected, n=270). |
+| IMP-036 | OPEN | sog 2.5 OVER .50-.55 (two-sided) | 2026-11-14 | 1 | -6.0 pts | two-sided lines: sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 46.4% vs 52.4% expected, n=97). |
+| IMP-037 | OPEN | points 0.5 UNDER .45-.50 (two-sided) | 2026-11-14 | 1 | -5.3 pts | two-sided lines: points 0.5 UNDER, P(over) .45-.50: model is overconfident (wins 47.4% vs 52.7% expected, n=173). |
+| IMP-038 | OPEN | sog 2.5 OVER .60-.70 (two-sided) | 2026-11-14 | 1 | +5.1 pts | two-sided lines: sog 2.5 OVER, P(over) .60-.70: model is underconfident (wins 68.8% vs 63.7% expected, n=96). |

@@ -75,6 +75,13 @@ Used when training or live data were wrong, as with the PP-TOI refit
   `level: two_sided`, key prefix `two_sided|`, and show "(two-sided)" in the
   log. A two-sided entry is where the model meets a real market; weigh it
   first when choosing what to fix. Entries without `level` are all-predictions.
+- Segments are measured on each lane's current production model only
+  (2026-11-15): SOG HGB from 2026-10-25, Points from the first slate scored by
+  the current model identity. Keys start with the model
+  (`NHL_SOG_COUNT_HGB_V1|…`, `NHL_POINTS_HGB_<identity8>|…`), so a cutover
+  starts new entries. Entries measured on rows that pooled retired models
+  (IMP-001..033) are `RETIRED_MODEL`: history kept, never updated. On a
+  future cutover, set the previous model's open entries to `RETIRED_MODEL`.
 
 ## Not yet automated
 - Paired shadow-vs-production proper scores (the weekly report shows W/L for

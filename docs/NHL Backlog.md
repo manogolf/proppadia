@@ -3015,6 +3015,34 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   `test_nhl_prediction_only_entry_points_v1.py` (4,
   `SAVES_REFIT_HISTORY_DSN_MISSING`). `backend/nhl/tests` passes.
 
+### P2.50 Weekly evaluation pooled retired models with current ones
+
+- Status: **FIXED 2026-11-15** (operator: "Yes, fix the report", after asking
+  whether the report's gaps are understood and tested).
+- Defect: every season table but W-L counted production rows from
+  `SOG_START`/`POINTS_START`, so SOG mixed the Poisson formula (10-08..10-24)
+  with HGB, and Points mixed three retired models (10-10..10-31) with the
+  current goals + assists model (`8cda6061…`, from 11-01). The improvement log
+  (IMP-001..033) was built from those pooled rows; most entries were flagged
+  on formula-era SOG.
+- Fix: `build_nhl_weekly_model_evaluation.py` keeps each lane's current
+  production model only, reusing the price view's `lane_days` (SOG HGB from
+  10-25; Points by current model identity). Retired Points rows stay in the
+  gap table as `points retired models`; the formula lane is unchanged. Log
+  keys now start with the model (`NHL_SOG_COUNT_HGB_V1|…`,
+  `NHL_POINTS_HGB_8cda6061|…`); IMP-001..033 set to RETIRED_MODEL (history
+  kept, `retired_note`), a hand-set status the weekly run never changes.
+- Rebuilt 11-14 report, current models only. Two-sided gap table: SOG model
+  15+ above on Overs 62-20, log loss 0.480 vs market 0.596; Points Under
+  model 10-15 above 92-59, market better (0.663 vs 0.612). New log entries:
+  IMP-034/035 SOG Over 1.5 at .50-.55 (45.3% vs 52.5%, n=333; two-sided
+  43.3%, n=270), IMP-036 SOG Over 2.5 .50-.55 two-sided, IMP-037 Points
+  Under 0.5 .45-.50 two-sided, IMP-038 SOG Over 2.5 .60-.70 two-sided
+  (underconfident).
+- Open: no entry has a hypothesis or test (none TESTING). First candidate:
+  IMP-034/035, the largest current gap. Outside the operator's 8rain filters
+  (Fair Odds −133 or shorter = model 57%+).
+
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
 - Status: **WATCH** from 2026-11-12 (operator: "Yes, add the tag"). Tag in the

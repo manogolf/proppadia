@@ -49,7 +49,13 @@ FLAG_GAP = 0.05          # flag a segment when results differ from confidence by
 CLEAR_WEEKS = 3          # weeks in a row unflagged before suggesting an entry is resolved
 LOG_JSON = DOCS / "model_improvement_log.json"
 LOG_MD = DOCS / "model_improvement_log.md"
-MANUAL_STATUSES = {"TESTING", "PROMOTED", "REJECTED", "WATCH", "RESOLVED"}
+MANUAL_STATUSES = {"TESTING", "PROMOTED", "REJECTED", "WATCH", "RESOLVED", "RETIRED_MODEL"}
+# Production rows before the current model of their lane (Points models before
+# the current identity) appear only in the gap table, under this lane.
+RETIRED_POINTS_LANE = "points retired models"
+# Improvement-log keys carry the model they were measured on (2026-11-15);
+# entries from before that pooled retired models and are RETIRED_MODEL.
+SOG_MODEL_KEY = "NHL_SOG_COUNT_HGB_V1"
 
 
 def _days(start: str, end: str) -> list[str]:
@@ -280,12 +286,15 @@ def segments(rows: pd.DataFrame, min_n: int = MIN_SEGMENT) -> pd.DataFrame:
     return out[out.n >= min_n].sort_values("gap")
 
 
-def update_improvement_log(log: dict, seg: pd.DataFrame, as_of: str) -> tuple[dict, list[str], list[str]]:
+def update_improvement_log(log: dict, seg: pd.DataFrame, as_of: str,
+                           models: dict[str, str] | None = None) -> tuple[dict, list[str], list[str]]:
     """Add newly flagged segments and record each open entry's state for this week.
 
-    Status values set by hand (TESTING, PROMOTED, REJECTED, WATCH, RESOLVED)
-    are never changed here. Returns the log and the ids that are new or
-    recurring this week.
+    Status values set by hand (TESTING, PROMOTED, REJECTED, WATCH, RESOLVED,
+    RETIRED_MODEL) are never changed here; RETIRED_MODEL entries get no new
+    history. `models` maps lane to the current model's key; keys then start
+    with it, so a new model's segments become new entries. Returns the log
+    and the ids that are new or recurring this week.
     """
     log = {"schema_version": "NHL_MODEL_IMPROVEMENT_LOG_V1", "entries": [], **log}
     entries = {e["key"]: e for e in log["entries"]}
@@ -297,13 +306,16 @@ def update_improvement_log(log: dict, seg: pd.DataFrame, as_of: str) -> tuple[di
         # All-predictions keys keep their original form; two-sided segments are separate entries.
         key = (f"{r.lane}|{r.line}|{r.selected_side}|{r.band}" if level == "all"
                else f"{level}|{r.lane}|{r.line}|{r.selected_side}|{r.band}")
+        model = (models or {}).get(r.lane)
+        if model:
+            key = f"{model}|{key}"
         seen.add(key)
         point = {"as_of": as_of, "n": int(r.n), "win_rate": round(float(r.win_rate), 4),
                  "predicted": round(float(r.predicted), 4), "gap": round(float(r.gap), 4), "flagged": True}
         direction = "overconfident" if r.gap < 0 else "underconfident"
         if key not in entries:
             entry = {"id": f"IMP-{len(entries) + 1:03d}", "key": key, "level": level, "lane": r.lane,
-                     "line": float(r.line),
+                     **({"model": model} if model else {}), "line": float(r.line),
                      "side": r.selected_side, "band": r.band, "first_flagged": as_of, "status": "OPEN",
                      "finding": (f"{'two-sided lines: ' if level == 'two_sided' else ''}"
                                  f"{r.lane} {r.line} {r.selected_side}, P(over) {r.band}: model is {direction} "
@@ -323,7 +335,7 @@ def update_improvement_log(log: dict, seg: pd.DataFrame, as_of: str) -> tuple[di
         entry["last_flagged"] = as_of
         entry["weeks_flagged"] = sum(1 for h in entry["history"] if h.get("flagged"))
     for key, entry in entries.items():
-        if key in seen:
+        if key in seen or entry["status"] == "RETIRED_MODEL":
             continue
         if not entry["history"] or entry["history"][-1]["as_of"] != as_of:
             entry["history"].append({"as_of": as_of, "flagged": False})
@@ -347,6 +359,9 @@ def render_log(log: dict) -> str:
              "next_step in `model_improvement_log.json`; the weekly run keeps hand-set statuses",
              "(TESTING, PROMOTED, REJECTED, WATCH, RESOLVED). Rules for acting on an entry:",
              "`docs/nhl/model_promotion_rules.md`.", "",
+             "Segments are measured on each lane's current production model only (from 2026-11-15); entries "
+             "flagged before then pooled retired models with the current ones and are RETIRED_MODEL "
+             "(history kept, no longer tracked).", "",
              f"Updated as of {log.get('updated_as_of')}.", "",
              "| Id | Status | Segment | First flagged | Weeks flagged | Latest gap | Finding |",
              "|---|---|---|---|---:|---:|---|"]
@@ -363,6 +378,14 @@ def _pct(x: float) -> str:
     return f"{100 * x:.1f}%"
 
 
+def split_current(rows: pd.DataFrame, current: dict[str, list[str]]) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(rows scored by each lane's current production model, the rest)."""
+    keep = pd.Series(False, index=rows.index)
+    for lane, days in current.items():
+        keep |= rows.lane.eq(lane) & rows.slate_date.astype(str).isin(days)
+    return rows[keep].reset_index(drop=True), rows[~keep].reset_index(drop=True)
+
+
 def two_sided_rows(rows: pd.DataFrame) -> pd.DataFrame:
     """Rows on a two-sided line; empty when no row carries two-sided evidence."""
     if "two_sided" not in rows:
@@ -375,13 +398,18 @@ def _wl(frame: pd.DataFrame) -> str:
 
 
 def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFrame, pulse: str | None,
-           log_note: str = "", schedule_note: str = "", shadow_rows: pd.DataFrame | None = None) -> str:
+           log_note: str = "", schedule_note: str = "", shadow_rows: pd.DataFrame | None = None,
+           current_starts: dict[str, str] | None = None) -> str:
     wk = rows[rows.slate_date.isin(week)]
+    starts = current_starts or {"sog": SOG_START, "points": POINTS_START}
     lines = [f"# NHL weekly model evaluation — week ending {as_of}", "",
              *([schedule_note, ""] if schedule_note else []),
              f"Week: {week[0]} to {week[-1]} ({len(set(wk.slate_date))} slates with production rows). "
-             f"Season to date: SOG (production and shadows) from {SOG_START}, Points HGB as production from {POINTS_START}, "
-             "Moneyline, Puck Line and Saves from 2026-10-01. Governed grades only. "
+             f"W-L table season to date: SOG (production and shadows) from {SOG_START}, Points HGB as production "
+             f"from {POINTS_START}, Moneyline, Puck Line and Saves from 2026-10-01. Every other table covers the "
+             f"current production model only: SOG HGB from {starts.get('sog', '—')}, Points (current model identity) "
+             f"from {starts.get('points', '—')}; retired models appear only in the gap table, labelled. "
+             "Governed grades only. "
              f"Two-sided lines from {TWO_SIDED_START}: only picks whose exact line had the same book or prediction "
              "market quoting both Over and Under before the prediction (`backend/nhl/two_sided_lines.py`).", "",
              "## Where every model stands (W-L)", "",
@@ -430,7 +458,8 @@ def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFram
               "Gap = model probability on its side minus the market's no-vig probability on that side "
               "(median across books). Lower log loss is better; the closer of the two shows who forecast better. "
               f"`{FORMULA_LANE}` is the Poisson formula: production until {FORMULA_SHADOW_START}, the "
-              "`sog_poisson_formula_shadow` lane after (latest pregame capture per player-game).", "",
+              "`sog_poisson_formula_shadow` lane after (latest pregame capture per player-game). "
+              f"`{RETIRED_POINTS_LANE}` is production Points before the current model; for history only.", "",
               "| Lane | Gap | Side | Week W-L | Season W-L | Win % | Model | Market | Log loss model | Log loss market |",
               "|---|---|---|---:|---:|---:|---:|---:|---:|---:|"]
     for r in gaps.itertuples():
@@ -537,13 +566,23 @@ def main() -> int:
     # The formula lane appears only in the model-vs-market gap table.
     shadow_rows = rows[rows.lane.eq(FORMULA_LANE)]
     rows = rows[~rows.lane.eq(FORMULA_LANE)].reset_index(drop=True)
+    # Every table but the W-L one covers the current production model of each
+    # lane (same rule as the plus-money price view). Earlier SOG production is
+    # the formula lane; earlier Points production goes to the gap table, labelled.
+    from backend.nhl.scripts.report_nhl_sog_points_price_view import current_points_identity, lane_days
+    current = lane_days(summaries, args.as_of)
+    rows, retired = split_current(rows, current)
+    shadow_rows = pd.concat([shadow_rows, retired[retired.lane.eq("points")].assign(lane=RETIRED_POINTS_LANE)],
+                            ignore_index=True)
+    current_starts = {lane: days[0] for lane, days in current.items() if days}
+    models = {"sog": SOG_MODEL_KEY, "points": f"NHL_POINTS_HGB_{current_points_identity()[:8]}"}
     out = OUT_ROOT / f"weekly_{args.as_of}"
     out.mkdir(parents=True, exist_ok=True)
     records.to_csv(out / "model_records.csv", index=False)
     seg = pd.concat([segments(rows, 1).assign(level="all"),
                      segments(two_sided_rows(rows), 1).assign(level="two_sided")], ignore_index=True)
     log = json.loads(LOG_JSON.read_text()) if LOG_JSON.is_file() else {}
-    log, new, recurring = update_improvement_log(log, seg, args.as_of)
+    log, new, recurring = update_improvement_log(log, seg, args.as_of, models)
     LOG_JSON.write_text(json.dumps(log, indent=2) + "\n")
     LOG_MD.write_text(render_log(log))
     open_ids = [e["id"] for e in log["entries"] if e["status"].startswith("OPEN") or e["status"] in {"TESTING", "WATCH"}]
@@ -559,7 +598,7 @@ def main() -> int:
     if pulse_failure:
         pulse_line = f"{pulse_failure}; {pulse_line or 'no earlier revision'}"
     report = render(args.as_of, week, records, rows, pulse_line, log_note, schedule_note,
-                    shadow_rows=shadow_rows)
+                    shadow_rows=shadow_rows, current_starts=current_starts)
     seg.to_csv(out / "segments.csv", index=False)
     gap_table(pd.concat([rows, shadow_rows], ignore_index=True), week).to_csv(out / "gap_bands.csv", index=False)
     doc = DOCS / f"weekly_model_evaluation_{args.as_of}.md"

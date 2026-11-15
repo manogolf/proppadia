@@ -9,7 +9,7 @@
       "side": "OVER",
       "band": ".70-1.00",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 2.5 OVER, P(over) .70-1.00: model is overconfident (wins 62.7% vs 77.3% expected, n=75).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -38,10 +38,19 @@
           "predicted": 0.7607,
           "gap": -0.1244,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 107,
+          "win_rate": 0.6449,
+          "predicted": 0.7589,
+          "gap": -0.114,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 3
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 4,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-002",
@@ -51,7 +60,7 @@
       "side": "OVER",
       "band": ".60-.70",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 2.5 OVER, P(over) .60-.70: model is overconfident (wins 51.5% vs 65.6% expected, n=103).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -80,10 +89,15 @@
           "predicted": 0.6495,
           "gap": -0.0758,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 3
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-003",
@@ -93,7 +107,7 @@
       "side": "OVER",
       "band": ".55-.60",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 2.5 OVER, P(over) .55-.60: model is overconfident (wins 44.5% vs 57.7% expected, n=137).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -122,10 +136,19 @@
           "predicted": 0.5756,
           "gap": -0.0856,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 231,
+          "win_rate": 0.5065,
+          "predicted": 0.5756,
+          "gap": -0.0691,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 3
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 4,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-004",
@@ -135,7 +158,7 @@
       "side": "OVER",
       "band": ".70-1.00",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 1.5 OVER, P(over) .70-1.00: model is overconfident (wins 70.3% vs 79.4% expected, n=596).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -164,10 +187,15 @@
           "predicted": 0.7893,
           "gap": -0.0549,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 3
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-005",
@@ -177,7 +205,7 @@
       "side": "OVER",
       "band": ".50-.55",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 42.7% vs 51.6% expected, n=124).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -206,10 +234,19 @@
           "predicted": 0.5187,
           "gap": -0.0629,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 240,
+          "win_rate": 0.4542,
+          "predicted": 0.5196,
+          "gap": -0.0654,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 3
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 4,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-006",
@@ -219,7 +256,7 @@
       "side": "UNDER",
       "band": ".30-.40",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "points 0.5 UNDER, P(over) .30-.40: model is overconfident (wins 57.1% vs 65.5% expected, n=837).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -244,10 +281,15 @@
         {
           "as_of": "2026-11-07",
           "flagged": false
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-10-31",
-      "weeks_flagged": 2
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-007",
@@ -257,7 +299,7 @@
       "side": "OVER",
       "band": ".60-.70",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 1.5 OVER, P(over) .60-.70: model is overconfident (wins 57.3% vs 65.5% expected, n=386).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -278,10 +320,15 @@
         {
           "as_of": "2026-11-07",
           "flagged": false
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-10-24",
-      "weeks_flagged": 1
+      "weeks_flagged": 1,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-008",
@@ -291,7 +338,7 @@
       "side": "UNDER",
       "band": ".00-.30",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 1.5 UNDER, P(over) .00-.30: model is overconfident (wins 76.1% vs 82.4% expected, n=1267).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -312,10 +359,15 @@
         {
           "as_of": "2026-11-07",
           "flagged": false
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-10-24",
-      "weeks_flagged": 1
+      "weeks_flagged": 1,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-009",
@@ -325,7 +377,7 @@
       "side": "UNDER",
       "band": ".45-.50",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 1.5 UNDER, P(over) .45-.50: model is underconfident (wins 58.0% vs 52.4% expected, n=255).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -354,10 +406,15 @@
           "predicted": 0.5241,
           "gap": 0.0526,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 3
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-010",
@@ -367,7 +424,7 @@
       "side": "UNDER",
       "band": ".45-.50",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 2.5 UNDER, P(over) .45-.50: model is underconfident (wins 59.5% vs 53.2% expected, n=153).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -392,10 +449,15 @@
         {
           "as_of": "2026-11-07",
           "flagged": false
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-10-31",
-      "weeks_flagged": 2
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-011",
@@ -405,7 +467,7 @@
       "side": "UNDER",
       "band": ".30-.40",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 3.5 UNDER, P(over) .30-.40: model is underconfident (wins 73.2% vs 65.3% expected, n=205).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -434,10 +496,15 @@
           "predicted": 0.6544,
           "gap": 0.0527,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 3
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-012",
@@ -447,7 +514,7 @@
       "side": "UNDER",
       "band": ".40-.45",
       "first_flagged": "2026-10-24",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 3.5 UNDER, P(over) .40-.45: model is underconfident (wins 66.7% vs 57.0% expected, n=48).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -476,10 +543,19 @@
           "predicted": 0.5741,
           "gap": 0.0703,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 119,
+          "win_rate": 0.6387,
+          "predicted": 0.5758,
+          "gap": 0.0629,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 3
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 4,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-013",
@@ -490,7 +566,7 @@
       "side": "OVER",
       "band": ".70-1.00",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "points 0.5 OVER, P(over) .70-1.00: model is overconfident (wins 64.6% vs 72.8% expected, n=48).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -507,10 +583,15 @@
         {
           "as_of": "2026-11-07",
           "flagged": false
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-10-31",
-      "weeks_flagged": 1
+      "weeks_flagged": 1,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-014",
@@ -521,7 +602,7 @@
       "side": "OVER",
       "band": ".50-.55",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 46.5% vs 52.2% expected, n=441).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -542,10 +623,19 @@
           "predicted": 0.5231,
           "gap": -0.0525,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 667,
+          "win_rate": 0.4678,
+          "predicted": 0.5234,
+          "gap": -0.0556,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-015",
@@ -556,7 +646,7 @@
       "side": "OVER",
       "band": ".60-.70",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "points 0.5 OVER, P(over) .60-.70: model is underconfident (wins 69.8% vs 63.8% expected, n=222).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -577,10 +667,15 @@
           "predicted": 0.6384,
           "gap": 0.0676,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-016",
@@ -591,7 +686,7 @@
       "side": "UNDER",
       "band": ".45-.50",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 3.5 UNDER, P(over) .45-.50: model is underconfident (wins 59.6% vs 52.8% expected, n=47).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -612,10 +707,19 @@
           "predicted": 0.5276,
           "gap": 0.0662,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 73,
+          "win_rate": 0.589,
+          "predicted": 0.527,
+          "gap": 0.0621,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-017",
@@ -626,7 +730,7 @@
       "side": "OVER",
       "band": ".60-.70",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 2.5 OVER, P(over) .60-.70: model is overconfident (wins 51.2% vs 64.8% expected, n=80).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -647,10 +751,15 @@
           "predicted": 0.6476,
           "gap": -0.0832,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-018",
@@ -661,7 +770,7 @@
       "side": "OVER",
       "band": ".50-.55",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 40.4% vs 51.8% expected, n=94).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -682,10 +791,19 @@
           "predicted": 0.5194,
           "gap": -0.0785,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 149,
+          "win_rate": 0.4362,
+          "predicted": 0.5207,
+          "gap": -0.0845,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-019",
@@ -696,7 +814,7 @@
       "side": "OVER",
       "band": ".55-.60",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 2.5 OVER, P(over) .55-.60: model is overconfident (wins 47.8% vs 57.7% expected, n=90).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -717,10 +835,19 @@
           "predicted": 0.5763,
           "gap": -0.0763,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 145,
+          "win_rate": 0.5172,
+          "predicted": 0.5762,
+          "gap": -0.059,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-020",
@@ -731,7 +858,7 @@
       "side": "OVER",
       "band": ".70-1.00",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 1.5 OVER, P(over) .70-1.00: model is overconfident (wins 68.9% vs 78.3% expected, n=315).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -752,10 +879,15 @@
           "predicted": 0.7816,
           "gap": -0.0698,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-021",
@@ -766,7 +898,7 @@
       "side": "OVER",
       "band": ".50-.55",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 44.5% vs 52.3% expected, n=209).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -787,10 +919,19 @@
           "predicted": 0.5234,
           "gap": -0.0714,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 396,
+          "win_rate": 0.4571,
+          "predicted": 0.5235,
+          "gap": -0.0665,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-022",
@@ -801,7 +942,7 @@
       "side": "UNDER",
       "band": ".40-.45",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 1.5 UNDER, P(over) .40-.45: model is overconfident (wins 50.0% vs 57.5% expected, n=260).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -822,10 +963,19 @@
           "predicted": 0.5752,
           "gap": -0.055,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 445,
+          "win_rate": 0.5213,
+          "predicted": 0.5749,
+          "gap": -0.0536,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-023",
@@ -836,7 +986,7 @@
       "side": "UNDER",
       "band": ".00-.30",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: points 0.5 UNDER, P(over) .00-.30: model is overconfident (wins 69.1% vs 76.4% expected, n=1038).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -857,10 +1007,15 @@
           "predicted": 0.7624,
           "gap": -0.0579,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-024",
@@ -871,7 +1026,7 @@
       "side": "UNDER",
       "band": ".00-.30",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 1.5 UNDER, P(over) .00-.30: model is overconfident (wins 70.9% vs 78.2% expected, n=148).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -892,10 +1047,19 @@
           "predicted": 0.7781,
           "gap": -0.0638,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 190,
+          "win_rate": 0.7158,
+          "predicted": 0.7731,
+          "gap": -0.0573,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 3,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-025",
@@ -906,7 +1070,7 @@
       "side": "UNDER",
       "band": ".45-.50",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 1.5 UNDER, P(over) .45-.50: model is underconfident (wins 57.8% vs 52.4% expected, n=187).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -923,10 +1087,15 @@
         {
           "as_of": "2026-11-07",
           "flagged": false
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-10-31",
-      "weeks_flagged": 1
+      "weeks_flagged": 1,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-026",
@@ -937,7 +1106,7 @@
       "side": "OVER",
       "band": ".60-.70",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: points 0.5 OVER, P(over) .60-.70: model is underconfident (wins 69.1% vs 63.7% expected, n=165).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -958,10 +1127,15 @@
           "predicted": 0.6375,
           "gap": 0.0648,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-027",
@@ -972,7 +1146,7 @@
       "side": "UNDER",
       "band": ".30-.40",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 3.5 UNDER, P(over) .30-.40: model is underconfident (wins 71.0% vs 65.0% expected, n=131).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -989,10 +1163,15 @@
         {
           "as_of": "2026-11-07",
           "flagged": false
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-10-31",
-      "weeks_flagged": 1
+      "weeks_flagged": 1,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-028",
@@ -1003,7 +1182,7 @@
       "side": "OVER",
       "band": ".50-.55",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: points 0.5 OVER, P(over) .50-.55: model is underconfident (wins 58.8% vs 52.4% expected, n=221).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -1020,10 +1199,15 @@
         {
           "as_of": "2026-11-07",
           "flagged": false
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-10-31",
-      "weeks_flagged": 1
+      "weeks_flagged": 1,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-029",
@@ -1034,7 +1218,7 @@
       "side": "OVER",
       "band": ".55-.60",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: points 0.5 OVER, P(over) .55-.60: model is underconfident (wins 65.8% vs 57.5% expected, n=146).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -1055,10 +1239,15 @@
           "predicted": 0.5749,
           "gap": 0.0689,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 2
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-030",
@@ -1069,7 +1258,7 @@
       "side": "UNDER",
       "band": ".40-.45",
       "first_flagged": "2026-10-31",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 3.5 UNDER, P(over) .40-.45: model is underconfident (wins 69.0% vs 57.1% expected, n=42).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -1086,10 +1275,15 @@
         {
           "as_of": "2026-11-07",
           "flagged": false
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-10-31",
-      "weeks_flagged": 1
+      "weeks_flagged": 1,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-031",
@@ -1100,7 +1294,7 @@
       "side": "OVER",
       "band": ".50-.55",
       "first_flagged": "2026-11-07",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "sog 3.5 OVER, P(over) .50-.55: model is overconfident (wins 45.2% vs 52.0% expected, n=42).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -1113,10 +1307,15 @@
           "predicted": 0.5196,
           "gap": -0.0673,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "flagged": false
         }
       ],
       "last_flagged": "2026-11-07",
-      "weeks_flagged": 1
+      "weeks_flagged": 1,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-032",
@@ -1127,7 +1326,7 @@
       "side": "OVER",
       "band": ".70-1.00",
       "first_flagged": "2026-11-07",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 2.5 OVER, P(over) .70-1.00: model is overconfident (wins 64.4% vs 75.6% expected, n=45).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -1140,10 +1339,19 @@
           "predicted": 0.7563,
           "gap": -0.1118,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 50,
+          "win_rate": 0.68,
+          "predicted": 0.753,
+          "gap": -0.073,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
-      "weeks_flagged": 1
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
     },
     {
       "id": "IMP-033",
@@ -1154,7 +1362,7 @@
       "side": "UNDER",
       "band": ".45-.50",
       "first_flagged": "2026-11-07",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: sog 3.5 UNDER, P(over) .45-.50: model is underconfident (wins 60.5% vs 52.7% expected, n=43).",
       "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
       "hypothesis": "",
@@ -1167,11 +1375,160 @@
           "predicted": 0.5267,
           "gap": 0.0779,
           "flagged": true
+        },
+        {
+          "as_of": "2026-11-14",
+          "n": 52,
+          "win_rate": 0.5962,
+          "predicted": 0.526,
+          "gap": 0.0701,
+          "flagged": true
         }
       ],
-      "last_flagged": "2026-11-07",
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 2,
+      "retired_note": "2026-11-15: measured on production rows that pooled retired models (SOG Poisson formula before 2026-10-25; Points models before 2026-11-01) with the current ones. Current-model segments are tracked as new entries keyed by model."
+    },
+    {
+      "id": "IMP-034",
+      "key": "NHL_SOG_COUNT_HGB_V1|sog|1.5|OVER|.50-.55",
+      "level": "all",
+      "lane": "sog",
+      "model": "NHL_SOG_COUNT_HGB_V1",
+      "line": 1.5,
+      "side": "OVER",
+      "band": ".50-.55",
+      "first_flagged": "2026-11-14",
+      "status": "OPEN",
+      "finding": "sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 45.3% vs 52.5% expected, n=333).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-11-14",
+          "n": 333,
+          "win_rate": 0.4535,
+          "predicted": 0.5251,
+          "gap": -0.0716,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-035",
+      "key": "NHL_SOG_COUNT_HGB_V1|two_sided|sog|1.5|OVER|.50-.55",
+      "level": "two_sided",
+      "lane": "sog",
+      "model": "NHL_SOG_COUNT_HGB_V1",
+      "line": 1.5,
+      "side": "OVER",
+      "band": ".50-.55",
+      "first_flagged": "2026-11-14",
+      "status": "OPEN",
+      "finding": "two-sided lines: sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 43.3% vs 52.5% expected, n=270).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-11-14",
+          "n": 270,
+          "win_rate": 0.4333,
+          "predicted": 0.5247,
+          "gap": -0.0913,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-036",
+      "key": "NHL_SOG_COUNT_HGB_V1|two_sided|sog|2.5|OVER|.50-.55",
+      "level": "two_sided",
+      "lane": "sog",
+      "model": "NHL_SOG_COUNT_HGB_V1",
+      "line": 2.5,
+      "side": "OVER",
+      "band": ".50-.55",
+      "first_flagged": "2026-11-14",
+      "status": "OPEN",
+      "finding": "two-sided lines: sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 46.4% vs 52.4% expected, n=97).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-11-14",
+          "n": 97,
+          "win_rate": 0.4639,
+          "predicted": 0.5243,
+          "gap": -0.0604,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-037",
+      "key": "NHL_POINTS_HGB_8cda6061|two_sided|points|0.5|UNDER|.45-.50",
+      "level": "two_sided",
+      "lane": "points",
+      "model": "NHL_POINTS_HGB_8cda6061",
+      "line": 0.5,
+      "side": "UNDER",
+      "band": ".45-.50",
+      "first_flagged": "2026-11-14",
+      "status": "OPEN",
+      "finding": "two-sided lines: points 0.5 UNDER, P(over) .45-.50: model is overconfident (wins 47.4% vs 52.7% expected, n=173).",
+      "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-11-14",
+          "n": 173,
+          "win_rate": 0.474,
+          "predicted": 0.5268,
+          "gap": -0.0528,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-11-14",
+      "weeks_flagged": 1
+    },
+    {
+      "id": "IMP-038",
+      "key": "NHL_SOG_COUNT_HGB_V1|two_sided|sog|2.5|OVER|.60-.70",
+      "level": "two_sided",
+      "lane": "sog",
+      "model": "NHL_SOG_COUNT_HGB_V1",
+      "line": 2.5,
+      "side": "OVER",
+      "band": ".60-.70",
+      "first_flagged": "2026-11-14",
+      "status": "OPEN",
+      "finding": "two-sided lines: sog 2.5 OVER, P(over) .60-.70: model is underconfident (wins 68.8% vs 63.7% expected, n=96).",
+      "suggested_checks": "Model may be too cautious here; check whether the market agrees before trusting larger confidence.",
+      "hypothesis": "",
+      "next_step": "",
+      "history": [
+        {
+          "as_of": "2026-11-14",
+          "n": 96,
+          "win_rate": 0.6875,
+          "predicted": 0.637,
+          "gap": 0.0505,
+          "flagged": true
+        }
+      ],
+      "last_flagged": "2026-11-14",
       "weeks_flagged": 1
     }
   ],
-  "updated_as_of": "2026-11-07"
+  "updated_as_of": "2026-11-14"
 }
