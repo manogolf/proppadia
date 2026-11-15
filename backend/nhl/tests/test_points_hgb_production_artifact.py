@@ -27,12 +27,27 @@ OFFSET_ARTIFACT = scorer.OFFSET_DEFENSE_CONTRACT_PATH.parent / "nhl_points_count
 
 
 class ProductionArtifactTests(unittest.TestCase):
-    def test_production_uses_the_goals_assists_model(self):
-        from backend.nhl import points_component_features as pcf
-        self.assertEqual(scorer.CONTRACT_PATH, scorer.GOALS_ASSISTS_CONTRACT_PATH)
+    def test_production_uses_the_pp_stats_api_refit(self):
+        """2026-11-15 (P2.53): the goals + assists recipe refit on corrected PP TOI replaces 8cda6061."""
         contract = json.loads(scorer.CONTRACT_PATH.read_text())
-        self.assertEqual(scorer.MODEL_PATH.name, contract["fitted_artifact"])
+        previous = json.loads(scorer.GOALS_ASSISTS_CONTRACT_PATH.read_text())
+        self.assertEqual(scorer.CONTRACT_PATH, scorer.PP_STATS_API_CONTRACT_PATH)
         self.assertEqual(sha(scorer.MODEL_PATH), contract["fitted_artifact_sha256"])
+        self.assertEqual(identity(contract), contract["model_identity_sha256"])
+        self.assertTrue(contract["model_identity_sha256"].startswith("c940ae2f"))
+        self.assertEqual(contract["supersedes_model_identity_sha256"], previous["model_identity_sha256"])
+        self.assertEqual(contract["reproducibility"]["status"], "PASS")
+        for key in ("feature_columns", "hyperparameters", "structure", "target", "thresholds", "history_contract",
+                    "prior_season_totals_sha256", "league_rates_sha256", "calibration_layer"):
+            self.assertEqual(contract[key], previous[key], key)
+        for name in ("prior_season_totals", "league_rates"):
+            self.assertEqual(sha(scorer.CONTRACT_PATH.parent / contract[name]), contract[f"{name}_sha256"], name)
+
+    def test_goals_assists_rollback_target_is_intact(self):
+        from backend.nhl import points_component_features as pcf
+        contract = json.loads(scorer.GOALS_ASSISTS_CONTRACT_PATH.read_text())
+        self.assertEqual(sha(scorer.GOALS_ASSISTS_CONTRACT_PATH.parent / contract["fitted_artifact"]),
+                         contract["fitted_artifact_sha256"])
         self.assertEqual(identity(contract), contract["model_identity_sha256"])
         self.assertTrue(contract["model_identity_sha256"].startswith("8cda6061"))
         self.assertEqual(contract["structure"], "GOALS_PLUS_ASSISTS")
@@ -41,7 +56,7 @@ class ProductionArtifactTests(unittest.TestCase):
         self.assertEqual(scorer.FEATURES, scorer.CORE_FEATURES + pcf.FEATURES)
         self.assertEqual(contract["feature_columns"], scorer.FEATURES)
         for name in ("prior_season_totals", "league_rates"):
-            self.assertEqual(sha(scorer.CONTRACT_PATH.parent / contract[name]), contract[f"{name}_sha256"], name)
+            self.assertEqual(sha(scorer.GOALS_ASSISTS_CONTRACT_PATH.parent / contract[name]), contract[f"{name}_sha256"], name)
         self.assertEqual(contract["supersedes_model_identity_sha256"],
                          json.loads(scorer.PP_CORRECTED_CONTRACT_PATH.read_text())["model_identity_sha256"])
 

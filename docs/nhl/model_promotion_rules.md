@@ -92,6 +92,15 @@ Used when training or live data were wrong, as with the PP-TOI refit
   qualify.
 
 ## Operator decisions outside these routes
+- **2026-11-15, Points: the goals + assists model refit on corrected PP TOI
+  (`c940ae2f…`) replaces `8cda6061…`** under the standing rule set the same
+  day for SOG (operator "Yes, replace it"). Only `mean_pp_toi_last10` differs
+  (recomputed from the NHL stats API values, P2.45). Evidence (P2.53): 2025
+  holdout paired log loss x1000 +0.10 / +0.21 / -0.05 at 0.5 / 1.5 / 2.5, all
+  intervals spanning zero; live 2026-11-01..11-14 -1.18 / +0.35 / +0.16, the
+  same; two refits identical; routine-integration evidence (gate J) refreshed;
+  live parity on the 2026-11-15 11:30 capture (249 rows): 0 invalid, 0 ladder
+  crossings, 5 side flips at 0.5 (all near 50%). First slate 2026-11-16.
 - **2026-11-15, SOG: `NHL_SOG_COUNT_HGB_V2` replaces V1 without route B's
   "better on the corrected segments" gate.** Operator decision: "replace the
   v1 model with the corrected power play data. suggesting to keep a model with

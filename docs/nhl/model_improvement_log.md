@@ -49,5 +49,5 @@ Updated as of 2026-11-14.
 | IMP-034 | RETIRED_MODEL | sog 1.5 OVER .50-.55 | 2026-11-14 | 1 | -7.2 pts | sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 45.3% vs 52.5% expected, n=333). |
 | IMP-035 | RETIRED_MODEL | sog 1.5 OVER .50-.55 (two-sided) | 2026-11-14 | 1 | -9.1 pts | two-sided lines: sog 1.5 OVER, P(over) .50-.55: model is overconfident (wins 43.3% vs 52.5% expected, n=270). |
 | IMP-036 | RETIRED_MODEL | sog 2.5 OVER .50-.55 (two-sided) | 2026-11-14 | 1 | -6.0 pts | two-sided lines: sog 2.5 OVER, P(over) .50-.55: model is overconfident (wins 46.4% vs 52.4% expected, n=97). |
-| IMP-037 | OPEN | points 0.5 UNDER .45-.50 (two-sided) | 2026-11-14 | 1 | -5.3 pts | two-sided lines: points 0.5 UNDER, P(over) .45-.50: model is overconfident (wins 47.4% vs 52.7% expected, n=173). |
+| IMP-037 | RETIRED_MODEL | points 0.5 UNDER .45-.50 (two-sided) | 2026-11-14 | 1 | -5.3 pts | two-sided lines: points 0.5 UNDER, P(over) .45-.50: model is overconfident (wins 47.4% vs 52.7% expected, n=173). |
 | IMP-038 | RETIRED_MODEL | sog 2.5 OVER .60-.70 (two-sided) | 2026-11-14 | 1 | +5.1 pts | two-sided lines: sog 2.5 OVER, P(over) .60-.70: model is underconfident (wins 68.8% vs 63.7% expected, n=96). |

@@ -1,8 +1,8 @@
 {
   "schema_version": "NHL_POINTS_HGB_TRAINING_FEATURE_RANGES_V1",
-  "source": "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/2026-10-24/rebuilt_training_matrix_2023_2024.csv.gz",
-  "source_sha256": "d83ba5035a6c34c253a24c4e08e71444caecd98f6f01df1c0436eb2e8ba8533d",
-  "model_identity_sha256": "fb701c671f24acc894ec8195c5f951136f2b521036f0f37e966b85ba726fa4ca",
+  "source": "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-15_pp_stats_api/training_frame_2023_2024.csv.gz",
+  "source_sha256": "7a71844cc65931d9003027b09c42cb4046bf083fdbb80965f219d7539bf9e33b",
+  "model_identity_sha256": "c940ae2f4f2543f99a87ff83acb905477db25b5e6a85dea1d5a3b3061584d9c5",
   "rows": 90486,
   "note": "Known (non-missing) training values; p01/p99 bound the range the frozen model saw.",
   "features": {
@@ -43,7 +43,7 @@
     },
     "mean_pp_toi_last10": {
       "p01": 0.0,
-      "p99": 4.13453,
+      "p99": 4.602,
       "missing_share": 0.022523
     },
     "team_d10_sf_per_game": {

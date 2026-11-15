@@ -3294,8 +3294,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.53 Points goals + assists refit on corrected PP TOI (route B)
 
-- Status: **CHECK RUN 2026-11-15** (operator "Yes, run it"); production
-  `8cda6061` unchanged pending the operator's decision on replacement.
+- Status: **REPLACED 2026-11-15** (operator "Yes, replace it"): production
+  is `c940ae2f…` from the 2026-11-16 slate; `8cda6061` is the one-step
+  rollback (`CONTRACT_PATH = GOALS_ASSISTS_CONTRACT_PATH`).
+- Cutover: `freeze_nhl_points_goals_assists.py --pp-stats-api` wrote
+  `production_2026-11-15_pp_stats_api/` (artifact SHA-256 `369f3919…`,
+  identity `c940ae2f4f2543f99a87ff83acb905477db25b5e6a85dea1d5a3b3061584d9c5`;
+  same recipe, rows, labels, frozen totals and league rates; two refits and
+  the artifact identical on the holdout; holdout vs `8cda6061` as above).
+  Input-watch Points ranges regenerated from the corrected training frame
+  (the file still named the older `fb701c67` frame). Routine-integration
+  evidence (gate J) refreshed. Live parity on the 2026-11-15 11:30 capture
+  (249 rows): 0 invalid, 0 ladder crossings, side flips 5 / 0 / 0 at
+  0.5 / 1.5 / 2.5, mean |change| in P(1+) 0.013. The 11-15 slate was scored by
+  `8cda6061` in every run; reports window Points by the identity each summary
+  records, so `c940ae2f` starts clean on 11-16.
+- Open: top-unit (3+ PP min) players are underpredicted under both fits
+  (P(1+) about 55% vs 58-59% actual); a PP-points component (P2.52 component
+  path) is the candidate. IMP-037 retired with `8cda6061`.
 - Script `backend/nhl/scripts/research_nhl_points_pp_corrected_refit.py`
   (read-only); output, git-ignored,
   `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/pp_stats_api_refit_2026-11-15/`

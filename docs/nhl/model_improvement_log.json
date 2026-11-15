@@ -1486,7 +1486,7 @@
       "side": "UNDER",
       "band": ".45-.50",
       "first_flagged": "2026-11-14",
-      "status": "OPEN",
+      "status": "RETIRED_MODEL",
       "finding": "two-sided lines: points 0.5 UNDER, P(over) .45-.50: model is overconfident (wins 47.4% vs 52.7% expected, n=173).",
       "suggested_checks": "Check this group's feature inputs against training; compare with the market on two-sided lines; test a calibration layer as a shadow.",
       "hypothesis": "",
@@ -1502,7 +1502,8 @@
         }
       ],
       "last_flagged": "2026-11-14",
-      "weeks_flagged": 1
+      "weeks_flagged": 1,
+      "retired_note": "2026-11-15: Points 8cda6061 replaced by c940ae2f (corrected PP TOI, P2.53); new model's segments are new entries."
     },
     {
       "id": "IMP-038",

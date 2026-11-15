@@ -142,5 +142,97 @@ def main() -> None:
                                                 "holdout_2025_vs_production_x1000", "reproducibility")}, indent=1))
 
 
+PP_OUT = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-15_pp_stats_api"
+PP_ARTIFACT = "nhl_points_goals_assists_v2_pp_stats_api.joblib"
+POINTS_RANGES = ROOT / "backend/nhl/config/points_hgb_training_feature_ranges.json"
+
+
+def freeze_pp_stats_api() -> None:
+    """Refit the production recipe after the PP TOI correction (P2.45, P2.53; operator 2026-11-15).
+
+    Same rows, labels, recipe and inputs as `8cda6061` except `mean_pp_toi_last10`,
+    recomputed from the corrected database with the live builder's window.
+    Fitted twice from the written CSV; both refits and the artifact must agree.
+    """
+    import shutil
+    from backend.nhl.scripts import research_nhl_points_pp_corrected_refit as rr
+    PP_OUT.mkdir(parents=True, exist_ok=False)
+    previous = json.loads(scorer.CONTRACT_PATH.read_text())
+    if previous["model_identity_sha256"][:8] != "8cda6061":
+        raise SystemExit("POINTS_PRODUCTION_IDENTITY_UNEXPECTED")
+    outcomes, _, _ = official()
+    logs = rr.db_logs()
+    history = outcomes[KEYS + ["game_date"]].copy()
+    history["game_date"] = pd.to_datetime(history.game_date).dt.normalize()
+    history = history.merge(logs.drop(columns="game_date"), on=KEYS, how="left")
+    frames = {}
+    for name in ("training_frame_2023_2024.csv.gz", "holdout_frame_2025.csv.gz"):
+        frame = pd.read_csv(OUT / name, float_precision="round_trip")
+        w = rr.window_means(history, frame[KEYS + ["slate_date"]].rename(columns={"slate_date": "game_date"}))
+        m = frame.merge(w, on=KEYS, how="left", validate="one_to_one")
+        if not (np.isclose(m.toi_recomputed, m.mean_toi_last10, atol=1e-6)
+                | (m.toi_recomputed.isna() & m.mean_toi_last10.isna())).mean() >= 0.99:
+            raise SystemExit("POINTS_WINDOW_NOT_REPRODUCED")
+        m["mean_pp_toi_last10"] = m.pp_corrected
+        m[frame.columns].to_csv(PP_OUT / name, index=False, float_format="%.17g")
+        frames[name] = pd.read_csv(PP_OUT / name, float_precision="round_trip")
+    train, hold = frames["training_frame_2023_2024.csv.gz"], frames["holdout_frame_2025.csv.gz"]
+    for name in (previous["prior_season_totals"], previous["league_rates"]):
+        shutil.copyfile(OUT / name, PP_OUT / name)
+    first, second = fit_pair(train), fit_pair(train.copy())
+    joblib.dump(first, PP_OUT / PP_ARTIFACT)
+    frozen = joblib.load(PP_OUT / PP_ARTIFACT)
+    p1, p2, pf = (scorer.score(hold, m).expected_points.to_numpy() for m in (first, second, frozen))
+    pred_path = PP_OUT / "frozen_holdout_predictions_2025.csv"
+    hold[KEYS].assign(expected_points=pf).to_csv(pred_path, index=False, float_format="%.17g")
+    prod = scorer.score(hold, joblib.load(OUT / ARTIFACT)).expected_points.to_numpy()
+    evals = {}
+    for line in (0.5, 1.5, 2.5):
+        y = (hold.realized_points > line).astype(float).to_numpy()
+        r = base.paired_bootstrap(base.log_loss_rows(poisson.sf(int(line), pf), y),
+                                  base.log_loss_rows(poisson.sf(int(line), prod), y), hold.slate_date.astype(str).to_numpy())
+        evals[str(line)] = {"diff_x1000": round(r["mean_diff"] * 1e3, 2), "ci": [round(c * 1e3, 2) for c in r["ci95"]]}
+    train_path = PP_OUT / "training_frame_2023_2024.csv.gz"
+    contract = {**{k: v for k, v in previous.items() if k != "model_identity_sha256"},
+                "training_rows": int(len(train)), "training_source_frame_sha256": sha(train_path),
+                "fitted_artifact": PP_ARTIFACT, "fitted_artifact_sha256": sha(PP_OUT / PP_ARTIFACT),
+                "scorer_sha256": sha(Path(__file__).resolve()),
+                "fitted_revision": "GOALS_ASSISTS_PP_STATS_API_2026_11_15",
+                "revision_reason": ("P2.53: same recipe, rows and inputs refit after PP TOI was corrected to the NHL "
+                                    "stats API (P2.45); only mean_pp_toi_last10 differs. Operator 2026-11-15: a model "
+                                    "trained on defective data is replaced by its corrected refit once no worse."),
+                "pp_toi_source": "NHL stats API skater/timeonice ppTimeOnIce (P2.45)",
+                "supersedes_model_identity_sha256": previous["model_identity_sha256"],
+                "supersedes_fitted_artifact_sha256": previous["fitted_artifact_sha256"],
+                "holdout_2025_vs_production_x1000": evals,
+                "reproducibility": {"refit_runs": 2, "csv_parsing": "float_precision=round_trip",
+                                    "max_abs_diff_between_refits": float(np.abs(p1 - p2).max()),
+                                    "max_abs_diff_vs_frozen": float(np.abs(p1 - pf).max()), "holdout_rows": int(len(hold)),
+                                    "frozen_prediction_sha256": sha(pred_path),
+                                    "status": "PASS" if np.array_equal(p1, p2) and np.array_equal(p1, pf) else "FAIL"},
+                "production_status": "PRODUCTION"}
+    if contract["reproducibility"]["status"] != "PASS":
+        raise SystemExit("POINTS_PP_REFIT_NOT_REPRODUCIBLE")
+    contract["model_identity_sha256"] = identity(contract)
+    (PP_OUT / "shadow_contract.json").write_text(json.dumps(contract, indent=2) + "\n")
+    ranges = {"schema_version": "NHL_POINTS_HGB_TRAINING_FEATURE_RANGES_V1",
+              "source": str(train_path.relative_to(ROOT)), "source_sha256": sha(train_path),
+              "model_identity_sha256": contract["model_identity_sha256"], "rows": int(len(train)),
+              "note": "Known (non-missing) training values; p01/p99 bound the range the frozen model saw.",
+              "features": {}}
+    old_ranges = json.loads(POINTS_RANGES.read_text())
+    for col in old_ranges["features"]:
+        v = pd.to_numeric(train[col], errors="coerce")
+        k = v.dropna()
+        ranges["features"][col] = {"p01": round(float(k.quantile(0.01)), 6), "p99": round(float(k.quantile(0.99)), 6),
+                                   "missing_share": round(float(v.isna().mean()), 6)}
+    POINTS_RANGES.write_text(json.dumps(ranges, indent=2) + "\n")
+    print(json.dumps({k: contract[k] for k in ("model_identity_sha256", "fitted_artifact_sha256", "training_rows",
+                                                "holdout_2025_vs_production_x1000", "reproducibility")}, indent=1))
+
+
 if __name__ == "__main__":
-    main()
+    if "--pp-stats-api" in sys.argv[1:]:
+        freeze_pp_stats_api()
+    else:
+        main()

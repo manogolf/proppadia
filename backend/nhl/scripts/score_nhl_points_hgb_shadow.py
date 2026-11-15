@@ -34,8 +34,11 @@ V1_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_leader_validation/2026-
 PP_CORRECTED_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-10-24/shadow_contract.json"
 OFFSET_DEFENSE_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01/shadow_contract.json"
 GOALS_ASSISTS_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01_goals_assists/shadow_contract.json"
-# Production artifact. One-step rollback: set CONTRACT_PATH = PP_CORRECTED_CONTRACT_PATH.
-CONTRACT_PATH = GOALS_ASSISTS_CONTRACT_PATH
+# 2026-11-15 (P2.53): the same goals + assists recipe refit after PP TOI was corrected
+# to the NHL stats API (P2.45); identity c940ae2f, first slate 2026-11-16.
+PP_STATS_API_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-15_pp_stats_api/shadow_contract.json"
+# Production artifact. One-step rollback: set CONTRACT_PATH = GOALS_ASSISTS_CONTRACT_PATH (8cda6061).
+CONTRACT_PATH = PP_STATS_API_CONTRACT_PATH
 MODEL_PATH = CONTRACT_PATH.parent / json.loads(CONTRACT_PATH.read_text())["fitted_artifact"]
 CORE_FEATURES = [
     "is_home", "d10_sog_per60", "attempts_d10_per60", "player_points_last10",
