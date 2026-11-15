@@ -3258,7 +3258,67 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   target. An ML model may live inside a component or correct the assembled
   total, but stays a separate, removable piece. The first ablation is
   reported both ways: as features added to V2 and as the component total.
+- **Ablation results 2026-11-15** (operator "run the p2.52 ablation test";
+  `backend/nhl/scripts/research_nhl_sog_situation_ablation.py`, read-only;
+  output `artifacts/analysis/nhl/sog_situation_ablation_2026-11-15/`,
+  git-ignored, with SHA-256 manifests of the official `skater/powerplay` and
+  `skater/penaltykill` responses, 573 dates each). Situation data known for
+  99.99% of training rows. Poisson log loss (paired vs A, 95% interval):
+  | Model | Holdout 2026-01..04 (24,213) | Live 2026-10-25..11-14 (5,208) |
+  |---|---|---|
+  | A production recipe (V2) | 1.52965 | 1.52177 |
+  | B + situation split | 1.52969 (+0.00004, -0.00085 to +0.00093) | 1.52319 (+0.0014, -0.0004 to +0.0031) |
+  | C + tonight's PP minutes | 1.52907 (-0.00057, -0.00162 to +0.00045) | 1.52374 (+0.0020, +0.0007 to +0.0034) |
+  | D components only (no fitted model) | 1.53643 (+0.0068, +0.0048 to +0.0088) | 1.52764 (+0.0059, +0.0022 to +0.0095) |
+  - Adding situation inputs to the all-in-one model does nothing (B) or
+    slightly hurts live (C): the model already has the information through
+    its overall rates.
+  - The components alone (D), a first crude version, are 0.006 worse than V2.
+    The miss has a visible cause: D's slope of actual on predicted is 1.05
+    holdout / 1.07 live (predictions too compressed). Its shrinkage (180 EV
+    minutes, 30 PP minutes toward the league rate) is too strong, so
+    top-unit players come out low (live 3+ PP band 2.31 vs actual 2.47) and
+    light ones high. Tuning that shrinkage is the first component to fix.
+  - Component targets: EV minutes from the last-10 mean, MAE 1.9 min,
+    correlation 0.77; PP minutes from the last-10 mean MAE 0.73 / 0.75,
+    correlation 0.72 / 0.74; tonight's PP minutes (share x expected team PP)
+    slightly better, MAE 0.71 / 0.74, correlation 0.73 / 0.75. Minutes are
+    the larger source of error than rates.
+  - IMP-034 band (P(over 1.5) .45-.60) live: A 46.8% vs 52.3%, B 47.1%, C
+    48.0%, D 46.9%. No variant closes it.
+  - Next component steps (not started): choose the shrinkage by holdout fit
+    for the EV and PP rate components; a minutes component that uses
+    projected lineups (P2.47) when available; then reassemble and compare
+    with V2.
 
+
+### P2.53 Points goals + assists refit on corrected PP TOI (route B)
+
+- Status: **CHECK RUN 2026-11-15** (operator "Yes, run it"); production
+  `8cda6061` unchanged pending the operator's decision on replacement.
+- Script `backend/nhl/scripts/research_nhl_points_pp_corrected_refit.py`
+  (read-only); output, git-ignored,
+  `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/pp_stats_api_refit_2026-11-15/`
+  (including the candidate artifact and corrected training frame).
+- Method: `mean_pp_toi_last10` recomputed from the corrected database with the
+  live builder's window (last 10 strict-prior official-outcome games within
+  120 days); window check: `mean_toi_last10` reproduced on 99.6% of training
+  and 99.9% of holdout rows. Changed: 86,469 of 90,486 training rows (mean
+  1.218 to 1.339) and 44,882 of 47,023 holdout rows. Every other input and
+  label unchanged; production recipe (`fit_pair`); refit reproducible.
+- Holdout 2025 (47,023, corrected PP inputs), corrected - old fit log loss
+  x1000: 0.5 +0.10 (-0.24 to +0.47), 1.5 +0.21 (-0.10 to +0.53), 2.5 -0.05
+  (-0.25 to +0.15). Live 2026-11-01..11-14 (3,536 graded player-games,
+  latest pregame capture, PP recomputed; TOI window match 88% since live
+  history is approximated from logs): 0.5 -1.18 (-3.29 to +0.90), 1.5
+  +0.35, 2.5 +0.16, all intervals spanning zero. No better, no worse.
+- PP bands (P(1+ point) model vs actual): top-unit 3+ min players are
+  underpredicted under both fits (holdout 55.4% / 55.2% vs 57.8%; live 55.1% /
+  54.5% vs 59.2%). IMP-037 (P(over) .45-.50, Unders overconfident live): old
+  47.4% vs 50.0% actual over; corrected 47.6% vs 49.7%; small live band.
+- Under the 2026-11-15 rule (a model trained on defective data is replaced by
+  its corrected refit once it is no worse), the candidate qualifies; awaiting
+  the operator's go-ahead to freeze and cut over.
 
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
