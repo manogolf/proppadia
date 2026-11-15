@@ -3337,10 +3337,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.45 League power-play time per skater ~31% higher in 2026 data
 
-- Status: **CAUSE FOUND 2026-11-15: stored training-season PP TOI is wrong,
-  not real PP growth. Source of record decided 2026-11-15: NHL stats API
-  `ppTimeOnIce` (operator "Yes, use stats API"); repair scope and daily-fill
-  switch still to decide** (found 2026-11-06 while building P2.44). 2026-11-15: leading cause of the live SOG Over 1.5 gap
+- Status: **REPAIRED 2026-11-15: 90,531 stored PP TOI values 2023-10..2026-11-14
+  set to the NHL stats API `ppTimeOnIce` (source of record, operator "Yes,
+  use stats API"; scope "All seasons"). Open: daily-fill switch, missing
+  stored rows, refits** (found 2026-11-06 while building P2.44). 2026-11-15: leading cause of the live SOG Over 1.5 gap
   IMP-034/035 (P2.50 step 1: light-PP players overpredicted, heavy-PP
   players underpredicted, holdout flat).
 - Evidence (read-only, `nhl.skater_game_logs_raw`, regular season): mean PP
@@ -3461,7 +3461,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     approval to execute. Effect: live PP TOI inputs for production SOG and
     Points change from the next daily run (5,880 rows of 2026-27 change,
     mostly light-PP players losing over-credited time).
-  - Open: (c) daily fill switch; the 3,471 missing stored rows; refits.
+  - **EXECUTED 2026-11-15** (operator "Yes, execute"): all 24 editor blocks
+    run by the operator as `postgres` in the Supabase SQL editor, 18:12-18:40
+    UTC; every receipt `correction_role_still_granted = false`. Read-only
+    verify (research identity): original 0, corrected 90,531, missing 0,
+    other 0; correction role members 0. Independent recheck of all 149,651
+    matched player-games against the official evidence: stored = official
+    in every season (top-unit ratio 1.00); 33 rows still differ, all among
+    the 55 excluded (TOI or team mismatch). A first attempt at the 2025
+    blocks did not commit (verify showed no change); a second run of the
+    2025-11 block after it committed raised `PP_TOI_STATS_API_GUARD_FAILED`
+    (`matching_rows=0`) and rolled back: a repeat run errors rather than
+    passing silently, with no change either way. Receipt:
+    `execution_receipt.json` in the evidence directory (SHA-256
+    `f8177283fcc27a27117ab8a08db9216cee0ef3a35152aec12f1a237bbd53329d`).
+  - Open: (c) daily fill switch (until then new games are filled by shift
+    overlap, about 600 player-games a month over-credited); the 3,471 missing
+    stored rows; SOG HGB and Points refits on corrected data (P2.50,
+    IMP-034/035/037).
   - Decisions as first listed: (a) make the stats API
     `ppTimeOnIce` the PP TOI source of record, superseding the shift-chart
     method and the 2023-24 recovery; (b) repair scope (all seasons, or the

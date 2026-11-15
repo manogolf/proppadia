@@ -234,7 +234,8 @@ def editor_block(update: str, batch: str, rows: int) -> str:
     Same shape as the earlier operator PP-TOI blocks: one transaction grants the
     correction role to postgres, switches to it, runs the UPDATE unchanged,
     switches back, revokes and checks the revoke. Any failure rolls everything
-    back, the grant included. Re-running after success changes nothing.
+    back, the grant included. Re-running after success raises the guard
+    (`matching_rows=0`) and rolls back: no change, but an error, not a silent pass.
     """
     return f"""-- PREPARED ONLY. Owner authorization required. Paste this whole block into the Supabase SQL
 -- editor for the production project and run it once. Batch {batch}: {rows} rows of
