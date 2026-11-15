@@ -35,7 +35,8 @@ PP_CORRECTED_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_correc
 OFFSET_DEFENSE_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01/shadow_contract.json"
 GOALS_ASSISTS_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01_goals_assists/shadow_contract.json"
 # 2026-11-15 (P2.53): the same goals + assists recipe refit after PP TOI was corrected
-# to the NHL stats API (P2.45); identity c940ae2f, first slate 2026-11-16.
+# to the NHL stats API (P2.45); identity c940ae2f, first slate 2026-11-15 (manual run
+# 12:41 PT; every game that day started later).
 PP_STATS_API_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-15_pp_stats_api/shadow_contract.json"
 # Production artifact. One-step rollback: set CONTRACT_PATH = GOALS_ASSISTS_CONTRACT_PATH (8cda6061).
 CONTRACT_PATH = PP_STATS_API_CONTRACT_PATH

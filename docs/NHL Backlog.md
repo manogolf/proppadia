@@ -3295,7 +3295,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 ### P2.53 Points goals + assists refit on corrected PP TOI (route B)
 
 - Status: **REPLACED 2026-11-15** (operator "Yes, replace it"): production
-  is `c940ae2f…` from the 2026-11-16 slate; `8cda6061` is the one-step
+  is `c940ae2f…` from the 2026-11-15 slate (operator: "we can run mannually
+  instead of waiting until tomorrow. no points wagers were placed"); `8cda6061` is the one-step
   rollback (`CONTRACT_PATH = GOALS_ASSISTS_CONTRACT_PATH`).
 - Cutover: `freeze_nhl_points_goals_assists.py --pp-stats-api` wrote
   `production_2026-11-15_pp_stats_api/` (artifact SHA-256 `369f3919…`,
@@ -3306,9 +3307,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (the file still named the older `fb701c67` frame). Routine-integration
   evidence (gate J) refreshed. Live parity on the 2026-11-15 11:30 capture
   (249 rows): 0 invalid, 0 ladder crossings, side flips 5 / 0 / 0 at
-  0.5 / 1.5 / 2.5, mean |change| in P(1+) 0.013. The 11-15 slate was scored by
-  `8cda6061` in every run; reports window Points by the identity each summary
-  records, so `c940ae2f` starts clean on 11-16.
+  0.5 / 1.5 / 2.5, mean |change| in P(1+) 0.013. The 11-15 05:45-11:30 runs used
+  `8cda6061`; the manual 12:41 PT run (`nhldaily_20261115T204153782611Z_d56d86d4`) used `c940ae2f`, and every 11-15 game
+  started after it, so each game's last pregame Points prediction is the new
+  model; reports window Points by the identity each summary records.
 - Open: top-unit (3+ PP min) players are underpredicted under both fits
   (P(1+) about 55% vs 58-59% actual); a PP-points component (P2.52 component
   path) is the candidate. IMP-037 retired with `8cda6061`.

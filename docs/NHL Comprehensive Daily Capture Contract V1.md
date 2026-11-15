@@ -657,13 +657,13 @@ present invalid or duplicate card still blocks; direct reconciliation keeps
 its exact-one-card contract.
 
 HGB Points goals + assists model (2026-11-01, P2.39). Production from the
-2026-11-16 slate is its refit on corrected PP TOI (P2.53, operator "Yes,
+2026-11-15 slate (manual run 12:41 PT, before every game) is its refit on corrected PP TOI (P2.53, operator "Yes,
 replace it"): same recipe, rows, inputs and frozen totals, only
 `mean_pp_toi_last10` recomputed from the NHL stats API values (P2.45);
 `production_2026-11-15_pp_stats_api/` (`nhl_points_goals_assists_v2_pp_stats_api.joblib`,
 SHA-256 `369f3919…`, identity `c940ae2f…`, `freeze_nhl_points_goals_assists.py
 --pp-stats-api`). One-step rollback: `CONTRACT_PATH = GOALS_ASSISTS_CONTRACT_PATH`
-(`8cda6061…`, which scored 2026-11-01..11-15). The original 2026-11-01 freeze: Frozen under
+(`8cda6061…`, which scored 2026-11-01..11-14 and the 11-15 05:45-11:30 runs). The original 2026-11-01 freeze: Frozen under
 `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-01_goals_assists/`
 (`nhl_points_goals_assists_v1.joblib`, artifact SHA-256 `c9ac141d…`,
 `shadow_contract.json` identity `8cda6061…`, freeze script
