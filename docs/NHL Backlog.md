@@ -3393,6 +3393,39 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     players); (4) refit SOG HGB on repaired data as a shadow under the
     promotion rules. PP TOI is also a Points input (production `8cda6061…`,
     fit on 2023-24): check its training window in step 1.
+- **Scope sized 2026-11-15** (operator "Yes, size the scope"; read-only;
+  573 regular-season dates 2023-10-10..2026-11-14, one stats-API request
+  each; scratch `tmp/pp_check/scope_fetch.py`, `scope_compare.py`, by-month
+  table `tmp/pp_check/scope_by_month.csv`). 149,651 player-games matched;
+  TOI agrees with official on all but 56. Top-unit ratio = stored / official
+  PP minutes for players with 2+ official minutes.
+  | Season | Rows | Official | Stored | Top-unit | Off 0.5+ min | Credited, official 0 | NULL |
+  |---|---:|---:|---:|---:|---:|---:|---:|
+  | 2023-24 | 47,084 | 1.379 | 1.189 | 0.79 | 9,201 | 6,252 | 0 |
+  | 2024-25 | 44,164 | 1.240 | 1.172 | 0.88 | 6,064 | 4,778 | 0 |
+  | 2025-26 | 46,704 | 1.317 | 1.160 | 0.69 | 13,145 | 7,697 | 2,096 |
+  | 2026-27 | 11,699 | 1.418 | 1.510 | 1.00 | 1,040 | 919 | 2 |
+  - Worst months (top-unit ratio): 2025-11 0.38, 2025-10 0.54, 2025-04
+    0.56, 2025-12 0.62, 2026-01 0.63 (also 2,023 NULL); 2023-11/12 0.70-0.72.
+    From 2026-02 the top unit is right (0.98-1.01); light-PP players stay
+    over-credited (about 600 a month credited with PP time the NHL gives as
+    zero).
+  - 2023-24 is the season the 71,627-row shift-chart recovery repaired
+    (VERIFIED COMPLETE below): those values reproduce the shift-overlap
+    reconstruction, not the NHL's own `ppTimeOnIce` (top unit at 79%).
+    Using the stats API as the source would supersede that recovery.
+  - Repair size: 88,861 rows differ by 2+ seconds (29,450 by more than 0.5
+    min), plus 2,098 NULL. Separately, 3,471 official player-games have no
+    stored row (3,024 in 2024-25, 310 in 2025-26, 137 in 2023-24): a missing
+    row, not a PP value, so outside a PP update.
+  - Decisions for the operator before any write: (a) make the stats API
+    `ppTimeOnIce` the PP TOI source of record, superseding the shift-chart
+    method and the 2023-24 recovery; (b) repair scope (all seasons, or the
+    model training windows 2023-10..2026-04 first); (c) whether the daily fill
+    switches to the stats API (it publishes after the game, like shift
+    charts). Then a guarded repair with preview and receipt through the
+    restricted identity, and refits (SOG HGB shadow; Points research) under
+    the promotion rules.
 
 ### P2.44 Daily role-change watch (ice time and PP time vs last season)
 
