@@ -3419,8 +3419,45 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     min), plus 2,098 NULL. Separately, 3,471 official player-games have no
     stored row (3,024 in 2024-25, 310 in 2025-26, 137 in 2023-24): a missing
     row, not a PP value, so outside a PP update.
-  - Decision (a) made 2026-11-15: stats API is the source of record. Open:
-    (b) and (c). Decisions for the operator before any write: (a) make the stats API
+  - Decision (a) made 2026-11-15: stats API is the source of record.
+  - Decision (b) made 2026-11-15: all seasons (operator "All seasons").
+  - Spot check (independent rebuild from official play-by-play situation codes
+    x official shift charts, `tmp/pp_check/spot.py`): stats API vs rebuild
+    mean gap 0.04 / 0.29 / 0.26 min in the Nov 2025 and Dec 2023 games where
+    stored values are blanket per-team constants (0.35, 0.78, 0.72; stored vs
+    rebuild 0.98 / 2.42 / 2.53); where stored equals the rebuild (Dec 2023,
+    Nov 2026) the API differs by 0.19-0.31 on average, moving up to about a
+    minute between players with team totals close. Shift-chart TOI matched
+    official TOI for every player checked.
+  - **Prepared 2026-11-15, not executed.**
+    `backend/nhl/scripts/prepare_nhl_pp_toi_stats_api_correction.py`
+    (`--fetch`, `--build`, `--verify`; tests
+    `backend/nhl/tests/test_prepare_nhl_pp_toi_stats_api_correction.py`).
+    Evidence, git-ignored: `artifacts/analysis/nhl/pp_toi_stats_api_correction_2026-11-15/`
+    (573 official responses with SHA-256 manifest, 153,122 rows;
+    `proposal.csv` SHA-256 `ba8736d72f255b3ca5293833ae0c4209763f8a0b25295c87b8eafe8ee0034702`;
+    `official_without_stored_row.csv`; `sql/repair_<month>.sql` and
+    `sql/rollback_<month>.sql`; `summary.json` with each statement's digest).
+    Regenerate by rerunning `--fetch` then `--build --last-date 2026-11-14`.
+  - Proposal: 90,531 rows (88,434 value changes, 2,097 NULL to official),
+    24 monthly batches of 157-6,800 rows; 59,065 already correct; excluded
+    54 TOI mismatches and 1 team mismatch; 10 stored rows with no official
+    row; 3,471 official player-games with no stored row (not inserted).
+    Each batch is one guarded UPDATE that passes `validate_correction_sql`:
+    every key pinned to its game, player, stored team and current value
+    (NULL-safe); unless all rows match, a cast raises and nothing changes.
+    Read-only verify 2026-11-15: original 90,531, corrected 0, missing 0,
+    other 0.
+  - Execution path: `execute_nhl_source_correction.py` per batch (SQL file,
+    its SHA-256 from `summary.json`, authorization reference), which grants
+    the restricted `proppadia_nhl_source_correction` role (UPDATE on
+    `pp_toi_minutes` and `shot_attempts` only) and revokes it in the same
+    transaction; then `--verify` (expect corrected 90,531). Needs operator
+    approval to execute. Effect: live PP TOI inputs for production SOG and
+    Points change from the next daily run (5,880 rows of 2026-27 change,
+    mostly light-PP players losing over-credited time).
+  - Open: (c) daily fill switch; the 3,471 missing stored rows; refits.
+  - Decisions as first listed: (a) make the stats API
     `ppTimeOnIce` the PP TOI source of record, superseding the shift-chart
     method and the 2023-24 recovery; (b) repair scope (all seasons, or the
     model training windows 2023-10..2026-04 first); (c) whether the daily fill
