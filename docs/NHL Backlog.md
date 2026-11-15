@@ -3386,6 +3386,38 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   its corrected refit once it is no worse), the candidate qualifies; awaiting
   the operator's go-ahead to freeze and cut over.
 
+### P2.54 Line and side scan: where the current models beat the price
+
+- Status: **SCANNED 2026-11-15** (operator: "we've visited 2.5 and 3.5 before
+  but it doesn't hurt to look again. I don't recall exploring points 1.5").
+  Research only; no filter changed.
+- Script `backend/nhl/scripts/research_nhl_line_side_edge_scan.py`, output
+  `artifacts/analysis/nhl/line_side_edge_scan_2026-11-15/` (git-ignored).
+  Current models' own predictions (SOG V2 rescored 2026-10-25..11-14, 21
+  slates; Points `c940ae2f` rescored 11-01..11-14, 14 slates), best price at
+  the operator's books before the prediction, edge = model % - implied %,
+  inside the Fair Odds range (model 57.1-83.3%).
+- Positive edge, win % vs implied % (n, per slate): SOG 1.5 Over 64.5 vs 63.9
+  (499, 23.8); SOG 1.5 Under 56.2 vs 57.6 (169); **SOG 2.5 Over 66.2 vs 59.2
+  (74, 3.5)**; SOG 2.5 Under 62.3 vs 63.7 (244); SOG 3.5 Under 63.4 vs 65.3
+  (101); Points 0.5 Over 52.3 vs 62.1 (111); Points 0.5 Under 58.5 vs 60.2
+  (390); **Points 1.5 Under 64.0 vs 72.5 (189): no edge**; Points 2.5 Under 4
+  rows.
+- By edge band, current searches: SOG 1.5 Over 4-6 66.3 vs 62.2 (83), 6-10
+  69.0 vs 58.7 (87), 10+ 33.3 vs 57.1 (15); Points 0.5 Under 4-6 60.8 vs 59.0
+  (79), 6-10 61.6 vs 57.8 (86), 10+ 30.8 vs 51.3 (26); Points 0.5 Over 4-6
+  55.6 vs 59.8 (18), 6-10 60.0 vs 55.3 (10); SOG 1.5 Under 10+ 68.4 vs 55.0
+  (19). Other lines: SOG 2.5 Over 6-10 88.2 vs 57.4 (17); SOG 3.5 Under 4-6
+  89.5 vs 63.5 (19) but 6-10 35.0 vs 59.4 (20).
+- Best price came from Novig on 1,038 of 1,781 positive-edge rows.
+- Reading (2-3 weeks; a band of 50-100 bets moves about +/-7 points by
+  chance): Points 1.5 Under has no edge. SOG 2.5 Over is the one new line
+  where the model beats the price across bands (about 1-2 a slate at Edge
+  4+). Points 0.5 Under 6-10 looks like the 4-6 band (an extension would add
+  about 6 a slate); 10+ is a loss on both Points Unders and SOG 1.5 Overs.
+  For the 11-28 review with more slates; nothing changes before then unless
+  the operator chooses.
+
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
 - Status: **WATCH** from 2026-11-12 (operator: "Yes, add the tag"). Tag in the

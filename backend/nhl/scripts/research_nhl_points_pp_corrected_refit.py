@@ -193,6 +193,7 @@ def main() -> int:
     live["OLD_FIT"] = scorer.score(live, old_model).expected_points.to_numpy()
     live["CORRECTED_FIT"] = scorer.score(live, new_model).expected_points.to_numpy()
     summary["live"] = {"rows": int(len(live)), "paired_corrected_minus_old": paired(live, "CORRECTED_FIT", "OLD_FIT")}
+    live[KEYS + ["game_date", "realized_points", "OLD_FIT", "CORRECTED_FIT"]].to_csv(OUT / "live_rows.csv", index=False)
     pb, imp = bands(live, {"old": "OLD_FIT", "corrected": "CORRECTED_FIT"})
     pb.to_csv(OUT / "live_by_pp_band.csv", index=False)
     imp.to_csv(OUT / "live_imp037_band.csv", index=False)
