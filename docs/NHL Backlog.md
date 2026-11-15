@@ -3242,10 +3242,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - First step proposed: an ablation on the 2026-01..04 holdout and the
   2026 live window: V2 vs V2 + situation split (1) vs + tonight's PP
   minutes (2), read-only, with the IMP-034 band and PP bands reported.
-- Direction (operator 2026-11-15): build SOG from components that can be
-  removed and replaced one at a time, not one all-in-one model ("if using a
+- Question under evaluation (operator 2026-11-15, asked, not decided): would
+  a component structure serve better than one all-in-one model ("if using a
   one solution that covers all you may never find another one solution that
-  is better and growth is stopped"). Target structure:
+  is better and growth is stopped")? Approach: pursue improvement over time,
+  letting the data decide at each step; production changes only when the
+  evidence supports it. Candidate structure:
   expected shots = sum over situations (EV, PP, SH) of
   [expected minutes in that situation] x [shot rate in that situation],
   then game adjustments (opponent, script), then a count distribution for
