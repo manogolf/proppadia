@@ -3493,8 +3493,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     2026-11-15: game 2026020312, 36 of 36 official values equal the corrected
     stored values. Full NHL suites pass (840); 6 `backend/tests` failures
     predate this change and are tracked above.
-  - Open after the migration is applied: confirm the first daily run's
-    receipt shows `official_source_games` > 0; the 3,471 missing
+  - **Applied 2026-11-15** by the operator as `postgres` (SQL editor block).
+    Verify before: installed false. Receipt: installed, daily_can_execute
+    true, anon_can_execute false, security_definer true. Verify after:
+    research_can_execute false, public_execute false, search_path_fixed
+    true. Dry run of the fill for 2026-11-14 (rolled back): 14 of 14 games
+    from the stats API (36 rows each), 0 fills (all populated), 0 conflicts
+    (stored equals official), invariant 0 bad team-games.
+  - Open: confirm the next daily run's receipt shows `official_source_games`
+    equal to the games played (first natural run 2026-11-16); the 3,471 missing
     stored rows; SOG HGB and Points refits on corrected data (P2.50,
     IMP-034/035/037).
   - Decisions as first listed: (a) make the stats API
