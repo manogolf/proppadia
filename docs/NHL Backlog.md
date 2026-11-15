@@ -3417,6 +3417,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   about 6 a slate); 10+ is a loss on both Points Unders and SOG 1.5 Overs.
   For the 11-28 review with more slates; nothing changes before then unless
   the operator chooses.
+- SOG outside the Fair Odds range (operator: "any sog improvements outside
+  of the current odds filter settings?"; same data, positive edge, win % vs
+  implied %): coin-flip band (model 50-57%) SOG 1.5 Over 43.0 vs 50.2 (193),
+  1.5 Under 47.1 vs 49.9 (136), 2.5 Over 45.8 vs 49.1 (96): the range's
+  -133 floor correctly keeps these out (IMP-034's band). Short favorites
+  (model 83%+): SOG 1.5 Over 96.3 vs 83.9 (27), 2.5 Under 90.0 vs 82.9 (20),
+  3.5 Under 88.2 vs 88.3 (51). Plus money (model under 50%): 1.5 Under at
+  +100 to +150 46.8 vs 43.5 (79), 2.5 Under 55.6 vs 44.0 (27), 2.5 Over at
+  +150 or longer 30.9 vs 29.9 (249), 3.5 Over 16.6 vs 20.8 (247). Nothing
+  with both volume and a clear margin; the 83%+ Overs at 1.5 are the only
+  consistent beat (about 1 a slate, short prices). Plus-money sides keep
+  being tracked by the weekly plus-money price view (P2.43).
 
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
