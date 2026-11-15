@@ -1,0 +1,109 @@
+{
+  "schema_version": "NHL_POINTS_RESEARCH_SHADOW_CONTRACT_V1",
+  "research_model_id": "NHL_POINTS_COUNT_HGB_V1",
+  "authority": "PRODUCTION_GOALS_PLUS_ASSISTS_REFIT",
+  "structure": "GOALS_PLUS_ASSISTS",
+  "structure_semantics": "expected points = goals HGB + assists HGB (production recipe each); Poisson ladder on the sum",
+  "training_seasons": [
+    2023,
+    2024
+  ],
+  "training_rows": 90486,
+  "evaluation_season_confirmation": 2025,
+  "training_source_frame_sha256": "7a71844cc65931d9003027b09c42cb4046bf083fdbb80965f219d7539bf9e33b",
+  "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V3_COMPONENT_RATES",
+  "feature_columns": [
+    "is_home",
+    "d10_sog_per60",
+    "attempts_d10_per60",
+    "player_points_last10",
+    "current_season_points_prior",
+    "current_season_games_prior",
+    "mean_toi_last10",
+    "mean_pp_toi_last10",
+    "team_d10_sf_per_game",
+    "last10_team_sog_share",
+    "own_rate_k30",
+    "own_games",
+    "goal_rate",
+    "assist_rate"
+  ],
+  "component_feature_module": "backend/nhl/points_component_features.py",
+  "component_feature_module_sha256": "38d237a24e83a949c7e3d61348f1a70d4f449403209c87a50993bcdd17662ac0",
+  "prior_season_totals": "prior_season_totals.csv",
+  "prior_season_totals_sha256": "fa69d10178adce0578580cb894b71c3d4db766b1a5f840d730d8c1be10ed6194",
+  "league_rates": "league_rates.csv",
+  "league_rates_sha256": "01a6cff7dc9e3cb69164274c7d43a11e051513dcf2dfbe33bb8a7bdb1cf3f323",
+  "prior_totals_seasons": [
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "history_contract": "120_DAY_LEGACY_BOUND",
+  "history_semantics": "strict prior game_date; same-day excluded; 120-day bound; last 10 player games",
+  "current_season_history": "official outcomes from the season's first game (not only 120 days) for the component rates",
+  "target": "official goals + official assists",
+  "distribution": "Poisson observation distribution",
+  "thresholds": {
+    "over_0_5": "P(X >= 1)",
+    "over_1_5": "P(X >= 2)",
+    "over_2_5": "P(X >= 3)"
+  },
+  "hyperparameters": {
+    "loss": "poisson",
+    "max_iter": 100,
+    "max_leaf_nodes": 15,
+    "l2_regularization": 1.0,
+    "early_stopping": false,
+    "random_state": 42
+  },
+  "calibration_layer": "NONE",
+  "fitted_artifact": "nhl_points_goals_assists_v2_pp_stats_api.joblib",
+  "fitted_artifact_sha256": "369f391943a7b5f0d25c100e5f13c0252725c4a38a72a7aa845c762b62d13939",
+  "scorer": "backend/nhl/scripts/freeze_nhl_points_goals_assists.py",
+  "scorer_sha256": "a4f3826c6b5b7432a3e3a0614faf67a81500672179efa9d7a6c423daaee7e7ea",
+  "prospective_only": false,
+  "production_replacement": true,
+  "initial_shadow_prediction": "NOT_APPLICABLE",
+  "fitted_revision": "GOALS_ASSISTS_PP_STATS_API_2026_11_15",
+  "revision_reason": "P2.53: same recipe, rows and inputs refit after PP TOI was corrected to the NHL stats API (P2.45); only mean_pp_toi_last10 differs. Operator 2026-11-15: a model trained on defective data is replaced by its corrected refit once no worse.",
+  "missing_value_policy": "fill zero before scaling (frozen recipe); unknown attempts from SOG rate",
+  "supersedes_model_identity_sha256": "8cda606196cc9d37b34c8a2fc633065c781e228361d32f651510c5ed4bc0a155",
+  "supersedes_fitted_artifact_sha256": "c9ac141db12e2c5e0a8bb4fd4e0db658bd0da2f2d1acd4d6f9f1c93c0d6fbeec",
+  "holdout_2025_vs_production_x1000": {
+    "0.5": {
+      "diff_x1000": 0.1,
+      "ci": [
+        -0.24,
+        0.47
+      ]
+    },
+    "1.5": {
+      "diff_x1000": 0.21,
+      "ci": [
+        -0.1,
+        0.53
+      ]
+    },
+    "2.5": {
+      "diff_x1000": -0.05,
+      "ci": [
+        -0.25,
+        0.15
+      ]
+    }
+  },
+  "reproducibility": {
+    "refit_runs": 2,
+    "csv_parsing": "float_precision=round_trip",
+    "max_abs_diff_between_refits": 0.0,
+    "max_abs_diff_vs_frozen": 0.0,
+    "holdout_rows": 47023,
+    "frozen_prediction_sha256": "8f11cc67cd032402389923760577db207f482bcecae0b282d931b72c62583a0b",
+    "status": "PASS"
+  },
+  "production_status": "PRODUCTION",
+  "pp_toi_source": "NHL stats API skater/timeonice ppTimeOnIce (P2.45)",
+  "model_identity_sha256": "c940ae2f4f2543f99a87ff83acb905477db25b5e6a85dea1d5a3b3061584d9c5"
+}
