@@ -3114,8 +3114,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.51 SOG HGB refit on corrected PP TOI (route B)
 
-- Status: **PLANNED 2026-11-15** (operator "Yes, plan the refit"); nothing
-  run yet. Follows P2.45 (90,531 PP TOI values corrected to the NHL stats
+- Status: **STEPS 1-3 RUN 2026-11-15 (operator "Yes, run 1-3"): route-B gate
+  not met; V1 stays production; no V2 frozen.** Follows P2.45 (90,531 PP TOI values corrected to the NHL stats
   API) and P2.50 (IMP-034/035: production SOG HGB `NHL_SOG_COUNT_HGB_V1`
   overrates light-PP shooters and underrates top-unit ones live).
 - Route: B in `docs/nhl/model_promotion_rules.md` (source-data correction:
@@ -3151,6 +3151,38 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Points: production `8cda6061` (fit on 2023-24 and 2024-25, both
   corrected) gets the same treatment as a separate item after this one;
   check IMP-037 then.
+- **Results 2026-11-15** (`backend/nhl/scripts/research_nhl_sog_hgb_pp_corrected_refit.py`,
+  read-only; output `artifacts/analysis/nhl/sog_hgb_count_model/pp_corrected_refit_2026-11-15/`,
+  git-ignored, regenerate by rerunning).
+  - Step 1: corrected frame 90,598 rows, same keys as V1's retained frame;
+    only `pp_toi_avg_10` changed (89,646 rows). SOG and every other feature
+    identical, so the route-B premise holds. Corrected frame SHA-256
+    `7d4278ef0fdf8859173bbbd3c819d2e279a4a757bbda5edbee3cbd298575df01`.
+  - Step 2, holdout 2026-01..04 (24,213 rows, both scored on corrected
+    features): log loss old fit 1.52961, corrected fit 1.52965; paired
+    corrected - old +0.00004 (95% -0.00059 to +0.00069). Brier 1.5 .2091 /
+    .2091. By last-10 PP band (log loss old / corrected): 0-0.25 1.3084 /
+    1.3079, 0.25-1 1.4826 / 1.4809, 1-2 1.5966 / 1.5976, 2-3 1.7343 /
+    1.7356, 3+ 1.8522 / 1.8527. No difference.
+  - Step 3, live 2026-10-25..11-14 (5,208 graded production player-games):
+    log loss V1 as published 1.52320, V1 on corrected inputs 1.52254, V2
+    1.52177; paired V2 - V1 corrected inputs -0.0008 (95% -0.0023 to
+    +0.0012), V2 - V1 published -0.0014 (-0.0036 to +0.0007). IMP-034 band
+    (own P(over 1.5) .45-.60): V1 published 47.2% vs 52.1% (999), V1
+    corrected inputs 47.5% vs 52.2% (987), V2 46.8% vs 52.3% (1,024). By PP
+    band V2 moves the 3+ group's mean from 2.376 to 2.395 (actual 2.472) and
+    the 2-3 group away (1.918 vs 1.842). Line and side: no segment differs
+    by more than 0.4 Brier points.
+  - Conclusion: the PP TOI correction was right for the data, but this
+    model barely uses PP TOI (shrunk shot rate dominates, P2.33), so the
+    refit changes nothing measurable and does not close IMP-034/035.
+    P2.50's PP-band attribution was a correlation in live rows, not the
+    cause; the light-PP over / heavy-PP under pattern persists under V2.
+    Route B requires better on the corrected feature's segments: not met.
+    No cutover; V1 unchanged. IMP-034/035 stay OPEN with the 11-22 weekly
+    recheck; candidate causes left: noise (about 3 standard errors) and a
+    real 2026 shift in PP shot share that a 10-game PP TOI average does not
+    carry.
 
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
