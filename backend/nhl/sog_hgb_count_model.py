@@ -41,13 +41,13 @@ MODEL_VERSIONS = {
            ROOT / "artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-11-15/shadow_contract.json",
            "197d6f1033b27ef994766d6fb1bebb365dc817d4bfa45800a36798834e6befe8"),
 }
-ACTIVE_VERSION = os.environ.get("NHL_SOG_HGB_VERSION", "V1").strip().upper()
+ACTIVE_VERSION = os.environ.get("NHL_SOG_HGB_VERSION", "V2").strip().upper()
 if ACTIVE_VERSION not in MODEL_VERSIONS:
     raise ValueError(f"NHL_SOG_HGB_VERSION_UNKNOWN:{ACTIVE_VERSION}")
 MODEL_IDENTITY, CONTRACT_PATH, EXPECTED_ARTIFACT_SHA256 = MODEL_VERSIONS[ACTIVE_VERSION]
-# First slate scored by V2 (the switch was made after the 2026-11-15 11:30 PT run,
-# so each slate is scored by one model). Earlier HGB slates are V1.
-V2_FIRST_SLATE = "2026-11-16"
+# First slate scored by V2 (switched before the 2026-11-15 11:30 PT run; every game
+# that day started after it, so its last pregame prediction is V2). Earlier HGB slates are V1.
+V2_FIRST_SLATE = "2026-11-15"
 
 
 def hgb_identity_for_slate(slate_date: str | None) -> str:

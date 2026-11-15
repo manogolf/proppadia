@@ -1,8 +1,8 @@
 {
   "schema_version": "NHL_SOG_HGB_TRAINING_FEATURE_RANGES_V1",
-  "source": "artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-10-25/training_frame_rebuilt.csv.gz",
-  "training_frame_sha256": "4042e31c758c6b0083272cf82904426b8732e06a9f2837c79e7e0d2e9aa093f6",
-  "fitted_artifact_sha256": "f7bf625dd3a32030a6003879f7e62380e674859f8c7f9f299e4bdae2245ae392",
+  "source": "artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-11-15/training_frame.csv.gz",
+  "training_frame_sha256": "7d4278ef0fdf8859173bbbd3c819d2e279a4a757bbda5edbee3cbd298575df01",
+  "fitted_artifact_sha256": "197d6f1033b27ef994766d6fb1bebb365dc817d4bfa45800a36798834e6befe8",
   "rows": 90598,
   "note": "Known (non-missing) training values; p01/p99 bound the range the frozen model saw. Live columns carry a feature_ prefix.",
   "features": {
@@ -67,9 +67,9 @@
       "missing_share": 0.017053
     },
     "pp_toi_avg_10": {
-      "p01": 0.005,
-      "p99": 3.841,
-      "missing_share": 2.2e-05
+      "p01": 0.0,
+      "p99": 4.303,
+      "missing_share": 0.0
     },
     "att60_10": {
       "p01": 4.005803,

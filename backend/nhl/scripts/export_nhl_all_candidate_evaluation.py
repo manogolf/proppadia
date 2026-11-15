@@ -650,7 +650,7 @@ def _prediction_row(base: dict[str, Any], p_over: float | None, p_under: float |
 
 
 def production_sog_identity(poisson_source: str | None, slate_date: str | None = None) -> tuple[str, str]:
-    """Model identity of one production SOG row (HGB from 2026-10-25; V2 from 2026-11-16).
+    """Model identity of one production SOG row (HGB from 2026-10-25; V2 from 2026-11-15).
 
     `formula_fallback` rows (players with no NHL history) carry the retired
     formula's prediction, so they keep the formula's identity.

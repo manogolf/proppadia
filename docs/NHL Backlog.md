@@ -3114,7 +3114,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.51 SOG HGB refit on corrected PP TOI (route B)
 
-- Status: **V2 REPLACES V1 FROM THE 2026-11-16 SLATE (operator decision
+- Status: **V2 REPLACES V1 FROM THE 2026-11-15 SLATE (operator decision
   2026-11-15: "replace the v1 model with the corrected power play data.
   suggesting to keep a model with known bad data is unsupported no matter
   the results").** Recorded in `docs/nhl/model_promotion_rules.md` (operator
@@ -3193,18 +3193,20 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   evaluated above; two refits identical). `sog_hgb_count_model.py` selects by
   `NHL_SOG_HGB_VERSION` (default V2; V1 = rollback), each version pinned to
   its own artifact digest; `hgb_identity_for_slate` labels slates before
-  2026-11-16 as V1 (8rain candidates, all-candidate export). The weekly
+  2026-11-15 as V1 (8rain candidates, all-candidate export). The weekly
   evaluation, improvement-log key and plus-money view take the SOG window
   from the identity each daily summary records. Input-watch ranges
   regenerated from V2's frame (only `pp_toi_avg_10` changed: p99 3.841 to
-  4.303). The default switched after the 2026-11-15 11:30 PT run so each
-  slate is scored by one model. Live parity on the 2026-11-15 08:30 run's
+  4.303). The default switched at 11:25 PT on 2026-11-15, before the 11:30
+  run; all five games that day started at 16:30 PT or later, so every
+  game's last pregame prediction is V2 (operator: "why not fully cut over to
+  v2 today?"). Live parity on the 2026-11-15 08:30 run's
   features (198 model rows): 0 invalid, 0 ladder crossings, side flips 6 /
   0 / 0 at 1.5 / 2.5 / 3.5 (all near 50%), mean expected shots 1.422 to
   1.452. NHL suites pass with either version active (852).
 - V1-keyed improvement-log entries (IMP-034/035/036/038) set to
   RETIRED_MODEL at the cutover; V2's segments start fresh from its graded
-  slates (the 11-22 weekly will have 11-16..11-21 only).
+  slates (the 11-22 weekly will have 11-15..11-21 only).
 
 ### P2.52 SOG modeling review: what a better structure would use
 

@@ -42,8 +42,11 @@ class SanityTests(unittest.TestCase):
 
     def test_sog_inputs_are_checked_against_the_frozen_training_ranges(self):
         sog_ranges = json.loads(watch.SOG_RANGES_PATH.read_text())
-        self.assertEqual(sog_ranges["training_frame_sha256"],
-                         "4042e31c758c6b0083272cf82904426b8732e06a9f2837c79e7e0d2e9aa093f6")
+        from backend.nhl import sog_hgb_count_model as sog_model
+        contract = json.loads(sog_model.MODEL_VERSIONS["V2"][1].read_text())
+        # The ranges come from the production model's own training frame (V2 since 2026-11-15).
+        self.assertEqual(sog_ranges["training_frame_sha256"], contract["training_frame_sha256"])
+        self.assertEqual(sog_ranges["fitted_artifact_sha256"], contract["fitted_artifact_sha256"])
         rows = [{"game_id": 1, "player_id": i, "player_name": f"S{i}", "feature_sog60_10": 7.0,
                  "feature_att60_10": 14.0, "feature_toi_avg_10": 17.0, "feature_pp_toi_avg_10": 1.0,
                  "feature_team_sf_10": 28.0, "feature_league_prior": 5.5} for i in range(1, 6)]

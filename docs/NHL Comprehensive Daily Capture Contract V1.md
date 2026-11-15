@@ -742,14 +742,14 @@ lines (18.5-30.5, an observed ladder without research behind it) and the
 conditional-start semantics are unchanged. One-step rollback: `PRODUCTION =
 PHOENIX_V2` restores the previous Poisson GLM with its isotonic 24.5 map.
 
-Production SOG scorer (2026-10-25, P2.33; V2 from the 2026-11-16 slate,
+Production SOG scorer (2026-10-25, P2.33; V2 from the 2026-11-15 slate,
 P2.51). Production SOG is the frozen HGB Poisson count model
 `NHL_SOG_COUNT_HGB_V2` (receipt identity `hgb_count / NHL_SOG_COUNT_HGB_V2`,
 scorer `backend/nhl/sog_hgb_count_model.py`, artifact
 `artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-11-15/nhl_sog_count_hgb_v2.joblib`,
 SHA-256 `197d6f10…`, pinned in the scorer): V1's recipe refit on the corrected
 PP TOI (P2.45). V1 (`frozen_2026-10-25/nhl_sog_count_hgb_v1.joblib`,
-`f7bf625d…`) scored slates 2026-10-25..11-15 and is the one-step rollback
+`f7bf625d…`) scored slates 2026-10-25..11-14 (and the 2026-11-15 05:45 and 08:30 runs) and is the one-step rollback
 (`NHL_SOG_HGB_VERSION=V1`). The 8rain export, all-candidate evaluation, weekly
 evaluation and plus-money price view label and window SOG by the model that
 scored each slate (`hgb_identity_for_slate`; the daily summary's

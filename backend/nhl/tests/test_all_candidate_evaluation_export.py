@@ -230,8 +230,8 @@ class AllCandidateExportTests(unittest.TestCase):
 
     def test_formula_fallback_rows_keep_the_formula_identity(self):
         from backend.nhl.sog_hgb_count_model import MODEL_IDENTITY
-        self.assertEqual(production_sog_identity("hgb_count", "2026-11-15"), ("hgb_count", "NHL_SOG_COUNT_HGB_V1"))
-        self.assertEqual(production_sog_identity("hgb_count", "2026-11-16"), ("hgb_count", MODEL_IDENTITY))
+        self.assertEqual(production_sog_identity("hgb_count", "2026-11-14"), ("hgb_count", "NHL_SOG_COUNT_HGB_V1"))
+        self.assertEqual(production_sog_identity("hgb_count", "2026-11-15"), ("hgb_count", MODEL_IDENTITY))
         self.assertEqual(production_sog_identity("formula_fallback"), ("poisson_baseline", "baseline_v1"))
 
 

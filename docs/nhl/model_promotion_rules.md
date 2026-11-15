@@ -102,7 +102,7 @@ Used when training or live data were wrong, as with the PP-TOI refit
   zero) or live 2026-10-25..11-14 (V2 - V1 -0.0008, interval spans zero);
   two refits identical; own identity and artifact; live parity on the
   2026-11-15 slate (0 invalid, 0 ladder crossings, 6 side flips at 1.5, all
-  near 50%). Rollback: `NHL_SOG_HGB_VERSION=V1`. First V2 slate 2026-11-16.
+  near 50%). Rollback: `NHL_SOG_HGB_VERSION=V1`. First V2 slate 2026-11-15 (switched before the 11:30 PT run; all games that day started later).
   Standing rule from this decision: a model trained on data later found
   defective is replaced by its corrected-data refit once that refit is no
   worse, whatever the size of the gain.

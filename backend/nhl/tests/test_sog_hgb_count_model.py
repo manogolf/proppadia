@@ -106,8 +106,8 @@ class HgbCountShadowTest(unittest.TestCase):
         self.assertEqual(set(shadow.MODEL_VERSIONS), {"V1", "V2"})
         self.assertEqual(shadow.MODEL_VERSIONS["V2"][0], "NHL_SOG_COUNT_HGB_V2")
         self.assertNotEqual(shadow.MODEL_VERSIONS["V1"][2], shadow.MODEL_VERSIONS["V2"][2])
-        self.assertEqual(shadow.hgb_identity_for_slate("2026-11-15"), "NHL_SOG_COUNT_HGB_V1")
-        self.assertEqual(shadow.hgb_identity_for_slate("2026-11-16"), shadow.MODEL_IDENTITY)
+        self.assertEqual(shadow.hgb_identity_for_slate("2026-11-14"), "NHL_SOG_COUNT_HGB_V1")
+        self.assertEqual(shadow.hgb_identity_for_slate("2026-11-15"), shadow.MODEL_IDENTITY)
         import subprocess, sys
         for version in ("V1", "V2"):
             out = subprocess.run([sys.executable, "-c", "from backend.nhl import sog_hgb_count_model as m; "
