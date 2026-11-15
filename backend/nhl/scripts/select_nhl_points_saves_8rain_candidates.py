@@ -647,7 +647,8 @@ def select_raw_sog(
         on=["player_id", "game_id", "line"], how="left", validate="one_to_one",
     )
     if "poisson_source" in long and long.poisson_source.isin(["hgb_count", "formula_fallback"]).any():
-        long["model_identity"] = "NHL_SOG_COUNT_HGB_V1"  # production SOG from 2026-10-25
+        from backend.nhl.sog_hgb_count_model import hgb_identity_for_slate
+        long["model_identity"] = hgb_identity_for_slate(slate_date)  # production SOG HGB (V2 from 2026-11-16)
     elif "poisson_source" in long:
         long["model_identity"] = "NHL_SOG_POISSON_BASELINE_V1_REFERENCE"
     else:

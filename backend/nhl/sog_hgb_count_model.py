@@ -1,7 +1,9 @@
-"""Frozen HGB Poisson SOG count model `NHL_SOG_COUNT_HGB_V1` (P2.33).
+"""Frozen HGB Poisson SOG count model (P2.33): `NHL_SOG_COUNT_HGB_V2` in production.
 
 Production SOG scorer since 2026-10-25 (`NHL_SOG_SCORER=hgb_count`, the
-default; rollback: `NHL_SOG_SCORER=poisson_baseline`). It scores the exact
+default; rollback: `NHL_SOG_SCORER=poisson_baseline`). V2 (2026-11-15, P2.51)
+is the same recipe refit after the PP TOI correction (P2.45) and replaced V1 by
+operator decision; `NHL_SOG_HGB_VERSION=V1` is the one-step rollback. It scores the exact
 player-games the Poisson formula scored, with features from
 `backend/nhl/sog_hgb_features.py` over strict-prior skater logs read
 read-only from the database. A player without qualifying history (no recent
@@ -13,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -29,10 +32,29 @@ from backend.nhl.sog_shrunk_rate_shadow import grade_slate as _grade_count_shado
 from backend.nhl.scripts.score_sog_poisson_baseline import _bucket_series, _poisson_tail
 
 ROOT = Path(__file__).resolve().parents[2]
-MODEL_IDENTITY = "NHL_SOG_COUNT_HGB_V1"
 PRIMARY_SOURCE = "HGB_COUNT"
-CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-10-25/shadow_contract.json"
-EXPECTED_ARTIFACT_SHA256 = "f7bf625dd3a32030a6003879f7e62380e674859f8c7f9f299e4bdae2245ae392"
+MODEL_VERSIONS = {
+    "V1": ("NHL_SOG_COUNT_HGB_V1",
+           ROOT / "artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-10-25/shadow_contract.json",
+           "f7bf625dd3a32030a6003879f7e62380e674859f8c7f9f299e4bdae2245ae392"),
+    "V2": ("NHL_SOG_COUNT_HGB_V2",
+           ROOT / "artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-11-15/shadow_contract.json",
+           "197d6f1033b27ef994766d6fb1bebb365dc817d4bfa45800a36798834e6befe8"),
+}
+ACTIVE_VERSION = os.environ.get("NHL_SOG_HGB_VERSION", "V1").strip().upper()
+if ACTIVE_VERSION not in MODEL_VERSIONS:
+    raise ValueError(f"NHL_SOG_HGB_VERSION_UNKNOWN:{ACTIVE_VERSION}")
+MODEL_IDENTITY, CONTRACT_PATH, EXPECTED_ARTIFACT_SHA256 = MODEL_VERSIONS[ACTIVE_VERSION]
+# First slate scored by V2 (the switch was made after the 2026-11-15 11:30 PT run,
+# so each slate is scored by one model). Earlier HGB slates are V1.
+V2_FIRST_SLATE = "2026-11-16"
+
+
+def hgb_identity_for_slate(slate_date: str | None) -> str:
+    """The HGB model identity that scored a production slate."""
+    if slate_date and str(slate_date) < V2_FIRST_SLATE:
+        return MODEL_VERSIONS["V1"][0]
+    return MODEL_IDENTITY
 LINES = (1.5, 2.5, 3.5)
 
 grade_slate = partial(_grade_count_shadow, model_identity=MODEL_IDENTITY, primary_source=PRIMARY_SOURCE)
@@ -42,7 +64,9 @@ def load_model(contract_path: Path = CONTRACT_PATH):
     contract = json.loads(Path(contract_path).read_text())
     artifact = Path(contract_path).parent / contract["fitted_artifact"]
     digest = sha256_file(artifact)
-    if digest != contract["fitted_artifact_sha256"] or digest != EXPECTED_ARTIFACT_SHA256:
+    expected = next((sha for _, path, sha in MODEL_VERSIONS.values() if Path(path) == Path(contract_path)),
+                    EXPECTED_ARTIFACT_SHA256)
+    if digest != contract["fitted_artifact_sha256"] or digest != expected:
         raise ValueError("SOG_HGB_ARTIFACT_SHA_MISMATCH")
     if contract["feature_columns"] != FEATURES:
         raise ValueError("SOG_HGB_FEATURE_CONTRACT_MISMATCH")

@@ -3491,7 +3491,8 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     if sog_scorer == "hgb_count":
         sog_components = [("scorer", ROOT / "backend/nhl/sog_hgb_count_model.py"),
                           ("feature_module", ROOT / "backend/nhl/sog_hgb_features.py"),
-                          ("fitted_artifact", SOG_HGB_CONTRACT_PATH.parent / "nhl_sog_count_hgb_v1.joblib"),
+                          ("fitted_artifact", SOG_HGB_CONTRACT_PATH.parent
+                           / json.loads(SOG_HGB_CONTRACT_PATH.read_text())["fitted_artifact"]),
                           ("shadow_contract", SOG_HGB_CONTRACT_PATH),
                           ("formula_scorer", SCRIPTS_DIR / "score_sog_poisson_baseline.py")]
     else:
@@ -3694,7 +3695,7 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
             provider_requests=0, credits_consumed=0)
 
     recorder.start_lane("sog_count_hgb_shadow", inputs=[{
-        "model_identity": "NHL_SOG_COUNT_HGB_V1",
+        "model_identity": SOG_HGB_MODEL_IDENTITY,
         "parent_daily_run_id": daily_run_id,
         "production_model_identity": f"{sog_model_family}/{sog_model_version}",
         "history_source": "nhl.skater_game_logs_raw (read-only)",

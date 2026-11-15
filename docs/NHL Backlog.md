@@ -3114,8 +3114,11 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.51 SOG HGB refit on corrected PP TOI (route B)
 
-- Status: **STEPS 1-3 RUN 2026-11-15 (operator "Yes, run 1-3"): route-B gate
-  not met; V1 stays production; no V2 frozen.** Follows P2.45 (90,531 PP TOI values corrected to the NHL stats
+- Status: **V2 REPLACES V1 FROM THE 2026-11-16 SLATE (operator decision
+  2026-11-15: "replace the v1 model with the corrected power play data.
+  suggesting to keep a model with known bad data is unsupported no matter
+  the results").** Recorded in `docs/nhl/model_promotion_rules.md` (operator
+  decisions); the earlier "V1 stays" conclusion below is withdrawn. Follows P2.45 (90,531 PP TOI values corrected to the NHL stats
   API) and P2.50 (IMP-034/035: production SOG HGB `NHL_SOG_COUNT_HGB_V1`
   overrates light-PP shooters and underrates top-unit ones live).
 - Route: B in `docs/nhl/model_promotion_rules.md` (source-data correction:
@@ -3183,6 +3186,61 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     recheck; candidate causes left: noise (about 3 standard errors) and a
     real 2026 shift in PP shot share that a 10-game PP TOI average does not
     carry.
+- **Cutover 2026-11-15.** `freeze_nhl_sog_hgb_count_model.py --freeze-v2`
+  wrote `frozen_2026-11-15/` (`nhl_sog_count_hgb_v2.joblib` SHA-256
+  `197d6f1033b27ef994766d6fb1bebb365dc817d4bfa45800a36798834e6befe8`,
+  contract with `supersedes` V1, training frame `7d4278ef…` = the frame
+  evaluated above; two refits identical). `sog_hgb_count_model.py` selects by
+  `NHL_SOG_HGB_VERSION` (default V2; V1 = rollback), each version pinned to
+  its own artifact digest; `hgb_identity_for_slate` labels slates before
+  2026-11-16 as V1 (8rain candidates, all-candidate export). The weekly
+  evaluation, improvement-log key and plus-money view take the SOG window
+  from the identity each daily summary records. Input-watch ranges
+  regenerated from V2's frame (only `pp_toi_avg_10` changed: p99 3.841 to
+  4.303). The default switched after the 2026-11-15 11:30 PT run so each
+  slate is scored by one model. Live parity on the 2026-11-15 08:30 run's
+  features (198 model rows): 0 invalid, 0 ladder crossings, side flips 6 /
+  0 / 0 at 1.5 / 2.5 / 3.5 (all near 50%), mean expected shots 1.422 to
+  1.452. NHL suites pass with either version active (852).
+- V1-keyed improvement-log entries (IMP-034/035/036/038) set to
+  RETIRED_MODEL at the cutover; V2's segments start fresh from its graded
+  slates (the 11-22 weekly will have 11-16..11-21 only).
+
+### P2.52 SOG modeling review: what a better structure would use
+
+- Status: **OPEN 2026-11-15** (operator: "is using a shrunk rate the best we
+  can do? seems we are not approaching sog with enough diligence if such a
+  huge data defect that should change predictions in fact doesn't
+  contribute anything"). Research only until the operator approves a step.
+- Why the PP correction moved little (P2.51): every production input is a
+  version of the player's all-situation shot rate times ice time (5/10/20/
+  season/prior-season SOG per 60, the shrunk rate and its lambda, TOI, shot
+  attempts per 60). PP shots already sit inside those rates, so a separate PP
+  minutes column adds little once the rate is known; the trees put almost
+  all weight on the shrunk lambda. The model cannot use PP time the way it
+  works on ice: a player's PP minutes matter through his PP shot rate and how
+  many power plays his team will get tonight, and neither is an input.
+- Candidate structure, each to test out of sample on corrected data against
+  V2 (paired log loss and Brier by line and side, date-clustered intervals):
+  1. Situation split: expected shots = EV SOG per 60 x expected EV minutes +
+     PP SOG per 60 x expected PP minutes (+ SH). The raw logs carry `ev_sog`,
+     `pp_sog`, `sh_sog`; the stats API also gives `evTimeOnIce` and
+     `shTimeOnIce` per player-game (not stored yet).
+  2. Tonight's PP minutes: the player's PP share of team PP time times the
+     team's expected PP time from both teams' penalty-drawn and penalty-taken
+     rates (official team PP opportunities per game).
+  3. Deployment: projected lineups (P2.47 trial: line and PP unit) and the
+     role-change watch (P2.44) as inputs once their timing is reliable.
+  4. Game script: market win probability and total (trailing teams shoot
+     more; P2.46 matchup work).
+  5. Shot quality to SOG: attempts and the player's on-target rate.
+  6. Count shape: negative binomial where the spread is wider than Poisson
+     (variance / mean 1.1-1.2 overall, more for some players), mostly for
+     2.5 and 3.5.
+- First step proposed: an ablation on the 2026-01..04 holdout and the
+  2026 live window: V2 vs V2 + situation split (1) vs + tonight's PP
+  minutes (2), read-only, with the IMP-034 band and PP bands reported.
+
 
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 

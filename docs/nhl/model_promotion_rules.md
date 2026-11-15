@@ -92,6 +92,20 @@ Used when training or live data were wrong, as with the PP-TOI refit
   qualify.
 
 ## Operator decisions outside these routes
+- **2026-11-15, SOG: `NHL_SOG_COUNT_HGB_V2` replaces V1 without route B's
+  "better on the corrected segments" gate.** Operator decision: "replace the
+  v1 model with the corrected power play data. suggesting to keep a model with
+  known bad data is unsupported no matter the results." V2 is V1's recipe,
+  seasons and features refit after the PP TOI correction (NHL Backlog P2.45);
+  only `pp_toi_avg_10` differs in its training frame. Evidence (P2.51): no
+  worse than V1 on the 2026-01..04 holdout (paired +0.00004, interval spans
+  zero) or live 2026-10-25..11-14 (V2 - V1 -0.0008, interval spans zero);
+  two refits identical; own identity and artifact; live parity on the
+  2026-11-15 slate (0 invalid, 0 ladder crossings, 6 side flips at 1.5, all
+  near 50%). Rollback: `NHL_SOG_HGB_VERSION=V1`. First V2 slate 2026-11-16.
+  Standing rule from this decision: a model trained on data later found
+  defective is replaced by its corrected-data refit once that refit is no
+  worse, whatever the size of the gain.
 - **2026-10-25, SOG: `NHL_SOG_COUNT_HGB_V1` promoted to production without
   route A's 4-week shadow.** Operator decision: a new model that beats
   production on held-out and live data becomes the baseline once tested.

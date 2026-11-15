@@ -433,6 +433,7 @@ def _validate_production_sog_game_set(
 PRODUCTION_SOG_SCORERS = {
     ("poisson_baseline", "baseline_v1"): "backend/nhl/scripts/score_sog_poisson_baseline.py",
     ("hgb_count", "NHL_SOG_COUNT_HGB_V1"): "backend/nhl/sog_hgb_count_model.py",
+    ("hgb_count", "NHL_SOG_COUNT_HGB_V2"): "backend/nhl/sog_hgb_count_model.py",
 }
 
 

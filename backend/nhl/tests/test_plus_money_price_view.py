@@ -59,13 +59,22 @@ class PlusMoneyPriceViewTests(unittest.TestCase):
                          ["sog", "points", "sog over 1.5"])
 
     def test_points_slates_follow_the_production_identity(self):
+        from backend.nhl.sog_hgb_count_model import MODEL_IDENTITY as sog_current
         current = view.current_points_identity()
-        summary = lambda identity: {"models": {"points": {"authority_context": {
-            "production": {"fitted_model_identity_sha256": identity}}}}}
+        summary = lambda identity, sog=sog_current: {"models": {
+            "points": {"authority_context": {"production": {"fitted_model_identity_sha256": identity}}},
+            "sog": {"reference": {"model_identity": {"model_version": sog}}}}}
         days = view.lane_days({"2026-10-31": summary("old"), "2026-11-01": summary(current),
                                "2026-11-02": summary(current)}, "2026-11-01")
         self.assertEqual(days["points"], ["2026-11-01"])
         self.assertEqual(days["sog"], ["2026-10-31", "2026-11-01"])
+
+    def test_sog_slates_follow_the_production_identity(self):
+        from backend.nhl.sog_hgb_count_model import MODEL_IDENTITY as sog_current
+        summary = lambda sog: {"models": {"sog": {"reference": {"model_identity": {"model_version": sog}}}}}
+        days = view.lane_days({"2026-11-14": summary("RETIRED_SOG_MODEL"), "2026-11-16": summary(sog_current)},
+                              "2026-11-20")
+        self.assertEqual(days["sog"], ["2026-11-16"])
 
 
 if __name__ == "__main__":

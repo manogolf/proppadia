@@ -649,14 +649,15 @@ def _prediction_row(base: dict[str, Any], p_over: float | None, p_under: float |
     return {field: base.get(field, "") for field in PREDICTION_FIELDS}
 
 
-def production_sog_identity(poisson_source: str | None) -> tuple[str, str]:
-    """Model identity of one production SOG row (HGB from 2026-10-25).
+def production_sog_identity(poisson_source: str | None, slate_date: str | None = None) -> tuple[str, str]:
+    """Model identity of one production SOG row (HGB from 2026-10-25; V2 from 2026-11-16).
 
     `formula_fallback` rows (players with no NHL history) carry the retired
     formula's prediction, so they keep the formula's identity.
     """
     if poisson_source == "hgb_count":
-        return "hgb_count", "NHL_SOG_COUNT_HGB_V1"
+        from backend.nhl.sog_hgb_count_model import hgb_identity_for_slate
+        return "hgb_count", hgb_identity_for_slate(slate_date)
     return "poisson_baseline", "baseline_v1"
 
 
@@ -699,7 +700,7 @@ def add_captured_sog_arms(rows: list[dict[str, Any]], operational_root: Path,
             game_id, player_id = r.get("game_id", ""), r.get("player_id", "")
             outcome = outcomes.get((game_id, player_id), {})
             if model == "PRODUCTION":
-                family, version = production_sog_identity(r.get("poisson_source"))
+                family, version = production_sog_identity(r.get("poisson_source"), slate_date)
                 line_probs = [("1.5", _num(r.get("p_over_1_5"))), ("2.5", _num(r.get("p_over_2_5"))), ("3.5", _num(r.get("p_over_3_5")))]
             else:
                 family, version = "poisson_baseline", model

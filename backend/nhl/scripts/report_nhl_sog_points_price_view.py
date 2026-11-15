@@ -172,11 +172,22 @@ def points_identity(summary: dict) -> str | None:
         .get("production", {}).get("fitted_model_identity_sha256")
 
 
+def _sog_model() -> str:
+    from backend.nhl.sog_hgb_count_model import MODEL_IDENTITY
+    return MODEL_IDENTITY
+
+
+def sog_identity(summary: dict) -> str | None:
+    return ((((summary.get("models") or {}).get("sog") or {}).get("reference") or {})
+            .get("model_identity") or {}).get("model_version")
+
+
 def lane_days(summaries: dict[str, dict], as_of: str) -> dict[str, list[str]]:
-    """Slates scored by the current production model of each lane."""
+    """Slates scored by the current production model of each lane (by the identity each summary records)."""
+    from backend.nhl.sog_hgb_count_model import MODEL_IDENTITY as sog_model
     identity = current_points_identity()
     return {"points": sorted(d for d, s in summaries.items() if d <= as_of and points_identity(s) == identity),
-            "sog": sorted(d for d in summaries if SOG_HGB_START <= d <= as_of)}
+            "sog": sorted(d for d, s in summaries.items() if SOG_HGB_START <= d <= as_of and sog_identity(s) == sog_model)}
 
 
 def best_prices(quotes: list[dict]) -> pd.DataFrame:
@@ -297,7 +308,7 @@ def render_weekly(as_of: str, priced: pd.DataFrame, days: dict[str, list[str]], 
              f"- Points: goals + assists model (`{current_points_identity()[:8]}…`), "
              f"{len(days['points'])} slates ({days['points'][0] if days['points'] else '—'} to "
              f"{days['points'][-1] if days['points'] else '—'}).",
-             f"- SOG: `NHL_SOG_COUNT_HGB_V1`, {len(days['sog'])} slates from {SOG_HGB_START}.", "",
+             f"- SOG: `{_sog_model()}`, {len(days['sog'])} slates from {days['sog'][0] if days['sog'] else '—'}.", "",
              "## Readiness", "",
              f"Positive-EV underdog sides at the operator's books; a market is ready for evaluation when every "
              f"fair-odds band has {READY_PER_BAND}.", "",
@@ -375,7 +386,7 @@ def run_weekly(as_of: str) -> dict:
         out / "by_relation_price.csv", index=False)
     WEEKLY_DOC.write_text(render_weekly(as_of, priced, days, ready))
     summary = {"contract": "NHL_PLUS_MONEY_PRICE_VIEW_WEEKLY_V1", "as_of": as_of,
-               "points_model_identity_sha256": current_points_identity(), "sog_model": "NHL_SOG_COUNT_HGB_V1",
+               "points_model_identity_sha256": current_points_identity(), "sog_model": _sog_model(),
                "slates": days, "my_books": list(MY_BOOKS), "ready_per_band": READY_PER_BAND,
                "readiness": lane_readiness(ready), "readiness_by_band": ready.to_dict(orient="records"), "doc": str(WEEKLY_DOC.relative_to(ROOT)),
                "price_rule": "each book's latest quote preceding the prediction (EARLY/FINAL_PREGAME); best decimal per side"}

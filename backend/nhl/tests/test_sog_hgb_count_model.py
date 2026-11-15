@@ -102,6 +102,20 @@ class HgbCountShadowTest(unittest.TestCase):
                                         "feature_columns": FEATURES, "training_frame_sha256": "x"}))
         return contract, digest
 
+    def test_versions_pin_their_own_artifacts_and_rollback_is_one_variable(self):
+        self.assertEqual(set(shadow.MODEL_VERSIONS), {"V1", "V2"})
+        self.assertEqual(shadow.MODEL_VERSIONS["V2"][0], "NHL_SOG_COUNT_HGB_V2")
+        self.assertNotEqual(shadow.MODEL_VERSIONS["V1"][2], shadow.MODEL_VERSIONS["V2"][2])
+        self.assertEqual(shadow.hgb_identity_for_slate("2026-11-15"), "NHL_SOG_COUNT_HGB_V1")
+        self.assertEqual(shadow.hgb_identity_for_slate("2026-11-16"), shadow.MODEL_IDENTITY)
+        import subprocess, sys
+        for version in ("V1", "V2"):
+            out = subprocess.run([sys.executable, "-c", "from backend.nhl import sog_hgb_count_model as m; "
+                                  "print(m.MODEL_IDENTITY); m.load_model()"],
+                                 env={**__import__("os").environ, "NHL_SOG_HGB_VERSION": version},
+                                 capture_output=True, text=True, check=True).stdout.split()
+            self.assertEqual(out[-1], f"NHL_SOG_COUNT_HGB_{version}")
+
     def test_artifact_checksum_guard(self):
         with tempfile.TemporaryDirectory() as td:
             contract, _ = self._artifact(Path(td))
@@ -126,7 +140,7 @@ class HgbCountShadowTest(unittest.TestCase):
             pd.DataFrame({"slate_date": [SLATE] * 3, "game_id": [GAME] * 3, "player_id": [1, 2, 3],
                           "shots_on_goal": [3, 0, 1]}).to_csv(recon / "canonical_skater_outcomes.csv", index=False)
             graded = shadow.grade_slate(slate_date=SLATE, reconciliation_package=recon, capture_root=root / "captures")
-            self.assertEqual(graded["model_identity"], "NHL_SOG_COUNT_HGB_V1")
+            self.assertEqual(graded["model_identity"], shadow.MODEL_IDENTITY)
             self.assertEqual(graded["latest_pregame"]["settled_player_games"], 3)
             self.assertEqual(graded["latest_pregame"]["production_fallback_player_games"], 1)
             summary = summarize_frames(slate_date=SLATE, games=1, phase="REGULAR_SEASON", reconciliation_status="CREATED",

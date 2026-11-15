@@ -40,6 +40,12 @@ OUT = ROOT / "artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-10-25"
 ARTIFACT = "nhl_sog_count_hgb_v1.joblib"
 MODEL_ID = "NHL_SOG_COUNT_HGB_V1"
 TRAINING_SEASONS = (2024, 2025)
+# V2 (2026-11-15, NHL Backlog P2.51): the same recipe and seasons refit after the
+# PP TOI correction to the NHL stats API (P2.45). Operator decision: replace V1.
+V2_OUT = ROOT / "artifacts/analysis/nhl/sog_hgb_count_model/frozen_2026-11-15"
+V2_ARTIFACT = "nhl_sog_count_hgb_v2.joblib"
+V2_MODEL_ID = "NHL_SOG_COUNT_HGB_V2"
+RANGES_PATH = ROOT / "backend/nhl/config/sog_hgb_training_feature_ranges.json"
 
 
 def sha(path: Path) -> str:
@@ -101,9 +107,70 @@ def rebuild_training_frame() -> int:
     return 0
 
 
+def feature_ranges(train: pd.DataFrame, *, source: str, frame_sha: str, artifact_sha: str) -> dict:
+    """Known training values per feature (p01/p99) for the input watch."""
+    feats = {}
+    for col in FEATURES:
+        values = pd.to_numeric(train[col], errors="coerce")
+        known = values.dropna()
+        feats[col] = {"p01": round(float(known.quantile(0.01)), 6), "p99": round(float(known.quantile(0.99)), 6),
+                      "missing_share": round(float(values.isna().mean()), 6)}
+    return {"schema_version": "NHL_SOG_HGB_TRAINING_FEATURE_RANGES_V1", "source": source,
+            "training_frame_sha256": frame_sha, "fitted_artifact_sha256": artifact_sha, "rows": int(len(train)),
+            "note": ("Known (non-missing) training values; p01/p99 bound the range the frozen model saw. "
+                     "Live columns carry a feature_ prefix."),
+            "features": feats}
+
+
+def freeze_v2() -> int:
+    """Freeze V2 on the corrected database: two identical refits, own identity and contract."""
+    import gzip
+    if (V2_OUT / V2_ARTIFACT).exists():
+        raise SystemExit(f"SOG_HGB_ARTIFACT_ALREADY_FROZEN:{V2_OUT / V2_ARTIFACT}")
+    train = training_frame(*_read_history())
+    frame_text = _frame_text(train)
+    frame_sha = hashlib.sha256(frame_text.encode()).hexdigest()
+    x = train[FEATURES].astype(float).to_numpy()
+    first, second = fit(train, BASE_KW), fit(train, BASE_KW)
+    if not np.array_equal(first.predict(x), second.predict(x)):
+        raise SystemExit("SOG_HGB_V2_REFIT_NOT_REPRODUCIBLE")
+    V2_OUT.mkdir(parents=True, exist_ok=True)
+    joblib.dump(first, V2_OUT / V2_ARTIFACT)
+    reloaded = joblib.load(V2_OUT / V2_ARTIFACT)
+    if not np.array_equal(reloaded.predict(x), first.predict(x)):
+        raise SystemExit("SOG_HGB_ARTIFACT_RELOAD_MISMATCH")
+    with gzip.open(V2_OUT / "training_frame.csv.gz", "wt", encoding="utf-8", newline="") as stream:
+        stream.write(frame_text)
+    v1 = json.loads((OUT / "shadow_contract.json").read_text())
+    contract = {**{k: v for k, v in v1.items() if k not in ("validation", "known_limitation")},
+                "schema_version": "NHL_SOG_COUNT_HGB_SHADOW_CONTRACT_V1", "model_id": V2_MODEL_ID,
+                "authority": "PRODUCTION", "fitted_artifact": V2_ARTIFACT,
+                "fitted_artifact_sha256": sha(V2_OUT / V2_ARTIFACT),
+                "training_rows": int(len(train)),
+                "training_window": [str(train.game_date.min().date()), str(train.game_date.max().date())],
+                "training_frame_sha256": frame_sha, "training_frame_file": "training_frame.csv.gz",
+                "training_mean_target": float(train.shots_on_goal.mean()),
+                "training_mean_prediction": float(first.predict(x).mean()),
+                "sklearn_version": sklearn.__version__, "joblib_version": joblib.__version__,
+                "reproducibility": "two refits on the same frame give identical predictions on every training row",
+                "supersedes": {"model_id": MODEL_ID, "fitted_artifact_sha256": v1["fitted_artifact_sha256"],
+                               "reason": "PP TOI corrected to the NHL stats API (P2.45); same recipe, seasons and features"},
+                "validation": "NHL Backlog P2.51 (holdout 2026-01..04 and live 2026-10-25..11-14 vs V1)",
+                "known_limitation": v1.get("known_limitation")}
+    (V2_OUT / "shadow_contract.json").write_text(json.dumps(contract, indent=2) + "\n")
+    ranges = feature_ranges(train, source=str((V2_OUT / "training_frame.csv.gz").relative_to(ROOT)),
+                            frame_sha=frame_sha, artifact_sha=contract["fitted_artifact_sha256"])
+    RANGES_PATH.write_text(json.dumps(ranges, indent=2) + "\n")
+    print(json.dumps({k: contract[k] for k in ("model_id", "fitted_artifact_sha256", "training_rows",
+                                               "training_window", "training_frame_sha256")}, indent=1))
+    return 0
+
+
 def main() -> int:
     if "--rebuild-training-frame" in sys.argv[1:]:
         return rebuild_training_frame()
+    if "--freeze-v2" in sys.argv[1:]:
+        return freeze_v2()
     if (OUT / ARTIFACT).exists():
         raise SystemExit(f"SOG_HGB_ARTIFACT_ALREADY_FROZEN:{OUT / ARTIFACT}")
     train = training_frame(*_read_history())

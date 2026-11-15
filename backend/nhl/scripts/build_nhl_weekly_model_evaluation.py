@@ -55,7 +55,7 @@ MANUAL_STATUSES = {"TESTING", "PROMOTED", "REJECTED", "WATCH", "RESOLVED", "RETI
 RETIRED_POINTS_LANE = "points retired models"
 # Improvement-log keys carry the model they were measured on (2026-11-15);
 # entries from before that pooled retired models and are RETIRED_MODEL.
-SOG_MODEL_KEY = "NHL_SOG_COUNT_HGB_V1"
+from backend.nhl.sog_hgb_count_model import MODEL_IDENTITY as SOG_MODEL_KEY  # noqa: E402  current production SOG
 
 
 def _days(start: str, end: str) -> list[str]:
