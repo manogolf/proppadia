@@ -3042,6 +3042,41 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Open: no entry has a hypothesis or test (none TESTING). First candidate:
   IMP-034/035, the largest current gap. Outside the operator's 8rain filters
   (Fair Odds −133 or shorter = model 57%+).
+- **Test plan, IMP-034/035 SOG Over 1.5 at P(over) .50-.55** (operator
+  "Yes, plan the test", 2026-11-15). Findings so far (read-only, scratch
+  `tmp/gap_split/`):
+  - Live 10-25..11-14, outcome buckets rebuilt from each player-game's
+    1.5/2.5/3.5 grades: the whole 1.5-1.9 expected-shots range is low on 2+
+    shots (.45-.50 43.5% vs 47.5%, n=375; .50-.55 45.3% vs 52.5%, n=333;
+    .55-.60 53.6% vs 57.7%, n=291); 3+ shots in the same range is on target
+    (.50-.55 24.3% vs 25.9%); bands below .45 and above .60 are within 2
+    points. Weekly in the band: 37%, 55%, 42% (n about 100 each).
+  - Market: two-sided priced 270 picks, market 51.6% vs model 52.5%, actual
+    43.3%. The market missed the band too, so it is not information the
+    market had and the model lacked.
+  - Holdout: the research script's own pull and fit (fit before 2026-01-01,
+    scored 2026-01..04, 1,437 rows in the band) give 51.6% vs 52.4%; count
+    distribution matches Poisson within 2 points at every count; variance /
+    mean 1.09-1.16 in every band; D 53.7%, F 50.7%. Not a flaw of the
+    model's form; something in the 2026 live season.
+  - Hypotheses: (1) noise, about 3 standard errors over the ~1,000 live rows
+    at .45-.60; (2) wider game-to-game spread for mid-volume shooters in 2026;
+    (3) league shot-rate drift (October shots per 60 5.96 / 5.71 / 5.54 for
+    2024-2026, P2.33); (4) ice-time role changes that the 10-game inputs lag
+    (P2.44 role-change watch).
+  - Step 1, read-only diagnostic (week of 2026-11-16): join live HGB latest
+    pregame picks to official SOG and the features rebuilt by
+    `research_nhl_sog_hgb_count_model.build`; in the band compare with the
+    holdout: actual mean vs expected (3), variance / mean and 0/1/2/3+ shares
+    (2), last-5 vs last-10 TOI and PP TOI (4), position, games this season.
+  - Step 2: recheck at the 11-22 weekly (band n about 450). If it holds and
+    step 1 names a cause, propose one fix as a shadow under the promotion
+    rules (4 weekly evaluations): an input fix (refit) for (3) or (4); a
+    count-spread change for (2) is asked first, since it reshapes
+    probabilities (no calibration without approval). If it fades or step 1
+    shows nothing, keep it OPEN and watch.
+  - Betting: outside the operator's 8rain SOG filters (Fair Odds −133 or
+    shorter, model 57%+); no filter change.
 
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
