@@ -3112,6 +3112,46 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     official, non-PP players credited). Route there: scope, governed repair,
     official-source daily fill, SOG HGB refit as a shadow.
 
+### P2.51 SOG HGB refit on corrected PP TOI (route B)
+
+- Status: **PLANNED 2026-11-15** (operator "Yes, plan the refit"); nothing
+  run yet. Follows P2.45 (90,531 PP TOI values corrected to the NHL stats
+  API) and P2.50 (IMP-034/035: production SOG HGB `NHL_SOG_COUNT_HGB_V1`
+  overrates light-PP shooters and underrates top-unit ones live).
+- Route: B in `docs/nhl/model_promotion_rules.md` (source-data correction:
+  same features, recipe and hyperparameters; no shadow period). Gates: holdout
+  and retrospective scores no worse than production and better on the
+  corrected feature's segments (PP bands); two refits identical; new model
+  identity; one-step rollback; live parity on a current slate.
+- Note: from the 2026-11-15 11:30 PT run, V1 already scores on corrected live
+  PP inputs while its fit still reflects the old values; the weekly report
+  and IMP-034/035 measure that mix until a cutover.
+- Steps (read-only on the database; artifacts git-ignored):
+  1. Training frame: rebuild with the freeze script's code from the corrected
+     database (`freeze_nhl_sog_hgb_count_model.py` path, seasons 2024-2025,
+     same eligibility). Compare with the retained V1 frame
+     (`frozen_2026-10-25/training_frame_rebuilt.csv.gz`, SHA-256 in
+     `shadow_contract.json`): rows, keys and which features changed (PP TOI
+     only is expected; any other change stops the route-B claim).
+  2. Holdout, like for like: fit the recipe on each frame before 2026-01-01
+     (old vs corrected), score both on 2026-01..04 with corrected features
+     (the live reality). Poisson log loss, Brier at 1.5/2.5/3.5, paired
+     date-clustered intervals; by last-10 PP TOI band (0-0.25, 0.25-1, 1-2,
+     2-3, 3+ min) and by line and side.
+  3. Retrospective live, 2026-10-25..11-14: the full refit (V2, seasons
+     2024-2025 corrected) vs V1 on the graded production player-games, both
+     with strict-prior corrected features; the same measures plus the
+     IMP-034 band (P(over 1.5) .45-.60) and the two-sided market comparison.
+  4. If the gates hold: freeze V2 (`nhl_sog_count_hgb_v2.joblib`, own
+     identity and contract, two identical refits), live parity on a slate,
+     report side flips; then ask the operator for the cutover (V1 kept as
+     rollback, formula stays the fallback and shadow).
+  5. If not: record the result, keep V1, and reopen IMP-034/035 with the
+     finding.
+- Points: production `8cda6061` (fit on 2023-24 and 2024-25, both
+  corrected) gets the same treatment as a separate item after this one;
+  check IMP-037 then.
+
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
 - Status: **WATCH** from 2026-11-12 (operator: "Yes, add the tag"). Tag in the
