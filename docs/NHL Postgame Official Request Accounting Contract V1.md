@@ -41,6 +41,7 @@ postgame reconciliation.
 | `ingest_shiftcharts_for_date.fetch_shiftcharts` | shift chart/game | yes | one attempt | distinct response contract; not replaceable by boxscore |
 | `backfill_game_manpower_segments.fetch_pbp` | play-by-play/game | yes | one attempt | distinct response contract; not replaceable by boxscore |
 | `fill_pp_toi_minutes_for_date.fetch_boxscore` | boxscore/game | currently dormant in the executed DB-overlap path | one attempt if called | governed reconciliation requires authority boxscore reuse |
+| `fill_pp_toi_minutes_for_date.fetch_official_pp` | skater time on ice (stats API `skater/timeonice`)/game | yes, once `nhl.fill_pp_toi_minutes_from_official` is installed (P2.45, 2026-11-15) | one attempt; on failure or no rows the game falls back to the shift-overlap fill | distinct response contract (per-player `ppTimeOnIce`, source of record for PP TOI); not replaceable by boxscore |
 
 All network-capable children inherit a reconciliation run ID, journal path,
 response-cache directory, requested slate date, canonical game IDs, and their

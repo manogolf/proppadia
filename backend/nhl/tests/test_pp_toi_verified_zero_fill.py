@@ -28,8 +28,9 @@ DSN = os.environ.get("NHL_PP_TOI_TEST_DSN")
 
 
 class FakeCursor:
-    def __init__(self, zero_available: bool, zero_count: int = 3):
+    def __init__(self, zero_available: bool, zero_count: int = 3, official_available: bool = False):
         self.zero_available = zero_available
+        self.official_available = official_available
         self.zero_count = zero_count
         self.calls: list[tuple[str, tuple]] = []
         self._next = None
@@ -37,7 +38,8 @@ class FakeCursor:
     def execute(self, sql, params=()):
         self.calls.append((sql, params))
         if "to_regprocedure" in sql:
-            self._next = (self.zero_available,)
+            official = bool(params) and "from_official" in str(params[0])
+            self._next = (self.official_available if official else self.zero_available,)
         elif "fill_pp_toi_zero_from_shift_overlap" in sql:
             self._next = (self.zero_count,)
         else:

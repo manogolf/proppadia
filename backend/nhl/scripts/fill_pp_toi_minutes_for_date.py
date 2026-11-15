@@ -6,8 +6,12 @@ Canonical daily fixer for nhl.skater_game_logs_raw.pp_toi_minutes.
 
 - Reads SLATE_DATE (ET) or --date
 - Finds regular-season games (game_type=2) on that date
-- For each game, reconstructs positive PP overlap from official-derived
-  manpower segments and player shiftcharts
+- For each game, once the official-fill migration is applied (P2.45), fetches
+  the NHL stats API `skater/timeonice` `ppTimeOnIce` (source of record since
+  2026-11-15) and fills NULL rows through nhl.fill_pp_toi_minutes_from_official,
+  zeros included. Otherwise, or when the stats API has no rows for the game,
+  reconstructs positive PP overlap from official-derived manpower segments and
+  player shiftcharts (the earlier method)
 - Fills skater_game_logs_raw.pp_toi_minutes only where current value is NULL
 - Once the verified-zero migration is applied, also writes 0.00 for NULL rows
   whose complete shifts overlap no own-team PP window (P2.31)
@@ -48,6 +52,8 @@ from backend.nhl.official_request_journal import RequestContext, official_get, s
 
 
 BOX_URL = "https://api-web.nhle.com/v1/gamecenter/{game_id}/boxscore"
+STATS_TOI_URL = "https://api.nhle.com/stats/rest/en/skater/timeonice"
+OFFICIAL_FILL_FUNCTION = "nhl.fill_pp_toi_minutes_from_official(bigint,jsonb)"
 UA = "proppadia-pp-toi-canonical/1.0"
 
 
@@ -265,6 +271,89 @@ def update_game(
     return (len(db_players), len(overlap), updated)
 
 
+def official_fill_available(cur) -> bool:
+    """True once the operator has applied the official-fill migration (P2.45)."""
+    cur.execute("SELECT to_regprocedure(%s) IS NOT NULL;", (OFFICIAL_FILL_FUNCTION,))
+    row = cur.fetchone()
+    return bool(row and row[0])
+
+
+def fetch_official_pp(game_id: int, timeout: int = 30) -> List[Dict[str, int]]:
+    """Official per-player PP and total TOI seconds for one game from the stats API."""
+    session = requests.Session()
+    session.headers.update({"User-Agent": UA})
+    r = official_get(
+        STATS_TOI_URL, timeout=timeout, session=session, stage="PP_TOI_COLLECTION",
+        endpoint_family="SKATER_TIME_ON_ICE",
+        identity={"slate_date": os.environ.get("SLATE_DATE"), "game_id": int(game_id)},
+        params={"isAggregate": "false", "isGame": "true", "limit": "-1",
+                "cayenneExp": f"gameId={int(game_id)}"},
+    )
+    r.raise_for_status()
+    payload = r.json()
+    data = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(data, list) or len(data) != payload.get("total", len(data)):
+        raise RuntimeError("OFFICIAL_SKATER_TOI_RESPONSE_INCOMPLETE")
+    rows = []
+    for item in data:
+        if int(item.get("gameId", -1)) != int(game_id):
+            raise RuntimeError("OFFICIAL_SKATER_TOI_GAME_MISMATCH")
+        rows.append({"player_id": int(item["playerId"]), "pp_seconds": int(item["ppTimeOnIce"]),
+                     "toi_seconds": int(item["timeOnIce"])})
+    return rows
+
+
+def fill_from_official(cur, game_id: int, rows: List[Dict[str, int]]) -> int:
+    """NULL-only fill through the fixed database function; never updates directly."""
+    cur.execute("SELECT nhl.fill_pp_toi_minutes_from_official(%s, %s::jsonb)",
+                (game_id, json.dumps(rows, separators=(",", ":"))))
+    row = cur.fetchone()
+    return int(row[0]) if row else 0
+
+
+def collect_conflicts(cur, game_id: int, values: Dict[int, float], *, source_kind: str,
+                      source_reference: str) -> List[Dict[str, Any]]:
+    """Populated rows whose stored value differs from the incoming source (kept, reported)."""
+    cur.execute(
+        """
+        SELECT l.player_id::bigint,
+               COALESCE(r.team_id, l.team_id)::bigint AS team_id,
+               team_map.official_team_id, team_map.mapping_count,
+               l.pp_toi_minutes
+        FROM nhl.skater_game_logs_raw l
+        LEFT JOIN LATERAL (
+          SELECT team_id FROM nhl.roster_status rs
+          WHERE rs.game_id=l.game_id AND rs.player_id=l.player_id
+          ORDER BY rs.asof_ts DESC LIMIT 1
+        ) r ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT
+            CASE WHEN COUNT(DISTINCT e.provider_team_id::bigint) = 1
+                 THEN MIN(e.provider_team_id::bigint) END AS official_team_id,
+            COUNT(DISTINCT e.provider_team_id::bigint) AS mapping_count
+          FROM nhl.team_external_ids e
+          WHERE e.team_id = COALESCE(r.team_id, l.team_id)
+            AND e.provider = 'nhl'
+        ) team_map ON TRUE
+        WHERE l.game_id = %s AND l.player_id = ANY(%s)
+          AND l.pp_toi_minutes IS NOT NULL
+        ORDER BY l.player_id;
+        """,
+        (game_id, list(values)),
+    )
+    out = []
+    for player_id, team_id, official_team_id, mapping_count, current_value in cur.fetchall():
+        conflict = pp_toi_conflict(
+            game_id=game_id, player_id=player_id, team_id=team_id,
+            official_team_id=official_team_id, official_team_mapping_count=mapping_count,
+            existing_value=current_value, incoming_value=values.get(int(player_id)),
+            source_kind=source_kind, source_reference=source_reference,
+        )
+        if conflict:
+            out.append(conflict)
+    return out
+
+
 ZERO_FILL_FUNCTION = "nhl.fill_pp_toi_zero_from_shift_overlap(bigint)"
 
 
@@ -438,8 +527,45 @@ def main() -> None:
         print("verified-zero fill function not installed; positive fill only", file=sys.stderr)
     conflicts: list[dict[str, Any]] = []
     source_values: list[tuple[int, int, float]] = []
+    official_available = official_fill_available(cur)
+    if not official_available:
+        print("official PP fill function not installed; shift-overlap fill only", file=sys.stderr)
+    total_official_rows = 0
+    official_games = 0
+    overlap_games = 0
     for game_id in game_ids:
-        # --- PP TOI source is DB overlap (segments + shiftcharts), not boxscore JSON ---
+        # --- Source of record: the NHL stats API (P2.45), once its fill function exists ---
+        if official_available:
+            try:
+                official_rows = fetch_official_pp(game_id)
+            except Exception as e:
+                print(f"game_id={game_id}: stats API PP fetch failed: {e}; using shift overlap", file=sys.stderr)
+                official_rows = []
+            if official_rows:
+                values = {r["player_id"]: r["pp_seconds"] / 60.0 for r in official_rows}
+                source_values.extend((int(game_id), int(pid), float(v)) for pid, v in sorted(values.items()))
+                try:
+                    conflicts.extend(collect_conflicts(
+                        cur, game_id, values, source_kind="OFFICIAL_STATS_API_SKATER_TOI",
+                        source_reference=STATS_TOI_URL))
+                    filled = fill_from_official(cur, game_id, official_rows)
+                except Exception as e:
+                    print(f"game_id={game_id}: official PP fill failed: {e}", file=sys.stderr)
+                    conn.rollback()
+                    continue
+                total_official_rows += filled
+                official_games += 1
+                print(f"game_id={game_id}: source=stats_api official_rows={len(official_rows)} filled={filled}")
+                if commit:
+                    conn.commit()
+                else:
+                    conn.rollback()
+                time.sleep(args.sleep)
+                continue
+            print(f"game_id={game_id}: stats API has no rows yet; using shift overlap", file=sys.stderr)
+
+        # --- Fallback: DB overlap (segments + shiftcharts), not boxscore JSON ---
+        overlap_games += 1
         try:
             pp_map = extract_pp_toi_minutes_from_db(cur, game_id)
         except Exception as e:
@@ -460,47 +586,13 @@ def main() -> None:
 
         source_values.extend((int(game_id), int(pid), float(value))
                              for pid, value in sorted(pp_map.items()))
-        cur.execute(
-            """
-            SELECT l.player_id::bigint,
-                   COALESCE(r.team_id, l.team_id)::bigint AS team_id,
-                   team_map.official_team_id, team_map.mapping_count,
-                   l.pp_toi_minutes
-            FROM nhl.skater_game_logs_raw l
-            LEFT JOIN LATERAL (
-              SELECT team_id FROM nhl.roster_status rs
-              WHERE rs.game_id=l.game_id AND rs.player_id=l.player_id
-              ORDER BY rs.asof_ts DESC LIMIT 1
-            ) r ON TRUE
-            LEFT JOIN LATERAL (
-              SELECT
-                CASE WHEN COUNT(DISTINCT e.provider_team_id::bigint) = 1
-                     THEN MIN(e.provider_team_id::bigint) END AS official_team_id,
-                COUNT(DISTINCT e.provider_team_id::bigint) AS mapping_count
-              FROM nhl.team_external_ids e
-              WHERE e.team_id = COALESCE(r.team_id, l.team_id)
-                AND e.provider = 'nhl'
-            ) team_map ON TRUE
-            WHERE l.game_id = %s AND l.player_id = ANY(%s)
-              AND l.pp_toi_minutes IS NOT NULL
-            ORDER BY l.player_id;
-            """,
-            (game_id, list(pp_map)),
-        )
-        for player_id, team_id, official_team_id, mapping_count, current_value in cur.fetchall():
-            conflict = pp_toi_conflict(
-                game_id=game_id, player_id=player_id, team_id=team_id,
-                official_team_id=official_team_id,
-                official_team_mapping_count=mapping_count,
-                existing_value=current_value, incoming_value=pp_map.get(int(player_id)),
-                source_kind="RECONSTRUCTED_SHIFT_OVERLAP",
-                source_reference=(
-                    "nhl.game_manpower_segments + nhl.shiftcharts_raw; "
-                    "extract_pp_toi_minutes_from_db"
-                ),
-            )
-            if conflict:
-                conflicts.append(conflict)
+        conflicts.extend(collect_conflicts(
+            cur, game_id, pp_map, source_kind="RECONSTRUCTED_SHIFT_OVERLAP",
+            source_reference=(
+                "nhl.game_manpower_segments + nhl.shiftcharts_raw; "
+                "extract_pp_toi_minutes_from_db"
+            ),
+        ))
 
         # Apply updates (only where pp_toi_minutes is NULL or 0)
         try:
@@ -551,7 +643,8 @@ def main() -> None:
     diagnostic = write_pp_toi_conflict_diagnostic(
         run_id=run_id, slate_date=slate_date, stage="fill",
         conflicts=conflicts,
-        source_reference="nhl.game_manpower_segments + nhl.shiftcharts_raw",
+        source_reference=("NHL stats API skater/timeonice ppTimeOnIce; fallback "
+                          "nhl.game_manpower_segments + nhl.shiftcharts_raw"),
         source_observation_set_sha256=hashlib.sha256(source_body).hexdigest(),
     )
     print("NHL_CHILD_SUMMARY_JSON=" + json.dumps({
@@ -559,6 +652,10 @@ def main() -> None:
         "run_id": run_id,
         "slate_date": slate_date,
         "source_reconstructed_positive_count": len(source_values),
+        "official_fill_function_available": official_available,
+        "official_fills": total_official_rows,
+        "official_source_games": official_games,
+        "shift_overlap_games": overlap_games,
         "filled_nulls": total_updated_rows,
         "verified_zero_fills": total_zero_rows,
         "zero_fill_function_available": zero_available,
@@ -567,7 +664,8 @@ def main() -> None:
         "unknown_source_remains_null": True,
         "populated_zero_preserved": True,
     }, sort_keys=True))
-    print(f"DONE. total_updated_rows={total_updated_rows} verified_zero_rows={total_zero_rows} bad_team_games={bad} mode={'COMMIT' if commit else 'DRY-RUN'}")
+    print(f"DONE. official_rows={total_official_rows} official_games={official_games} "
+          f"overlap_games={overlap_games} total_updated_rows={total_updated_rows} verified_zero_rows={total_zero_rows} bad_team_games={bad} mode={'COMMIT' if commit else 'DRY-RUN'}")
 
 
 if __name__ == "__main__":

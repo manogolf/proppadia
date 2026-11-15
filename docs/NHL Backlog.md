@@ -3475,8 +3475,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     passing silently, with no change either way. Receipt:
     `execution_receipt.json` in the evidence directory (SHA-256
     `f8177283fcc27a27117ab8a08db9216cee0ef3a35152aec12f1a237bbd53329d`).
-  - Open: (c) daily fill switch (until then new games are filled by shift
-    overlap, about 600 player-games a month over-credited); the 3,471 missing
+  - Decision (c) made 2026-11-15 (operator "Yes, switch it"). Prepared, not
+    applied: migration `backend/nhl/sql/migrations/20261115_pp_toi_official_fill.sql`
+    (+ rollback; operator block
+    `backend/nhl/sql/repairs/operator_sql_editor_pp_toi_official_fill.sql`;
+    read-only check `verify_nhl_pp_toi_official_fill.sql`) adds
+    `nhl.fill_pp_toi_minutes_from_official(bigint, jsonb)`: SECURITY DEFINER,
+    execute for `proppadia_nhl_ingest` only, fills NULL rows only with
+    round(ppTimeOnIce / 60, 2) when 0 <= PP <= TOI and stored TOI is within
+    0.05 min of official. `fill_pp_toi_minutes_for_date.py` fetches the stats
+    API per game (`official_get`, family `SKATER_TIME_ON_ICE`) and calls it;
+    a game with no rows or a failed fetch falls back to shift overlap; until
+    the function exists the fill is unchanged. Receipt fields
+    `official_fill_function_available`, `official_fills`,
+    `official_source_games`, `shift_overlap_games`. Tests
+    `backend/nhl/tests/test_pp_toi_official_fill.py`. Live fetch check
+    2026-11-15: game 2026020312, 36 of 36 official values equal the corrected
+    stored values. Full NHL suites pass (840); 6 `backend/tests` failures
+    predate this change and are tracked above.
+  - Open after the migration is applied: confirm the first daily run's
+    receipt shows `official_source_games` > 0; the 3,471 missing
     stored rows; SOG HGB and Points refits on corrected data (P2.50,
     IMP-034/035/037).
   - Decisions as first listed: (a) make the stats API
