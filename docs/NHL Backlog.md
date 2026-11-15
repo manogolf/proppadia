@@ -3107,6 +3107,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     2026 data) as a shadow under the promotion rules. PP TOI is also a Points
     input; check IMP-037 (Points Under 0.5 .45-.50) the same way. Weekly
     recheck 11-22 continues.
+  - P2.45 checked 2026-11-15: real PP time is flat; the training seasons'
+    stored PP TOI is corrupted (2025-10..12: top-unit players at 53-71% of
+    official, non-PP players credited). Route there: scope, governed repair,
+    official-source daily fill, SOG HGB refit as a shadow.
 
 ### P2.49 Hot streaks: players who cleared the line in each of their last 3 games
 
@@ -3333,8 +3337,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.45 League power-play time per skater ~31% higher in 2026 data
 
-- Status: **OPEN — not investigated; now priority** (found 2026-11-06 while
-  building P2.44). 2026-11-15: leading cause of the live SOG Over 1.5 gap
+- Status: **CAUSE FOUND 2026-11-15: stored training-season PP TOI is wrong,
+  not real PP growth; repair awaits operator approval** (found 2026-11-06
+  while building P2.44). 2026-11-15: leading cause of the live SOG Over 1.5 gap
   IMP-034/035 (P2.50 step 1: light-PP players overpredicted, heavy-PP
   players underpredicted, holdout flat).
 - Evidence (read-only, `nhl.skater_game_logs_raw`, regular season): mean PP
@@ -3348,6 +3353,46 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   reports many PP TOI values outside the SOG training range).
 - Next: compare 2026 team PP opportunities and PP minutes from an official
   source with the stored values for a sample of games.
+- **Checked 2026-11-15** (operator "Yes, check PP data"; read-only, research
+  identity; scratch `tmp/pp_check/`). Official source: NHL stats REST
+  `api.nhle.com/stats/rest/en/skater/timeonice?isGame=true` (`ppTimeOnIce`
+  per player-game; queried one date at a time, `limit=-1`, since results cap
+  at 10,000) and `team/powerplay` for team totals. The gamecenter boxscore no
+  longer carries per-player PP time, but this endpoint does.
+  - Real PP time is flat. Official PP minutes per team-game through 11-14:
+    5.02 (2024-25), 5.12 (2025-26), 5.05 (2026-27); opportunities 3.06 /
+    3.12 / 3.15. Full seasons 4.48 and 4.74. The "31% higher" came from
+    comparing the stored early-2026 window with full prior seasons whose
+    stored values are low (below), not from more power plays.
+  - Stored vs official per skater-game (mean stored / official; ratio for
+    official PP players by official band 0-1 / 1-2 / 2-3 / 3+ min):
+    | Window | Rows | Official | Stored | 0-1 | 1-2 | 2-3 | 3+ | Credited, official 0 |
+    |---|---:|---:|---:|---:|---:|---:|---:|---:|
+    | 2024-10 | 5,975 | 1.441 | 1.361 | 1.46 | 0.96 | 0.94 | 0.85 | 554 (396 NULL) |
+    | 2025-02 | 4,392 | 1.197 | 1.225 | 1.39 | 1.01 | 1.00 | 0.96 | 303 (365 NULL) |
+    | 2025-10-07..11-14 | 10,152 | 1.419 | 0.884 | 1.14 | 0.54 | 0.54 | 0.53 | 2,456 |
+    | 2025-12 | 8,135 | 1.340 | 1.342 | 2.50 | 0.91 | 0.71 | 0.59 | 1,487 |
+    | 2026-02-25..03-25 | 8,207 | 1.304 | 1.394 | 1.43 | 1.08 | 1.04 | 1.00 | 601 |
+    | 2026-10-06..11-14 | 10,151 | 1.404 | 1.490 | 1.52 | 1.08 | 1.04 | 0.99 | 791 |
+    TOI matches official to 0.01 minute in every window.
+  - Defect: the SOG HGB training seasons (2024-10..2026-04) hold a corrupted
+    stretch, at least 2025-10 to 2025-12: top-unit PP players stored at
+    53-71% of their official minutes and PP time credited to players who had
+    none (in October-November the team total is 15.8 vs 25.3 official
+    skater-minutes). Elsewhere stored values are close, with light-PP players
+    over-credited about 1.4-1.5x (shift-overlap method) and some NULLs. The
+    model learned a weakened, blurred PP effect; live 2026 values are near
+    official, so top-unit shooters are underpredicted and light-PP players
+    overpredicted (P2.50 step 1).
+  - Route (needs operator approval; not started): (1) size the full scope,
+    every regular-season date 2023-10..today, official vs stored (about 700
+    small requests); (2) a governed repair of `pp_toi_minutes` from the
+    official endpoint, through the restricted identity with a preview and
+    receipt, since it overwrites populated historical values; (3) switch the
+    daily fill to the official endpoint (shift overlap over-credits light PP
+    players); (4) refit SOG HGB on repaired data as a shadow under the
+    promotion rules. PP TOI is also a Points input (production `8cda6061…`,
+    fit on 2023-24): check its training window in step 1.
 
 ### P2.44 Daily role-change watch (ice time and PP time vs last season)
 
