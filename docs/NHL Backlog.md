@@ -3388,7 +3388,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.57 Restore the 82 missing 2024-25 Utah games (part of the 3,471 missing player-game rows)
 
-- Status: **PLANNED 2026-11-16, no database write** (operator: "Yes, plan it",
+- Status: **APPLIED AND VERIFIED 2026-11-16** (planned on operator "Yes, plan it",
   after the P2.46 xG test could not use the 82 games).
 - Cause (read-only, confirmed): the NHL gave the Utah Hockey Club team id 59
   in 2024-25 and the Utah Mammoth id 68 from 2025-26. `nhl.team_external_ids`
@@ -3475,6 +3475,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     row's SOG by strength differs from the boxscore SOG by one (play-by-play
     vs boxscore, as in the reproduction check). Tests
     `backend/nhl/tests/test_prepare_nhl_utah_2024_restore.py`.
+- **Applied 2026-11-16** by the operator (SQL editor, blocks 1 then 2).
+  Verify after: 82 games, 82 dated, 2,952 skater rows, 172 goalie rows,
+  0 off-team, 0 PP above TOI, 0 PP NULL, player 8484910 present.
+  Independent read-only check (research login): all 2,952 stored skater rows
+  equal the manifest on team, TOI, PP TOI, SOG and shot attempts; all 82
+  dates equal. The P2.45 missing-row list drops from 3,471 to 555 (the
+  scattered rows, still undiagnosed). The games enter model training only
+  when training frames are rebuilt (next refit); the frozen research frames
+  used by the P2.46 tests do not include them.
 
 ### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
 
