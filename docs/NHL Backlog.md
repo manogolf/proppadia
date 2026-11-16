@@ -3619,6 +3619,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     Under edges are the model's pessimism. Candidate test: stronger pull of
     low-history players toward the league rate (own rate shrunk by 60
     games instead of 30; the 10-game version was tested and was no better).
+- **Shrinkage tested, 2026-11-16** (operator: "Yes, test it").
+  `backend/nhl/scripts/research_nhl_points_rate_shrinkage.py` (read-only;
+  output `artifacts/analysis/nhl/points_rate_shrinkage_2026-11-16/`; rates
+  re-blended from the stored K = 30 values, inversion exact to 1e-16). K = 60
+  and K = 120 refits vs production 2f0824cf: holdout -0.13 / +0.22 / 0.00
+  and -0.03 / +0.28 / +0.10 x1000; live within noise; depth players barely
+  move (morning lowest quintile 34.7% -> 34.5%); qualified Points Unders won
+  58.7% (production), 56.5% (K60), 55.9% (K120). Not the cause; no change.
+  - The real finding: over all player-games the model is calibrated on
+    depth players in every season (lowest scoring-rate fifth, fixed training
+    cut-offs: model / actual 18.4 / 18.4 in 2023-24, 18.3 / 18.0, 17.9 /
+    18.6, 2026-27 18.3 / 17.1; ice time under 13 min likewise). On the depth
+    players the books post a Points line for, the same band scored 39-44%
+    against the model's 35-38% and the market's 40-42%. Which depth
+    players get a posted line is itself information: the books list the
+    ones they expect to matter, and the model's inputs cannot see why.
+  - Next candidate: test on 2025-26, where 7 pm ET Points snapshots exist
+    (`backend/nhl/exports/odds_history`), whether listed depth players
+    outscore the model and unlisted ones do not; if so, a "has a posted
+    line" input or a model trained on listed player-games.
 
 
 ### P2.54 Line and side scan: where the current models beat the price
