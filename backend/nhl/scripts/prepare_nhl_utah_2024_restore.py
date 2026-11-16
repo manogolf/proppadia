@@ -282,16 +282,240 @@ def manifest() -> dict:
     return summary
 
 
+# --------------------------------------------------------------------------- SQL
+
+SKATER_COLS = ["player_id", "game_id", "team_id", "opponent_id", "is_home", "game_date", "toi_minutes",
+               "pp_toi_minutes", "shots_on_goal", "shot_attempts", "ev_sog", "pp_sog", "sh_sog", "blocks", "hits"]
+GOALIE_COLS = ["player_id", "game_id", "team_id", "opponent_id", "is_home", "game_date", "toi_minutes",
+               "shots_faced", "saves", "goals_allowed", "start_flag"]
+ROLE = "proppadia_nhl_ingest"
+
+
+def lit(v) -> str:
+    if v is None or (isinstance(v, float) and np.isnan(v)):
+        return "NULL"
+    if isinstance(v, (bool, np.bool_)):
+        return "TRUE" if v else "FALSE"
+    if isinstance(v, (int, np.integer)):
+        return str(int(v))
+    if isinstance(v, (float, np.floating)):
+        return f"{float(v):.2f}"
+    return "'" + str(v).replace("'", "''") + "'"
+
+
+def values(frame: pd.DataFrame, cols: list[str], casts: dict[str, str]) -> str:
+    out = []
+    for i, r in enumerate(frame[cols].itertuples(index=False)):
+        vals = [lit(None if pd.isna(v) else v) for v in r]
+        if i == 0:
+            vals = [f"{v}::{casts[c]}" if c in casts else v for v, c in zip(vals, cols)]
+        out.append("    (" + ", ".join(vals) + ")")
+    return ",\n".join(out)
+
+
+def wrap(body: str, title: str, *, role: str | None = ROLE) -> str:
+    head = f"""-- PREPARED ONLY. Owner authorization required. NHL Backlog P2.57: {title}
+-- Paste this whole block into the Supabase SQL editor for the production project and run it once.
+-- One transaction; any failure aborts it and nothing is committed{', including the grant' if role else ''}.
+-- Afterwards run backend/nhl/sql/repairs/verify_nhl_utah_2024_restore.sql (read-only).
+
+BEGIN;
+
+DO $$
+BEGIN
+  IF session_user <> 'postgres' THEN
+    RAISE EXCEPTION 'RUN_AS_POSTGRES_IN_SQL_EDITOR:session_user=%', session_user;
+  END IF;
+"""
+    if role is None:
+        return head + "END $$;\n\n" + body.strip() + "\n\nCOMMIT;\n"
+    return head + f"""  IF pg_has_role(session_user, '{role}', 'MEMBER') THEN
+    RAISE EXCEPTION 'INGEST_ROLE_ALREADY_GRANTED_REFUSING_TO_PROCEED';
+  END IF;
+END $$;
+
+GRANT {role} TO postgres;
+SET LOCAL ROLE {role};
+
+DO $$
+BEGIN
+  IF current_user <> '{role}' THEN
+    RAISE EXCEPTION 'INGEST_SET_ROLE_VERIFICATION_FAILED:current_user=%', current_user;
+  END IF;
+END $$;
+
+{body.strip()}
+
+RESET ROLE;
+REVOKE {role} FROM postgres;
+
+DO $$
+BEGIN
+  IF current_user <> 'postgres' OR pg_has_role('postgres', '{role}', 'MEMBER') THEN
+    RAISE EXCEPTION 'INGEST_ROLE_RESET_OR_REVOKE_FAILED';
+  END IF;
+END $$;
+
+COMMIT;
+
+SELECT now() AS checked_at_utc, current_user AS checked_as,
+       pg_has_role('postgres', '{role}', 'MEMBER') AS ingest_role_still_granted;
+"""
+
+
+def games_sql(games: pd.DataFrame, *, reverse: bool = False) -> str:
+    g = games.assign(start=games.start_time_utc.str.replace("Z", "+00:00"))
+    n = len(g)
+    rows = values(g, ["game_id", "game_date", "start", "home_team_id", "away_team_id"],
+                  {"game_id": "bigint", "game_date": "date", "start": "timestamptz",
+                   "home_team_id": "bigint", "away_team_id": "bigint"})
+    if reverse:
+        cond, setter, err = ("g.game_date = v.d AND g.start_time_utc = v.t", "game_date = NULL, start_time_utc = NULL",
+                             "UTAH_2024_GAMES_ROLLBACK_GUARD_FAILED")
+    else:
+        cond, setter, err = ("g.game_date IS NULL AND g.start_time_utc IS NULL", "game_date = c.d, start_time_utc = c.t",
+                             "UTAH_2024_GAMES_GUARD_FAILED")
+    return f"""-- {'Rollback: clear' if reverse else 'Fill'} game_date and start_time_utc for the {n} 2024-25 Utah games (team 59 unmapped),
+-- only where every game is in its pinned state with its pinned teams; otherwise the cast raises.
+UPDATE nhl.games AS g
+SET {setter}
+FROM (
+  SELECT v.*, count(x.game_id) OVER () AS matching_rows
+  FROM (VALUES
+{rows}
+  ) AS v(game_id, d, t, home, away)
+  LEFT JOIN nhl.games AS x
+    ON x.game_id = v.game_id AND x.home_team_id = v.home AND x.away_team_id = v.away
+   AND {cond.replace('g.', 'x.')}
+) AS c
+WHERE g.game_id = c.game_id
+  AND (CASE WHEN c.matching_rows = {n} THEN TRUE
+       ELSE ('{err}:matching_rows=' || c.matching_rows)::boolean END);
+"""
+
+
+def logs_sql(games: pd.DataFrame, sk: pd.DataFrame, gl: pd.DataFrame, player: dict) -> str:
+    ids = ", ".join(str(int(g)) for g in games.game_id)
+    return f"""-- Guards: the games block ran first, and no player-game row exists yet for these games.
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM nhl.games WHERE game_id IN ({ids}) AND game_date IS NOT NULL) <> {len(games)} THEN
+    RAISE EXCEPTION 'RUN_THE_GAMES_BLOCK_FIRST';
+  END IF;
+  IF EXISTS (SELECT 1 FROM nhl.skater_game_logs_raw WHERE game_id IN ({ids}))
+     OR EXISTS (SELECT 1 FROM nhl.goalie_game_logs_raw WHERE game_id IN ({ids})) THEN
+    RAISE EXCEPTION 'UTAH_2024_ROWS_ALREADY_PRESENT_REFUSING';
+  END IF;
+END $$;
+
+-- The one player not yet in nhl.players (foreign key for his goalie row).
+INSERT INTO nhl.players (player_id, full_name, first_name, last_name, team_id, position)
+SELECT {player['player_id']}, {lit(player['full_name'])}, {lit(player['first_name'])}, {lit(player['last_name'])}, {player['team_id']}, 'G'
+WHERE NOT EXISTS (SELECT 1 FROM nhl.players WHERE player_id = {player['player_id']});
+
+INSERT INTO nhl.skater_game_logs_raw ({", ".join(SKATER_COLS)})
+SELECT * FROM (VALUES
+{values(sk, SKATER_COLS, {"player_id": "bigint", "game_id": "bigint", "team_id": "bigint", "opponent_id": "bigint",
+                          "is_home": "boolean", "game_date": "date", "toi_minutes": "numeric", "pp_toi_minutes": "numeric",
+                          "shots_on_goal": "smallint", "shot_attempts": "smallint", "ev_sog": "integer", "pp_sog": "integer",
+                          "sh_sog": "integer", "blocks": "smallint", "hits": "smallint"})}
+) AS v({", ".join(SKATER_COLS)});
+
+INSERT INTO nhl.goalie_game_logs_raw ({", ".join(GOALIE_COLS)})
+SELECT * FROM (VALUES
+{values(gl, GOALIE_COLS, {"player_id": "bigint", "game_id": "bigint", "team_id": "bigint", "opponent_id": "bigint",
+                          "is_home": "boolean", "game_date": "date", "toi_minutes": "numeric", "shots_faced": "smallint",
+                          "saves": "smallint", "goals_allowed": "smallint", "start_flag": "boolean"})}
+) AS v({", ".join(GOALIE_COLS)});
+
+-- All-or-nothing: exact counts, every team one of the game's two teams.
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM nhl.skater_game_logs_raw WHERE game_id IN ({ids})) <> {len(sk)}
+     OR (SELECT count(*) FROM nhl.goalie_game_logs_raw WHERE game_id IN ({ids})) <> {len(gl)} THEN
+    RAISE EXCEPTION 'UTAH_2024_ROW_COUNT_GUARD_FAILED';
+  END IF;
+  IF EXISTS (SELECT 1 FROM nhl.skater_game_logs_raw l JOIN nhl.games g USING (game_id)
+              WHERE l.game_id IN ({ids}) AND l.team_id NOT IN (g.home_team_id, g.away_team_id))
+     OR EXISTS (SELECT 1 FROM nhl.goalie_game_logs_raw l JOIN nhl.games g USING (game_id)
+              WHERE l.game_id IN ({ids}) AND l.team_id NOT IN (g.home_team_id, g.away_team_id)) THEN
+    RAISE EXCEPTION 'UTAH_2024_TEAM_GUARD_FAILED';
+  END IF;
+END $$;
+"""
+
+
+def rollback_logs_sql(games: pd.DataFrame, sk: pd.DataFrame, gl: pd.DataFrame, player: dict) -> str:
+    ids = ", ".join(str(int(g)) for g in games.game_id)
+    return f"""-- OWNER-LEVEL ROLLBACK. No restricted role holds DELETE on these tables, so removing the
+-- restored rows needs the postgres owner; run only on the operator's decision to undo P2.57 step 3.
+-- Removes exactly the restored rows (counts pinned) and the one added player if nothing else uses him.
+DO $$
+BEGIN
+  IF (SELECT count(*) FROM nhl.skater_game_logs_raw WHERE game_id IN ({ids})) <> {len(sk)}
+     OR (SELECT count(*) FROM nhl.goalie_game_logs_raw WHERE game_id IN ({ids})) <> {len(gl)} THEN
+    RAISE EXCEPTION 'UTAH_2024_ROLLBACK_COUNT_GUARD_FAILED';
+  END IF;
+END $$;
+DELETE FROM nhl.skater_game_logs_raw WHERE game_id IN ({ids});
+DELETE FROM nhl.goalie_game_logs_raw WHERE game_id IN ({ids});
+DELETE FROM nhl.players p WHERE p.player_id = {player['player_id']}
+  AND NOT EXISTS (SELECT 1 FROM nhl.goalie_game_logs_raw WHERE player_id = p.player_id)
+  AND NOT EXISTS (SELECT 1 FROM nhl.skater_game_logs_raw WHERE player_id = p.player_id);
+"""
+
+
+def build_sql() -> dict:
+    games = pd.read_csv(OUT / "games.csv")
+    sk = pd.read_csv(OUT / "skater_rows.csv")
+    gl = pd.read_csv(OUT / "goalie_rows.csv")
+    for f in (sk, gl):
+        f["game_date"] = f.game_date.astype(str)
+    gl["goals_allowed"] = gl.goals_allowed.astype("Int64")
+    with connect() as c, c.cursor() as cur:
+        cur.execute("SELECT player_id FROM nhl.players WHERE player_id = ANY(%s)",
+                    (sorted(set(sk.player_id) | set(gl.player_id)),))
+        known = {r[0] for r in cur.fetchall()}
+    new = sorted((set(sk.player_id) | set(gl.player_id)) - known)
+    if len(new) != 1:
+        raise SystemExit(f"EXPECTED_ONE_NEW_PLAYER:{new}")
+    pid = new[0]
+    row = gl[gl.player_id.eq(pid)].iloc[0]
+    pbp = json.loads((PBP_FILL / f"game={int(row.game_id)}.json").read_text())
+    spot = next(r for r in pbp["rosterSpots"] if int(r["playerId"]) == pid)
+    player = {"player_id": pid, "first_name": spot["firstName"]["default"], "last_name": spot["lastName"]["default"],
+              "full_name": f"{spot['firstName']['default']} {spot['lastName']['default']}", "team_id": int(row.team_id)}
+    sql_dir = OUT / "sql"
+    sql_dir.mkdir(exist_ok=True)
+    files = {
+        "editor_1_games.sql": wrap(games_sql(games), f"fill dates for {len(games)} 2024-25 Utah games"),
+        "editor_2_player_logs.sql": wrap(logs_sql(games, sk, gl, player),
+                                         f"add {len(sk)} skater rows, {len(gl)} goalie rows and 1 player"),
+        "rollback_1_games.sql": wrap(games_sql(games, reverse=True), "ROLLBACK of the games block"),
+        "rollback_2_player_logs.sql": wrap(rollback_logs_sql(games, sk, gl, player),
+                                           "ROLLBACK of the player and log rows (owner-level)", role=None),
+    }
+    out = {"player": player, "skater_rows": int(len(sk)), "goalie_rows": int(len(gl)), "games": int(len(games)), "files": {}}
+    for name, text in files.items():
+        (sql_dir / name).write_text(text)
+        out["files"][name] = {"sha256": sha(text.encode()), "bytes": len(text.encode())}
+    (OUT / "sql_summary.json").write_text(json.dumps(out, indent=1) + "\n")
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--fetch", action="store_true")
     mode.add_argument("--manifest", action="store_true")
+    mode.add_argument("--build", action="store_true", help="write the editor blocks and rollbacks under sql/")
     args = ap.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     if args.fetch:
         man = fetch(utah_games())
         print(f"UTAH 2024 BOXSCORES: {len(man)} games, states {pd.Series([v['state'] for v in man.values()]).value_counts().to_dict()}")
+    elif args.build:
+        print(json.dumps(build_sql(), indent=1))
     else:
         print(json.dumps(manifest(), indent=1, default=str))
     return 0

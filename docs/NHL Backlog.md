@@ -3448,6 +3448,33 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     NULL, as current ingestion does.
   - Next: step 2 (games dates) and step 3 (player row, then skater and
     goalie rows) as guarded editor blocks with rollbacks.
+- **Steps 2-3 prepared 2026-11-16, not executed** (operator: "Yes, prepare
+  them"). `prepare_nhl_utah_2024_restore.py --build` writes, git-ignored,
+  under `artifacts/analysis/nhl/utah_2024_restore_2026-11-16/sql/` (digests in
+  `sql_summary.json`):
+  - `editor_1_games.sql` (SHA-256 37410b27...): fills `game_date` and
+    `start_time_utc` for the 82 games; every game must be NULL in both with
+    its pinned home/away teams or the cast raises (all-or-nothing).
+  - `editor_2_player_logs.sql` (529fa009..., 288 KB): refuses unless all 82
+    games are dated and no skater or goalie row exists for them; adds player
+    8484910 (Victor Ostman, G, team 55); inserts 2,952 skater rows (TOI, PP
+    TOI, SOG, attempts, SOG by strength, blocks, hits; goals/assists/points
+    NULL as current ingestion) and 172 goalie rows (TOI, shots faced, saves,
+    goals allowed, start flag); then checks exact counts and that every row's
+    team is one of the game's two teams.
+  - Both run as `postgres` with `proppadia_nhl_ingest` granted, SET LOCAL
+    ROLE, reset and revoked inside the transaction (ingest holds INSERT on
+    every column used and UPDATE on the two `nhl.games` columns).
+  - Rollbacks: `rollback_1_games.sql` (ingest role, clears the two columns
+    only where they hold the restored values); `rollback_2_player_logs.sql`
+    is owner-level, because no restricted role holds DELETE on these
+    tables; for use only on the operator's decision.
+  - Read-only check `backend/nhl/sql/repairs/verify_nhl_utah_2024_restore.sql`;
+    before (2026-11-16): 82 games, 0 dated, 0 skater, 0 goalie rows, player
+    absent. Sanity: no PP TOI above TOI, no saves above shots; one skater
+    row's SOG by strength differs from the boxscore SOG by one (play-by-play
+    vs boxscore, as in the reproduction check). Tests
+    `backend/nhl/tests/test_prepare_nhl_utah_2024_restore.py`.
 
 ### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
 
