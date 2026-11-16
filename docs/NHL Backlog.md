@@ -3700,6 +3700,26 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     first listing on (from the daily price captures), rather than a fixed
     list of players. Deferred with the retry itself, since listed-only
     training is not favorable on current data.
+- **Listed-player lift tested, 2026-11-16, measurement only** (operator: "try
+  next proposed solution"; a calibration layer, route C, not approved for
+  use). `backend/nhl/scripts/research_nhl_points_listed_lift.py` (output
+  `artifacts/analysis/nhl/points_listed_lift_2026-11-16/`): expected points of
+  listed player-games x c, c fitted by Poisson log loss on graded listed
+  rows before each test window.
+  - 2025-26 split: c = 1.075 (11,139 rows before 2026-02-01); after
+    (1,938): P(1+) actual 50.4, production 46.8, lift 49.2; log loss x1000
+    -2.46 [-5.19, 0.56] / -2.59 [-5.28, 0.23] / -0.39.
+  - Live (c = 1.079 on all 2025-26 listed rows; 1,744 player-games): P(1+)
+    actual 47.4, market 47.4, production 45.2, lift 47.7; log loss at 0.5
+    market 0.6535, production 0.6607, lift 0.6598; paired -0.88 / -1.87 /
+    -0.40 (span zero).
+  - Qualified searches at 1 PM: production Unders 167 won 58.7% (+0.9%),
+    Overs 23 won 65.2%; lift Unders 87 won 49.4% (-14.9%), Overs 84 won
+    47.6% (-15.0%).
+  - Reading: the lift fixes the level and forecasts a little better, still
+    behind the market, and the plays it qualifies do worse, because the
+    remaining disagreements are player-level error the lift cannot see.
+    Not proposed for use.
 
 
 ### P2.54 Line and side scan: where the current models beat the price
