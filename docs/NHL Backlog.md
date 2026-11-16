@@ -4025,6 +4025,21 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     B: holdout better, live no worse). The xG/relative and three-season
     versions are input and scope changes; on live data they lead but every
     interval spans zero at 15 slates.
+- **Promoted 2026-11-16** (operator: "Yes, replace it"; route B, data
+  correction): ROUTE_B_2S frozen as `2f0824cf…`
+  (`freeze_nhl_points_goals_assists.py --utah-2024`,
+  `production_2026-11-16_utah_2024/`, artifact SHA-256 `418ddd39…`); holdout
+  vs c940ae2f -0.21 / -0.32 [-0.61, -0.02] / -0.11; reproducible; feature
+  ranges regenerated; routine-integration evidence refreshed; one-step
+  rollback `CONTRACT_PATH = PP_STATS_API_CONTRACT_PATH`. First slate
+  2026-11-16 via a manual run at 13:35 PT (operator: "we can run manually at
+  any time and frequency"), before every game.
+  Run `20261116T213503Z_867eff3f` READY, every step exit 0. Live parity on
+  its capture (109 rows): stored predictions equal the new artifact, 0
+  invalid, 0 ladder crossings, 1 side flip at 0.5 (0.490 to 0.505), none at
+  1.5; mean expected points 0.3845 vs 0.3847 for c940ae2f, largest change
+  0.129. Model files are git-ignored like earlier artifacts; committing them
+  needs the operator's authorization (`git add -f`).
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
   Pregame line combinations: NHL.com projected lineups in trial from

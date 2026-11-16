@@ -92,6 +92,16 @@ Used when training or live data were wrong, as with the PP-TOI refit
   qualify.
 
 ## Operator decisions outside these routes
+- **2026-11-16, Points: the same recipe refit on frames rebuilt with the
+  restored 2024-25 Utah games (`2f0824cf…`) replaces `c940ae2f…` by route B.**
+  Operator: the Utah restore is a data correction ("Utah was missing from the
+  database"), so route B applies. Evidence (P2.46, P2.57): 2025 holdout -0.21
+  [-0.56, 0.15] / -0.32 [-0.61, -0.02] / -0.11 [-0.27, 0.06] x1000 at 0.5 /
+  1.5 / 2.5; live 2026-11-01..11-15 within noise (+0.31 / -0.11 / +0.18);
+  two refits identical; routine-integration evidence refreshed. Live inputs
+  unchanged (only 2024-25 prior totals differ). First slate 2026-11-16 (manual
+  run 13:35 PT, before every game). The xG, relative-shot and three-season
+  versions are input or scope changes and are not part of this decision.
 - **2026-11-15, Points: the goals + assists model refit on corrected PP TOI
   (`c940ae2f…`) replaces `8cda6061…`** under the standing rule set the same
   day for SOG (operator "Yes, replace it"). Only `mean_pp_toi_last10` differs

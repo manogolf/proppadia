@@ -657,7 +657,15 @@ present invalid or duplicate card still blocks; direct reconciliation keeps
 its exact-one-card contract.
 
 HGB Points goals + assists model (2026-11-01, P2.39). Production from the
-2026-11-15 slate (manual run 12:41 PT, before every game) is its refit on corrected PP TOI (P2.53, operator "Yes,
+2026-11-16 slate (manual run 13:35 PT, before every game) is the same recipe refit on
+training frames rebuilt from the database with the restored 2024-25 Utah games (P2.57,
+route B, operator "Yes, replace it"): `production_2026-11-16_utah_2024/`
+(`nhl_points_goals_assists_v3_utah_2024.joblib`, SHA-256 `418ddd39…`, identity
+`2f0824cf…`, `freeze_nhl_points_goals_assists.py --utah-2024`); only the 2024-25 prior-season
+totals differ from the previous contract, so live inputs are unchanged. One-step rollback:
+`CONTRACT_PATH = PP_STATS_API_CONTRACT_PATH` (`c940ae2f…`, which scored 2026-11-15 and the
+11-16 05:45-11:30 runs). Before that, from the
+2026-11-15 slate (manual run 12:41 PT, before every game), its refit on corrected PP TOI (P2.53, operator "Yes,
 replace it"): same recipe, rows, inputs and frozen totals, only
 `mean_pp_toi_last10` recomputed from the NHL stats API values (P2.45);
 `production_2026-11-15_pp_stats_api/` (`nhl_points_goals_assists_v2_pp_stats_api.joblib`,
