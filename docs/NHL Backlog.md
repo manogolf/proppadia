@@ -3799,6 +3799,35 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     production on its own evidence; a shadow (route A) would need operator
     approval and a live path for the relative inputs (league shot means
     of earlier slates).
+- **Replacing raw shots per 60, 2026-11-16** (operator: "Yes, test them";
+  no earlier test had replaced `d10_sog_per60` in Points; shot quality was
+  listed above as untested). `backend/nhl/scripts/research_nhl_points_onice_xg.py`
+  (read-only; output `artifacts/analysis/nhl/points_onice_xg_2026-11-16/`).
+  Stored official play-by-play 2023-24..2025-26 (3,842 games) and shift
+  charts (3,525 games: 2023-24 all, 2024-25 1,230, 2025-26 1,036 from
+  `nhl.shiftcharts_shifts`). xG: logistic regression on 2023-24 unblocked
+  attempts (distance, angle, shot type, strength, rebound; empty net out),
+  unchanged after: goals vs xG 7,639 / 7,633 (2023-24), 6,918 / 6,981,
+  7,501 / 8,016. Inputs: ixg_d10_per60 and onice_gf_d10_per60 (strict prior,
+  last 10 games with data, 120 days), shooting % over the last 82 games
+  shrunk to the league by 100 shots.
+  - Season means: SOG per 60 6.14 / 5.72 / 5.63, ixG per 60 0.605 / 0.585 /
+    0.627 (no downward drift), on-ice GF per 60 2.96 / 2.88 / 2.92.
+  - 2025 holdout vs production, x1000 at 0.5 / 1.5 / 2.5:
+    REPLACE_XG (sog slot -> ixG) -0.64 [-1.02, -0.25] / -0.52 [-0.85, -0.20] /
+    -0.24 [-0.45, -0.02]; ADD_XG (+ ixG, shooting %) -0.53 / -0.52 / -0.39
+    (all exclude zero); ADD_ONICE -0.19 / -0.26 / -0.17; ADD_ALL -0.72
+    [-1.09, -0.37] / -0.75 [-1.07, -0.42] / -0.23; REPLACE_ALL -0.40 / -0.47
+    / -0.20. Gains hold at 20+ minutes (ADD_ALL -1.14 / -1.36 / -0.29) and
+    early season (0-4 games -0.84 / -1.32). For comparison REL (relative
+    shots) was -0.26 / -0.34 / -0.15.
+  - Level barely moves (ADD_ALL 0.447 vs actual 0.460).
+  - Reading: shot quality is a clearly better input than raw shot volume
+    (2-3 times REL's gain, every interval below zero at 0.5 and 1.5);
+    on-ice goals for adds little on its own. Live not tested: 2026-27
+    play-by-play is not retained (about 330 games so far, one public
+    request each; shift charts are in the database). Size given to the
+    operator before fetching.
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
   Pregame line combinations: NHL.com projected lineups in trial from
