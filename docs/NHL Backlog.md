@@ -3417,8 +3417,14 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   qualified plays; Points so far adds nothing beyond the market; SOG's large
   disagreements with the market are the one place leaning right (not yet
   conclusive). Measurement only; no filter, calibration or model change.
-- Open: repeat as data accrues (weekly evaluation candidate: a market-fair
-  column beside model and price).
+- **Weekly evaluation section added 2026-11-16** (operator "Yes, add it"):
+  "Your searches vs the market" in `build_nhl_weekly_model_evaluation.py`
+  (`SEARCHES`, `search_table`, `attach_prices`; prices from the plus-money
+  price view's cached best prices at the operator's books, market from the
+  existing two-sided no-vig median), current models only, so it starts at
+  2026-11-15 (one slate so far). Tests in
+  `test_build_nhl_weekly_model_evaluation.py`. First report: week ending 11-22.
+- Open: update `SEARCHES` when the operator changes a search (11-28 filter review).
 
 ### P2.54 Line and side scan: where the current models beat the price
 

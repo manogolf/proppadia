@@ -140,6 +140,36 @@ class QualityTests(unittest.TestCase):
         self.assertIn("Model vs market by gap", text)
         self.assertIn("| sog | over 15 above | OVER | 1-0 | 1-0 |", text)
 
+    def test_searches_compare_wins_with_model_market_and_price(self):
+        import numpy as np
+        rows = pd.DataFrame({
+            "lane": ["sog", "sog", "sog", "points", "points"], "line": [1.5, 1.5, 1.5, 0.5, 0.5],
+            "selected_side": ["OVER", "OVER", "OVER", "UNDER", "UNDER"],
+            "slate_date": ["2026-11-15", "2026-11-16", "2026-11-16", "2026-11-16", "2026-11-16"],
+            "p_pick": [0.70, 0.66, 0.70, 0.65, 0.65], "market_p_pick": [0.60, 0.55, np.nan, 0.58, 0.58],
+            # SOG: edge 0.70-0.588 qualifies, 0.66-0.625 (3.5) does not, no market drops; Points: edge 0.65-0.588 qualifies
+            "decimal_price": [1.70, 1.60, 1.70, 1.70, 1.25], "win": [1, 0, 1, 0, 1]})
+        table = ev.search_table(rows, ["2026-11-16"]).set_index("search")
+        sog = table.loc["SOG Over 1.5"]
+        self.assertEqual((sog.plays, sog.wins, sog.losses, sog.week_wins), (1, 1, 0, 0))
+        self.assertAlmostEqual(sog.market_p, 0.60)
+        self.assertAlmostEqual(sog.roi, 0.70)
+        self.assertAlmostEqual(sog.price_beats_market, 1.0)
+        pts = table.loc["Points Under 0.5"]   # 1.25 is edge 0.65-0.80 < 0: excluded
+        self.assertEqual((pts.plays, pts.losses), (1, 1))
+        self.assertAlmostEqual(pts.price_beats_market, 0.0)
+        text = ev.render("2026-11-16", ["2026-11-16"], ev.model_records({"2026-11-16": summary(V3, V3)}),
+                         rows.assign(grading_state="WIN", p_over=0.6, y_over=1, band="x", two_sided=True), None)
+        self.assertIn("## Your searches vs the market", text)
+        self.assertIn("| SOG Over 1.5 | 1 |", text)
+
+    def test_prices_attach_to_the_selected_side_at_my_books_only(self):
+        rows = pd.DataFrame({"lane": ["sog"], "game_id": [1], "player_id": [2], "line": [1.5], "selected_side": ["OVER"]})
+        prices = pd.DataFrame({"lane": ["sog"] * 3, "game_id": [1] * 3, "player_id": [2] * 3, "line": [1.5] * 3,
+                               "quote_side": ["OVER", "OVER", "UNDER"], "price_scope": ["all_books", "my_books", "my_books"],
+                               "decimal_price": [1.9, 1.8, 2.1]})
+        self.assertEqual(ev.attach_prices(rows, prices).tolist(), [1.8])
+
     def test_keys_without_a_market_price_still_mark_two_sided(self):
         keys = [[1, 1, 1.5], [1, 2, 1.5, None]]
         self.assertEqual(ev.mark_two_sided(self.rows, keys).tolist(), [True, True, False, False])

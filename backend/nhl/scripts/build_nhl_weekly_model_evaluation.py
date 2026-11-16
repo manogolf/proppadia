@@ -177,6 +177,51 @@ def gap_table(rows: pd.DataFrame, week: list[str]) -> pd.DataFrame:
         if len(frame) else frame
 
 
+# The operator's 8rain searches (screenshots 2026-11-16): edge = model minus the
+# implied probability of the best price at the operator's books (points, as 8rain
+# shows it); model range = the Fair Odds filter. NHL Backlog P2.55.
+SEARCHES = (("Points Under 0.5", "points", 0.5, "UNDER", 0.04, 0.10, 0.5714, 0.75),
+            ("Points Over 0.5", "points", 0.5, "OVER", 0.05, 1.0, 0.5714, 0.8333),
+            ("SOG Over 1.5", "sog", 1.5, "OVER", 0.06, 1.0, 0.5714, 0.8333),
+            ("SOG Under 1.5", "sog", 1.5, "UNDER", 0.10, 1.0, 0.5714, 0.75))
+
+
+def search_table(rows: pd.DataFrame, week: list[str]) -> pd.DataFrame:
+    """The operator's searches on priced two-sided rows: wins vs model, market fair and price."""
+    need = {"decimal_price", "market_p_pick"}
+    if not need <= set(rows.columns):
+        return pd.DataFrame()
+    priced = rows[rows.decimal_price.gt(1) & rows.market_p_pick.notna()].copy()
+    priced["implied"] = 1 / priced.decimal_price
+    priced["edge"] = priced.p_pick - priced.implied
+    priced["profit"] = np.where(priced.win.eq(1), priced.decimal_price - 1, -1.0)
+    out = []
+    for name, lane, line, side, lo, hi, plo, phi in SEARCHES:
+        g = priced[priced.lane.eq(lane) & priced.line.astype(float).eq(line) & priced.selected_side.eq(side)
+                   & priced.edge.between(lo, hi) & priced.p_pick.between(plo, phi)]
+        if g.empty:
+            continue
+        w = g[g.slate_date.isin(week)]
+        slates = priced[priced.lane.eq(lane)].slate_date.nunique()
+        out.append({"search": name, "plays": int(len(g)), "per_slate": len(g) / slates if slates else np.nan,
+                    "week_wins": int(w.win.sum()), "week_losses": int(len(w) - w.win.sum()),
+                    "wins": int(g.win.sum()), "losses": int(len(g) - g.win.sum()), "win_rate": float(g.win.mean()),
+                    "model_p": float(g.p_pick.mean()), "market_p": float(g.market_p_pick.mean()),
+                    "price_p": float(g.implied.mean()), "roi": float(g.profit.mean()),
+                    "price_beats_market": float((g.market_p_pick * g.decimal_price > 1).mean())})
+    return pd.DataFrame(out)
+
+
+def attach_prices(rows: pd.DataFrame, prices: pd.DataFrame) -> pd.Series:
+    """Best decimal price at the operator's books on each row's selected side (NaN when unquoted)."""
+    mine = prices[prices.price_scope.eq("my_books")]
+    found = {(r.lane, int(r.game_id), int(r.player_id), float(r.line), r.quote_side): float(r.decimal_price)
+             for r in mine.itertuples()}
+    return pd.Series([found.get((lane, int(g), int(p), float(line), side), np.nan) for lane, g, p, line, side in
+                      zip(rows.lane, rows.game_id, rows.player_id, rows.line, rows.selected_side)],
+                     index=rows.index, dtype=float)
+
+
 GRADE_ROOT = ROOT / "artifacts/operational/nhl/cross_market_shadow/grades"
 
 
@@ -468,6 +513,21 @@ def render(as_of: str, week: list[str], records: pd.DataFrame, rows: pd.DataFram
                      f"{r.log_loss_model:.4f} | {r.log_loss_market:.4f} |")
     if gaps.empty:
         lines.append("| — | no priced two-sided rows | | | | | | | | |")
+    searches = search_table(rows, week)
+    lines += ["", "## Your searches vs the market (current models, season to date)", "",
+              "The operator's 8rain searches applied to the current models' picks on two-sided lines, at the best "
+              "price quoted before the prediction at BetOnline, Novig, Kalshi or Pinnacle. Market = the median no-vig "
+              "probability on that side across books, as in the gap table. A search finds real edge only if its win rate beats "
+              "the market, not just the model; the price has to beat the market too for a profit. "
+              "Price beats market = share of plays whose price was better than market fair (NHL Backlog P2.55).", "",
+              "| Search | Plays | Per slate | Week W-L | Season W-L | Win % | Model | Market | Price | ROI | Price beats market |",
+              "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|"]
+    for r in searches.itertuples():
+        lines.append(f"| {r.search} | {r.plays} | {r.per_slate:.1f} | {r.week_wins}-{r.week_losses} | "
+                     f"{r.wins}-{r.losses} | {_pct(r.win_rate)} | {_pct(r.model_p)} | {_pct(r.market_p)} | "
+                     f"{_pct(r.price_p)} | {100 * r.roi:+.1f}% | {_pct(r.price_beats_market)} |")
+    if searches.empty:
+        lines.append("| — | no priced plays | | | | | | | | | |")
     seg = segments(rows)
     lines += ["", f"## Areas for improvement (season, segments with at least {MIN_SEGMENT} picks)", "",
               "Gap = actual win rate minus the model's average confidence in its pick. Negative means overconfident.", "",
@@ -575,6 +635,11 @@ def main() -> int:
     shadow_rows = pd.concat([shadow_rows, retired[retired.lane.eq("points")].assign(lane=RETIRED_POINTS_LANE)],
                             ignore_index=True)
     current_starts = {lane: days[0] for lane, days in current.items() if days}
+    from backend.nhl.scripts.report_nhl_sog_points_price_view import _cached_prices
+    rows["decimal_price"] = np.nan
+    for day in sorted(set(rows.slate_date.astype(str))):
+        on_day = rows.slate_date.astype(str).eq(day)
+        rows.loc[on_day, "decimal_price"] = attach_prices(rows[on_day], _cached_prices(day, load_candidates))
     models = {"sog": SOG_MODEL_KEY, "points": f"NHL_POINTS_HGB_{current_points_identity()[:8]}"}
     out = OUT_ROOT / f"weekly_{args.as_of}"
     out.mkdir(parents=True, exist_ok=True)
@@ -601,6 +666,7 @@ def main() -> int:
                     shadow_rows=shadow_rows, current_starts=current_starts)
     seg.to_csv(out / "segments.csv", index=False)
     gap_table(pd.concat([rows, shadow_rows], ignore_index=True), week).to_csv(out / "gap_bands.csv", index=False)
+    search_table(rows, week).to_csv(out / "searches_vs_market.csv", index=False)
     doc = DOCS / f"weekly_model_evaluation_{args.as_of}.md"
     doc.write_text(report)
     (out / "summary.json").write_text(json.dumps({
