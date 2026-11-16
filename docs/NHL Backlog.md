@@ -3585,6 +3585,16 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   2026-11-15 (one slate so far). Tests in
   `test_build_nhl_weekly_model_evaluation.py`. First report: week ending 11-22.
 - Open: update `SEARCHES` when the operator changes a search (11-28 filter review).
+- **Market timing check, 2026-11-16** (operator: the model and the books
+  both lack lineups when lines open, so lineups are not the reason).
+  `--market-time morning|1pm|close` (morning = quotes up to 06:30 PT, as
+  the 05:45 run saw them; output folders `_morning`, `_close`). Points
+  Under 0.5 qualified: morning 95 plays (9 slates with morning quotes)
+  model 62.9 / market 55.1 / won 56.8; 1 PM 174: 64.3 / 56.4 / 56.9; close
+  178: 64.5 / 56.7 / 57.3. The market barely moves from open to close and
+  is already near the result at open; the model's 8-point gap is the same
+  against the opening line. Lineups and late news are not the cause; the
+  books open with a better estimate from the same morning information.
 
 ### P2.54 Line and side scan: where the current models beat the price
 

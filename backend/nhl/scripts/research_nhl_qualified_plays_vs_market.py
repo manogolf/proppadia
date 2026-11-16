@@ -58,7 +58,7 @@ def dec(american) -> np.ndarray:
     return np.where(a > 0, 1 + a / 100, 1 + 100 / -a)
 
 
-def quotes() -> pd.DataFrame:
+def quotes(market_time: str = "1pm") -> pd.DataFrame:
     parts = []
     for f in glob.glob(str(OBS / "slate_date=*/observation=*/normalized_odds.jsonl")):
         t = pd.read_json(f, lines=True)
@@ -75,8 +75,16 @@ def quotes() -> pd.DataFrame:
     q["start"] = pd.to_datetime(q.commence_time, utc=True)
     # Market as of 1 PM PT on game day (the operator bets in the early afternoon), never later
     # than 30 minutes before the start.
-    cutoff = (q.start.dt.tz_convert("America/Los_Angeles").dt.normalize() + pd.Timedelta(hours=13)).dt.tz_convert("UTC")
-    q = q[(q.obs <= q.start - LEAD) & (q.obs <= cutoff)]
+    q = q[q.obs <= q.start - LEAD]
+    day = q.start.dt.tz_convert("America/Los_Angeles").dt.normalize()
+    cutoff = (day + pd.Timedelta(hours=13)).dt.tz_convert("UTC")
+    if market_time == "1pm":
+        q = q[q.obs <= cutoff]
+    elif market_time == "morning":
+        # The market as the 05:45 PT run saw it: observations up to 06:30 PT on game day.
+        q = q[q.obs <= (day + pd.Timedelta(hours=6, minutes=30)).dt.tz_convert("UTC")]
+    elif market_time != "close":
+        raise SystemExit(f"UNKNOWN_MARKET_TIME:{market_time}")
     q["who"] = q.description.map(norm)
     q["game_date"] = q.start.dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d")
     # last pregame observation per game (all books in it)
@@ -109,8 +117,16 @@ def model_rows() -> pd.DataFrame:
 
 
 def main() -> int:
+    import argparse
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--market-time", default="1pm", choices=["morning", "1pm", "close"],
+                    help="morning: quotes up to 06:30 PT (the 05:45 run); 1pm; close: last 30+ min before start")
+    args = ap.parse_args()
+    global OUT
+    if args.market_time != "1pm":
+        OUT = OUT.parent / f"{OUT.name}_{args.market_time}"
     OUT.mkdir(parents=True, exist_ok=True)
-    q = quotes()
+    q = quotes(args.market_time)
     two = q.pivot_table(index=["game_date", "market", "who", "point", "bookmaker"], columns="outcome",
                         values="price", aggfunc="last").dropna().reset_index()
     two["p_over"] = (1 / dec(two.Over)) / (1 / dec(two.Over) + 1 / dec(two.Under))
