@@ -3595,6 +3595,31 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   is already near the result at open; the model's 8-point gap is the same
   against the opening line. Lineups and late news are not the cause; the
   books open with a better estimate from the same morning information.
+- **What the books weigh differently, 2026-11-16** (operator: "Yes, run
+  it"). `backend/nhl/scripts/research_nhl_points_market_disagreement_by_input.py`
+  (read-only; output `artifacts/analysis/nhl/points_market_disagreement_by_input_2026-11-16/`):
+  every Points 0.5 player-game c940ae2f scored with a two-sided market,
+  inputs from the latest pregame capture, by input quintile.
+  - Overall: morning (1,032 rows, 9 slates) model 47.5% / market 49.5% /
+    actual 50.2%; close (1,744, 14 slates) 45.2 / 47.4 / 47.4. The model
+    sits about 2 points below the market and the market matches the result.
+  - The difference is concentrated in low-usage, low-scoring players and
+    vanishes for stars. Close market, lowest vs highest quintile, model
+    minus market: scoring rate -5.0 vs -0.7, team shot share -4.5 vs -0.3,
+    PP TOI -4.0 vs -1.1, TOI -4.1 vs -1.1, goal rate -4.8 vs -0.2. Morning
+    lowest quintiles: TOI model 38.3 / market 42.2 / actual 44.2; scoring
+    rate 34.7 / 39.5 / 39.1; goal rate 38.0 / 42.2 / 42.0: the market is
+    right on depth players, the model too pessimistic. A few low bands
+    lean the model's way at the close (low PP TOI 31.0 / 35.0 / 29.9),
+    within noise (about 350 rows per band, about +/-2.6 points).
+  - Top quintiles: model and market agree and both are a little low
+    (close, PP TOI Q5: 57.5 / 58.6 / 64.7).
+  - Reading: Points 0.5 Unders come from exactly these depth players
+    (model P(over) 25-43%), where the model is 4-5 points too low, so many
+    Under edges are the model's pessimism. Candidate test: stronger pull of
+    low-history players toward the league rate (own rate shrunk by 60
+    games instead of 30; the 10-game version was tested and was no better).
+
 
 ### P2.54 Line and side scan: where the current models beat the price
 
