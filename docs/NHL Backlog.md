@@ -3484,6 +3484,36 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   scattered rows, still undiagnosed). The games enter model training only
   when training frames are rebuilt (next refit); the frozen research frames
   used by the P2.46 tests do not include them.
+- **Pre-refit checks, 2026-11-16** (operator: "this is a data correction ...
+  proceed with listed items"):
+  - Legacy team IDs: the training build already binds every 2023-24 and
+    2024-25 row to the game's home or away side by `is_home`
+    (`run_nhl_points_hgb_pp_corrected_refit.bind_canonical_team`; 85,440
+    rows rebound, 2,192 legacy-ID collisions resolved), so team inputs do
+    not read the stored legacy IDs. No change needed.
+  - Training frames rebuilt from the database with the Utah games:
+    `backend/nhl/scripts/rebuild_nhl_points_training_frames.py` (read-only;
+    output `artifacts/analysis/nhl/points_training_rebuild_2026-11-16/`; Utah
+    labels from the official boxscores). Training 93,438 rows (2,952 new,
+    all in Utah games; 90,486 shared with the P2.53 frame), 2025-26 47,023.
+    Every feature difference traces to the Utah games: games-played counts,
+    windows and prior-season rates of players who played them (opponents
+    included), the league prior rates (all 2025-26 rates move slightly),
+    and 472 team-shot inputs of players whose team played Utah in a game
+    they sat out. Labels consistent; no row lost.
+  - The 555 scattered missing rows (2023-24 137, 2024-25 108, 2025-26 310;
+    83 players, 469 games, none in 2026-27; list
+    `points_training_rebuild_2026-11-16/scattered_missing_rows.csv`): every
+    player exists in `nhl.players` and has other stored games; 85% were not
+    in `nhl.roster_status` for that game. The historical loader matched
+    boxscore names to IDs through that table
+    (`seed_skater_logs_for_date.roster_name_map`), so a player absent from
+    it, or sharing a name (two Elias Petterssons, 51 rows in 2025-26), was
+    skipped. Top: Liam O'Brien 75 (2023-24), Elias Pettersson (8480012) 51,
+    Tyler Pitlick 34, Matthew Schaefer 33, Ben Meyers 31. The 2026-27 path
+    matches by official player ID and has no missing rows. Open: restore
+    them the same way as Utah (boxscores for 469 games), if the operator
+    wants.
 
 ### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
 
@@ -3972,6 +4002,29 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     it does not close the gap to the market or fix the big Unders. A shadow
     would need a daily play-by-play pull and the xG computation in the live
     path (operator decision).
+- **Refit candidates on the rebuilt frames, 2026-11-16**
+  (`backend/nhl/scripts/research_nhl_points_refit_candidates.py`, read-only;
+  output `artifacts/analysis/nhl/points_refit_candidates_2026-11-16/`).
+  x1000 vs production c940ae2f at 0.5 / 1.5 / 2.5:
+  - ROUTE_B_2S (production recipe, 2023-24 + 2024-25 with Utah; the
+    data-correction refit; reproducible): holdout -0.21 / -0.32 [-0.61,
+    -0.02] / -0.11, 20+ min -0.56 / -1.05 [-1.75, -0.35] / -0.52; live
+    +0.31 / -0.11 / +0.18 (all span zero); two-sided 0.5050 (= production).
+  - XG_REL_2S (+ ixG and shooting %, relative shot inputs): holdout -0.74
+    [-1.21, -0.25] / -0.49 [-0.93, -0.05] / -0.14, 20+ min -1.32 [-2.46,
+    -0.17]; live +0.29 / -0.49 / +0.13; two-sided 0.5044.
+  - ROUTE_B_3S (recipe on 2023-24..2025-26, no holdout left): live +0.44 /
+    -0.67 / -0.18; two-sided 0.5042.
+  - XG_REL_3S: live +0.13 / -1.18 [-2.84, 0.13] / -0.81 [-2.06, 0.27];
+    two-sided 0.5037 (market 0.5000), role change 0.5135 vs 0.5145.
+  - Level (live actual 0.470): production 0.453, ROUTE_B_2S 0.453,
+    XG_REL_2S 0.457, ROUTE_B_3S 0.459, XG_REL_3S 0.462. Three seasons close
+    about 40% of the level gap. Biggest Points disagreements (139): won
+    60.4%, market 61.4%, production 73.6%, XG_REL_3S 72.2%.
+  - Reading: ROUTE_B_2S is the same-recipe refit on corrected data (route
+    B: holdout better, live no worse). The xG/relative and three-season
+    versions are input and scope changes; on live data they lead but every
+    interval spans zero at 15 slates.
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
   Pregame line combinations: NHL.com projected lineups in trial from
