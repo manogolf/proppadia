@@ -3655,6 +3655,35 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     list, which is the only subset that can be bet. Which players are
     listed carries the books' view of who matters tonight. Unders on listed
     players are overstated by about 3 points and Overs understated.
+- **Trained on listed player-games, 2026-11-16** (operator: "Train on listed
+  players"). `backend/nhl/scripts/research_nhl_points_listed_training.py`
+  (read-only; output `artifacts/analysis/nhl/points_listed_training_2026-11-16/`).
+  Same recipe; listing exists only from 2025-10.
+  - Time split in 2025-26 (fit before 2026-02-01, test listed rows after:
+    1,938 rows, 17 slates with snapshots): P(1+) actual 50.4%, production
+    46.8, LISTED_EARLY (11,139 listed rows) 52.0, ALL25_EARLY 49.4,
+    MIXED_EARLY (two seasons + early listed rows) 47.3. Log loss vs
+    production x1000: LISTED_EARLY +7.49 / +2.57 / +0.44, ALL25_EARLY
+    +0.73 / -0.36 / +0.38, MIXED_EARLY +0.74 / -1.18 / -0.55 (all span zero).
+  - Live 2026-27 (1,744 listed player-games, 14 slates): P(1+) actual 47.4,
+    market 47.4, production 45.2, LISTED_2025 48.5, MIXED_2025 46.0. Log
+    loss at 0.5: market 0.6535, production 0.6607, LISTED_2025 0.6645,
+    MIXED_2025 0.6605. Qualified searches at 1 PM: LISTED_2025 Unders 115
+    plays won 54.8% (-2.8%), Overs 149 won 48.3% (-14.5%); production
+    Unders 167 won 58.7%, Overs 23 won 65.2%.
+  - Training on listed rows fixes the level but, with one season of
+    listing (11-13k rows), forecasts worse; mixing the listed rows into the
+    full training data barely moves anything. Not adopted.
+  - Qualifier check (production, 1 PM, Points Under 0.5): edge 4-10 won
+    56.9 vs market 56.4 (174); 7-13 won 43.2 vs 54.1 (88); 10+ won 40.9 vs
+    48.0 (44). Raising the Under edge bar selects more model error, so a
+    higher threshold does not help. On Points, every edge band tracks the
+    market or does worse.
+  - Reading: the listing explains the level gap but the books know more
+    than the listing; with today's data no Points variant beats the market.
+    Revisit when the live season adds listed rows (prices are captured
+    daily), and keep Points plays to prices better than the market's
+    no-vig number.
 
 
 ### P2.54 Line and side scan: where the current models beat the price
