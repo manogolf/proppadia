@@ -3693,6 +3693,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     must cover them (first listing and relisting), with no separate rule
     needed on this evidence. Caveat: snapshot days are missing on some
     dates, so a few "new" listings may be continuing ones.
+  - Requirement for any later listed-training retry (operator: "newly
+    listed players was directed at training. when a new player is listed
+    somehow include in training"): the listed training set grows as the
+    season goes, adding each newly listed player's player-games from his
+    first listing on (from the daily price captures), rather than a fixed
+    list of players. Deferred with the retry itself, since listed-only
+    training is not favorable on current data.
 
 
 ### P2.54 Line and side scan: where the current models beat the price
