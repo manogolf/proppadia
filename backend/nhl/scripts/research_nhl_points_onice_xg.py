@@ -49,6 +49,9 @@ from backend.nhl.scripts import research_nhl_points_pp_corrected_refit as ppfix 
 OUT = ROOT / "artifacts/analysis/nhl/points_onice_xg_2026-11-16"
 SRC_2324 = ROOT / "artifacts/analysis/nhl/pp_toi_historical_recovery_2026-10-16/official_sources"
 PBP_2025 = ROOT / "artifacts/analysis/nhl/points_attempts_2025_full_recovery_2026-10-16/official_pbp"
+# 2026-27 play-by-play fetched 2026-11-16 for the live test (operator: "Yes, fetch it"; 330 games
+# through 2026-11-15, manifest pbp_2026_manifest.json).
+PBP_2026 = OUT / "pbp_2026"
 KEYS = ["game_id", "player_id"]
 SHOT_TYPES = ("wrist", "snap", "slap", "backhand", "tip-in", "deflected", "wrap-around")
 
@@ -121,7 +124,7 @@ def shifts_from_json(s: dict) -> pd.DataFrame:
     return pd.DataFrame(rows, columns=["game_id", "player_id", "team_id", "start", "end"])
 
 
-def shifts_2025() -> pd.DataFrame:
+def shifts_2025(season: int = 2025) -> pd.DataFrame:
     import psycopg
     from dotenv import dotenv_values
     from backend.nhl.database_access import database_url
@@ -130,7 +133,7 @@ def shifts_2025() -> pd.DataFrame:
         cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         cur.execute("""SELECT s.game_id::bigint, s.player_id::bigint, s.team_id::bigint, s.period, s.start_time, s.end_time
                          FROM nhl.shiftcharts_shifts s JOIN nhl.games g USING (game_id)
-                        WHERE g.season = 2025 AND g.game_type = 2 AND s.period <= 4""")
+                        WHERE g.season = %s AND g.game_type = 2 AND s.period <= 4""", (season,))
         rows = cur.fetchall()
     out = [(g, p, t, game_seconds(int(per), mmss(str(a))), game_seconds(int(per), mmss(str(b))))
            for g, p, t, per, a, b in rows]
@@ -236,11 +239,65 @@ def db_logs_with_sog() -> pd.DataFrame:
         cur.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
         cur.execute("""SELECT l.game_id::bigint, l.player_id::bigint, g.game_date, l.toi_minutes, l.shots_on_goal
                          FROM nhl.skater_game_logs_raw l JOIN nhl.games g USING (game_id)
-                        WHERE g.season BETWEEN 2023 AND 2025 AND g.game_type = 2""")
+                        WHERE g.season BETWEEN 2023 AND 2026 AND g.game_type = 2""")
         logs = pd.DataFrame(cur.fetchall(), columns=["game_id", "player_id", "game_date", "toi_minutes", "shots_on_goal"])
     logs["toi_minutes"] = pd.to_numeric(logs.toi_minutes, errors="coerce").astype(float)
     logs["shots_on_goal"] = pd.to_numeric(logs.shots_on_goal, errors="coerce").astype(float)
     return logs
+
+
+def live_test(shots, goals, shifts, logs, specs, models, swap) -> dict:
+    """Score the candidates on live 2026-11-01..11-15 captures against production and the market."""
+    import joblib
+    from scipy.stats import poisson
+    from backend.nhl.scripts import research_nhl_points_hgb_month_end_refit as base
+    from backend.nhl.scripts import score_nhl_points_hgb_shadow as scorer
+    s26, g26 = [], []
+    for f in sorted(PBP_2026.glob("game=*.play-by-play.json")):
+        a, b = parse_pbp(json.load(open(f)))
+        s26 += a; g26 += b
+    shots = pd.concat([shots, pd.DataFrame(s26)], ignore_index=True)
+    goals = pd.concat([goals, pd.DataFrame(g26)], ignore_index=True)
+    shifts = pd.concat([shifts, shifts_2025(2026)], ignore_index=True)
+    pg, _ = per_game(shots, goals, shifts)   # xG still fitted on 2023-24 only
+    fr = ms.frames()
+    live = fr["live"].copy()
+    live["slate_date"] = live.game_date.astype(str)
+    roll = rolling(live[KEYS + ["slate_date"]], pg, logs)
+    live = live.merge(roll, on=KEYS, how="left")
+    live["attempts_d10_per60"] = scorer.impute_unknown_attempts(live)
+    prod = joblib.load(scorer.CONTRACT_PATH.parent / json.loads(scorer.CONTRACT_PATH.read_text())["fitted_artifact"])
+    live["PRODUCTION"] = scorer.score(live, prod).expected_points.to_numpy()
+    for k, (f, sw) in specs.items():
+        live[k] = ms.predict(models[k], swap(live) if sw else live)
+    out = {"live_rows": int(len(live)), "coverage_ixg": float(live.ixg_d10_per60.notna().mean()),
+           "base_vs_production_max_abs": float(np.abs(live.BASE - live.PRODUCTION).max()),
+           "mean": {"actual": float(live.realized_points.mean()), **{k: float(live[k].mean()) for k in specs}}}
+    masks = {k: v for k, v in pmc.groups(live).items()
+             if k in ("all", "role_change", "role_up", "role_down", "toi_under_13", "toi_17_20", "toi_20_plus")}
+    paired = pd.concat([pmc.paired(live, k, "BASE", masks).assign(model=k) for k in list(specs)[1:]], ignore_index=True)
+    paired[["model", "group", "line", "n", "diff_x1000", "ci_x1000"]].to_csv(OUT / "live_vs_production.csv", index=False)
+    mk = live.merge(fr["market"], on=KEYS, how="inner")
+    y = (mk.realized_points > mk.line).astype(float).to_numpy()
+    kk = mk.line.astype(int).to_numpy()
+    rows = []
+    for name, m in {"all": np.ones(len(mk), bool), "line_0.5": mk.line.eq(0.5).to_numpy(),
+                    "role_change": mk.role_change.to_numpy(bool)}.items():
+        row = {"group": name, "n": int(m.sum()), "MARKET": float(base.log_loss_rows(mk.market_p_over.to_numpy()[m], y[m]).mean())}
+        for k in specs:
+            row[k] = float(base.log_loss_rows(poisson.sf(kk, mk[k].to_numpy())[m], y[m]).mean())
+        rows.append(row)
+    pd.DataFrame(rows).to_csv(OUT / "live_two_sided_vs_market.csv", index=False)
+    if pmc.DISAGREE.is_file():
+        d = pd.read_csv(pmc.DISAGREE)
+        d = d[d.lane.eq("points")].merge(live[KEYS + list(specs)], on=KEYS, how="inner")
+        over = d.side.eq("OVER").to_numpy()
+        row = {"plays": len(d), "won": float(d.won.mean()), "market": float(d.market_p.mean())}
+        for k in specs:
+            p_ = poisson.sf(d.line.astype(int).to_numpy(), d[k].to_numpy())
+            row[k] = float(np.where(over, p_, 1 - p_).mean())
+        pd.DataFrame([row]).to_csv(OUT / "live_biggest_points_disagreements.csv", index=False)
+    return out
 
 
 def main() -> int:
@@ -283,8 +340,8 @@ def main() -> int:
     info["holdout_mean"] = {"actual": float(hold.realized_points.mean()), **{k: float(hold[k].mean()) for k in specs}}
     toi = hold.assign(toi_band=pd.cut(hold.mean_toi_last10, [0, 13, 17, 20, 23, 60], labels=["<13", "13-17", "17-20", "20-23", "23+"]))
     toi.groupby("toi_band", observed=True)[["realized_points"] + list(specs)].mean().round(4).to_csv(OUT / "holdout_level_by_toi.csv")
-    # Live sizing: 2026-27 regular-season games played so far need play-by-play.
-    info["live_pull_needed"] = "2026-27 play-by-play for games played to date (~330 games, one public request each); shift charts are in the database"
+    if PBP_2026.is_dir():
+        info["live"] = live_test(shots, goals, shifts, logs, specs, models, swap)
     (OUT / "summary.json").write_text(json.dumps(info, indent=1, default=str) + "\n")
     pd.set_option("display.width", 250)
     print(json.dumps(info, indent=1, default=str))

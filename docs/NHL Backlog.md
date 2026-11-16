@@ -3824,10 +3824,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Level barely moves (ADD_ALL 0.447 vs actual 0.460).
   - Reading: shot quality is a clearly better input than raw shot volume
     (2-3 times REL's gain, every interval below zero at 0.5 and 1.5);
-    on-ice goals for adds little on its own. Live not tested: 2026-27
-    play-by-play is not retained (about 330 games so far, one public
-    request each; shift charts are in the database). Size given to the
-    operator before fetching.
+    on-ice goals for adds little on its own.
+  - Live (operator "Yes, fetch it": 330 games of 2026-27 play-by-play
+    through 11-15 fetched, all final, manifest `pbp_2026_manifest.json`;
+    same xG fit). 3,573 player-games 11-01..11-15, x1000 vs production:
+    REPLACE_XG +0.31 [-1.02, 1.40] / -0.54 [-2.0, 0.54] / -0.26; ADD_XG
+    -0.43 / -0.40 / -0.03; ADD_ALL +0.20 / -0.21 / +0.14 (all span zero);
+    REPLACE_XG on role-up players -3.22 / -2.19 / -2.61. Two-sided vs market:
+    production 0.5050, REPLACE_XG 0.5049, ADD_XG 0.5050, market 0.5000.
+    Biggest Points disagreements (139): production 73.6%, xG versions
+    73.1-73.5%, market 61.4%, won 60.4%.
+  - Reading: the holdout gain (about 0.6 x1000) is smaller than live noise
+    at 15 slates (intervals about +/-1.2), so live neither confirms nor
+    contradicts it. xG is the best-supported Points input change so far;
+    it does not close the gap to the market or fix the big Unders. A shadow
+    would need a daily play-by-play pull and the xG computation in the live
+    path (operator decision).
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
   Pregame line combinations: NHL.com projected lineups in trial from
