@@ -375,7 +375,7 @@ def fill_verified_zero(cur, game_id: int) -> int:
     return int(row[0]) if row else 0
 
 
-def assert_no_bad_team_games(cur, slate_date: str) -> int:
+def assert_no_bad_team_games(cur, slate_date: str, pending_game_ids=()) -> int:
     """
     Returns count of (game_id, team_id) where:
       - team TOI > 0
@@ -397,6 +397,7 @@ def assert_no_bad_team_games(cur, slate_date: str) -> int:
           WHERE g.game_date = %s::date
             AND g.game_type = 2
             AND l.team_id IS NOT NULL
+            AND NOT (g.game_id = ANY(%s::bigint[]))
           GROUP BY 1,2
         ),
         pp_windows AS (
@@ -428,11 +429,11 @@ def assert_no_bad_team_games(cur, slate_date: str) -> int:
         )
         SELECT COUNT(*) FROM bad;
         """,
-        (slate_date, slate_date),
+        (slate_date, [int(g) for g in pending_game_ids], slate_date),
     )
     return int(cur.fetchone()[0])
 
-def print_bad_team_games(cur, slate_date: str, limit: int = 20) -> None:
+def print_bad_team_games(cur, slate_date: str, pending_game_ids=(), limit: int = 20) -> None:
     cur.execute(
         """
         WITH team_games AS (
@@ -446,6 +447,7 @@ def print_bad_team_games(cur, slate_date: str, limit: int = 20) -> None:
           WHERE g.game_date = %s::date
             AND g.game_type = 2
             AND l.team_id IS NOT NULL
+            AND NOT (g.game_id = ANY(%s::bigint[]))
           GROUP BY 1,2
         ),
         pp_windows AS (
@@ -478,7 +480,7 @@ def print_bad_team_games(cur, slate_date: str, limit: int = 20) -> None:
         ORDER BY pp_window_sec DESC, tg.team_toi_sum DESC
         LIMIT %s;
         """,
-        (slate_date, slate_date, limit),
+        (slate_date, [int(g) for g in pending_game_ids], slate_date, limit),
     )
     for r in cur.fetchall():
         print(f"BAD team-game: {r}", file=sys.stderr)
@@ -533,13 +535,14 @@ def main() -> None:
     total_official_rows = 0
     official_games = 0
     overlap_games = 0
+    pending_games: list[int] = []
     for game_id in game_ids:
         # --- Source of record: the NHL stats API (P2.45), once its fill function exists ---
         if official_available:
             try:
                 official_rows = fetch_official_pp(game_id)
             except Exception as e:
-                print(f"game_id={game_id}: stats API PP fetch failed: {e}; using shift overlap", file=sys.stderr)
+                print(f"game_id={game_id}: stats API PP fetch failed: {e}", file=sys.stderr)
                 official_rows = []
             if official_rows:
                 values = {r["player_id"]: r["pp_seconds"] / 60.0 for r in official_rows}
@@ -562,7 +565,14 @@ def main() -> None:
                     conn.rollback()
                 time.sleep(args.sleep)
                 continue
-            print(f"game_id={game_id}: stats API has no rows yet; using shift overlap", file=sys.stderr)
+            # Not published yet (the stats API lags the final horn) or unreachable: leave the
+            # game NULL for a later run. A shift-overlap value written now could never be
+            # replaced, because every fill is NULL-only (2026-11-15 VAN-VGK, P2.45).
+            pending_games.append(int(game_id))
+            print(f"game_id={game_id}: stats API has no rows yet; left NULL for a later run", file=sys.stderr)
+            conn.rollback()
+            time.sleep(args.sleep)
+            continue
 
         # --- Fallback: DB overlap (segments + shiftcharts), not boxscore JSON ---
         overlap_games += 1
@@ -622,9 +632,9 @@ def main() -> None:
         time.sleep(args.sleep)
 
     # invariant check (run in a transaction that matches mode)
-    bad = assert_no_bad_team_games(cur, slate_date)
+    bad = assert_no_bad_team_games(cur, slate_date, pending_games)
     if bad > 0:
-        print_bad_team_games(cur, slate_date)
+        print_bad_team_games(cur, slate_date, pending_games)
         if commit:
             conn.rollback()
         conn.close()
@@ -656,6 +666,7 @@ def main() -> None:
         "official_fills": total_official_rows,
         "official_source_games": official_games,
         "shift_overlap_games": overlap_games,
+        "official_pending_games": len(pending_games),
         "filled_nulls": total_updated_rows,
         "verified_zero_fills": total_zero_rows,
         "zero_fill_function_available": zero_available,
@@ -665,7 +676,7 @@ def main() -> None:
         "populated_zero_preserved": True,
     }, sort_keys=True))
     print(f"DONE. official_rows={total_official_rows} official_games={official_games} "
-          f"overlap_games={overlap_games} total_updated_rows={total_updated_rows} verified_zero_rows={total_zero_rows} bad_team_games={bad} mode={'COMMIT' if commit else 'DRY-RUN'}")
+          f"overlap_games={overlap_games} pending_games={len(pending_games)} total_updated_rows={total_updated_rows} verified_zero_rows={total_zero_rows} bad_team_games={bad} mode={'COMMIT' if commit else 'DRY-RUN'}")
 
 
 if __name__ == "__main__":

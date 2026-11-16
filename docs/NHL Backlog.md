@@ -3803,8 +3803,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     round(ppTimeOnIce / 60, 2) when 0 <= PP <= TOI and stored TOI is within
     0.05 min of official. `fill_pp_toi_minutes_for_date.py` fetches the stats
     API per game (`official_get`, family `SKATER_TIME_ON_ICE`) and calls it;
-    a game with no rows or a failed fetch falls back to shift overlap; until
-    the function exists the fill is unchanged. Receipt fields
+    a game with no rows or a failed fetch was at first filled by shift overlap
+    (replaced 2026-11-16, below); until the function exists the fill is
+    unchanged. Receipt fields
     `official_fill_function_available`, `official_fills`,
     `official_source_games`, `shift_overlap_games`. Tests
     `backend/nhl/tests/test_pp_toi_official_fill.py`. Live fetch check
@@ -3818,8 +3819,32 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     true. Dry run of the fill for 2026-11-14 (rolled back): 14 of 14 games
     from the stats API (36 rows each), 0 fills (all populated), 0 conflicts
     (stored equals official), invariant 0 bad team-games.
-  - Open: confirm the next daily run's receipt shows `official_source_games`
-    equal to the games played (first natural run 2026-11-16); the 3,471 missing
+  - **2026-11-16 first natural receipts:** both daily runs for 11-15 show
+    `official_source_games` 5 of 5 and 0 shift-overlap games, but 24
+    confirmed conflicts, all in game 2026020329 (VAN at VGK). Cause: the
+    postgame run (`nhlpostgame_20261115_20261116T052143249378Z_e4ce44de`)
+    asked the stats API at 05:22Z, about 40 minutes after the game, and got
+    an empty response (21 bytes; the other four games returned 180 rows);
+    the fill fell back to shift overlap, and because every fill is NULL-only
+    those values could not be replaced by the official ones. Shift overlap
+    stored more PP time than official on all 24 (e.g. 1.95 vs 1.42 min).
+    Fix: when the official fill function exists, a game with no official
+    rows or a failed fetch is left NULL for a later run (next daily run
+    fills it), never shift overlap; the end-of-run team invariant skips those
+    games; receipt field `official_pending_games`. Shift overlap remains only
+    where the official function is not installed. Tests
+    `test_pp_toi_official_fill.py`. Correction of the 24 rows prepared (no
+    database write): `prepare_nhl_pp_toi_stats_api_correction.py --fetch|--build|--verify
+    --first-date 2026-11-15 --last-date 2026-11-15 --evidence
+    artifacts/analysis/nhl/pp_toi_stats_api_correction_2026-11-16` (new
+    `--first-date`/`--evidence` options so the completed repair's proposal
+    and receipt stay intact): 156 already correct, 24 to change, one batch,
+    operator block `sql/editor_2026-11.sql`. Verify before: original 24.
+    Effect on 11-16 predictions: the 11-15 VAN values enter the last-10 PP
+    averages of VAN skaters playing 11-16 (about +0.05 min each); the
+    situation inputs add nothing to SOG V2 (P2.52), so no rerun.
+  - Open: operator runs the 2026-11-16 correction block, then `--verify`
+    (expect corrected 24); the 3,471 missing
     stored rows; SOG HGB and Points refits on corrected data (P2.50,
     IMP-034/035/037).
   - Decisions as first listed: (a) make the stats API

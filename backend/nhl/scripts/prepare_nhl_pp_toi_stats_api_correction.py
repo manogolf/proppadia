@@ -367,22 +367,27 @@ def verify(evidence: Path = EVIDENCE) -> list[dict]:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--last-date", required=True, help="last regular-season date to include, YYYY-MM-DD")
+    ap.add_argument("--first-date", default=FIRST_DATE, help=f"first date to include (default {FIRST_DATE})")
+    ap.add_argument("--evidence", type=Path, default=EVIDENCE,
+                    help="evidence directory; use a new one for a follow-up correction so the "
+                         "completed correction's proposal and receipt are not overwritten")
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--fetch", action="store_true")
     mode.add_argument("--build", action="store_true")
     mode.add_argument("--verify", action="store_true")
     args = ap.parse_args()
+    evidence = args.evidence if args.evidence.is_absolute() else ROOT / args.evidence
     if args.verify:
-        for row in verify():
+        for row in verify(evidence):
             print(json.dumps(row))
         return 0
-    raw = read_raw(FIRST_DATE, args.last_date)
+    raw = read_raw(args.first_date, args.last_date)
     if args.fetch:
-        manifest = fetch(regular_season_dates(raw))
+        manifest = fetch(regular_season_dates(raw), evidence)
         print(f"PP TOI STATS API EVIDENCE: {len(manifest)} dates, {sum(e['rows'] for e in manifest.values())} rows")
         return 0
-    proposal, counts, missing = build_proposal(raw, load_official())
-    summary = write_build(proposal, counts, missing)
+    proposal, counts, missing = build_proposal(raw, load_official(evidence))
+    summary = write_build(proposal, counts, missing, evidence)
     print(f"PP TOI STATS API PROPOSAL: {summary['proposal_rows']} rows in {len(summary['batches'])} batches; "
           f"counts {json.dumps(dict(counts), sort_keys=True)}")
     return 0

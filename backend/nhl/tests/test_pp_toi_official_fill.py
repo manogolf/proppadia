@@ -64,6 +64,14 @@ class FakeConn:
         pass
 
 
+def _invariant_patch():
+    """Keep an outer patch of the invariant when a test installs one."""
+    from contextlib import nullcontext
+    if isinstance(fill.assert_no_bad_team_games, unittest.mock.Mock):
+        return nullcontext()
+    return patch.object(fill, "assert_no_bad_team_games", return_value=0)
+
+
 def run_main(cursor, official_rows, games=(2026020101, 2026020102)):
     out, err = StringIO(), StringIO()
     overlap = patch.object(fill, "extract_pp_toi_minutes_from_db", return_value={1: 2.0})
@@ -74,7 +82,7 @@ def run_main(cursor, official_rows, games=(2026020101, 2026020102)):
          patch.object(fill, "fetch_official_pp", side_effect=official_rows) as fetch, \
          overlap as extract, \
          patch.object(fill, "update_game", return_value=(20, 1, 1)), \
-         patch.object(fill, "assert_no_bad_team_games", return_value=0), \
+         _invariant_patch(), \
          patch.object(fill, "write_pp_toi_conflict_diagnostic", return_value={"conflict_count": 0}), \
          patch.object(fill.time, "sleep"), \
          patch.object(sys, "argv", ["fill", "--date", "2026-11-15", "--commit"]), \
@@ -98,19 +106,35 @@ class DailyCallTests(unittest.TestCase):
         self.assertEqual([c[0] for c in calls], [2026020101, 2026020102])
         self.assertEqual(json.loads(calls[0][1]), OFFICIAL)
 
-    def test_a_game_missing_from_the_stats_api_falls_back_to_shift_overlap(self):
+    def test_a_game_not_yet_in_the_stats_api_is_left_null_not_shift_overlap(self):
+        # 2026-11-15 VAN-VGK: the postgame run asked 40 minutes after the horn, got no rows,
+        # and the shift-overlap fallback locked in values the official fill could never replace.
         cursor = FakeCursor(official_available=True)
-        summary, _, extract, err = run_main(cursor, [OFFICIAL, []])
-        self.assertEqual((summary["official_source_games"], summary["shift_overlap_games"]), (1, 1))
-        self.assertEqual(summary["filled_nulls"], 1)
-        self.assertEqual(extract.call_count, 1)
-        self.assertIn("no rows yet", err)
+        with patch.object(fill, "assert_no_bad_team_games", return_value=0) as invariant:
+            summary, _, extract, err = run_main(cursor, [OFFICIAL, []])
+        self.assertEqual((summary["official_source_games"], summary["shift_overlap_games"],
+                          summary["official_pending_games"]), (1, 0, 1))
+        self.assertEqual((summary["filled_nulls"], summary["verified_zero_fills"]), (0, 0))
+        self.assertEqual(extract.call_count, 0)
+        self.assertFalse([c for c in cursor.calls if "zero_from_shift_overlap(" in c[0] and "SELECT nhl." in c[0]])
+        self.assertIn("left NULL for a later run", err)
+        self.assertEqual(invariant.call_args.args[2], [2026020102])
 
-    def test_a_fetch_failure_falls_back_to_shift_overlap(self):
+    def test_a_fetch_failure_is_left_null_not_shift_overlap(self):
         cursor = FakeCursor(official_available=True)
         summary, _, extract, err = run_main(cursor, [RuntimeError("boom"), OFFICIAL])
-        self.assertEqual((summary["official_source_games"], summary["shift_overlap_games"]), (1, 1))
+        self.assertEqual((summary["official_source_games"], summary["shift_overlap_games"],
+                          summary["official_pending_games"]), (1, 0, 1))
+        self.assertEqual(extract.call_count, 0)
         self.assertIn("stats API PP fetch failed", err)
+
+    def test_the_team_invariant_skips_pending_games(self):
+        cursor = FakeCursor(official_available=True)
+        cursor.fetchone = lambda: (0,)
+        fill.assert_no_bad_team_games(cursor, "2026-11-15", [2026020329])
+        sql, params = cursor.calls[-1]
+        self.assertIn("NOT (g.game_id = ANY(%s::bigint[]))", sql)
+        self.assertEqual(params, ("2026-11-15", [2026020329], "2026-11-15"))
 
     def test_without_the_migration_the_stats_api_is_not_called(self):
         cursor = FakeCursor(official_available=False)
@@ -151,7 +175,7 @@ class DailyCallTests(unittest.TestCase):
         source = (ROOT / "backend/nhl/daily_orchestration.py").read_text()
         allowed = source.split("allowed = {", 1)[1].split("}", 1)[0]
         for key in ("official_fill_function_available", "official_fills", "official_source_games",
-                    "shift_overlap_games"):
+                    "shift_overlap_games", "official_pending_games"):
             self.assertIn(f'"{key}"', allowed)
 
 
