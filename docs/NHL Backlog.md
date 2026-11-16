@@ -3386,6 +3386,35 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   its corrected refit once it is no worse), the candidate qualifies; awaiting
   the operator's go-ahead to freeze and cut over.
 
+### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
+
+- Status: **MEASURED 2026-11-16, no decision** (operator "Yes, run it", after
+  asking whether surfacing past winners and losers reveals shortcomings:
+  single results do not, groups by reason can).
+- Method: `backend/nhl/scripts/research_nhl_disagreement_reasons.py`
+  (read-only; output `artifacts/analysis/nhl/disagreement_reasons_2026-11-16/`).
+  The input watch's 10 biggest model-above-market disagreements per lane and
+  slate (two-sided lines) with the watch's reasons, 2026-10-28..11-15
+  (19 slates, 358 graded on official postgame outcomes). Model = the
+  production model that day as the watch recorded it: 338 plays are retired
+  models, 20 the current ones (too few to read on their own).
+- SOG (181): the model was closer than the market. Overs won 70.4% vs market
+  59.3%, model 75.0% (81, z +2.1); gap 20+ won 21 of 23. Model right most on
+  heavy shooters: season shots high vs market peers 95% (22), PP TOI or shot
+  rate outside the training range 80-92% (30, 13-17). Market right on TOI
+  low vs market peers (30%, 10), opponent shots-against high (42%, 12) and
+  defensemen (59% vs market 60%).
+- Points (177, all but 7 Unders): the market was closer. Unders won 59.4% vs
+  market 61.2%, model 74.4%. Model right only on few games played (74%, 19;
+  70% vs market peers, 27). Market right on TOI outside the training range
+  (31%, 16), shots low vs market peers (33%, 15), TOI low vs peers (51%, 35),
+  role change vs last season (56% vs market 63%, 39).
+- Reading: big SOG disagreements on high-volume shooters lean model;
+  big Points Unders on low-TOI, low-shot or role-changed players are model
+  error. Counts per reason are small (10-51) and reasons overlap; retired
+  models. Measurement only; feeds the 11-28 filter review and the Points
+  minutes/role work (P2.52), no filter or model change.
+
 ### P2.55 Qualified plays vs the market consensus (current models)
 
 - Status: **MEASURED 2026-11-16, no decision** (operator "start measurement").
