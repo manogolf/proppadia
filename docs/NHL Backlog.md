@@ -3749,6 +3749,38 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     the running shadow is fitted on pre-correction PP data. Next for the
     ice-time work: why expected points do not rise enough with minutes
     (17+ minutes and role up), as an input or structure fix, not calibration.
+- **Why expected points do not rise enough with minutes, 2026-11-16**
+  (operator: "Yes, test it"). `backend/nhl/scripts/research_nhl_points_minutes_scaling.py`
+  (read-only; output `artifacts/analysis/nhl/points_minutes_scaling_2026-11-16/`),
+  same corrected training frame; BASE reproduces c940ae2f exactly.
+  - Not the learner: production's own training fit is compressed at the
+    extremes (lowest predicted tenth 0.159 vs 0.120 actual, highest 1.015 vs
+    1.064), but 300 rounds or 31 leaves are worse everywhere (holdout +0.6 to
+    +5 x1000). Not the 30-game shrinkage: 10 games changes little.
+  - Out of sample the shape is close (holdout slope 1.02); the level is low:
+    holdout 0.444 vs 0.460, about 3.5% in nearly every predicted tenth and
+    10% for 23+ minutes (0.631 vs 0.700).
+  - Cause found: shot-volume inputs fell season over season while scoring
+    did not. SOG per 60 (last 10) 6.14 / 5.72 / 5.63 / 5.60 and team shots
+    per game 29.95 / 28.01 / 27.43 / 27.51 for 2023-24 / 2024-25 / 2025-26 /
+    2026-27; points per player-game 0.458 / 0.449 / 0.460 / 0.470. The model
+    reads fewer shots as fewer points.
+  - REL (the three shot inputs divided by the league mean of earlier slates
+    this season): holdout -0.26 / -0.34 [-0.66, -0.01] / -0.15 x1000; live
+    -0.10 / -1.00 [-2.0, -0.16] / -0.31; live role up -1.40 / -4.20
+    [-6.84, -1.59] / -3.63 [-6.34, -0.74]. Two-sided vs market log loss:
+    BASE 0.5050, REL 0.5037, market 0.5000 (role change 0.5145 / 0.5111 /
+    0.5069). It barely lifts the level (holdout 0.4456).
+  - REL_LEVEL (measurement only; a level adjustment needs operator approval):
+    REL x league points per player-game on earlier slates this season / the
+    training mean. Level 0.4499 holdout, 0.4582 live (actual 0.4602 /
+    0.4702); log loss vs REL within 0.3 x1000. Two training seasons cannot
+    teach the model a league scoring level, and the season level explains
+    only part of the shortfall; the rest is open.
+  - Reading: REL is a small real gain (a fix to an input, not calibration)
+    and the strongest on promoted players; it does not close the gap to
+    the market. Candidate for the next Points refit together with the
+    per-minute rates; the remaining level gap stays open.
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
   Pregame line combinations: NHL.com projected lineups in trial from
