@@ -3639,6 +3639,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     (`backend/nhl/exports/odds_history`), whether listed depth players
     outscore the model and unlisted ones do not; if so, a "has a posted
     line" input or a model trained on listed player-games.
+- **Listed vs not, 2025-26, 2026-11-16** (operator: "Yes, test it").
+  `backend/nhl/scripts/research_nhl_points_listed_players.py` (read-only;
+  output `artifacts/analysis/nhl/points_listed_players_2025_2026-11-16/`):
+  production 2f0824cf on its 2025-26 holdout frame; listed = any book
+  quoted the player's Points in the 7 pm ET snapshot. 124 slates, 35,067
+  player-games, 37% listed (1% of the lowest scoring-rate fifth, 82% of the
+  top).
+  - Not listed (21,990): model 25.9% / actual 26.0%. Listed (13,077): model
+    46.8% / actual 49.7%, low in every scoring-rate band (actual minus model
+    +2.6 Q1 (87 rows), +6.0 Q2, +2.3 Q3, +1.5 Q4, +4.0 Q5; standard errors
+    0.7-2.2) and every ice-time band from 15 minutes up (+1.9 to +3.5).
+  - Reading: the model is calibrated on the population it was trained on
+    (every player-game) and about 3 points low on the subset the books
+    list, which is the only subset that can be bet. Which players are
+    listed carries the books' view of who matters tonight. Unders on listed
+    players are overstated by about 3 points and Overs understated.
 
 
 ### P2.54 Line and side scan: where the current models beat the price
