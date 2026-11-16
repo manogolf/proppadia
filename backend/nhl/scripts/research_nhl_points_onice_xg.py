@@ -52,6 +52,10 @@ PBP_2025 = ROOT / "artifacts/analysis/nhl/points_attempts_2025_full_recovery_202
 # 2026-27 play-by-play fetched 2026-11-16 for the live test (operator: "Yes, fetch it"; 330 games
 # through 2026-11-15, manifest pbp_2026_manifest.json).
 PBP_2026 = OUT / "pbp_2026"
+# 2025-26 games missing from the stored sources, fetched 2026-11-16 (operator: "adjust 2025 to full
+# season"): 12 play-by-play files and 276 shift charts, manifest fill_2025_manifest.json.
+PBP_2025_FILL = OUT / "pbp_2025_missing"
+SHIFTS_2025_FILL = OUT / "shifts_2025_missing"
 KEYS = ["game_id", "player_id"]
 SHOT_TYPES = ("wrist", "snap", "slap", "backhand", "tip-in", "deflected", "wrap-around")
 
@@ -179,7 +183,12 @@ def build_events() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             continue
         s, g = parse_pbp(p)
         shots += s; goals += g
+    for f in sorted(PBP_2025_FILL.glob("game=*.json")):
+        s, g = parse_pbp(json.load(open(f)))
+        shots += s; goals += g
     shift_parts.append(shifts_2025())
+    for f in sorted(SHIFTS_2025_FILL.glob("game=*.json")):
+        shift_parts.append(shifts_from_json(json.load(open(f))))
     out = (pd.DataFrame(shots), pd.DataFrame(goals), pd.concat(shift_parts, ignore_index=True))
     import joblib
     joblib.dump(out, cache)

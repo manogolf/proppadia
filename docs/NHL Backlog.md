@@ -3834,6 +3834,21 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     production 0.5050, REPLACE_XG 0.5049, ADD_XG 0.5050, market 0.5000.
     Biggest Points disagreements (139): production 73.6%, xG versions
     73.1-73.5%, market 61.4%, won 60.4%.
+  - **2025-26 completed, 2026-11-16** (operator: "adjust 2025 to full season
+    instead of a sample season"): the 2025-26 season had play-by-play for
+    1,300 and shift charts for 1,036 of 1,312 games; the missing 12 and 276
+    were fetched (public endpoints, no database writes; files under the
+    output's `pbp_2025_missing/`, `shifts_2025_missing/`, manifest
+    `fill_2025_manifest.json`). 2025-26 is now complete (goals 7,578, xG
+    8,081). Rerun on the full 2025 holdout, x1000 at 0.5 / 1.5 / 2.5:
+    REPLACE_XG -0.70 [-1.08, -0.31] / -0.48 [-0.82, -0.16] / -0.22; ADD_XG
+    -0.73 [-1.14, -0.33] / -0.63 [-0.98, -0.28] / -0.26 [-0.48, -0.06];
+    ADD_ONICE -0.18 / -0.33 / -0.17; ADD_ALL -0.42 / -0.49 / -0.29;
+    REPLACE_ALL -0.61 / -0.74 / -0.22. Live unchanged in substance (every
+    interval spans zero; two-sided log loss 0.5047-0.5057 vs production
+    0.5050, market 0.5000). ADD_XG is now the best version. The training
+    season 2024-25 still lacks play-by-play for 82 games and shift charts
+    for 135.
   - Reading: the holdout gain (about 0.6 x1000) is smaller than live noise
     at 15 slates (intervals about +/-1.2), so live neither confirms nor
     contradicts it. xG is the best-supported Points input change so far;
