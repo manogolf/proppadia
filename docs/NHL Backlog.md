@@ -3398,21 +3398,23 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (read-only; output `artifacts/analysis/nhl/qualified_plays_vs_market_2026-11-16/`).
   Current models' own predictions (SOG V2 10-25..11-14, 21 slates; Points
   c940ae2f 11-01..11-14, 14 slates); market = every book in the timestamped
-  odds captures, last observation at least 30 minutes before the start;
-  play price = best of BetOnline, Novig, Pinnacle (Kalshi is not in the odds
-  feed); market fair = median proportional no-vig of the other books quoting
+  odds captures, last observation at or before 1 PM PT on game day and 30+
+  minutes before the start (rerun 2026-11-16 after the operator noted bets are
+  placed in the early afternoon and Kalshi quotes Points as
+  `player_points_alternate`, first run missed both); play price = best of
+  BetOnline, Novig, Kalshi, Pinnacle; market fair = median proportional no-vig of the other books quoting
   both sides (2 or more). Qualified = the operator's current searches.
 - Qualified plays (won / model / market / price implied, ROI):
-  - Points Under 0.5, 161 (11.5 per slate): 56.5 / 64.3 / 56.1 / 57.8, -1.7%.
-    Only 2.5% had a price better than market fair.
-  - Points Over 0.5, 16: 37.5 / 62.3 / 54.3 / 55.6, -34%.
-  - SOG Over 1.5, 111 (5.3 per slate): 58.6 / 64.8 / 55.0 / 56.3, +3.8%
-    (z +0.8 vs market).
-  - SOG Under 1.5, 17: 58.8 / 66.9 / 50.7 / 53.6, +11%.
+  - Points Under 0.5, 174 (12.4 per slate): 56.9 / 64.3 / 56.5 / 57.8, -1.3%.
+    Only 5.8% had a price better than market fair.
+  - Points Over 0.5, 21: 52.4 / 62.4 / 54.4 / 55.8, -7.7%.
+  - SOG Over 1.5, 111 (5.3 per slate): 59.5 / 65.0 / 55.0 / 56.3, +5.5%
+    (z +0.9 vs market).
+  - SOG Under 1.5, 19: 57.9 / 67.4 / 51.1 / 54.1, +8.9%.
 - Every positive-edge line and side by model-minus-market gap: Points wins
   track the market in every band (none above it). SOG wins track the market
-  up to 6 points; at 6-10, 54.5 vs 52.9 (563 plays); at 10+, 60.8 vs 55.1
-  (245 plays, 11.7 per slate, z +1.8, ROI +2.8%).
+  up to 6 points; at 3-6, 53.1 vs 51.5 (725); at 6-10, 53.6 vs 52.7 (526);
+  at 10+, 58.0 vs 54.6 (238 plays, 11.3 per slate, z +1.1, ROI -1.1%).
 - Reading: the current models still overstate their edge by 8-10 points on
   qualified plays; Points so far adds nothing beyond the market; SOG's large
   disagreements with the market are the one place leaning right (not yet

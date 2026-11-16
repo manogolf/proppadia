@@ -7,9 +7,10 @@ the same of the current production models: SOG `NHL_SOG_COUNT_HGB_V2` (rescored
 2026-10-25..11-14, P2.51 live_rows.csv) and Points `c940ae2f` (2026-11-01..11-14, P2.53).
 
 Market: every book quote captured in artifacts/operational/nhl/odds_observations
-(timestamped). For each game, the last observation at least 30 minutes before the start.
-Play price: best of the operator's books in the capture (BetOnline, Novig, Pinnacle;
-Kalshi is not in the odds feed). Market fair: median proportional no-vig of every other
+(timestamped). For each game, the last observation at or before 1 PM PT on game day
+(the operator bets in the early afternoon) and at least 30 minutes before the start.
+Play price: best of the operator's books (BetOnline, Novig, Kalshi, Pinnacle; Kalshi
+quotes Points only, as player_points_alternate). Market fair: median proportional no-vig of every other
 book quoting both sides of the same player, line (excluding the play's book).
 
 Qualified = the operator's 8rain searches (2026-11-16 screenshots): edge is model minus
@@ -39,7 +40,7 @@ SOG_ROWS = ROOT / "artifacts/analysis/nhl/sog_hgb_count_model/pp_corrected_refit
 PTS_ROWS = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/pp_stats_api_refit_2026-11-15/live_rows.csv"
 OBS = ROOT / "artifacts/operational/nhl/odds_observations/season=2026"
 ATTACH = ROOT / "artifacts/operational/nhl/{lane}_market_attachments/season=2026"
-MY_BOOKS = ("betonlineag", "novig", "pinnacle")
+MY_BOOKS = ("betonlineag", "novig", "kalshi", "pinnacle")
 MARKETS = {"sog": "player_shots_on_goal", "points": "player_points"}
 LINES = {"sog": (1.5, 2.5, 3.5), "points": (0.5, 1.5)}
 FILTERS = {("points", 0.5, "Over"): (0.05, 1.0, 0.5714, 0.8333), ("points", 0.5, "Under"): (0.04, 0.10, 0.5714, 0.75),
@@ -63,6 +64,8 @@ def quotes() -> pd.DataFrame:
         t = pd.read_json(f, lines=True)
         if "market" not in t:
             continue
+        # Kalshi quotes Points only as player_points_alternate (P2.50); same contract, same line key.
+        t["market"] = t.market.replace({"player_points_alternate": "player_points"})
         t = t[t.market.isin(MARKETS.values()) & t.outcome.isin(["Over", "Under"])]
         if t.empty:
             continue
@@ -70,7 +73,10 @@ def quotes() -> pd.DataFrame:
         parts.append(t[["obs", "bookmaker", "market", "description", "outcome", "point", "price", "commence_time"]])
     q = pd.concat(parts, ignore_index=True)
     q["start"] = pd.to_datetime(q.commence_time, utc=True)
-    q = q[q.obs <= q.start - LEAD]
+    # Market as of 1 PM PT on game day (the operator bets in the early afternoon), never later
+    # than 30 minutes before the start.
+    cutoff = (q.start.dt.tz_convert("America/Los_Angeles").dt.normalize() + pd.Timedelta(hours=13)).dt.tz_convert("UTC")
+    q = q[(q.obs <= q.start - LEAD) & (q.obs <= cutoff)]
     q["who"] = q.description.map(norm)
     q["game_date"] = q.start.dt.tz_convert("America/New_York").dt.strftime("%Y-%m-%d")
     # last pregame observation per game (all books in it)
@@ -159,7 +165,7 @@ def main() -> int:
     t3.to_csv(OUT / "positive_edge_by_model_market_gap.csv")
     (OUT / "summary.json").write_text(json.dumps({"slates": days, "priced_rows": int(len(m)),
                                                    "qualified": int(len(qual)), "my_books": MY_BOOKS,
-                                                   "observation_lead_minutes": 30}, indent=1) + "\n")
+                                                   "observation": "last at or before 13:00 PT, 30+ min before start"}, indent=1) + "\n")
     pd.set_option("display.width", 250)
     print(json.dumps({"slates": days, "priced_rows": len(m), "qualified": len(qual)}))
     print(t1.to_string()); print(t2.to_string()); print(t3.to_string())
