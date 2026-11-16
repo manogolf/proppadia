@@ -3720,6 +3720,33 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     behind the market, and the plays it qualifies do worse, because the
     remaining disagreements are player-level error the lift cannot see.
     Not proposed for use.
+- **PP unit and the game's expected scoring, 2026-11-16** (operator: "bring
+  that information into the model's perspective"; both public before the
+  first daily run). `backend/nhl/scripts/research_nhl_points_ppunit_game_scoring.py`
+  (read-only; output `artifacts/analysis/nhl/points_ppunit_game_scoring_2026-11-16/`).
+  PP unit from stored per-player PP TOI (PP1 = top five by PP minutes in the
+  team-game): pp1_last_game, pp1_share_last5, pp_rank_last_game. Game
+  scoring from public team results (no historical totals stored): team
+  goals for and opponent goals against per game over the last 10, and their
+  mean. Coverage 98-100%. x1000 vs production 2f0824cf at 0.5 / 1.5 / 2.5:
+  - +PPU: holdout -0.33 / -0.44 [-0.78, -0.11] / -0.24 [-0.42, -0.05];
+    listed 2025-26 rows -0.32 / -0.81 [-1.56, -0.09] / -0.61 [-1.12, -0.08];
+    live -1.14 [-2.15, -0.17] / -0.71 / -0.19. Better everywhere.
+  - +GAME (team-results proxy): holdout +0.10 / -0.04 / +0.19, live ~0. No
+    gain from the proxy.
+  - +BOTH: holdout -0.29 / -0.49 [-0.92, -0.06] / 0.00; live -0.97 / -2.00
+    [-3.37, -0.48] / -1.34 [-2.49, -0.01]. Live two-sided Points 0.5 log
+    loss: market 0.6535, production 0.6607, PPU 0.6594, GAME 0.6597, BOTH
+    0.6571 (about half the gap to the market). Qualified Points Under 0.5 at
+    1 PM: BOTH 136 plays won 62.5% vs market 56.7% (+7.5%); production 167
+    won 58.7% (+0.9%). Small samples.
+  - Reading: PP unit is the first Points input addition that helps on the
+    holdout, the listed rows and live. The team-results proxy for expected
+    scoring adds nothing on its own; the books' real number is the game
+    total. Historical NHL totals are not stored; the Odds API historical
+    endpoint would supply them (one pregame snapshot per date, markets h2h +
+    totals, US region: about 570 dates for 2023-24..2025-26 at about 20
+    credits each, about 11,400 credits). Not fetched; operator decision.
 
 
 ### P2.54 Line and side scan: where the current models beat the price
