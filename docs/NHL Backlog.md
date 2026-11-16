@@ -3684,6 +3684,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     Revisit when the live season adds listed rows (prices are captured
     daily), and keep Points plays to prices better than the market's
     no-vig number.
+  - Newly listed players (operator: "a provision for newly listed players
+    needs including"), 2025-26, production 2f0824cf, actual minus model
+    P(1+): first listing of the season (414) +3.0 (se 2.4); relisted after
+    5+ unlisted games (114) +0.1 (se 4.4); regularly listed (12,549) +2.9
+    (se 0.4); not listed (21,990) +0.1. Newly listed players carry the same
+    gap as regularly listed ones, not a larger one; any listing-based fix
+    must cover them (first listing and relisting), with no separate rule
+    needed on this evidence. Caveat: snapshot days are missing on some
+    dates, so a few "new" listings may be continuing ones.
 
 
 ### P2.54 Line and side scan: where the current models beat the price
