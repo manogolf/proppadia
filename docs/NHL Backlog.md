@@ -3386,6 +3386,45 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   its corrected refit once it is no worse), the candidate qualifies; awaiting
   the operator's go-ahead to freeze and cut over.
 
+### P2.57 Restore the 82 missing 2024-25 Utah games (part of the 3,471 missing player-game rows)
+
+- Status: **PLANNED 2026-11-16, no database write** (operator: "Yes, plan it",
+  after the P2.46 xG test could not use the 82 games).
+- Cause (read-only, confirmed): the NHL gave the Utah Hockey Club team id 59
+  in 2024-25 and the Utah Mammoth id 68 from 2025-26. `nhl.team_external_ids`
+  maps only provider id 68 (to team 68, UTA). All 82 Utah games of 2024-25
+  are in `nhl.games` (home/away team 68) but with `game_date` and
+  `start_time_utc` NULL (every other 2024-25 game has a date) and no rows in
+  `nhl.skater_game_logs_raw`; play-by-play shows `homeTeam.id` 59. They are
+  about 2,950 of the 3,024 missing 2024-25 player-games (P2.45). The rest of
+  the 3,471 (2023-24 137 in 136 games, 2024-25 about 70, 2025-26 310 in 252
+  games) are scattered single rows with a different, undiagnosed cause.
+- Not a global crosswalk: adding provider 59 -> team 68 to
+  `nhl.team_external_ids` would give team 68 two provider ids, and the PP TOI
+  conflict check (`pp_toi_source.py`, `official_team_mapping_status`)
+  requires exactly one, so every current Utah row would become ambiguous.
+  The restore translates 59 -> 68 inside its own script and records it.
+- Steps (each write through the operator SQL editor block, guarded and
+  all-or-nothing as in P2.45, with a rollback that removes exactly the
+  inserted keys; populated values are never changed):
+  1. Read-only manifest: official boxscore per game (82 public requests;
+     play-by-play already fetched in
+     `artifacts/analysis/nhl/points_onice_xg_2026-11-16/pbp_2024_missing/`),
+     game date and start time, expected skater and goalie rows, and a check
+     against `official_without_stored_row.csv`.
+  2. `nhl.games`: fill `game_date` and `start_time_utc` for the 82 rows,
+     only where NULL.
+  3. Skater and goalie logs: new rows only (guard: no row exists for any
+     key), from the boxscore (SOG, TOI, goals, assists, blocks; goalie
+     saves and shots against), shot attempts from the play-by-play, PP TOI
+     from the stats API `skater/timeonice` (the P2.45 source of record),
+     team 59 written as 68.
+  4. Verify: rows per game, team totals equal the boxscore, the P2.45 PP
+     verify, then rerun the P2.46 xG test with the games included.
+  - Frozen production artifacts and training frames are unchanged; the
+    games enter training at the next refit.
+  - Later, separately: diagnose the scattered ~520 missing rows.
+
 ### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
 
 - Status: **MEASURED 2026-11-16, no decision** (operator "Yes, run it", after
