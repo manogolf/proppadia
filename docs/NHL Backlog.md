@@ -3386,6 +3386,40 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   its corrected refit once it is no worse), the candidate qualifies; awaiting
   the operator's go-ahead to freeze and cut over.
 
+### P2.55 Qualified plays vs the market consensus (current models)
+
+- Status: **MEASURED 2026-11-16, no decision** (operator "start measurement").
+  Why: the operator's 8rain history (2024-01..2026-11, graded copy outside
+  the repo) won about what the other books' no-vig price said, while the
+  wager fair odds showed 10-13 point edges. The fair odds were 8rain's own
+  weighting before April 2025 (overstated about 4 points) and our model's
+  (P3) after (overstated 10-13); history covers retired models only.
+- Method: `backend/nhl/scripts/research_nhl_qualified_plays_vs_market.py`
+  (read-only; output `artifacts/analysis/nhl/qualified_plays_vs_market_2026-11-16/`).
+  Current models' own predictions (SOG V2 10-25..11-14, 21 slates; Points
+  c940ae2f 11-01..11-14, 14 slates); market = every book in the timestamped
+  odds captures, last observation at least 30 minutes before the start;
+  play price = best of BetOnline, Novig, Pinnacle (Kalshi is not in the odds
+  feed); market fair = median proportional no-vig of the other books quoting
+  both sides (2 or more). Qualified = the operator's current searches.
+- Qualified plays (won / model / market / price implied, ROI):
+  - Points Under 0.5, 161 (11.5 per slate): 56.5 / 64.3 / 56.1 / 57.8, -1.7%.
+    Only 2.5% had a price better than market fair.
+  - Points Over 0.5, 16: 37.5 / 62.3 / 54.3 / 55.6, -34%.
+  - SOG Over 1.5, 111 (5.3 per slate): 58.6 / 64.8 / 55.0 / 56.3, +3.8%
+    (z +0.8 vs market).
+  - SOG Under 1.5, 17: 58.8 / 66.9 / 50.7 / 53.6, +11%.
+- Every positive-edge line and side by model-minus-market gap: Points wins
+  track the market in every band (none above it). SOG wins track the market
+  up to 6 points; at 6-10, 54.5 vs 52.9 (563 plays); at 10+, 60.8 vs 55.1
+  (245 plays, 11.7 per slate, z +1.8, ROI +2.8%).
+- Reading: the current models still overstate their edge by 8-10 points on
+  qualified plays; Points so far adds nothing beyond the market; SOG's large
+  disagreements with the market are the one place leaning right (not yet
+  conclusive). Measurement only; no filter, calibration or model change.
+- Open: repeat as data accrues (weekly evaluation candidate: a market-fair
+  column beside model and price).
+
 ### P2.54 Line and side scan: where the current models beat the price
 
 - Status: **SCANNED 2026-11-15** (operator: "we've visited 2.5 and 3.5 before
