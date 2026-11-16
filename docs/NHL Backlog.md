@@ -3424,6 +3424,30 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Frozen production artifacts and training frames are unchanged; the
     games enter training at the next refit.
   - Later, separately: diagnose the scattered ~520 missing rows.
+- **Step 1 done 2026-11-16** (operator: "Yes, start step 1"; no database
+  write). `backend/nhl/scripts/prepare_nhl_utah_2024_restore.py --fetch` /
+  `--manifest`; output `artifacts/analysis/nhl/utah_2024_restore_2026-11-16/`
+  (82 boxscores with manifest, `games.csv`, `skater_rows.csv`,
+  `goalie_rows.csv`, `reproduction_check.csv`, `summary.json`).
+  - 82 games, all final, 2024-10-08..2025-04-15; play-by-play for all 82.
+  - 2,952 skater rows (18 per team-game) and 172 goalie rows (164 starters,
+    8 relief); none present today. 2,916 of the skater keys are on the
+    P2.45 missing list; the other 36 are one game (2024020333, 2024-11-24,
+    the only game that date, so the P2.45 evidence never fetched it); its
+    PP TOI was fetched per game (`pp_extra/`), so PP TOI is known for all.
+  - Team SOG totals equal the boxscore in all 164 team-games.
+  - One player is not in `nhl.players` (8484910, a goalie): the insert
+    needs his player row first (foreign key).
+  - Reproduction check (6 stored 2024-25 games rebuilt with the same code,
+    216 rows): TOI, PP TOI, shot attempts and game date equal 100%, SOG
+    99.5%, SOG by strength 90-94%. Team ID matches 8% and points 62%:
+    stored 2023-24 and 2024-25 rows carry legacy team IDs (91% not either
+    team of the game, already noted in the Saves work) and points stored as
+    0 for every row; 2025-26 on are correct team IDs with points NULL. The
+    restored rows use correct team IDs and leave goals, assists and points
+    NULL, as current ingestion does.
+  - Next: step 2 (games dates) and step 3 (player row, then skater and
+    goalie rows) as guarded editor blocks with rollbacks.
 
 ### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
 
