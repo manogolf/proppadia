@@ -3747,6 +3747,36 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     endpoint would supply them (one pregame snapshot per date, markets h2h +
     totals, US region: about 570 dates for 2023-24..2025-26 at about 20
     credits each, about 11,400 credits). Not fetched; operator decision.
+- **Real game totals, 2026-11-16** (operator: "Yes, fetch them").
+  `backend/nhl/scripts/fetch_nhl_historical_game_lines.py`: Odds API
+  historical snapshot at 14:00 UTC (about the 05:45 PT first run) for every
+  2023-24..2025-26 regular-season date, markets h2h + totals, US region; 528
+  dates, 10,560 credits, about 78,600 left (daily NHL captures use about 700
+  a day). Raw responses and manifest in
+  `artifacts/analysis/nhl/game_lines_history_2026-11-16/` (git-ignored).
+  `backend/nhl/scripts/research_nhl_points_game_totals.py` (read-only;
+  output `artifacts/analysis/nhl/points_game_totals_2026-11-16/`): per game
+  the median total and no-vig Over lean, and the no-vig win probability
+  across books; 2026-27 from the captured quotes by 06:30 PT. Inputs:
+  team_implied_goals (total split by win probability), game_total,
+  team_win_p. Coverage 99%. x1000 vs production 2f0824cf:
+  - +TOTALS: holdout -0.65 [-1.33, 0.03] / -0.10 / -0.09; live -1.70 /
+    -1.69 / -1.11 (span zero).
+  - +PPU+TOTALS: holdout -0.80 [-1.52, -0.10] / -0.22 / -0.03; listed
+    2025-26 -1.17 / -0.27 / +0.09; live -2.69 [-5.0, 0.19] / -2.38 [-4.34,
+    0.22] / -1.55.
+  - Live two-sided Points 0.5 log loss: market 0.6535, production 0.6607,
+    PPU 0.6594, TOTALS 0.6554, PPU+TOTALS 0.6539: nearly the market.
+  - Qualified searches at 1 PM: PPU+TOTALS Unders 114 won 56.1% vs market
+    57.6% (-4.3%), Overs 12; TOTALS Unders 136 won 52.9% (-8.2%).
+    Production Unders 167 won 58.7% (+0.9%).
+  - Reading: the real game total plus PP unit bring the Points model to
+    about the market's accuracy, the largest gain of any input tested. A
+    model as good as the market disagrees with it less, and the remaining
+    disagreements do not win; it is a better forecaster, not yet a source
+    of edges. Production use would be route A (input change, 4-week
+    shadow) and needs the live path to read the morning totals from the
+    captures.
 
 
 ### P2.54 Line and side scan: where the current models beat the price
