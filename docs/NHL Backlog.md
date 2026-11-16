@@ -3718,6 +3718,37 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Grade weekly with the current production model only; decide after at
     least 3-4 weeks whether to propose promotion (route and gate in
     `docs/nhl/model_promotion_rules.md`), keep watching, or drop.
+- **Per-minute on the corrected recipe, 2026-11-16** (operator: "proceed with
+  Points ice-time and role work"; after P2.56 found the market right on big
+  Points Unders for low-TOI, low-shot and role-changed players).
+  `backend/nhl/scripts/research_nhl_points_per_minute_corrected.py`
+  (read-only; output `artifacts/analysis/nhl/points_per_minute_corrected_2026-11-16/`).
+  BASE = c940ae2f recipe refit on the P2.53 corrected frame (reproduces
+  production exactly, max diff 0.0); ADD = BASE + per-minute rates (test 1).
+  Paired log loss x1000, ADD minus BASE/production, negative = better:
+  - 2025 holdout (47,023): every group within +/-1 and spans zero, role
+    change -0.34/-0.15/+0.18 at 0.5/1.5/2.5. Open step (a), games played:
+    0-4 games +0.27/+0.25/-0.29, 5-9 -0.14/+0.33/-0.35, 10-19 +0.51/+0.76/+0.50,
+    20+ -0.09/-0.44/+0.03: no early-season gain in a past season either.
+  - Live 11-01..11-15 (3,573, latest pregame capture, corrected PP, the live
+    shadow's own per-minute inputs, official outcomes): all ~0; role up
+    -1.26/-4.11/-3.30 (2.5: -4.95 to -1.30); role down ~0.
+  - Two-sided lines vs market (4,912 line rows), log loss: market 0.5000,
+    production 0.5050, ADD 0.5050; role change market 0.5069, ADD 0.5120,
+    production 0.5145 (ADD closes about a third, as the shadow grading showed).
+  - P2.56 biggest Points disagreements on these dates (139, nearly all
+    Unders): won 60.4%, market 61.4%, production 73.6%, ADD 72.7%. The
+    per-minute rate does not fix them.
+  - Level: production underpredicts points, holdout 0.444 vs actual 0.460,
+    live 0.453 vs 0.470, most at 17+ minutes (live 20+: 0.639 vs 0.677) and
+    on role-up players (live 0.501 vs 0.573); low TOI (<13) is overpredicted
+    live (0.235 vs 0.214). Training seasons score 0.458 / 0.449 per
+    player-game, holdout 0.460, so the season level explains under half.
+    Underpredicted points make Unders look stronger than they are.
+  - Reading: per-minute rates are a small live gain on role-up players only;
+    the running shadow is fitted on pre-correction PP data. Next for the
+    ice-time work: why expected points do not rise enough with minutes
+    (17+ minutes and role up), as an input or structure fix, not calibration.
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
   Pregame line combinations: NHL.com projected lineups in trial from
