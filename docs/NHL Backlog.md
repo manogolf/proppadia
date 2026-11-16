@@ -3781,6 +3781,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     and the strongest on promoted players; it does not close the gap to
     the market. Candidate for the next Points refit together with the
     per-minute rates; the remaining level gap stays open.
+- **Candidate built, 2026-11-16** (operator: "Yes, build it"):
+  `backend/nhl/scripts/research_nhl_points_rel_per_minute_candidate.py`
+  (read-only; output `artifacts/analysis/nhl/points_rel_per_minute_candidate_2026-11-16/`,
+  artifacts `points_rel_candidate.joblib` and `points_rel_per_minute_candidate.joblib`,
+  fit reproducible). x1000 vs production, negative = better:
+  - REL alone: holdout -0.26 / -0.34 / -0.15; live -0.10 / -1.00 / -0.31;
+    two-sided log loss 0.5037 (production 0.5050, market 0.5000).
+  - REL_ADD (relative shots + per-minute): holdout -0.16 / -0.37 / -0.06;
+    live -0.41 / -0.13 / -0.16, role up 2.5 -4.56 [-7.84, -0.74], role down
+    worse (+2.03 / +1.26 / +0.76); two-sided 0.5042. The two fixes do not
+    add up; per-minute adds noise once shots are relative.
+  - Biggest Points disagreements (139): won 60.4%, market 61.4%,
+    production 73.6%, REL 73.5%, REL_ADD 72.7%: neither fixes them.
+  - Reading: REL is the better candidate, a small real input fix (about a
+    quarter of the gap to the market on two-sided lines). Not ready for
+    production on its own evidence; a shadow (route A) would need operator
+    approval and a live path for the relative inputs (league shot means
+    of earlier slates).
 - Data on hand: shift charts (`nhl.shiftcharts_shifts`, retained 2023-24
   charts), play-by-play 2023-25, PP TOI (see P2.45 on the 2026 level shift).
   Pregame line combinations: NHL.com projected lineups in trial from
