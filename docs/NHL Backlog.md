@@ -3843,8 +3843,10 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     Effect on 11-16 predictions: the 11-15 VAN values enter the last-10 PP
     averages of VAN skaters playing 11-16 (about +0.05 min each); the
     situation inputs add nothing to SOG V2 (P2.52), so no rerun.
-  - Open: operator runs the 2026-11-16 correction block, then `--verify`
-    (expect corrected 24); the 3,471 missing
+  - **Applied 2026-11-16** by the operator (SQL editor block, 16:10:02Z):
+    batch 2026-11, 24 rows, correction role still granted false. Verify
+    after: original 0, corrected 24, missing 0, other 0.
+  - Open: the 3,471 missing
     stored rows; SOG HGB and Points refits on corrected data (P2.50,
     IMP-034/035/037).
   - Decisions as first listed: (a) make the stats API
