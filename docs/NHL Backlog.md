@@ -3849,6 +3849,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     0.5050, market 0.5000). ADD_XG is now the best version. The training
     season 2024-25 still lacks play-by-play for 82 games and shift charts
     for 135.
+  - **2024-25 filled and a defect fixed, 2026-11-16** (operator: "Yes, fill
+    2024-25"): 82 play-by-play and 135 shift charts requested, all answered;
+    57 shift charts are empty at the source, so 2024-25 has play-by-play for
+    all 1,312 games and shift charts for 1,255 (manifest
+    `fill_2024_manifest.json`). The 82 games are also missing from the stored
+    player-game logs (the open 3,471-row item), so they cannot enter the
+    training frame or the rolling inputs until those rows exist. Defect fixed
+    in the builder: a game with play-by-play but no shift chart dropped the
+    player's xG with his on-ice values (now kept; on-ice per 60 uses only
+    games with a shift chart). Final numbers (supersede the two runs above),
+    x1000 at 0.5 / 1.5 / 2.5:
+    - Holdout: REPLACE_XG -0.56 [-0.94, -0.17] / -0.58 [-0.93, -0.24] /
+      -0.25 [-0.48, -0.02]; ADD_XG -0.65 [-1.03, -0.25] / -0.58 [-0.93,
+      -0.23] / -0.26 [-0.51, -0.00]; REPLACE_ALL -0.60 / -0.68 / -0.11;
+      ADD_ALL -0.34 / -0.47 / -0.14; ADD_ONICE -0.07 / -0.27 / -0.08.
+    - Live: every interval spans zero (REPLACE_XG -0.23 / -0.18 / -0.12);
+      two-sided log loss REPLACE_XG 0.5049, production 0.5050, market 0.5000;
+      role change REPLACE_XG 0.5119 vs production 0.5145.
   - Reading: the holdout gain (about 0.6 x1000) is smaller than live noise
     at 15 slates (intervals about +/-1.2), so live neither confirms nor
     contradicts it. xG is the best-supported Points input change so far;

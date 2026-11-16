@@ -56,6 +56,10 @@ PBP_2026 = OUT / "pbp_2026"
 # season"): 12 play-by-play files and 276 shift charts, manifest fill_2025_manifest.json.
 PBP_2025_FILL = OUT / "pbp_2025_missing"
 SHIFTS_2025_FILL = OUT / "shifts_2025_missing"
+# 2024-25 likewise (operator: "Yes, fill 2024-25"): 82 play-by-play and 135 shift charts requested,
+# 57 of the shift charts are empty at the source; manifest fill_2024_manifest.json.
+PBP_FILLS = (OUT / "pbp_2024_missing", PBP_2025_FILL)
+SHIFT_FILLS = (OUT / "shifts_2024_missing", SHIFTS_2025_FILL)
 KEYS = ["game_id", "player_id"]
 SHOT_TYPES = ("wrist", "snap", "slap", "backhand", "tip-in", "deflected", "wrap-around")
 
@@ -183,11 +187,11 @@ def build_events() -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             continue
         s, g = parse_pbp(p)
         shots += s; goals += g
-    for f in sorted(PBP_2025_FILL.glob("game=*.json")):
+    for f in sorted(f for d in PBP_FILLS for f in d.glob("game=*.json")):
         s, g = parse_pbp(json.load(open(f)))
         shots += s; goals += g
     shift_parts.append(shifts_2025())
-    for f in sorted(SHIFTS_2025_FILL.glob("game=*.json")):
+    for f in sorted(f for d in SHIFT_FILLS for f in d.glob("game=*.json")):
         shift_parts.append(shifts_from_json(json.load(open(f))))
     out = (pd.DataFrame(shots), pd.DataFrame(goals), pd.concat(shift_parts, ignore_index=True))
     import joblib
@@ -207,7 +211,8 @@ def per_game(shots: pd.DataFrame, goals: pd.DataFrame, shifts: pd.DataFrame) -> 
         ixg=("xg", "sum"), iff=("xg", "size"), igoals=("goal", "sum")).reset_index().rename(columns={"shooter": "player_id"})
     oi = onice(goals, shifts)
     games_with_pbp = pd.DataFrame({"game_id": sorted(shots.game_id.unique())})
-    return oi.merge(ind, on=KEYS, how="left"), {"xg_by_season": check, "games_with_pbp": int(len(games_with_pbp)),
+    # outer: a game with play-by-play but no shift chart keeps its xG (on-ice values NaN)
+    return oi.merge(ind, on=KEYS, how="outer"), {"xg_by_season": check, "games_with_pbp": int(len(games_with_pbp)),
                                                  "games_with_shifts": int(shifts.game_id.nunique()),
                                                  "xg_coefficients": dict(zip(xg_design(fit_rows).columns,
                                                                              np.round(model.coef_[0], 4)))}
@@ -234,7 +239,8 @@ def rolling(frame: pd.DataFrame, pg: pd.DataFrame, logs: pd.DataFrame) -> pd.Dat
         long = prior.tail(82)
         out.append((t.game_id, t.player_id,
                     h.ixg.sum() / toi * 60 if toi > 0 else np.nan,
-                    h.onice_gf.sum() / toi * 60 if toi > 0 else np.nan,
+                    (h.onice_gf.sum() / h.toi_minutes[h.onice_gf.notna()].sum() * 60
+                     if h.toi_minutes[h.onice_gf.notna()].sum() > 0 else np.nan),
                     (long.igoals.sum() + 100 * lg_sh) / (long.shots_on_goal.sum() + 100)))
     return pd.DataFrame(out, columns=KEYS + ["ixg_d10_per60", "onice_gf_d10_per60", "sh_pct_shrunk"])
 
