@@ -27,21 +27,30 @@ OFFSET_ARTIFACT = scorer.OFFSET_DEFENSE_CONTRACT_PATH.parent / "nhl_points_count
 
 
 class ProductionArtifactTests(unittest.TestCase):
-    def test_production_uses_the_pp_stats_api_refit(self):
-        """2026-11-15 (P2.53): the goals + assists recipe refit on corrected PP TOI replaces 8cda6061."""
+    def test_production_uses_the_utah_2024_refit(self):
+        """2026-11-16 (P2.57, route B): the same recipe refit on frames rebuilt with the restored Utah games."""
         contract = json.loads(scorer.CONTRACT_PATH.read_text())
-        previous = json.loads(scorer.GOALS_ASSISTS_CONTRACT_PATH.read_text())
-        self.assertEqual(scorer.CONTRACT_PATH, scorer.PP_STATS_API_CONTRACT_PATH)
+        previous = json.loads(scorer.PP_STATS_API_CONTRACT_PATH.read_text())
+        self.assertEqual(scorer.CONTRACT_PATH, scorer.UTAH_2024_CONTRACT_PATH)
         self.assertEqual(sha(scorer.MODEL_PATH), contract["fitted_artifact_sha256"])
         self.assertEqual(identity(contract), contract["model_identity_sha256"])
-        self.assertTrue(contract["model_identity_sha256"].startswith("c940ae2f"))
+        self.assertTrue(contract["model_identity_sha256"].startswith("2f0824cf"))
         self.assertEqual(contract["supersedes_model_identity_sha256"], previous["model_identity_sha256"])
         self.assertEqual(contract["reproducibility"]["status"], "PASS")
         for key in ("feature_columns", "hyperparameters", "structure", "target", "thresholds", "history_contract",
-                    "prior_season_totals_sha256", "league_rates_sha256", "calibration_layer"):
+                    "calibration_layer"):
             self.assertEqual(contract[key], previous[key], key)
         for name in ("prior_season_totals", "league_rates"):
             self.assertEqual(sha(scorer.CONTRACT_PATH.parent / contract[name]), contract[f"{name}_sha256"], name)
+        self.assertGreater(contract["training_rows"], previous["training_rows"])
+
+    def test_pp_stats_api_rollback_target_is_intact(self):
+        """c940ae2f (P2.53) is the one-step rollback."""
+        contract = json.loads(scorer.PP_STATS_API_CONTRACT_PATH.read_text())
+        self.assertEqual(identity(contract), contract["model_identity_sha256"])
+        self.assertTrue(contract["model_identity_sha256"].startswith("c940ae2f"))
+        self.assertEqual(sha(scorer.PP_STATS_API_CONTRACT_PATH.parent / contract["fitted_artifact"]),
+                         contract["fitted_artifact_sha256"])
 
     def test_goals_assists_rollback_target_is_intact(self):
         from backend.nhl import points_component_features as pcf

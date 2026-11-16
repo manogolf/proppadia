@@ -7,16 +7,16 @@
   "feature_contract": "NHL_POINTS_LEADER_CORE_FEATURES_V3_COMPONENT_RATES",
   "feature_exporter_sha256": "39c7b936667209d60f3ae648ddafbad1f3083d2d879bf25c0f3a079c7e480f98",
   "history_contract": "120_DAY_LEGACY_BOUND",
-  "model_artifact_sha256": "369f391943a7b5f0d25c100e5f13c0252725c4a38a72a7aa845c762b62d13939",
-  "model_identity_sha256": "c940ae2f4f2543f99a87ff83acb905477db25b5e6a85dea1d5a3b3061584d9c5",
+  "model_artifact_sha256": "418ddd397ec7e099b77704c79c6d649728b441f7c73a4397d9d2cb7ba2a7187b",
+  "model_identity_sha256": "2f0824cfdae2d2f2fbaba6d8a7ce628ce81d752a352d17e199e32eeebf07594a",
   "normal_daily_entrypoint": "python -m backend.nhl.cli daily --with-odds",
   "paid_credits": 0,
   "phoenix_control_prediction_sha256": "730cb908bac956b090683dce15d9e24631920231a3933c2101e60e7041396cf4",
-  "prediction_sha256": "3fbe05d7142cd00ce9d0d3894f764bd3af1e49e97431ff1ee2c07ad7685ebb5d",
+  "prediction_sha256": "d4b7bfa3e7ef014954e6ac9d6521d712aa12dbcdbd8aa0c1cefdd03680db438f",
   "production_orchestration_helper": "backend/nhl/points_hgb_shadow.py:capture_from_files",
   "production_orchestration_helper_sha256": "cb6e4496fc70b246e1681c34c3c0fe956d0eecfc7d35371295e34bbe7eca5392",
   "proof_scope": "BOUNDED_DRY_RUN_SHARED_PRODUCTION_CAPTURE_HELPER",
   "provider_calls": 0,
   "schema_version": "NHL_POINTS_HGB_ROUTINE_DAILY_INTEGRATION_EVIDENCE_V1",
-  "scorer_sha256": "9f7fdb0a18e6376775e5641c6bfad6af387838f46f25bead1001969897ec4ccb"
+  "scorer_sha256": "fa561356d55b59884c62329d742c375de5672bff9119e891559d9ff57f2b95fb"
 }

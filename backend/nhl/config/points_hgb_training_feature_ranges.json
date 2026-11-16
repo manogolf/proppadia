@@ -1,9 +1,9 @@
 {
   "schema_version": "NHL_POINTS_HGB_TRAINING_FEATURE_RANGES_V1",
-  "source": "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-15_pp_stats_api/training_frame_2023_2024.csv.gz",
-  "source_sha256": "7a71844cc65931d9003027b09c42cb4046bf083fdbb80965f219d7539bf9e33b",
-  "model_identity_sha256": "c940ae2f4f2543f99a87ff83acb905477db25b5e6a85dea1d5a3b3061584d9c5",
-  "rows": 90486,
+  "source": "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-16_utah_2024/training_frame_2023_2024.csv.gz",
+  "source_sha256": "2b0f75036048102b73147bdab6307d58da5164c2944555c741c94fb72aee7af1",
+  "model_identity_sha256": "2f0824cfdae2d2f2fbaba6d8a7ce628ce81d752a352d17e199e32eeebf07594a",
+  "rows": 93438,
   "note": "Known (non-missing) training values; p01/p99 bound the range the frozen model saw.",
   "features": {
     "is_home": {
@@ -12,39 +12,39 @@
       "missing_share": 0.0
     },
     "d10_sog_per60": {
-      "p01": 0.284726,
-      "p99": 13.889715,
-      "missing_share": 0.022523
+      "p01": 0.39267,
+      "p99": 13.881803,
+      "missing_share": 0.02194
     },
     "attempts_d10_per60": {
-      "p01": 3.333526,
-      "p99": 24.37922,
-      "missing_share": 0.022523
+      "p01": 3.380034,
+      "p99": 24.365533,
+      "missing_share": 0.02194
     },
     "player_points_last10": {
       "p01": 0.0,
       "p99": 1.6,
-      "missing_share": 0.022523
+      "missing_share": 0.02194
     },
     "current_season_points_prior": {
       "p01": 0.0,
-      "p99": 71.0,
+      "p99": 72.0,
       "missing_share": 0.0
     },
     "current_season_games_prior": {
       "p01": 0.0,
-      "p99": 77.0,
+      "p99": 78.0,
       "missing_share": 0.0
     },
     "mean_toi_last10": {
-      "p01": 7.749,
-      "p99": 25.52053,
-      "missing_share": 0.022523
+      "p01": 7.73987,
+      "p99": 25.53613,
+      "missing_share": 0.02194
     },
     "mean_pp_toi_last10": {
       "p01": 0.0,
-      "p99": 4.602,
-      "missing_share": 0.022523
+      "p99": 4.60013,
+      "missing_share": 0.02194
     },
     "team_d10_sf_per_game": {
       "p01": 0.0,
@@ -53,7 +53,7 @@
     },
     "last10_team_sog_share": {
       "p01": 0.0,
-      "p99": 0.141737,
+      "p99": 0.141435,
       "missing_share": 0.0
     }
   }

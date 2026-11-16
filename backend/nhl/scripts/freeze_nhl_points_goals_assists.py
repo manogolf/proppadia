@@ -231,8 +231,87 @@ def freeze_pp_stats_api() -> None:
                                                 "holdout_2025_vs_production_x1000", "reproducibility")}, indent=1))
 
 
+UTAH_OUT = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-16_utah_2024"
+UTAH_ARTIFACT = "nhl_points_goals_assists_v3_utah_2024.joblib"
+REBUILT = ROOT / "artifacts/analysis/nhl/points_training_rebuild_2026-11-16"
+
+
+def freeze_utah_2024() -> None:
+    """Refit the production recipe after the 2024-25 Utah restore (P2.57; operator 2026-11-16, route B).
+
+    Same recipe, inputs and hyperparameters as `c940ae2f`; the training frame is rebuilt from the
+    database with the 82 restored Utah games (`rebuild_nhl_points_training_frames.py`), so only
+    the data differ. Fitted twice from the written CSV; both refits and the artifact must agree.
+    """
+    import shutil
+    previous = json.loads(scorer.CONTRACT_PATH.read_text())
+    if previous["model_identity_sha256"][:8] != "c940ae2f":
+        raise SystemExit("POINTS_PRODUCTION_IDENTITY_UNEXPECTED")
+    UTAH_OUT.mkdir(parents=True, exist_ok=False)
+    shutil.copyfile(REBUILT / "training_frame_2023_2024.csv.gz", UTAH_OUT / "training_frame_2023_2024.csv.gz")
+    shutil.copyfile(REBUILT / "season_frame_2025.csv.gz", UTAH_OUT / "holdout_frame_2025.csv.gz")
+    for name in ("prior_season_totals.csv", "league_rates.csv"):
+        shutil.copyfile(REBUILT / name, UTAH_OUT / name)
+    train = pd.read_csv(UTAH_OUT / "training_frame_2023_2024.csv.gz", float_precision="round_trip")
+    hold = pd.read_csv(UTAH_OUT / "holdout_frame_2025.csv.gz", float_precision="round_trip")
+    first, second = fit_pair(train), fit_pair(train.copy())
+    joblib.dump(first, UTAH_OUT / UTAH_ARTIFACT)
+    frozen = joblib.load(UTAH_OUT / UTAH_ARTIFACT)
+    p1, p2, pf = (scorer.score(hold, m).expected_points.to_numpy() for m in (first, second, frozen))
+    pred_path = UTAH_OUT / "frozen_holdout_predictions_2025.csv"
+    hold[KEYS].assign(expected_points=pf).to_csv(pred_path, index=False, float_format="%.17g")
+    prod = scorer.score(hold, joblib.load(scorer.MODEL_PATH)).expected_points.to_numpy()
+    evals = {}
+    for line in (0.5, 1.5, 2.5):
+        y = (hold.realized_points > line).astype(float).to_numpy()
+        r = base.paired_bootstrap(base.log_loss_rows(poisson.sf(int(line), pf), y),
+                                  base.log_loss_rows(poisson.sf(int(line), prod), y), hold.slate_date.astype(str).to_numpy())
+        evals[str(line)] = {"diff_x1000": round(r["mean_diff"] * 1e3, 2), "ci": [round(c * 1e3, 2) for c in r["ci95"]]}
+    train_path = UTAH_OUT / "training_frame_2023_2024.csv.gz"
+    contract = {**{k: v for k, v in previous.items() if k != "model_identity_sha256"},
+                "training_rows": int(len(train)), "training_source_frame_sha256": sha(train_path),
+                "prior_season_totals": "prior_season_totals.csv", "prior_season_totals_sha256": sha(UTAH_OUT / "prior_season_totals.csv"),
+                "league_rates": "league_rates.csv", "league_rates_sha256": sha(UTAH_OUT / "league_rates.csv"),
+                "fitted_artifact": UTAH_ARTIFACT, "fitted_artifact_sha256": sha(UTAH_OUT / UTAH_ARTIFACT),
+                "scorer_sha256": sha(Path(__file__).resolve()),
+                "fitted_revision": "GOALS_ASSISTS_UTAH_2024_2026_11_16",
+                "revision_reason": ("P2.57: same recipe and inputs refit after the 82 missing 2024-25 Utah games were restored "
+                                    "(team id 59 unmapped; 2,952 skater rows); training frame rebuilt from the database "
+                                    "(rebuild_nhl_points_training_frames.py). Operator 2026-11-16: data correction, route B."),
+                "training_frame_rebuild": "backend/nhl/scripts/rebuild_nhl_points_training_frames.py",
+                "supersedes_model_identity_sha256": previous["model_identity_sha256"],
+                "supersedes_fitted_artifact_sha256": previous["fitted_artifact_sha256"],
+                "holdout_2025_vs_production_x1000": evals,
+                "reproducibility": {"refit_runs": 2, "csv_parsing": "float_precision=round_trip",
+                                    "max_abs_diff_between_refits": float(np.abs(p1 - p2).max()),
+                                    "max_abs_diff_vs_frozen": float(np.abs(p1 - pf).max()), "holdout_rows": int(len(hold)),
+                                    "frozen_prediction_sha256": sha(pred_path),
+                                    "status": "PASS" if np.array_equal(p1, p2) and np.array_equal(p1, pf) else "FAIL"},
+                "production_status": "PRODUCTION"}
+    if contract["reproducibility"]["status"] != "PASS":
+        raise SystemExit("POINTS_UTAH_REFIT_NOT_REPRODUCIBLE")
+    contract["model_identity_sha256"] = identity(contract)
+    (UTAH_OUT / "shadow_contract.json").write_text(json.dumps(contract, indent=2) + "\n")
+    ranges = {"schema_version": "NHL_POINTS_HGB_TRAINING_FEATURE_RANGES_V1",
+              "source": str(train_path.relative_to(ROOT)), "source_sha256": sha(train_path),
+              "model_identity_sha256": contract["model_identity_sha256"], "rows": int(len(train)),
+              "note": "Known (non-missing) training values; p01/p99 bound the range the frozen model saw.",
+              "features": {}}
+    old_ranges = json.loads(POINTS_RANGES.read_text())
+    for col in old_ranges["features"]:
+        v = pd.to_numeric(train[col], errors="coerce")
+        k = v.dropna()
+        ranges["features"][col] = {"p01": round(float(k.quantile(0.01)), 6), "p99": round(float(k.quantile(0.99)), 6),
+                                   "missing_share": round(float(v.isna().mean()), 6)}
+    POINTS_RANGES.write_text(json.dumps(ranges, indent=2) + "\n")
+    print(json.dumps({k: contract[k] for k in ("model_identity_sha256", "fitted_artifact_sha256", "training_rows",
+                                                "holdout_2025_vs_production_x1000", "reproducibility")}, indent=1))
+
+
 if __name__ == "__main__":
-    if "--pp-stats-api" in sys.argv[1:]:
+    if "--utah-2024" in sys.argv[1:]:
+        freeze_utah_2024()
+    elif "--pp-stats-api" in sys.argv[1:]:
         freeze_pp_stats_api()
     else:
         main()

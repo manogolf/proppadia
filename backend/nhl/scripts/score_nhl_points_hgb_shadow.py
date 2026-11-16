@@ -38,8 +38,12 @@ GOALS_ASSISTS_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corre
 # to the NHL stats API (P2.45); identity c940ae2f, first slate 2026-11-15 (manual run
 # 12:41 PT; every game that day started later).
 PP_STATS_API_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-15_pp_stats_api/shadow_contract.json"
-# Production artifact. One-step rollback: set CONTRACT_PATH = GOALS_ASSISTS_CONTRACT_PATH (8cda6061).
-CONTRACT_PATH = PP_STATS_API_CONTRACT_PATH
+# 2026-11-16 (P2.57, route B): the same recipe refit after the 82 missing 2024-25 Utah games
+# were restored (training frame rebuilt from the database); identity 2f0824cf, first slate
+# 2026-11-17 (switched after the day's last scheduled run).
+UTAH_2024_CONTRACT_PATH = ROOT / "artifacts/analysis/nhl/points_hgb_pp_corrected_refit/production_2026-11-16_utah_2024/shadow_contract.json"
+# Production artifact. One-step rollback: set CONTRACT_PATH = PP_STATS_API_CONTRACT_PATH (c940ae2f).
+CONTRACT_PATH = UTAH_2024_CONTRACT_PATH
 MODEL_PATH = CONTRACT_PATH.parent / json.loads(CONTRACT_PATH.read_text())["fitted_artifact"]
 CORE_FEATURES = [
     "is_home", "d10_sog_per60", "attempts_d10_per60", "player_points_last10",
