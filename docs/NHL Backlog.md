@@ -3517,7 +3517,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.59 SOG shadow review: which shadows still earn their keep
 
-- Status: **REVIEWED 2026-11-16, decision pending** (operator: "examine sog
+- Status: **RETIRED 2026-11-16** (operator: "Retire all twelve"; reviewed the same day, operator: "examine sog
   shadows and determine which if any are beyond being useful").
   `backend/nhl/scripts/research_nhl_sog_shadow_review.py` (read-only; output
   `artifacts/analysis/nhl/sog_shadow_review_2026-11-16/`). Every running SOG
@@ -3546,6 +3546,18 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   are candidates for retirement (operator decision; the 8-week rule has had
   three weeks against V2). Retiring the formula lane also removes the weekly
   gap table's "sog formula" comparator row.
+- **Applied 2026-11-16**: `backend/nhl/cli.py` `RETIRED_SOG_SHADOW_LANES`
+  (fixed blends, divergence, structural, SHRUNK_180, formula) close as
+  `RETIRED` without scoring; `run_nhl_mainline_cross_market_capture_warn_only.py`
+  no longer calls the SOG prediction-only observer (link status `RETIRED`;
+  resilient cross-market grading reads only CAPTURED links, so it records no
+  new SOG rows). Postgame grading of these shadows was already non-blocking.
+  Tests `backend/nhl/tests/test_sog_shadow_retirement.py`; NHL suite passes.
+  Captures and grades kept.
+- Not covered by the review: the SOG defense-surprise shadow
+  (`score_sog_poisson_defense_surprise_shadow.py`, written into the
+  production prediction folder, on by default while the formula runs). It
+  still runs; review or retire it as a separate decision.
 
 ### P2.58 Points shadow candidates on hold or proposed (bundled start)
 

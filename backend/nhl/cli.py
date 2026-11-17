@@ -174,6 +174,21 @@ PROC_DIR    = NHL_DIR / "data" / "processed"
 SQL_DIR     = NHL_DIR / "sql"
 SCRIPTS_DIR = NHL_DIR / "scripts"
 SOG_FORMULA_SCORERS = ("poisson_baseline", "hgb_count")  # scorers that run the Poisson formula
+# SOG shadows retired 2026-11-16 (operator "Retire all twelve", NHL Backlog P2.59): every one was worse
+# than production V2 at every line and in every week. Their lanes close as RETIRED; history is kept.
+RETIRED_SOG_SHADOW_LANES = frozenset({
+    "sog_fixed_blend_shadows", "sog_d10_d20_divergence_shadow", "sog_d10_structural_correction_shadow",
+    "sog_shrunk_rate_k180_shadow", "sog_poisson_formula_shadow",
+})
+
+
+def _retired_sog_shadow(recorder, lane: str) -> bool:
+    """Close a retired SOG shadow lane without scoring; True when the lane is retired."""
+    if lane not in RETIRED_SOG_SHADOW_LANES:
+        return False
+    recorder.finish_lane(lane, status="RETIRED", reason="RETIRED_2026_11_16_P2_59_WORSE_THAN_PRODUCTION_V2",
+                         database_rows_written=False, provider_requests=0, credits_consumed=0)
+    return True
 MODELS_DIR  = NHL_DIR / "models"
 
 # Daily artifact organization
@@ -3566,7 +3581,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "production_model_identity": f"{sog_model_family}/{sog_model_version}",
         "comparator_model_identity": "poisson_baseline/baseline_v1",
     }])
-    if sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
+    if _retired_sog_shadow(recorder, "sog_fixed_blend_shadows"):
+        pass
+    elif sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
         try:
             shadow_packages = capture_sog_fixed_blends(
                 feature_path=Path(sog_feature_binding["feature_input_path"]),
@@ -3597,7 +3614,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "provider_requests": 0,
         "credits_consumed": 0,
     }])
-    if sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
+    if _retired_sog_shadow(recorder, "sog_d10_d20_divergence_shadow"):
+        pass
+    elif sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
         try:
             divergence_package = capture_sog_divergence_shadow(
                 feature_path=Path(sog_feature_binding["feature_input_path"]),
@@ -3638,7 +3657,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "stage2_threshold": 9.0, "stage2_compression_factor": 0.5,
         "provider_requests": 0, "credits_consumed": 0,
     }])
-    if sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
+    if _retired_sog_shadow(recorder, "sog_d10_structural_correction_shadow"):
+        pass
+    elif sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
         try:
             structural_package = capture_sog_structural_correction_shadow(
                 feature_path=Path(sog_feature_binding["feature_input_path"]), production_path=formula_pred_path,
@@ -3669,7 +3690,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "history_source": "nhl.skater_game_logs_raw (read-only)",
         "provider_requests": 0, "credits_consumed": 0,
     }])
-    if sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
+    if _retired_sog_shadow(recorder, "sog_shrunk_rate_k180_shadow"):
+        pass
+    elif sog_scorer in SOG_FORMULA_SCORERS and sog_feature_capture is not None:
         try:
             shrunk_season = infer_nhl_season_from_date_yyyy_mm_dd(slate)
             shrunk_history, shrunk_positions = load_sog_shrunk_rate_history(
@@ -3738,7 +3761,9 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
         "production_model_identity": f"{sog_model_family}/{sog_model_version}",
         "provider_requests": 0, "credits_consumed": 0,
     }])
-    if sog_scorer == "hgb_count":
+    if _retired_sog_shadow(recorder, "sog_poisson_formula_shadow"):
+        pass
+    elif sog_scorer == "hgb_count":
         try:
             formula_package = capture_sog_formula_shadow(
                 formula_path=formula_pred_path, production_path=calibrated_pred_path,

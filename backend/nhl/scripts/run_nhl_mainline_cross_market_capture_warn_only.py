@@ -149,14 +149,11 @@ def observe_prediction_only_lanes(slate: str, requested: str, dsn: str,
             # boundary additionally prevents an unexpected lane defect from
             # suppressing another prediction lane or changing paid-market flow.
             results[lane] = _player_prop_observer_failure(error)
-    try:
-        path = observe_sog_prediction_only(
-            slate=slate, requested=requested, dsn=dsn,
-            root=ROOT / "artifacts/operational/nhl/sog_prediction_only", now=now,
-        )
-        results["SOG"] = _player_prop_observer_link(Path(path))
-    except Exception as error:
-        results["SOG"] = _player_prop_observer_failure(error)
+    # The SOG prediction-only observer (cold-start arms A, B, C, D, F, G) was retired 2026-11-16
+    # (operator "Retire all twelve", NHL Backlog P2.59): every arm was worse than production V2.
+    # Its history is kept; `observe_sog_prediction_only` stays importable for replays.
+    results["SOG"] = {"status": "RETIRED", "receipt_path": None,
+                      "reason": "RETIRED_2026_11_16_P2_59_WORSE_THAN_PRODUCTION_V2"}
     return results
 
 

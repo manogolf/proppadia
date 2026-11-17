@@ -799,7 +799,13 @@ SHA, artifact SHA, the formula file and the per-row feature file
 `sog_hgb_features.csv`. The retained SOG feature package binds the formula's
 inputs to the formula's own output. The formula is a shadow
 (`NHL_SOG_POISSON_FORMULA_V1`, lane `sog_poisson_formula_shadow`, captures
-under `artifacts/operational/nhl/sog_formula_shadows/`). Formula-variant
+under `artifacts/operational/nhl/sog_formula_shadows/`). **Retired 2026-11-16** (NHL Backlog P2.59, operator
+"Retire all twelve"): the formula shadow, SHRUNK_180, D10/D20 divergence, both
+fixed blends and the structural correction no longer score; their lanes close as
+`RETIRED` (`cli.RETIRED_SOG_SHADOW_LANES`), and the SOG prediction-only observer
+(cold-start arms A-G) is no longer called by the cross-market capture (its link
+reads `RETIRED`, so resilient grading has no new SOG rows). Captures and grades
+already written are kept. The text below describes them as they ran. Formula-variant
 research shadows (fixed blends, D10/D20 divergence, structural correction,
 defense surprise) keep reading the formula file; the SHRUNK_180 shadow pairs
 with production. The fixed-blend, divergence and structural lanes (and the
