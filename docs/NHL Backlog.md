@@ -3543,8 +3543,9 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   windows, but the gain is about one-sixth of what the same inputs gave Points
   (about 7 x1000 on two-sided lines), and live intervals include zero. V2
   already beats the market on SOG. A shadow arm (PP unit, or PP unit + game
-  lines) is possible on the Points shadow framework; not started without an
-  operator decision.
+  lines) is possible on the Points shadow framework. Operator 2026-11-16:
+  "Not now" (no SOG shadow started; the listed-player mid-band patterns stay
+  unacted on).
 
 ### P2.59 SOG shadow review: which shadows still earn their keep
 
