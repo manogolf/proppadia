@@ -3547,6 +3547,20 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   "Not now" (no SOG shadow started; the listed-player mid-band patterns stay
   unacted on). The gain alone is too small to justify a shadow; revisit
   bundling PP unit (and game lines) if another SOG contributor turns up.
+- Mid-band follow-up (operator: "go ahead and check if there is something
+  there"; `research_nhl_sog_listed_band_profile.py`,
+  `sog_listed_band_profile_2026-11-16/`). Within the same fifth, listed
+  players carry about 1 more minute of TOI, more PP time, more PP1 games and a
+  rising last-game TOI; unlisted fourth-fifth players a falling one. So
+  listing tracks current role. Holdout: the miss lines up with last-game TOI
+  vs last-10 (lowest quartile, unlisted -3.7 points; highest, listed +5.7).
+  Recent-role inputs (last-game and last-3 TOI, TOI trend, last-game SOG,
+  last-3 attempts) added to the V2 recipe: holdout -1.45 x1000 [-2.55,
+  -0.35] (with PP unit -1.82); live +0.21 [-1.79, 2.17] vs V2 and two-sided
+  0.6042 vs V2 0.6023 (market 0.6049). The holdout pattern by TOI trend does
+  not repeat live. Reading: no second contributor; the PP-unit arm stays on
+  hold. Not tested: the listed flag itself as an input (it is the books'
+  choice and its morning availability is not established).
 
 ### P2.59 SOG shadow review: which shadows still earn their keep
 
