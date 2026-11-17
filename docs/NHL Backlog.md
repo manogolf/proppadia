@@ -3559,8 +3559,20 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   -0.35] (with PP unit -1.82); live +0.21 [-1.79, 2.17] vs V2 and two-sided
   0.6042 vs V2 0.6023 (market 0.6049). The holdout pattern by TOI trend does
   not repeat live. Reading: no second contributor; the PP-unit arm stays on
-  hold. Not tested: the listed flag itself as an input (it is the books'
-  choice and its morning availability is not established).
+  hold.
+- Listed flag as an input (operator: "test using books listed";
+  `research_nhl_sog_listed_input.py`, `sog_listed_input_2026-11-16/`).
+  Timing: live, 91% of the day's final SOG listings are already up in the
+  morning observation (by 06:30 PT) and every morning listing stays listed;
+  history has only the 7 pm ET snapshot, from 2025-10-07, so training is
+  2025-26 only (evening flag). Listed share differs: 36% of player-games in
+  the 2025-26 holdout snapshot, 54% (morning) / 59% (final) live.
+  Holdout 2026-01..04 vs the same recipe without it, Poisson x1000: listed
+  -1.57 [-3.30, -0.04], number of books listing +0.19. Live with the morning
+  flag: listed -0.66 vs the same recipe (the 2025-26-only recipe is itself
+  +3.46 [0.71, 6.08] worse than V2); two-sided lines listed 0.6058, books
+  0.6049, recipe 0.6053, V2 0.6023, market 0.6049. Reading: no gain live;
+  not a contributor. The SOG PP-unit arm stays on hold.
 
 ### P2.59 SOG shadow review: which shadows still earn their keep
 
