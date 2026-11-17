@@ -3517,7 +3517,7 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 
 ### P2.58 Points shadow candidates on hold or proposed (bundled start)
 
-- Status: **HOLD, operator 2026-11-16**: start Points shadows together so
+- Status: **STAGE 1 RUNNING 2026-11-16** (was HOLD: start Points shadows together so
   candidates can run side by side rather than one at a time. Production is
   2f0824cf (P2.57).
 - Proposed:
@@ -3541,6 +3541,24 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
 - Before starting: decide the arms (likely game total + PP unit as the
   main arm, with xG and three seasons as variants) and build the live
   inputs once, shared with SOG if the SOG work uses the game lines.
+- **Stage 1 built and running 2026-11-16** (operator: "proceed with building
+  points shadows before sog work"; shadow length may be reduced later).
+  Arms `TOTALS_PPU_2S` (`05c0e3db…`) and `TOTALS_PPU_3S` (`f41755c5…`),
+  `backend/nhl/points_candidate_shadows.py`, freeze
+  `scripts/freeze_nhl_points_candidate_shadows.py`, runner
+  `scripts/run_nhl_points_candidate_shadows.py` (scheduled step 06), grader
+  `scripts/grade_nhl_points_candidate_shadows.py`. Parity: captures before
+  the P2.45 correction hold pre-correction PP TOI (11-05..11-14 match 68-72%
+  on PP rank), so parity uses the 11-15 post-correction capture: all inputs
+  equal (180 player-games) after two fixes: PP-rank ties broken by
+  player_id in both builders, and a frozen previous-season tail (last five
+  2025-26 games per player) for players with few games this season. Game
+  lines: one rule for research and live (latest non-CLOSING observation by
+  06:30 PT, else the day's first). 11-16's four captures scored; 15 of 109
+  rostered players without games this season have no PP inputs, as in
+  production. Research numbers unchanged after the fixes.
+- Stage 2 (open): xG arm (daily play-by-play pull) and PP points component
+  arm (daily official power-play stats).
 
 ### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
 

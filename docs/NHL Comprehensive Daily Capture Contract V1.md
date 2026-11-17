@@ -216,6 +216,21 @@ Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
   Non-blocking: a failure is `points_per_minute_shadow_warning` and the run
   stays READY.
 
+Points candidate shadows (2026-11-16, P2.58; operator "proceed with building points shadows"). Arms
+frozen under `artifacts/analysis/nhl/points_candidate_shadows_2026-11-16/arm=<name>/` (contract +
+goals/assists artifact; production recipe and hyperparameters; no calibration):
+`TOTALS_PPU_2S` (2023-24 + 2024-25, identity `05c0e3db…`) and `TOTALS_PPU_3S` (2023-24..2025-26,
+`f41755c5…`). Inputs beyond production, built by `backend/nhl/points_candidate_shadows.py` from the
+capture's own files: PP unit (`pp1_last_game`, `pp1_share_last5`, `pp_rank_last_game`; per team-game
+the top five by PP minutes with PP time, ties by player_id; previous-season tail from
+`prior_season_pp_units.csv`) and game lines (`team_implied_goals`, `game_total`, `team_win_p` from the
+latest non-CLOSING odds observation by 06:30 PT on the slate date, else the day's first one). Live
+parity (2026-11-15 post-correction capture, 180 player-games): every input equal. Step
+`06_points_candidate_shadows` scores every capture once per arm (non-blocking; output
+`artifacts/operational/nhl/points_candidate_shadows/.../arm=<name>/`); captures before the PP TOI
+correction are not scored (first slate 2026-11-16). Grader:
+`scripts/grade_nhl_points_candidate_shadows.py`. Production is unchanged; promotion follows route A.
+
 Points per-minute shadow (2026-11-06, P2.46; RETIRED 2026-11-16 by operator decision: frozen on pre-correction PP TOI and superseded; step 05 removed from the scheduled run, captures and grades kept). `backend/nhl/points_per_minute_shadow.py`
 scores every Points capture of the slate once (captures already scored are
 skipped; captures without the 2026-11-01 component rates are skipped). Model:

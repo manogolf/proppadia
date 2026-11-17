@@ -58,10 +58,10 @@ def team_games() -> tuple[pd.DataFrame, pd.DataFrame]:
     pg = logs[KEYS + ["game_date", "team_id", "home_team_id", "away_team_id", "pp_toi_minutes"]].merge(
         outcomes[KEYS + ["goals"]], on=KEYS, how="left")
     pg["game_date"] = pd.to_datetime(pg.game_date)
-    pp = pg.pp_toi_minutes.fillna(0)
-    pg["pp_rank"] = pp.groupby([pg.game_id, pg.team_id]).rank(ascending=False, method="first")
-    pg["pp1"] = ((pg.pp_rank <= 5) & (pp > 0)).astype(float)
-    pg.loc[pp.eq(0), "pp_rank"] = 10.0
+    # Same PP unit rule as the live shadow (deterministic ties; P2.58).
+    from backend.nhl import points_candidate_shadows as live
+    units = live.pp_unit_table(pg)[KEYS + ["pp_rank", "pp1"]]
+    pg = pg.merge(units, on=KEYS, how="left", validate="one_to_one")
     tg = pg.groupby(["game_id", "team_id"]).agg(game_date=("game_date", "first"), gf=("goals", "sum"),
                                                 home=("home_team_id", "first"), away=("away_team_id", "first")).reset_index()
     tg["opp"] = np.where(tg.team_id.eq(tg.home), tg.away, tg.home)

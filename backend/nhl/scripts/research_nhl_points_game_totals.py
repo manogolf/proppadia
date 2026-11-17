@@ -93,22 +93,22 @@ def historical() -> pd.DataFrame:
 
 
 def live_lines() -> pd.DataFrame:
+    """2026-27 game lines from the observation the live shadow uses (points_candidate_shadows.morning_observation)."""
+    from backend.nhl import points_candidate_shadows as live
     rows = []
     for d in sorted(OBS.glob("slate_date=2026-1[01]-*")):
         day = d.name.split("=")[1]
-        obs = sorted(d.glob("observation=*/normalized_odds.jsonl"))
-        stamp = lambda p: pd.Timestamp(re.search(r"observation=(\d{8}T\d{6})", str(p)).group(1), tz="UTC")  # noqa: E731
-        cutoff = pd.Timestamp(day + " 06:30", tz="America/Los_Angeles").tz_convert("UTC")
-        early = [p for p in obs if stamp(p) <= cutoff] or obs[:1]
-        for p in early[-1:]:
-            t = pd.read_json(p, lines=True)
-            if "market" not in t:
-                continue
-            t = t[t.market.isin(["h2h", "totals"])]
-            for r in t.itertuples():
-                et = pd.Timestamp(r.commence_time).tz_convert("America/New_York").strftime("%Y-%m-%d")
-                if et == day:
-                    rows.append((day, r.home_team, r.away_team, r.bookmaker, r.market, r.outcome, r.point, r.price))
+        p = live.morning_observation(day)
+        if p is None:
+            continue
+        t = pd.read_json(p, lines=True)
+        if "market" not in t:
+            continue
+        t = t[t.market.isin(["h2h", "totals"])]
+        for r in t.itertuples():
+            et = pd.Timestamp(r.commence_time).tz_convert("America/New_York").strftime("%Y-%m-%d")
+            if et == day:
+                rows.append((day, r.home_team, r.away_team, r.bookmaker, r.market, r.outcome, r.point, r.price))
     return pd.DataFrame(rows, columns=["game_date", "home", "away", "book", "market", "outcome", "point", "price"])
 
 

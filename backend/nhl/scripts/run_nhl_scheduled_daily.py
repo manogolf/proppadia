@@ -132,6 +132,9 @@ def main(argv: list[str] | None = None) -> int:
         ("03_8rain_export", [PYTHON, ROOT / "backend/nhl/scripts/run_nhl_8rain_export.py", "--latest-refresh"]),
         # Step 05 (Points per-minute shadow, P2.46) retired 2026-11-16: frozen on pre-correction PP TOI
         # and superseded; its history is kept and still gradable.
+        # Shadows (P2.58): Points candidate arms (game lines + PP unit) on this slate's captures; non-blocking.
+        ("06_points_candidate_shadows", [PYTHON, ROOT / "backend/nhl/scripts/run_nhl_points_candidate_shadows.py",
+                                         "--slate-date", slate]),
     ]
     if args.dry_run:
         print(json.dumps({"slate": slate, "steps": [[str(c) for c in cmd] for _, cmd in steps]}, indent=2))
@@ -165,6 +168,8 @@ def main(argv: list[str] | None = None) -> int:
                 summary["status"] = "FAILED_EXPORT"
                 break
             summary["upload_csv"] = export_csv_path(ROOT / result["log"])
+        elif name == "06_points_candidate_shadows" and result["exit_code"] != 0:
+            summary["points_candidate_shadows_warning"] = f"shadow exit {result['exit_code']}"
         elif name == "00_projected_lineups_trial" and result["exit_code"] != 0:
             summary["lineups_trial_warning"] = f"collector exit {result['exit_code']}"
         write()
