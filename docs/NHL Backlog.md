@@ -3573,6 +3573,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     component add a little on the holdout and nothing live. Stage 2 (two
     new daily pulls: play-by-play per finished game and the official
     power-play report per date) is paused for the operator's decision.
+  - **Skipped 2026-11-16** (operator: "skip and move to sog"). Not built;
+    the stage-1 arms are the Points shadows.
 
 ### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
 
