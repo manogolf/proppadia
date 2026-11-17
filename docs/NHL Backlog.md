@@ -4022,6 +4022,21 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
          shot effect against the SOG model's own predictions, and opponent
          line identity (not rank) with matchup history between the two
          teams' coaches.
+     - **Road top line vs the SOG model, 2026-11-16** (operator: "Yes, test
+       it"). `backend/nhl/scripts/research_nhl_sog_road_top_line.py`
+       (read-only; output `artifacts/analysis/nhl/sog_road_top_line_2026-11-16/`).
+       V2 recipe fitted before 2026-01-01, scored on 2026-01..04 (24,215
+       rows); live V2 predictions 10-25..11-14 (5,208). Actual / predicted
+       SOG, road top line: holdout 2.355 / 2.332 (ratio 1.010, Over 1.5
+       gap -0.2, se 1.1); live 2.420 / 2.423 (0.999, +0.8, se 2.2). Home
+       top line 1.021 and 1.012. No unit shows a consistent home/road miss
+       across holdout and live (largest live gap road F4-6 -5.4, se 2.4,
+       holdout +1.6). Live SOG 1.5 Over qualified: road top line 23 plays
+       won 56.5% vs market 56.2%, home 20 won 55.0% vs 55.5%.
+       - Reading: the SOG model already carries the road top line's lower
+         shot rate (is_home and its rate inputs), so the last-change effect
+         is priced in. Rank-level matchups add nothing to SOG; any further
+         gain would have to come from specific line identity.
 - Results, tests 1-3 (2026-11-06, operator: "historical tests first";
   `backend/nhl/scripts/research_nhl_points_role_change_tests.py`, output
   `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/role_change_tests_2026-11-06/`,
