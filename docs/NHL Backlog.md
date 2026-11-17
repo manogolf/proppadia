@@ -3515,6 +3515,33 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     them the same way as Utah (boxscores for 469 games), if the operator
     wants.
 
+### P2.58 Points shadow candidates on hold or proposed (bundled start)
+
+- Status: **HOLD, operator 2026-11-16**: start Points shadows together so
+  candidates can run side by side rather than one at a time. Production is
+  2f0824cf (P2.57).
+- Proposed:
+  - **Game total + PP unit** (P2.55): implied team goals, game total and
+    win probability from the morning lines, plus PP1 last game, PP1 share of
+    the last five, PP rank last game. Live two-sided log loss 0.6539 vs
+    production 0.6607 and market 0.6535; holdout -0.80 at 0.5. Live path
+    needed: morning game lines from the daily captures (collected since
+    11-01) and PP unit from the stored logs.
+- On hold:
+  - **xG + shooting %** (P2.46): holdout -0.65 / -0.58 / -0.26 x1000; live
+    within noise. Live path needs a daily play-by-play pull.
+  - **PP points component, P1 / P2** (P2.52): small holdout gain (P1), P2
+    narrows the top-unit miss; operator "Not yet". Different from PP unit:
+    it models the player's PP scoring rate times expected PP minutes, while
+    PP unit is deployment (first unit or not).
+  - **Three training seasons** (P2.46 candidates): closes about 40% of the
+    live level gap; no holdout left once 2025-26 is training.
+  - **Relative shot inputs** (P2.46): small gain, superseded in effect by xG.
+- Retired: per-minute shadow (2026-11-16). Removed: listed-player training.
+- Before starting: decide the arms (likely game total + PP unit as the
+  main arm, with xG and three seasons as variants) and build the live
+  inputs once, shared with SOG if the SOG work uses the game lines.
+
 ### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
 
 - Status: **MEASURED 2026-11-16, no decision** (operator "Yes, run it", after
@@ -3693,7 +3720,13 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     must cover them (first listing and relisting), with no separate rule
     needed on this evidence. Caveat: snapshot days are missing on some
     dates, so a few "new" listings may be continuing ones.
-  - Requirement for any later listed-training retry (operator: "newly
+  - **Removed 2026-11-16** (operator: keep listed-player training only if it
+    has value). It does not: on 2025-26 and live it forecasts worse than
+    production, its qualified plays lose, and the listed-player level gap it
+    targets is mostly closed by the game total + PP unit inputs (listed
+    2025-26 P(1+): production 46.8, PPU+TOTALS 47.3, actual 49.7; live
+    two-sided log loss within 0.0004 of the market). Not a pending item.
+  - (Superseded) Requirement for any later listed-training retry (operator: "newly
     listed players was directed at training. when a new player is listed
     somehow include in training"): the listed training set grows as the
     season goes, adding each newly listed player's player-games from his
@@ -4068,6 +4101,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   - Next: (a) holdout split by games played; (c) test 4, line matchups,
     needs on-ice goals by line (shift charts plus play-by-play goals), not
     built yet; (d) test 5, market totals.
+- **Shadow RETIRED 2026-11-16** (operator: "retire the per minute shadow"):
+  frozen on PP TOI from before the P2.45 correction, and per-minute rates add
+  nothing once shots are relative or PP unit is in. Step
+  `05_points_per_minute_shadow` removed from `run_nhl_scheduled_daily.py`;
+  captures and grades kept (`grade_nhl_points_per_minute_shadow.py` still
+  reads them).
 - Shadow started 2026-11-06 (operator: "Yes, start shadow"): PER_MINUTE_ADD
   frozen (`freeze_nhl_points_per_minute_shadow.py`, live-path parity passed:
   goal/assist rates within 2.5e-5, points rate within 0.08%), scored on every

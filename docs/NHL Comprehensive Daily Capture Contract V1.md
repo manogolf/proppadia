@@ -216,7 +216,7 @@ Scheduled daily runs (operator-approved 2026-11-03, NHL Backlog P2.33):
   Non-blocking: a failure is `points_per_minute_shadow_warning` and the run
   stays READY.
 
-Points per-minute shadow (2026-11-06, P2.46). `backend/nhl/points_per_minute_shadow.py`
+Points per-minute shadow (2026-11-06, P2.46; RETIRED 2026-11-16 by operator decision: frozen on pre-correction PP TOI and superseded; step 05 removed from the scheduled run, captures and grades kept). `backend/nhl/points_per_minute_shadow.py`
 scores every Points capture of the slate once (captures already scored are
 skipped; captures without the 2026-11-01 component rates are skipped). Model:
 the production goals + assists recipe on the production inputs plus
