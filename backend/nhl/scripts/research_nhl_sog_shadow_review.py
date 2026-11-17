@@ -75,6 +75,26 @@ def formula_shadows(starts: pd.Series) -> pd.DataFrame:
     return pd.concat(parts, ignore_index=True)
 
 
+DEFENSE = ROOT / "backend/nhl/data/processed/daily_runs"
+DEFENSE_VARIANTS = {"lambda_blend_w0_4": "DEFENSE_SURPRISE_BLEND_W0_4", "lambda_projected_a0_4": "DEFENSE_SURPRISE_A0_4",
+                    "lambda_projected_a0_5": "DEFENSE_SURPRISE_A0_5"}
+
+
+def defense_surprise() -> pd.DataFrame:
+    """The defense-surprise shadow written into each daily run's prediction folder (added 2026-11-16)."""
+    parts = []
+    for f in DEFENSE.glob("nhldaily_*/sog_predictions_wide_defense_surprise_shadow.csv"):
+        t = pd.read_csv(f)
+        if "game_date" not in t or t.empty:
+            continue
+        t = t[t.game_date.astype(str).between(START, END)]
+        for col, name in DEFENSE_VARIANTS.items():
+            if col in t:
+                parts.append(t[KEYS + [col]].drop_duplicates(KEYS).rename(columns={col: "lam"})
+                             .assign(model=name, run_time=run_time(f.parent.name)))
+    return pd.concat(parts, ignore_index=True)
+
+
 def cold_start() -> pd.DataFrame:
     parts = []
     for f in (OPS / "sog_prediction_only" / "season=2026").glob("slate_date=*/phase=FINAL_PREGAME/run_id=*/immutable_predictions.csv"):
@@ -98,7 +118,7 @@ def latest_pregame(t: pd.DataFrame, starts: pd.Series) -> pd.DataFrame:
 def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     starts = game_starts()
-    sh = latest_pregame(pd.concat([formula_shadows(starts), cold_start()], ignore_index=True), starts)
+    sh = latest_pregame(pd.concat([formula_shadows(starts), cold_start(), defense_surprise()], ignore_index=True), starts)
     prod = pd.read_csv(LIVE_ROWS)[KEYS + ["game_date", "shots_on_goal", "V2"]]
     wide = sh.pivot_table(index=KEYS, columns="model", values="lam").reset_index()
     m = prod.merge(wide, on=KEYS, how="inner")

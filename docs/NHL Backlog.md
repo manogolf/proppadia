@@ -3558,6 +3558,15 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   (`score_sog_poisson_defense_surprise_shadow.py`, written into the
   production prediction folder, on by default while the formula runs). It
   still runs; review or retire it as a separate decision.
+- **Defense-surprise shadow reviewed 2026-11-16** (operator: "Yes, review
+  it"; same script, now also reading
+  `backend/nhl/data/processed/daily_runs/*/sog_predictions_wide_defense_surprise_shadow.csv`).
+  Three variants on the formula's offense rate, vs V2 at 1.5 (interval) /
+  2.5 / 3.5 x1000: defense blend w0.4 +15.45 [10.65, 20.32] / +16.20 /
+  +11.81; projected a0.4 +29.55 [21.17, 38.07] / +27.43 / +18.70; projected
+  a0.5 +29.65 / +27.65 / +18.89. Worse than V2 in all three weeks (Brier at
+  1.5 +5.0 to +13.6 x1000). Two-sided log loss 0.6207 / 0.6315 / 0.6317 vs
+  V2 0.6023 and market 0.6049. Same verdict as the other twelve.
 
 ### P2.58 Points shadow candidates on hold or proposed (bundled start)
 
