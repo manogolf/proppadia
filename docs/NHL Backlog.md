@@ -3993,6 +3993,35 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
        any missing pull for the operator before fetching.
   5. Market totals (captured from 2026-11-01): team implied goals as a
      scoring environment input.
+     - **First version run 2026-11-16** (operator: "Line matchups next").
+       `backend/nhl/scripts/research_nhl_line_matchups.py` (read-only;
+       output `artifacts/analysis/nhl/line_matchups_2026-11-16/`), season
+       2025-26 with complete shift charts. Pregame units from last-10 TOI
+       within each team-game (F1-3 top line, F4-6, F7-9, F10+; D1-2 top
+       pair, D3-4, D5+).
+       - Points vs production 2f0824cf (P(1+) actual minus model, se about
+         0.8-1.0): top line home +1.5, road +2.6; top D pair home +1.0,
+         road +3.8; expected-points ratio road 1.06 (top line) and 1.13
+         (top pair) vs home 1.02. Road top players do not fall short; the
+         model's home/road effect is too strong for them.
+       - Shots on goal vs the player's own last-10 rate x TOI: top line
+         home 1.008, road 0.950; other road units 0.97-0.99, home
+         1.00-1.04. Road top lines take about 5% fewer shots than their
+         rate, 2-3 points more than other road units.
+       - Who faced whom (1,286 games, all strengths): the road top line
+         spends 68.4% of its time against the home top D pair, the home top
+         line 65.8% against the road top pair; forward matchups equal (63.4
+         vs 63.6%). Most-faced opposing forward unit: F4-6 50%, F1-3 36%,
+         F7-9 14% for both sides; repeat rate vs the team's previous game
+         39%, about what the base rates give, so the top line's opponent
+         rank is not predictable game to game at this level.
+       - Reading: the last change shows up as a modest shift of the home
+         top D pair onto the visitors' top line and about 5% fewer shots for
+         road top lines; Points shows no road penalty beyond what the model
+         already applies (it over-applies it). Next: test the road-top-line
+         shot effect against the SOG model's own predictions, and opponent
+         line identity (not rank) with matchup history between the two
+         teams' coaches.
 - Results, tests 1-3 (2026-11-06, operator: "historical tests first";
   `backend/nhl/scripts/research_nhl_points_role_change_tests.py`, output
   `artifacts/analysis/nhl/points_hgb_pp_corrected_refit/role_change_tests_2026-11-06/`,
