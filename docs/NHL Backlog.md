@@ -3515,6 +3515,37 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     them the same way as Utah (boxscores for 469 games), if the operator
     wants.
 
+### P2.60 SOG: listed-player gap, game lines and PP unit (research, 2026-11-16)
+
+- Status: **OPEN (research done; no shadow started)**. Operator "proceed" (SOG
+  work after P2.59). Read-only scripts; outputs under `artifacts/analysis/nhl/`.
+- Listed players (`research_nhl_sog_listed_players.py`,
+  `sog_listed_players_2026-11-16/`): unlike Points (P2.55, about 3 points low
+  on listed player-games), SOG has no overall listed gap. P(Over 1.5) actual
+  vs model: holdout 2026-01..04 (13,475 rows, 48 slates, 36% listed) listed
+  0.610 vs 0.607, unlisted 0.325 vs 0.331; live 2026-10-25..11-14 (5,208
+  rows, 46% listed) listed 0.589 vs 0.593, unlisted 0.274 vs 0.284.
+  Mid-band patterns repeat in both windows: listed players in the middle
+  shot-rate fifth are underpredicted (+4.9 points, se 2.2 holdout; +6.4, se
+  2.5 live) and unlisted players in the fourth fifth overpredicted (-8.3, se
+  1.9; -15.5, se 4.9). Not acted on.
+- Game lines and PP unit (`research_nhl_sog_game_lines_ppunit.py`,
+  `sog_game_lines_ppunit_2026-11-16/`): the Points inputs
+  (`points_candidate_shadows.TOT`, `.PPU`) added to the V2 recipe. Holdout
+  (24,215 rows) Poisson log loss vs the refit V2 recipe x1000: game lines
+  -0.86 [-1.71, -0.05], PP unit -0.80 [-1.55, -0.10], both -1.13 [-2.16,
+  -0.12]. Live from 2026-11-02 (3,351 player-games with every input; earlier
+  slates lack morning totals and the research PP-unit build) vs V2's own
+  predictions: game lines +0.73 [-1.20, 2.84], PP unit -0.97 [-2.75, 0.71],
+  both -0.88 [-3.18, 1.22]. Two-sided lines (3,438 rows): market 0.6002, V2
+  0.5963, PP unit 0.5948, both 0.5944.
+- Reading: the direction favours PP unit (with or without game lines) in both
+  windows, but the gain is about one-sixth of what the same inputs gave Points
+  (about 7 x1000 on two-sided lines), and live intervals include zero. V2
+  already beats the market on SOG. A shadow arm (PP unit, or PP unit + game
+  lines) is possible on the Points shadow framework; not started without an
+  operator decision.
+
 ### P2.59 SOG shadow review: which shadows still earn their keep
 
 - Status: **RETIRED 2026-11-16** (operator: "Retire all twelve"; reviewed the same day, operator: "examine sog
