@@ -3342,7 +3342,10 @@ def _cmd_daily_impl(*, with_odds: bool, morning_only: bool, odds_phase: str,
     else:
         raise SystemExit(f"Unsupported NHL_SOG_SCORER={sog_scorer!r}")
 
-    shadow_default = sog_scorer in SOG_FORMULA_SCORERS
+    # The defense-surprise shadow was retired 2026-11-16 (operator "Yes, retire it", NHL Backlog P2.59):
+    # all three variants were worse than production V2 at every line and in every week. It no longer
+    # runs by default; NHL_SOG_DEFENSE_SHADOW_ENABLED=1 still runs it for a replay.
+    shadow_default = False
     shadow_enabled = _env_bool("NHL_SOG_DEFENSE_SHADOW_ENABLED", default=shadow_default)
     shadow_required = _env_bool("NHL_SOG_DEFENSE_SHADOW_REQUIRED", default=False)
     if shadow_enabled and sog_scorer in SOG_FORMULA_SCORERS:

@@ -805,7 +805,7 @@ fixed blends and the structural correction no longer score; their lanes close as
 `RETIRED` (`cli.RETIRED_SOG_SHADOW_LANES`), and the SOG prediction-only observer
 (cold-start arms A-G) is no longer called by the cross-market capture (its link
 reads `RETIRED`, so resilient grading has no new SOG rows). Captures and grades
-already written are kept. The text below describes them as they ran. Formula-variant
+already written are kept. The defense-surprise shadow was retired the same day and no longer runs by default (`NHL_SOG_DEFENSE_SHADOW_ENABLED=1` for a replay). The text below describes them as they ran. Formula-variant
 research shadows (fixed blends, D10/D20 divergence, structural correction,
 defense surprise) keep reading the formula file; the SHRUNK_180 shadow pairs
 with production. The fixed-blend, divergence and structural lanes (and the

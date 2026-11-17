@@ -3567,6 +3567,12 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   a0.5 +29.65 / +27.65 / +18.89. Worse than V2 in all three weeks (Brier at
   1.5 +5.0 to +13.6 x1000). Two-sided log loss 0.6207 / 0.6315 / 0.6317 vs
   V2 0.6023 and market 0.6049. Same verdict as the other twelve.
+  - **Retired 2026-11-16** (operator: "Yes, retire it"): `backend/nhl/cli.py`
+    no longer runs it by default (`shadow_default = False`;
+    `NHL_SOG_DEFENSE_SHADOW_ENABLED=1` still runs it for a replay; the
+    variable is not set in `backend/.env` or the launch agents). Test in
+    `test_sog_shadow_retirement.py`; NHL suite passes (860). No SOG shadow
+    remains running.
 
 ### P2.58 Points shadow candidates on hold or proposed (bundled start)
 

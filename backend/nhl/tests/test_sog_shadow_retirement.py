@@ -1,5 +1,6 @@
 """SOG shadows retired 2026-11-16 (NHL Backlog P2.59): lanes close as RETIRED and score nothing."""
 import unittest
+from pathlib import Path
 from datetime import datetime, timezone
 from unittest import mock
 
@@ -36,6 +37,10 @@ class RetirementTests(unittest.TestCase):
         sog.assert_not_called()
         self.assertEqual(out["SOG"]["status"], "RETIRED")
         self.assertEqual(out["POINTS"]["status"], "FAILED_BEFORE_RECEIPT")
+
+    def test_defense_surprise_shadow_is_off_by_default(self):
+        source = Path(cli.__file__).read_text()
+        self.assertIn("    shadow_default = False\n    shadow_enabled = _env_bool(\"NHL_SOG_DEFENSE_SHADOW_ENABLED\"", source)
 
 
 if __name__ == "__main__":
