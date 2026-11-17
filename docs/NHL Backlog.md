@@ -3557,8 +3557,22 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   06:30 PT, else the day's first). 11-16's four captures scored; 15 of 109
   rostered players without games this season have no PP inputs, as in
   production. Research numbers unchanged after the fixes.
-- Stage 2 (open): xG arm (daily play-by-play pull) and PP points component
-  arm (daily official power-play stats).
+- Stage 2 value check before building the daily feeds, 2026-11-16 (operator:
+  "Yes, build stage 2"). `backend/nhl/scripts/research_nhl_points_stage2_value.py`
+  (read-only): each candidate on top of the stage-1 inputs (production +
+  game lines + PP unit), same recipe and training rows, x1000 vs that base:
+  - + xG: holdout -0.27 / -0.01 / -0.22 (span zero); live (11-01..11-14)
+    +0.97 / +0.29 / +0.39.
+  - + PP points component: holdout -0.08 / -0.32 [-0.66, -0.01] / -0.16;
+    live -0.62 / +0.70 / +0.19.
+  - + both: holdout -0.50 [-0.93, -0.06] / -0.50 [-0.87, -0.14] / -0.32
+    [-0.56, -0.09]; live +0.33 / +0.87 / +0.05.
+  - Live two-sided Points 0.5 log loss: market 0.6535, stage-1 base 0.6538,
+    + xG 0.6550, + PP points 0.6538, + both 0.6541.
+  - Reading: once game lines and PP unit are in, xG and the PP points
+    component add a little on the holdout and nothing live. Stage 2 (two
+    new daily pulls: play-by-play per finished game and the official
+    power-play report per date) is paused for the operator's decision.
 
 ### P2.56 Biggest model-vs-market disagreements: which side was right, by reason
 
