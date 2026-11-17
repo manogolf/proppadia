@@ -3515,6 +3515,38 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
     them the same way as Utah (boxscores for 469 games), if the operator
     wants.
 
+### P2.59 SOG shadow review: which shadows still earn their keep
+
+- Status: **REVIEWED 2026-11-16, decision pending** (operator: "examine sog
+  shadows and determine which if any are beyond being useful").
+  `backend/nhl/scripts/research_nhl_sog_shadow_review.py` (read-only; output
+  `artifacts/analysis/nhl/sog_shadow_review_2026-11-16/`). Every running SOG
+  shadow's latest pregame prediction, 2026-10-25..11-14 (21 slates, about
+  5,100-5,200 player-games each), against production V2's own predictions
+  and the two-sided market.
+- Shadows: formula family started when production was the Poisson formula
+  (NHL_SOG_POISSON_FORMULA_V1, NHL_SOG_SHRUNK_RATE_K180_V1,
+  NHL_SOG_D10_D20_DIVERGENCE_SHRINK_V1, NHL_SOG_D10_D20_FIXED_BLEND_50_50_V1
+  and _25_75_V1, NHL_SOG_D10_STRUCTURAL_CORRECTION_V1; cli lanes) and the
+  cold-start arms A, B, C, D, F, G (prediction-only observer,
+  `run_nhl_sog_prediction_only_warn_only.py`; D is that lane's selected
+  arm, not used by production or the 8rain export).
+- Paired log loss vs V2 x1000 at 1.5 (interval) / 2.5 / 3.5:
+  SHRUNK_180 +6.72 [3.16, 10.14] / +3.41 / +1.19; fixed blend 25/75 +14.77
+  / +10.29 / +6.56; fixed blend 50/50 +17.57 / +13.97 / +9.12; structural
+  +17.95 / +14.15 / +8.81; divergence +18.43 / +14.56 / +9.60; cold-start C
+  +20.17, G +20.52, D +22.51, A +62.63, B +77.97, F +50.74; formula +30.41 /
+  +27.02 / +18.45. Every interval at 1.5 excludes zero.
+- Weekly paired Brier at 1.5 vs V2 (three weeks): every shadow worse in
+  every week (SHRUNK_180 +2.3 / +2.9 / +3.3 x1000, the closest).
+- Two-sided lines (5,019 rows): V2 0.6023, market 0.6049, SHRUNK_180
+  0.6031, fixed blend 25/75 0.6123, others 0.614-0.680.
+- Reading: none is better than production anywhere; V2 already carries the
+  shrunk rate and recent rates as inputs, and beats the market. All twelve
+  are candidates for retirement (operator decision; the 8-week rule has had
+  three weeks against V2). Retiring the formula lane also removes the weekly
+  gap table's "sog formula" comparator row.
+
 ### P2.58 Points shadow candidates on hold or proposed (bundled start)
 
 - Status: **STAGE 1 RUNNING 2026-11-16** (was HOLD: start Points shadows together so
