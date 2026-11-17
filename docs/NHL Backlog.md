@@ -3545,7 +3545,8 @@ Scope: outstanding NHL operational, source-integrity, and validation work.
   already beats the market on SOG. A shadow arm (PP unit, or PP unit + game
   lines) is possible on the Points shadow framework. Operator 2026-11-16:
   "Not now" (no SOG shadow started; the listed-player mid-band patterns stay
-  unacted on).
+  unacted on). The gain alone is too small to justify a shadow; revisit
+  bundling PP unit (and game lines) if another SOG contributor turns up.
 
 ### P2.59 SOG shadow review: which shadows still earn their keep
 
